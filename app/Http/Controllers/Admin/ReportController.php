@@ -2769,8 +2769,8 @@ class ReportController extends Controller
 
                 $debts = [];
                 foreach ($subjects as $sub) {
-                    // Joriy semestr toggle ON bo'lsa — faqat joriy semestr fanlarini hisoblash
-                    // Toggle OFF bo'lsa — barcha semestrlar (joriy ham) kiritiladi
+                    // Toggle ON: faqat joriy semestr fanlarini hisoblash
+                    // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                     if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
 
                     // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
@@ -3111,8 +3111,8 @@ class ReportController extends Controller
             $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
 
             // Semestrlarga guruhlash:
-            // Toggle ON bo'lsa — faqat joriy semestr tab ko'rinadi
-            // Toggle OFF bo'lsa — barcha semestrlar ko'rinadi
+            // Toggle ON: faqat joriy semestr tab ko'rinadi
+            // Toggle OFF: barcha semestrlar ko'rinadi
             $semesters = $records->groupBy('semester_code')
                 ->when($showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
                     return $collection->filter(fn($items, $code) => (string) $code === $studentSemesterCode);
@@ -3170,8 +3170,8 @@ class ReportController extends Controller
             }
 
             foreach ($currSubjects as $sub) {
-                // Joriy semestr toggle ON bo'lsa — faqat joriy semestr fanlarini ko'rsatish
-                // Toggle OFF bo'lsa — barcha semestrlar (joriy ham) kiritiladi
+                // Toggle ON: faqat joriy semestr fanlarini ko'rsatish
+                // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                 if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
 
                 // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz

@@ -3229,6 +3229,94 @@ class ReportController extends Controller
     }
 
     /**
+     * Debug: talabaning student_subjects (DB) va HEMIS API real ma'lumotlarini taqqoslash
+     */
+    public function debugStudentSubjects(Request $request)
+    {
+        $studentId = $request->get('student_id');
+        if (!$studentId) {
+            return response()->json(['error' => 'student_id required']);
+        }
+
+        // 1. Bazadagi student_subjects
+        $dbSubjects = DB::table('student_subjects')
+            ->where('student_hemis_id', $studentId)
+            ->select('subject_id', 'semester_id', 'subject_name', 'curriculum_subject_hemis_id', 'updated_at')
+            ->orderBy('semester_id')
+            ->orderBy('subject_name')
+            ->get();
+
+        // 2. HEMIS API dan real-time ma'lumot
+        $baseUrl = config('services.hemis.base_url');
+        $token   = config('services.hemis.token');
+
+        $apiSubjects = [];
+        $apiError = null;
+        $page = 1;
+
+        do {
+            try {
+                $response = \Illuminate\Support\Facades\Http::withoutVerifying()
+                    ->timeout(30)
+                    ->withToken($token)
+                    ->get($baseUrl . 'v1/data/student-subject-list', [
+                        '_student' => $studentId,
+                        'page'     => $page,
+                        'limit'    => 100,
+                    ]);
+
+                if (!$response->successful()) {
+                    $apiError = 'HTTP ' . $response->status();
+                    break;
+                }
+
+                $data = $response->json();
+                if (!($data['success'] ?? false)) {
+                    $apiError = 'API success=false';
+                    break;
+                }
+
+                $items      = $data['data']['items'] ?? [];
+                $pagination = $data['data']['pagination'] ?? [];
+
+                foreach ($items as $item) {
+                    $cs = $item['curriculumSubject'] ?? [];
+                    $apiSubjects[] = [
+                        'curriculum_subject_hemis_id' => $cs['id'] ?? null,
+                        'subject_id'                  => $cs['subject']['id'] ?? null,
+                        'subject_name'                => $cs['subject']['name'] ?? null,
+                        'semester_id'                 => $item['_semester'] ?? null,
+                    ];
+                }
+
+                $hasMore = ($pagination['page'] ?? 1) < ($pagination['pageCount'] ?? 1);
+                $page++;
+            } catch (\Exception $e) {
+                $apiError = $e->getMessage();
+                break;
+            }
+        } while ($hasMore ?? false);
+
+        // 3. Taqqoslash
+        $apiKeys = collect($apiSubjects)->keyBy(fn($s) => $s['subject_id'] . '|' . $s['semester_id']);
+        $dbKeys  = $dbSubjects->keyBy(fn($s) => $s->subject_id . '|' . $s->semester_id);
+
+        $onlyInDb  = $dbSubjects->filter(fn($s) => !$apiKeys->has($s->subject_id . '|' . $s->semester_id))->values();
+        $onlyInApi = collect($apiSubjects)->filter(fn($s) => !$dbKeys->has($s['subject_id'] . '|' . $s['semester_id']))->values();
+
+        return response()->json([
+            'student_id'    => $studentId,
+            'db_count'      => $dbSubjects->count(),
+            'api_count'     => count($apiSubjects),
+            'api_error'     => $apiError,
+            'only_in_db'    => $onlyInDb,   // DB da bor, API da yo'q (eskirgan yozuvlar)
+            'only_in_api'   => $onlyInApi,  // API da bor, DB da yo'q (import qilinmagan)
+            'db_subjects'   => $dbSubjects,
+            'api_subjects'  => collect($apiSubjects)->sortBy(['semester_id', 'subject_name'])->values(),
+        ]);
+    }
+
+    /**
      * Guruh suffiksi bo'yicha fanlarni filtrlash
      * "d1/23-01b" → suffix "b" → faqat "(b)" yoki suffixsiz fanlar
      */

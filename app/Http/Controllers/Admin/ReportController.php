@@ -2672,6 +2672,7 @@ class ReportController extends Controller
             set_time_limit(120);
 
             $minDebtCount = (int) $request->get('min_debt_count', 4);
+            $showCurrentSemester = $request->get('current_semester', '0') == '1';
 
             // 1-QADAM: Talabalar ro'yxatini filtrlar bo'yicha olish
             $studentQuery = DB::table('students as s')
@@ -2768,8 +2769,8 @@ class ReportController extends Controller
 
                 $debts = [];
                 foreach ($subjects as $sub) {
-                    // Joriy semestrni o'tkazib yuborish
-                    if ($studentSemCode && (string) $sub->semester_code === $studentSemCode) continue;
+                    // Joriy semestr: toggle OFF bo'lsa o'tkazib yuboriladi, ON bo'lsa kiritiladi
+                    if (!$showCurrentSemester && $studentSemCode && (string) $sub->semester_code === $studentSemCode) continue;
 
                     // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
                     if ($useStudentSubjects) {
@@ -3166,7 +3167,8 @@ class ReportController extends Controller
             }
 
             foreach ($currSubjects as $sub) {
-                if ($studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
+                // Joriy semestr: toggle OFF bo'lsa o'tkazib yuboriladi, ON bo'lsa kiritiladi
+                if (!$showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
 
                 // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
                 if ($assignedSubjectKeys !== null) {

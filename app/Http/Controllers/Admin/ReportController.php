@@ -2741,7 +2741,6 @@ class ReportController extends Controller
 
             // 3b-QADAM: student_subjects lookup — "Biriktirilgan" ustuni uchun
             $studentSubjectsLookup = [];   // student_hemis_id|subject_id|semester_id => true
-            $studentSemestersWithSS = [];  // student_hemis_id|semester_id => true
             $studentsWithAnySS = [];       // student_hemis_id => true (umuman SS yozuvi bor)
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $ssRows = DB::table('student_subjects')
@@ -2750,7 +2749,6 @@ class ReportController extends Controller
                     ->get();
                 foreach ($ssRows as $ss) {
                     $studentSubjectsLookup[$ss->student_hemis_id . '|' . $ss->subject_id . '|' . $ss->semester_id] = true;
-                    $studentSemestersWithSS[$ss->student_hemis_id . '|' . $ss->semester_id] = true;
                     $studentsWithAnySS[$ss->student_hemis_id] = true;
                 }
                 unset($ssRows);
@@ -2799,11 +2797,8 @@ class ReportController extends Controller
                     // Majburiy (curriculum) hisobiga
                     $debtsCurr[] = $debtItem;
 
-                    // Biriktirilgan hisobiga: shu semestrda student_subjects bor bo'lsa faqat
-                    // biriktirilgan fanlar, yo'q bo'lsa — curriculum dan olish
-                    $semKey = $st->hemis_id . '|' . $sub->semester_code;
-                    $semHasSS = isset($studentSemestersWithSS[$semKey]);
-                    if (!$semHasSS || isset($studentSubjectsLookup[$st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code])) {
+                    // Biriktirilgan hisobiga: faqat student_subjects da bo'lgan fanlar
+                    if (isset($studentSubjectsLookup[$st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code])) {
                         $debtsAssigned[] = $debtItem;
                     }
                 }
@@ -3183,11 +3178,9 @@ class ReportController extends Controller
                 ->select('subject_id', 'semester_id')
                 ->get();
             $assignedKeys = [];
-            $semestersHavingSS = [];
             $hasAnySS = $ssRows->isNotEmpty();
             foreach ($ssRows as $s) {
                 $assignedKeys[$s->subject_id . '|' . $s->semester_id] = true;
-                $semestersHavingSS[$s->semester_id] = true;
             }
 
             // Ikkita ro'yxat: majburiy (curriculum) va biriktirilgan (student_subjects)
@@ -3219,12 +3212,9 @@ class ReportController extends Controller
 
                 $debtsAll[] = $item;
 
-                // Biriktirilgan: faqat student_subjects mavjud bo'lsa hisoblash
-                if ($hasAnySS) {
-                    $semHasSS = isset($semestersHavingSS[$sub->semester_code]);
-                    if (!$semHasSS || isset($assignedKeys[$sub->subject_id . '|' . $sub->semester_code])) {
-                        $debtsAssigned[] = $item;
-                    }
+                // Biriktirilgan: faqat student_subjects da mavjud fanlar
+                if ($hasAnySS && isset($assignedKeys[$sub->subject_id . '|' . $sub->semester_code])) {
+                    $debtsAssigned[] = $item;
                 }
             }
 

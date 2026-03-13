@@ -3244,10 +3244,23 @@ class ReportController extends Controller
      */
     public function debugStudentSubjects(Request $request)
     {
-        $studentId = $request->get('student_id');
-        if (!$studentId) {
+        $studentIdParam = $request->get('student_id');
+        if (!$studentIdParam) {
             return response()->json(['error' => 'student_id required']);
         }
+
+        // student_id_number (368...) yoki hemis_id (6957) bo'lishi mumkin — ikkalasini tekshiramiz
+        $studentRow = DB::table('students')
+            ->where('hemis_id', $studentIdParam)
+            ->orWhere('student_id_number', $studentIdParam)
+            ->first();
+
+        if (!$studentRow) {
+            return response()->json(['error' => 'Talaba topilmadi: ' . $studentIdParam]);
+        }
+
+        $studentId = $studentRow->hemis_id; // internal HEMIS ID (e.g. 6957)
+        $studentIdNumber = $studentRow->student_id_number; // e.g. 368231100383
 
         // 1. Bazadagi student_subjects
         $dbSubjects = DB::table('student_subjects')
@@ -3316,7 +3329,9 @@ class ReportController extends Controller
         $onlyInApi = collect($apiSubjects)->filter(fn($s) => !$dbKeys->has($s['subject_id'] . '|' . $s['semester_id']))->values();
 
         return response()->json([
-            'student_id'    => $studentId,
+            'student_id_number' => $studentIdNumber,
+            'hemis_id'      => $studentId,
+            'full_name'     => $studentRow->full_name ?? null,
             'db_count'      => $dbSubjects->count(),
             'api_count'     => count($apiSubjects),
             'api_error'     => $apiError,

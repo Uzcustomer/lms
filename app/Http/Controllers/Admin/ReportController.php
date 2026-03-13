@@ -2725,16 +2725,16 @@ class ReportController extends Controller
                 ->select('curricula_hemis_id', 'semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
                 ->get();
 
-            // 3-QADAM: Academic records olish
+            // 3-QADAM: Academic records olish (grade va retraining_status ham kerak)
             $arRecordsLookup = [];
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $arRecords = DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
-                    ->select('student_id', 'subject_id', 'semester_id')
+                    ->select('student_id', 'subject_id', 'semester_id', 'grade', 'retraining_status')
                     ->get();
 
                 foreach ($arRecords as $ar) {
-                    $arRecordsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
+                    $arRecordsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = $ar;
                 }
                 unset($arRecords);
             }
@@ -2780,9 +2780,15 @@ class ReportController extends Controller
                     }
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
+                    $ar = $arRecordsLookup[$arKey] ?? null;
 
-                    // Agar academic_records da ma'lumot bo'lmasa — qarzdorlik
-                    if (!isset($arRecordsLookup[$arKey])) {
+                    // studentAllRecords bilan bir xil mantiq: yozuv yo'q, baho null, '2'/'0', yoki qayta o'qish
+                    $isDebt = !$ar
+                        || $ar->grade === null
+                        || in_array($ar->grade, ['2', '0'])
+                        || $ar->retraining_status;
+
+                    if ($isDebt) {
                         $debts[] = [
                             'subject_id' => $sub->subject_id,
                             'subject_name' => $sub->subject_name,

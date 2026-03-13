@@ -2672,6 +2672,7 @@ class ReportController extends Controller
             set_time_limit(120);
 
             $minDebtCount = (int) $request->get('min_debt_count', 4);
+            $showCurrentSemester = $request->get('current_semester', '0') == '1';
 
             // 1-QADAM: Talabalar ro'yxatini filtrlar bo'yicha olish
             $studentQuery = DB::table('students as s')
@@ -2768,8 +2769,9 @@ class ReportController extends Controller
 
                 $debts = [];
                 foreach ($subjects as $sub) {
-                    // Joriy semestrni o'tkazib yuborish
-                    if ($studentSemCode && (string) $sub->semester_code === $studentSemCode) continue;
+                    // Joriy semestr toggle ON bo'lsa — faqat joriy semestr fanlarini hisoblash
+                    // Toggle OFF bo'lsa — barcha semestrlar (joriy ham) kiritiladi
+                    if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
 
                     // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
                     if ($useStudentSubjects) {
@@ -3108,10 +3110,12 @@ class ReportController extends Controller
             // Guruh suffiksi bo'yicha filtr
             $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
 
-            // Semestrlarga guruhlash (toggle OFF bo'lsa joriy semester cardni yashirish)
+            // Semestrlarga guruhlash:
+            // Toggle ON bo'lsa — faqat joriy semestr tab ko'rinadi
+            // Toggle OFF bo'lsa — barcha semestrlar ko'rinadi
             $semesters = $records->groupBy('semester_code')
-                ->when(!$showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
-                    return $collection->reject(fn($items, $code) => (string) $code === $studentSemesterCode);
+                ->when($showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
+                    return $collection->filter(fn($items, $code) => (string) $code === $studentSemesterCode);
                 })
                 ->map(function ($items, $semesterCode) {
                     return (object) [
@@ -3166,7 +3170,9 @@ class ReportController extends Controller
             }
 
             foreach ($currSubjects as $sub) {
-                if ($studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
+                // Joriy semestr toggle ON bo'lsa — faqat joriy semestr fanlarini ko'rsatish
+                // Toggle OFF bo'lsa — barcha semestrlar (joriy ham) kiritiladi
+                if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
 
                 // Agar student_subjects bor bo'lsa — faqat biriktirilgan fanlarni ko'rsatamiz
                 if ($assignedSubjectKeys !== null) {

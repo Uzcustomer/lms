@@ -2739,21 +2739,10 @@ class ReportController extends Controller
                 unset($arRecords);
             }
 
-            // 3b-QADAM: Talabaga biriktirilgan fanlar (student_subjects) lookup
-            // Faqat shu semestrda student_subjects yozuvi bor bo'lsa filtr ishlatiladi
-            $studentSubjectsLookup = [];      // student_hemis_id|subject_id|semester_id => true
-            $studentSemestersWithSS = [];     // student_hemis_id|semester_id => true (qaysi semestrlarda yozuv bor)
-            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
-                $ssRows = DB::table('student_subjects')
-                    ->whereIn('student_hemis_id', $chunk)
-                    ->select('student_hemis_id', 'subject_id', 'semester_id')
-                    ->get();
-                foreach ($ssRows as $ss) {
-                    $studentSubjectsLookup[$ss->student_hemis_id . '|' . $ss->subject_id . '|' . $ss->semester_id] = true;
-                    $studentSemestersWithSS[$ss->student_hemis_id . '|' . $ss->semester_id] = true;
-                }
-                unset($ssRows);
-            }
+            // 3b-QADAM: student_subjects endi qarzdorlik hisoblashda ISHLATILMAYDI
+            // Sabab: majburiy fanlar curriculum_subjects da bor, lekin student_subjects da yo'q bo'lishi mumkin
+            // (HEMIS ham curriculum_subjects asosida qarzdorlikni hisoblaydi)
+            // student_subjects faqat tanlov fanlar uchun ma'lumot, debt uchun curriculum yetarli
 
             // 4-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
@@ -2770,14 +2759,6 @@ class ReportController extends Controller
                     // Toggle ON: faqat joriy semestr fanlarini hisoblash
                     // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                     if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
-
-                    // student_subjects filtrini FAQAT shu semestrda yozuv mavjud bo'lsa qo'llash
-                    // Eski semestrlar uchun student_subjects bo'lmasa — curriculum_subjects dan olish
-                    $semHasSS = isset($studentSemestersWithSS[$st->hemis_id . '|' . $sub->semester_code]);
-                    if ($semHasSS) {
-                        $ssKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
-                        if (!isset($studentSubjectsLookup[$ssKey])) continue;
-                    }
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
                     $ar = $arRecordsLookup[$arKey] ?? null;
@@ -3131,22 +3112,9 @@ class ReportController extends Controller
                     ];
                 })->values();
 
-            // Qarzdorliklar: joriy semester fanlari doim chiqariladi (baho semester oxirida qo'yiladi)
-            // Ro'yxatdagi debt_count bilan bir xil natija berishi uchun lookup-based yondashuv
+            // Qarzdorliklar: curriculum_subjects asosida hisoblanadi (HEMIS bilan bir xil)
+            // student_subjects ishlatilmaydi — majburiy fanlar student_subjects da bo'lmasa ham debt hisoblanadi
             $gradeDebts = [];
-
-            // Talabaga biriktirilgan fanlarni aniqlash (student_subjects da bo'lsa)
-            // Filtr faqat shu semestrda yozuv mavjud bo'lsa qo'llanadi
-            $assignedSubjectKeys = [];
-            $semestersHavingSS = [];  // semester_id => true
-            $ssRows = DB::table('student_subjects')
-                ->where('student_hemis_id', $studentId)
-                ->select('subject_id', 'semester_id')
-                ->get();
-            foreach ($ssRows as $a) {
-                $assignedSubjectKeys[$a->subject_id . '|' . $a->semester_id] = true;
-                $semestersHavingSS[$a->semester_id] = true;
-            }
 
             $currSubjects = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
@@ -3175,11 +3143,6 @@ class ReportController extends Controller
                 // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                 if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
 
-                // student_subjects filtrini FAQAT shu semestrda yozuv mavjud bo'lsa qo'llash
-                if (isset($semestersHavingSS[$sub->semester_code])) {
-                    $key = $sub->subject_id . '|' . $sub->semester_code;
-                    if (!isset($assignedSubjectKeys[$key])) continue;
-                }
 
                 $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
 

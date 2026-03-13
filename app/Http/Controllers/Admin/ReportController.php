@@ -3147,10 +3147,6 @@ class ReportController extends Controller
                     ];
                 })->values();
 
-            // Qarzdorliklar: curriculum_subjects asosida hisoblanadi (HEMIS bilan bir xil)
-            // student_subjects ishlatilmaydi — majburiy fanlar student_subjects da bo'lmasa ham debt hisoblanadi
-            $gradeDebts = [];
-
             $currSubjects = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
                 ->where('is_active', true)
@@ -3173,11 +3169,24 @@ class ReportController extends Controller
                 $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
             }
 
-            foreach ($currSubjects as $sub) {
-                // Toggle ON: faqat joriy semestr fanlarini ko'rsatish
-                // Toggle OFF: barcha semestrlar (o'tgan + joriy)
-                if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
+            // student_subjects lookup — "Biriktirilgan" ro'yxati uchun
+            $ssRows = DB::table('student_subjects')
+                ->where('student_hemis_id', $studentId)
+                ->select('subject_id', 'semester_id')
+                ->get();
+            $assignedKeys = [];
+            $semestersHavingSS = [];
+            foreach ($ssRows as $s) {
+                $assignedKeys[$s->subject_id . '|' . $s->semester_id] = true;
+                $semestersHavingSS[$s->semester_id] = true;
+            }
 
+            // Ikkita ro'yxat: majburiy (curriculum) va biriktirilgan (student_subjects)
+            $debtsAll      = []; // majburiy
+            $debtsAssigned = []; // biriktirilgan
+
+            foreach ($currSubjects as $sub) {
+                if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
 
                 $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
 
@@ -3186,21 +3195,34 @@ class ReportController extends Controller
                     || in_array($ar->grade, ['2', '0'])
                     || $ar->retraining_status;
 
-                if ($isDebt) {
-                    $gradeDebts[] = [
-                        'semester_code' => $sub->semester_code,
-                        'semester_name' => $sub->semester_name,
-                        'subject_name' => $sub->subject_name,
-                        'credit' => $sub->credit,
-                        'total_acload' => $sub->total_acload,
-                        'total_point' => $ar->total_point ?? null,
-                        'grade' => $ar->grade ?? null,
-                        'status' => 'Qarzdor',
-                    ];
+                if (!$isDebt) continue;
+
+                $item = [
+                    'semester_code' => $sub->semester_code,
+                    'semester_name' => $sub->semester_name,
+                    'subject_name'  => $sub->subject_name,
+                    'credit'        => $sub->credit,
+                    'total_acload'  => $sub->total_acload,
+                    'total_point'   => $ar->total_point ?? null,
+                    'grade'         => $ar->grade ?? null,
+                    'status'        => 'Qarzdor',
+                ];
+
+                $debtsAll[] = $item;
+
+                // Biriktirilgan: shu semestrda SS bor bo'lsa faqat biriktirilganlar,
+                // yo'q bo'lsa curriculum dan olish
+                $semHasSS = isset($semestersHavingSS[$sub->semester_code]);
+                if (!$semHasSS || isset($assignedKeys[$sub->subject_id . '|' . $sub->semester_code])) {
+                    $debtsAssigned[] = $item;
                 }
             }
 
-            return response()->json(['semesters' => $semesters, 'grade_debts' => $gradeDebts]);
+            return response()->json([
+                'semesters'       => $semesters,
+                'grade_debts'     => $debtsAll,      // majburiy (curriculum)
+                'grade_debts_ss'  => $debtsAssigned, // biriktirilgan (student_subjects)
+            ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'grade_debts' => []], 500);
         }

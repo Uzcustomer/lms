@@ -432,45 +432,54 @@
                     gh += '</div>';
                     $('#all-records-wrap').html(gh);
 
-                    // Semestr baholaridan Qarzdorliklar ro'yxatini qurish
-                    var gradeDebts = resp.grade_debts || [];
-                    if (gradeDebts.length > 0) {
-                        var dh = '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + gradeDebts.length + ' ta fan)</div>';
-                        dh += '<table class="detail-table">';
-                        dh += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
-                        dh += '<tbody>';
-                        for (var d = 0; d < gradeDebts.length; d++) {
-                            var debt = gradeDebts[d];
-                            dh += '<tr>';
-                            dh += '<td>' + (d + 1) + '</td>';
-                            dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
-                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
-                            dh += '<td>' + esc(debt.credit) + '</td>';
-                            dh += '<td>' + esc(debt.total_acload) + '</td>';
-                            var statusText = '';
-                            if (debt.status === 'Qayta o\'qish') {
-                                statusText = '<span class="reason-badge" style="background:#fef3c7;color:#92400e;border-color:#fde68a;">Qayta o\'qish</span>';
-                            } else if (debt.status && debt.status.indexOf('Baho:') === 0) {
-                                statusText = '<span class="reason-badge">' + esc(debt.status) + '</span>';
-                            } else {
-                                statusText = '<span class="reason-badge">Qarzdor</span>';
-                            }
-                            dh += '<td>' + statusText + '</td>';
-                            dh += '</tr>';
+                    // Ikkita qarzdorlik ro'yxati: majburiy va biriktirilgan
+                    var debtsAll      = resp.grade_debts    || [];
+                    var debtsAssigned = resp.grade_debts_ss || [];
+                    var isTeng = (debtsAll.length === debtsAssigned.length);
+
+                    function buildDebtTable(list) {
+                        if (!list.length) return '<div style="padding:8px 20px;color:#16a34a;font-size:13px;">Qarzdorlik yo\'q</div>';
+                        var t = '<table class="detail-table"><thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead><tbody>';
+                        for (var d = 0; d < list.length; d++) {
+                            var debt = list[d];
+                            t += '<tr><td>' + (d+1) + '</td>';
+                            t += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
+                            t += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
+                            t += '<td>' + esc(debt.credit) + '</td>';
+                            t += '<td>' + esc(debt.total_acload) + '</td>';
+                            t += '<td><span class="reason-badge">Qarzdor</span></td></tr>';
                         }
-                        dh += '</tbody></table>';
-
-                        var currentTitle = $('#modal-title').text().split(' — ')[0];
-                        $('#modal-title').text(currentTitle + ' — Qarzdorliklar (' + gradeDebts.length + ' ta fan)');
-
-                        $('#grade-debts-wrap').html(dh).show();
-                    } else {
-                        $('#grade-debts-wrap').html('<div style="padding:8px 20px 4px;font-weight:700;color:#16a34a;font-size:14px;border-top:2px solid #dcfce7;">Qarzdorlik yo\'q</div>').show();
-                        var currentTitle = $('#modal-title').text().split(' — ')[0];
-                        $('#modal-title').text(currentTitle + ' — Qarzdorliklar (0 ta fan)');
+                        t += '</tbody></table>';
+                        return t;
                     }
 
-                    currentDebtSubjects = gradeDebts;
+                    var statusBadge = isTeng
+                        ? '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng</span>'
+                        : '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng emas</span>';
+
+                    var dh = '<div style="border-top:2px solid #e2e8f0;">';
+                    // Ikki ustun yonma-yon
+                    dh += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">';
+
+                    // Biriktirilgan
+                    dh += '<div style="border-right:1px solid #e2e8f0;">';
+                    dh += '<div style="padding:8px 16px 4px;font-weight:700;color:#1d4ed8;font-size:13px;background:#eff6ff;border-bottom:1px solid #bfdbfe;">Biriktirilgan (' + debtsAssigned.length + ' ta fan)</div>';
+                    dh += buildDebtTable(debtsAssigned);
+                    dh += '</div>';
+
+                    // Majburiy
+                    dh += '<div>';
+                    dh += '<div style="padding:8px 16px 4px;font-weight:700;color:#dc2626;font-size:13px;background:#fef2f2;border-bottom:1px solid #fecaca;">Majburiy (' + debtsAll.length + ' ta fan) ' + statusBadge + '</div>';
+                    dh += buildDebtTable(debtsAll);
+                    dh += '</div>';
+
+                    dh += '</div></div>';
+
+                    var currentTitle = $('#modal-title').text().split(' — ')[0];
+                    $('#modal-title').text(currentTitle + ' — Biriktirilgan: ' + debtsAssigned.length + ' | Majburiy: ' + debtsAll.length);
+
+                    $('#grade-debts-wrap').html(dh).show();
+                    currentDebtSubjects = debtsAll;
                 },
                 error: function() {
                     $('#all-records-wrap').html('<div style="padding:12px;color:#ef4444;">Xatolik yuz berdi</div>');

@@ -2739,10 +2739,9 @@ class ReportController extends Controller
                 unset($arRecords);
             }
 
-            // 3b-QADAM: Talabaga biriktirilgan fanlar (student_subjects) lookup
-            // Faqat shu semestrda student_subjects yozuvi bor bo'lsa filtr ishlatiladi
-            $studentSubjectsLookup = [];      // student_hemis_id|subject_id|semester_id => true
-            $studentSemestersWithSS = [];     // student_hemis_id|semester_id => true (qaysi semestrlarda yozuv bor)
+            // 3b-QADAM: student_subjects lookup — "Biriktirilgan" ustuni uchun
+            $studentSubjectsLookup = [];   // student_hemis_id|subject_id|semester_id => true
+            $studentSemestersWithSS = [];  // student_hemis_id|semester_id => true
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $ssRows = DB::table('student_subjects')
                     ->whereIn('student_hemis_id', $chunk)
@@ -2755,6 +2754,8 @@ class ReportController extends Controller
                 unset($ssRows);
             }
 
+            $filterDebtStatus = $request->get('debt_status', ''); // 'teng' | 'teng_emas' | ''
+
             // 4-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
 
@@ -2765,60 +2766,75 @@ class ReportController extends Controller
                 $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
                 $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
 
-                $debts = [];
-                foreach ($subjects as $sub) {
-                    // Toggle ON: faqat joriy semestr fanlarini hisoblash
-                    // Toggle OFF: barcha semestrlar (o'tgan + joriy)
-                    if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
+                // Ikki xil hisoblash:
+                // debt_curr  — o'quv reja (curriculum_subjects) asosida, majburiy fanlar ham kiritiladi
+                // debt_ss    — fanga biriktirilgan (student_subjects) asosida
+                $debtsCurr = [];
+                $debtsAssigned = [];
 
-                    // student_subjects filtrini FAQAT shu semestrda yozuv mavjud bo'lsa qo'llash
-                    // Eski semestrlar uchun student_subjects bo'lmasa — curriculum_subjects dan olish
-                    $semHasSS = isset($studentSemestersWithSS[$st->hemis_id . '|' . $sub->semester_code]);
-                    if ($semHasSS) {
-                        $ssKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
-                        if (!isset($studentSubjectsLookup[$ssKey])) continue;
-                    }
+                foreach ($subjects as $sub) {
+                    if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
                     $ar = $arRecordsLookup[$arKey] ?? null;
 
-                    // studentAllRecords bilan bir xil mantiq: yozuv yo'q, baho null, '2'/'0', yoki qayta o'qish
                     $isDebt = !$ar
                         || $ar->grade === null
                         || in_array($ar->grade, ['2', '0'])
                         || $ar->retraining_status;
 
-                    if ($isDebt) {
-                        $debts[] = [
-                            'subject_id' => $sub->subject_id,
-                            'subject_name' => $sub->subject_name,
-                            'semester_code' => $sub->semester_code,
-                            'semester_name' => $sub->semester_name,
-                            'credit' => $sub->credit,
-                            'total_acload' => $sub->total_acload,
-                        ];
+                    if (!$isDebt) continue;
+
+                    $debtItem = [
+                        'subject_id'    => $sub->subject_id,
+                        'subject_name'  => $sub->subject_name,
+                        'semester_code' => $sub->semester_code,
+                        'semester_name' => $sub->semester_name,
+                        'credit'        => $sub->credit,
+                        'total_acload'  => $sub->total_acload,
+                    ];
+
+                    // Majburiy (curriculum) hisobiga
+                    $debtsCurr[] = $debtItem;
+
+                    // Biriktirilgan hisobiga: shu semestrda student_subjects bor bo'lsa faqat
+                    // biriktirilgan fanlar, yo'q bo'lsa — curriculum dan olish
+                    $semKey = $st->hemis_id . '|' . $sub->semester_code;
+                    $semHasSS = isset($studentSemestersWithSS[$semKey]);
+                    if (!$semHasSS || isset($studentSubjectsLookup[$st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code])) {
+                        $debtsAssigned[] = $debtItem;
                     }
                 }
 
-                $debtCount = count($debts);
-                if ($debtCount < $minDebtCount) continue;
+                $debtCountCurr     = count($debtsCurr);
+                $debtCountAssigned = count($debtsAssigned);
+                $debtStatus        = ($debtCountCurr === $debtCountAssigned) ? 'teng' : 'teng_emas';
+
+                // min_debt_count filtrini curriculum asosida qo'llash
+                if ($debtCountCurr < $minDebtCount) continue;
+
+                // Status filtr
+                if ($filterDebtStatus && $debtStatus !== $filterDebtStatus) continue;
 
                 // Semestr bo'yicha tartiblash
-                usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                usort($debtsCurr, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
 
                 $finalResults[] = [
-                    'hemis_id' => $st->hemis_id,
-                    'full_name' => $st->full_name ?? 'Noma\'lum',
+                    'hemis_id'          => $st->hemis_id,
+                    'full_name'         => $st->full_name ?? 'Noma\'lum',
                     'student_id_number' => $st->student_id_number ?? '-',
-                    'department_name' => $st->department_name ?? '-',
-                    'specialty_name' => $st->specialty_name ?? '-',
-                    'level_name' => $st->level_name ?? '-',
-                    'semester_name' => $st->semester_name ?? '-',
-                    'group_name' => $st->group_name ?? '-',
-                    'group_id' => $st->group_id ?? '',
-                    'debt_count' => $debtCount,
-                    'lesson_days' => 0,
-                    'debts' => $debts,
+                    'department_name'   => $st->department_name ?? '-',
+                    'specialty_name'    => $st->specialty_name ?? '-',
+                    'level_name'        => $st->level_name ?? '-',
+                    'semester_name'     => $st->semester_name ?? '-',
+                    'group_name'        => $st->group_name ?? '-',
+                    'group_id'          => $st->group_id ?? '',
+                    'debt_count'        => $debtCountCurr,      // asosiy sort uchun
+                    'debt_count_curr'   => $debtCountCurr,      // majburiy (curriculum)
+                    'debt_count_ss'     => $debtCountAssigned,  // biriktirilgan (student_subjects)
+                    'debt_status'       => $debtStatus,
+                    'lesson_days'       => 0,
+                    'debts'             => $debtsCurr,
                 ];
             }
 
@@ -3131,22 +3147,9 @@ class ReportController extends Controller
                     ];
                 })->values();
 
-            // Qarzdorliklar: joriy semester fanlari doim chiqariladi (baho semester oxirida qo'yiladi)
-            // Ro'yxatdagi debt_count bilan bir xil natija berishi uchun lookup-based yondashuv
+            // Qarzdorliklar: curriculum_subjects asosida hisoblanadi (HEMIS bilan bir xil)
+            // student_subjects ishlatilmaydi — majburiy fanlar student_subjects da bo'lmasa ham debt hisoblanadi
             $gradeDebts = [];
-
-            // Talabaga biriktirilgan fanlarni aniqlash (student_subjects da bo'lsa)
-            // Filtr faqat shu semestrda yozuv mavjud bo'lsa qo'llanadi
-            $assignedSubjectKeys = [];
-            $semestersHavingSS = [];  // semester_id => true
-            $ssRows = DB::table('student_subjects')
-                ->where('student_hemis_id', $studentId)
-                ->select('subject_id', 'semester_id')
-                ->get();
-            foreach ($ssRows as $a) {
-                $assignedSubjectKeys[$a->subject_id . '|' . $a->semester_id] = true;
-                $semestersHavingSS[$a->semester_id] = true;
-            }
 
             $currSubjects = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
@@ -3175,11 +3178,6 @@ class ReportController extends Controller
                 // Toggle OFF: barcha semestrlar (o'tgan + joriy)
                 if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
 
-                // student_subjects filtrini FAQAT shu semestrda yozuv mavjud bo'lsa qo'llash
-                if (isset($semestersHavingSS[$sub->semester_code])) {
-                    $key = $sub->subject_id . '|' . $sub->semester_code;
-                    if (!isset($assignedSubjectKeys[$key])) continue;
-                }
 
                 $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
 

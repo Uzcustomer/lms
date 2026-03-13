@@ -94,6 +94,14 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.SH</label>
                             <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." style="height:36px;border-radius:8px;border:1px solid #cbd5e1;font-size:0.8rem;" />
                         </div>
+                        <div class="filter-item" style="min-width: 150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Qarz holati</label>
+                            <select id="debt_status" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="teng">Teng (mos)</option>
+                                <option value="teng_emas">Teng emas (farq bor)</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
                             <div class="toggle-switch" id="current-semester-toggle" onclick="toggleSemester()">
@@ -180,7 +188,9 @@
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="debt_count">Qarzdor fanlar <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Fanga biriktirilgan (student_subjects) asosida"><a href="#" class="sort-link" data-sort="debt_count_ss">Biriktirilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="O'quv reja (curriculum) asosida majburiy fanlar"><a href="#" class="sort-link" data-sort="debt_count_curr">Majburiy <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;">Status</th>
                                         @unless($isExpelledPage ?? false)
                                         <th><a href="#" class="sort-link" data-sort="lesson_days">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         @endunless
@@ -225,7 +235,7 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'debt_count';
+        let currentSort = 'debt_count_curr';
         let currentDirection = 'desc';
         let currentPage = 1;
         let reportData = [];
@@ -256,6 +266,7 @@
                 group: $('#group').val() || '',
                 student_status: $('#student_status').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
+                debt_status: $('#debt_status').val() || '',
                 min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
@@ -341,7 +352,18 @@
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-debt">' + r.debt_count + '</span></td>';
+                var debtSS   = (r.debt_count_ss   !== undefined) ? r.debt_count_ss   : r.debt_count;
+                var debtCurr = (r.debt_count_curr !== undefined) ? r.debt_count_curr : r.debt_count;
+                var isTeng   = (r.debt_status === 'teng');
+                html += '<td style="text-align:center;"><span class="badge badge-debt" style="background:#1d4ed8;">' + debtSS + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-debt">' + debtCurr + '</span></td>';
+                html += '<td style="text-align:center;">';
+                if (isTeng) {
+                    html += '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Teng</span>';
+                } else {
+                    html += '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Teng emas</span>';
+                }
+                html += '</td>';
                 if (!isExpelledPage) {
                     html += '<td style="text-align:center;"><span class="badge badge-violet">' + (r.lesson_days || 0) + ' kun</span></td>';
                 }

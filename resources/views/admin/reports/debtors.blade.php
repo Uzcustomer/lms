@@ -437,43 +437,69 @@
                     var debtsAssigned = resp.grade_debts_ss || [];
                     var isTeng = (debtsAll.length === debtsAssigned.length);
 
-                    function buildDebtTable(list) {
-                        if (!list.length) return '<div style="padding:8px 20px;color:#16a34a;font-size:13px;">Qarzdorlik yo\'q</div>';
-                        var t = '<table class="detail-table"><thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead><tbody>';
-                        for (var d = 0; d < list.length; d++) {
-                            var debt = list[d];
-                            t += '<tr><td>' + (d+1) + '</td>';
-                            t += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
-                            t += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
-                            t += '<td>' + esc(debt.credit) + '</td>';
-                            t += '<td>' + esc(debt.total_acload) + '</td>';
-                            t += '<td><span class="reason-badge">Qarzdor</span></td></tr>';
+                    // Bitta birlashgan jadval: har bir noyob fan uchun bitta qator,
+                    // Biriktirilgan va Majburiy ustunlari bo'sh yoki "Qarzdor" ko'rsatadi
+                    var mergedMap = {}; // key: semester_code|subject_name
+                    var mergedOrder = [];
+
+                    function addToMerged(list, field) {
+                        for (var i = 0; i < list.length; i++) {
+                            var d = list[i];
+                            var key = d.semester_code + '|' + d.subject_name;
+                            if (!mergedMap[key]) {
+                                mergedMap[key] = { semester_name: d.semester_name, subject_name: d.subject_name, credit: d.credit, total_acload: d.total_acload, ss: false, curr: false, semester_code: d.semester_code };
+                                mergedOrder.push(key);
+                            }
+                            mergedMap[key][field] = true;
                         }
-                        t += '</tbody></table>';
-                        return t;
                     }
+                    addToMerged(debtsAssigned, 'ss');
+                    addToMerged(debtsAll, 'curr');
+
+                    // semester_code bo'yicha tartiblash
+                    mergedOrder.sort(function(a, b) {
+                        var sa = mergedMap[a].semester_code, sb = mergedMap[b].semester_code;
+                        if (sa !== sb) return sa < sb ? -1 : 1;
+                        return mergedMap[a].subject_name < mergedMap[b].subject_name ? -1 : 1;
+                    });
 
                     var statusBadge = isTeng
                         ? '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng</span>'
                         : '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng emas</span>';
 
                     var dh = '<div style="border-top:2px solid #e2e8f0;">';
-                    // Ikki ustun yonma-yon
-                    dh += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">';
-
-                    // Biriktirilgan
-                    dh += '<div style="border-right:1px solid #e2e8f0;">';
-                    dh += '<div style="padding:8px 16px 4px;font-weight:700;color:#1d4ed8;font-size:13px;background:#eff6ff;border-bottom:1px solid #bfdbfe;">Biriktirilgan (' + debtsAssigned.length + ' ta fan)</div>';
-                    dh += buildDebtTable(debtsAssigned);
+                    dh += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
+                    dh += '<span style="font-weight:700;color:#1d4ed8;font-size:13px;">Biriktirilgan: ' + debtsAssigned.length + ' ta fan</span>';
+                    dh += '<span style="color:#94a3b8;">|</span>';
+                    dh += '<span style="font-weight:700;color:#dc2626;font-size:13px;">Majburiy: ' + debtsAll.length + ' ta fan</span>';
+                    dh += statusBadge;
                     dh += '</div>';
 
-                    // Majburiy
-                    dh += '<div>';
-                    dh += '<div style="padding:8px 16px 4px;font-weight:700;color:#dc2626;font-size:13px;background:#fef2f2;border-bottom:1px solid #fecaca;">Majburiy (' + debtsAll.length + ' ta fan) ' + statusBadge + '</div>';
-                    dh += buildDebtTable(debtsAll);
+                    if (mergedOrder.length === 0) {
+                        dh += '<div style="padding:12px 20px;color:#16a34a;font-size:13px;">Qarzdorlik yo\'q</div>';
+                    } else {
+                        dh += '<table class="detail-table">';
+                        dh += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th>';
+                        dh += '<th style="text-align:center;color:#1d4ed8;">Biriktirilgan</th>';
+                        dh += '<th style="text-align:center;color:#dc2626;">Majburiy</th>';
+                        dh += '</tr></thead><tbody>';
+                        for (var i = 0; i < mergedOrder.length; i++) {
+                            var row = mergedMap[mergedOrder[i]];
+                            var onlyInCurr = !row.ss && row.curr; // faqat majburiyda bor
+                            var rowStyle = onlyInCurr ? 'background:#fff7ed;' : '';
+                            dh += '<tr style="' + rowStyle + '">';
+                            dh += '<td>' + (i+1) + '</td>';
+                            dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(row.semester_name) + '</span></td>';
+                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name) + '</td>';
+                            dh += '<td>' + esc(row.credit) + '</td>';
+                            dh += '<td>' + esc(row.total_acload) + '</td>';
+                            dh += '<td style="text-align:center;">' + (row.ss   ? '<span class="reason-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;">Qarzdor</span>' : '') + '</td>';
+                            dh += '<td style="text-align:center;">' + (row.curr ? '<span class="reason-badge">Qarzdor</span>' : '') + '</td>';
+                            dh += '</tr>';
+                        }
+                        dh += '</tbody></table>';
+                    }
                     dh += '</div>';
-
-                    dh += '</div></div>';
 
                     var currentTitle = $('#modal-title').text().split(' — ')[0];
                     $('#modal-title').text(currentTitle + ' — Biriktirilgan: ' + debtsAssigned.length + ' | Majburiy: ' + debtsAll.length);

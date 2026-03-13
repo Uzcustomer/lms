@@ -100,6 +100,7 @@
                                 <option value="">Barchasi</option>
                                 <option value="teng">Teng (mos)</option>
                                 <option value="teng_emas">Teng emas (farq bor)</option>
+                                <option value="noma'lum">Noma'lum (SS yo'q)</option>
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 160px;">
@@ -352,13 +353,15 @@
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
-                var debtSS   = (r.debt_count_ss   !== undefined) ? r.debt_count_ss   : r.debt_count;
+                var debtSS   = r.debt_count_ss;
                 var debtCurr = (r.debt_count_curr !== undefined) ? r.debt_count_curr : r.debt_count;
-                var isTeng   = (r.debt_status === 'teng');
-                html += '<td style="text-align:center;"><span class="badge badge-debt" style="background:#1d4ed8;">' + debtSS + '</span></td>';
+                var ssKnown  = (debtSS !== null && debtSS !== undefined);
+                html += '<td style="text-align:center;">' + (ssKnown ? '<span class="badge badge-debt" style="background:#1d4ed8;">' + debtSS + '</span>' : '<span style="color:#94a3b8;font-size:12px;">—</span>') + '</td>';
                 html += '<td style="text-align:center;"><span class="badge badge-debt">' + debtCurr + '</span></td>';
                 html += '<td style="text-align:center;">';
-                if (isTeng) {
+                if (!ssKnown) {
+                    html += '<span style="background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Noma\'lum</span>';
+                } else if (r.debt_status === 'teng') {
                     html += '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Teng</span>';
                 } else {
                     html += '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Teng emas</span>';
@@ -434,8 +437,10 @@
 
                     // Ikkita qarzdorlik ro'yxati: majburiy va biriktirilgan
                     var debtsAll      = resp.grade_debts    || [];
-                    var debtsAssigned = resp.grade_debts_ss || [];
-                    var isTeng = (debtsAll.length === debtsAssigned.length);
+                    var debtsAssigned = resp.grade_debts_ss; // null = SS ma'lumoti yo'q
+                    var hasSS         = resp.has_ss_data && debtsAssigned !== null;
+                    if (!hasSS) debtsAssigned = [];
+                    var isTeng = hasSS && (debtsAll.length === debtsAssigned.length);
 
                     // Bitta birlashgan jadval: har bir noyob fan uchun bitta qator,
                     // Biriktirilgan va Majburiy ustunlari bo'sh yoki "Qarzdor" ko'rsatadi
@@ -463,13 +468,15 @@
                         return mergedMap[a].subject_name < mergedMap[b].subject_name ? -1 : 1;
                     });
 
-                    var statusBadge = isTeng
-                        ? '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng</span>'
-                        : '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng emas</span>';
+                    var statusBadge = !hasSS
+                        ? '<span style="background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Noma\'lum (SS yo\'q)</span>'
+                        : isTeng
+                            ? '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng</span>'
+                            : '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng emas</span>';
 
                     var dh = '<div style="border-top:2px solid #e2e8f0;">';
                     dh += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
-                    dh += '<span style="font-weight:700;color:#1d4ed8;font-size:13px;">Biriktirilgan: ' + debtsAssigned.length + ' ta fan</span>';
+                    dh += '<span style="font-weight:700;color:#1d4ed8;font-size:13px;">Biriktirilgan: ' + (hasSS ? debtsAssigned.length + ' ta fan' : '— (ma\'lumot yo\'q)') + '</span>';
                     dh += '<span style="color:#94a3b8;">|</span>';
                     dh += '<span style="font-weight:700;color:#dc2626;font-size:13px;">Majburiy: ' + debtsAll.length + ' ta fan</span>';
                     dh += statusBadge;

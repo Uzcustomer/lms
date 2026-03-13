@@ -1057,7 +1057,10 @@ class JournalController extends Controller
         foreach ($jbLessonDates as $_d) {
             $_ds = \Carbon\Carbon::parse($_d)->format('Y-m-d');
             $covered = $jbAccountedByDate[$_ds] ?? [];
-            if (!empty($covered) && count($covered) >= count($studentHemisIds)) {
+            // $students — journalda ko'rsatiladigan talabalar (faollar + yozuvi borlar).
+            // $studentHemisIds — so'rov filtr uchun (chiqarilganlar ham bor), u katta bo'ladi.
+            // Shuning uchun $students->count() dan foydalanamiz.
+            if (!empty($covered) && count($covered) >= $students->count()) {
                 $jbGradeDates[] = $_ds;
             }
         }

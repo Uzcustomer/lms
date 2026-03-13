@@ -1034,11 +1034,34 @@ class JournalController extends Controller
         $teacherName = $lectureTeacher['name'] ?? ($practiceTeachers[0]['name'] ?? '');
 
         // ===== Dars ochish: o'tkazib yuborilgan kunlarni aniqlash =====
-        // Jadvalda dars bor lekin haqiqiy baho qo'yilmagan kunlar.
-        // Faqat effective (haqiqiy) bahosi bor yozuvlar hisobga olinadi.
-        // Davomat yozuvlari (attendance) buni bloklamaydi — chunki davomat
-        // belgilangan bo'lsa ham, baho qo'yilmagan bo'lishi mumkin.
-        $jbGradeDates = collect($jbGradesRaw)->filter(fn($g) => $getEffectiveGrade($g) !== null)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
+        // Kun "missed" (dars ochish kerak) hisoblanadi faqat kamida bitta talabada
+        // na baho, na NB bo'lmasa. NB qo'yilgan talabaga baho qo'yib bo'lmaydi,
+        // shuning uchun u "hisobga olingan" deb hisoblanadi.
+        // Har bir kun uchun "hisobga olingan" talabalar ro'yxatini tuzish:
+        // talaba "hisobga olingan" deb hisoblanadi agar unga:
+        //   a) haqiqiy (effective) baho qo'yilgan bo'lsa, YOKI
+        //   b) NB (absent) belgilangan bo'lsa — NB qo'yilgan talabaga baho qo'yib bo'lmaydi
+        $jbAccountedByDate = [];
+        foreach ($jbGradesRaw as $_g) {
+            $_dateStr = \Carbon\Carbon::parse($_g->lesson_date)->format('Y-m-d');
+            if ($getEffectiveGrade($_g) !== null || $_g->reason === 'absent') {
+                $jbAccountedByDate[$_dateStr][$_g->student_hemis_id] = true;
+            }
+        }
+
+        // Kun "missed emas" (dars ochish ko'rsatilmaydi) →
+        // o'sha kunda barcha talaba uchun yoki baho bor yoki NB bor.
+        // Kun "missed" (dars ochish kerak) →
+        // kamida bitta talabada na baho, na NB yo'q.
+        $jbGradeDates = [];
+        foreach ($jbLessonDates as $_d) {
+            $_ds = \Carbon\Carbon::parse($_d)->format('Y-m-d');
+            $covered = $jbAccountedByDate[$_ds] ?? [];
+            if (!empty($covered) && count($covered) >= count($studentHemisIds)) {
+                $jbGradeDates[] = $_ds;
+            }
+        }
+
         $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
 
         $missedDates = [];

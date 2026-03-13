@@ -1038,7 +1038,9 @@ class JournalController extends Controller
         // Faqat effective (haqiqiy) bahosi bor yozuvlar hisobga olinadi.
         // Davomat yozuvlari (attendance) buni bloklamaydi — chunki davomat
         // belgilangan bo'lsa ham, baho qo'yilmagan bo'lishi mumkin.
-        $jbGradeDates = collect($jbGradesRaw)->filter(fn($g) => $getEffectiveGrade($g) !== null)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
+        // NB (absent) yozuvlari ham "baho qo'yilgan" hisoblanadi — agar o'qituvchi
+        // barcha talabani NB qilgan bo'lsa ham, o'sha kun missed emas.
+        $jbGradeDates = collect($jbGradesRaw)->filter(fn($g) => $getEffectiveGrade($g) !== null || $g->reason === 'absent')->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
         $jbAttendanceDates = collect($jbAttendanceRaw)->pluck('lesson_date')->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'))->unique()->toArray();
 
         $missedDates = [];

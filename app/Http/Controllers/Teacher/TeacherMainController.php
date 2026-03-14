@@ -164,7 +164,8 @@ class TeacherMainController extends Controller
             $query->where('province_name', $request->province);
         }
 
-        $students = $query->orderBy('group_name')->orderBy('full_name')->paginate(50)->appends($request->query());
+        $perPage = $request->get('per_page', 50);
+        $students = $query->orderBy('group_name')->orderBy('full_name')->paginate($perPage)->appends($request->query());
 
         // Viloyatlar ro'yxati (filtr uchun)
         $provinces = Student::whereIn('group_id', $groupHemisIds)

@@ -3,7 +3,7 @@
         <div class="mt-14">
 
             <div class="flex items-center justify-between mb-6">
-                <h1 class="text-2xl font-bold text-gray-800">Bitiruvchi shartnomalar</h1>
+                <h1 class="text-2xl font-bold text-gray-800">Ishga joylashish shartnomasi</h1>
             </div>
 
             @if(session('success'))

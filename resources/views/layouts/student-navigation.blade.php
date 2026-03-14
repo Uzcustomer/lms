@@ -37,7 +37,7 @@
                         {{ __('Sababli ariza') }}
                     </x-nav-link>
                     <x-nav-link :href="route('student.contracts.index')" :active="request()->routeIs('student.contracts.*')">
-                        {{ __('Shartnomalar') }}
+                        {{ __('Ishga joylashish') }}
                     </x-nav-link>
                 </div>
             </div>

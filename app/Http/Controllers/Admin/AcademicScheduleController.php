@@ -102,7 +102,9 @@ class AcademicScheduleController extends Controller
         $routePrefix = $this->routePrefix();
         $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
         $user = auth()->user() ?? auth('teacher')->user();
-        $canDelete = $user && $user->hasAnyRole($adminRoles);
+        // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $canDelete = $user && in_array($activeRole, $adminRoles);
 
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
@@ -748,7 +750,9 @@ class AcademicScheduleController extends Controller
     {
         $user = auth()->user() ?? auth('teacher')->user();
         $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
-        if (!$user || !$user->hasAnyRole($adminRoles)) {
+        // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        if (!$user || !in_array($activeRole, $adminRoles)) {
             abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
         }
 

@@ -48,6 +48,8 @@ class SendAttendanceFinalDailyReport extends Command
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        // Fan nomi bo'yicha baho tekshirishdan chiqariladigan fanlar (Tanishuv amaliyoti, O'quv amaliyoti va h.k.)
+        $gradeExcludedSubjectPatterns = config('app.grade_excluded_subject_patterns', []);
 
         $this->info("Hisobot sanasi: {$reportDateStr} (yakuniy)");
 
@@ -219,7 +221,10 @@ class SendAttendanceFinalDailyReport extends Command
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
-                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+                $subjectNameLower = mb_strtolower($sch->subject_name ?? '');
+                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes)
+                    || (!empty($gradeExcludedSubjectPatterns) && collect($gradeExcludedSubjectPatterns)
+                        ->contains(fn($p) => str_contains($subjectNameLower, mb_strtolower($p))));
 
                 $grouped[$key] = [
                     'employee_name' => $sch->employee_name,

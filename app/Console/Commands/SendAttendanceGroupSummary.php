@@ -28,6 +28,8 @@ class SendAttendanceGroupSummary extends Command
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        // Fan nomi bo'yicha baho tekshirishdan chiqariladigan fanlar (Tanishuv amaliyoti, O'quv amaliyoti va h.k.)
+        $gradeExcludedSubjectPatterns = config('app.grade_excluded_subject_patterns', []);
 
         $this->info("Bugungi sana: {$todayStr}");
 
@@ -271,8 +273,11 @@ class SendAttendanceGroupSummary extends Command
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
-                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
-                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi; shuningdek fan nomi bo'yicha chiqarilganlar
+                $subjectNameLower = mb_strtolower($sch->subject_name ?? '');
+                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes)
+                    || (!empty($gradeExcludedSubjectPatterns) && collect($gradeExcludedSubjectPatterns)
+                        ->contains(fn($p) => str_contains($subjectNameLower, mb_strtolower($p))));
 
                 $grouped[$key] = [
                     'employee_name' => $sch->employee_name,

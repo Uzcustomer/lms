@@ -136,6 +136,8 @@ return [
     "attendance_excluded_training_types" => [99, 100, 101, 102],
     // Reyting hisobotidan chiqariladigan fanlar (baho qo'yilmaydigan fanlar)
     "excluded_rating_subject_patterns" => ["quv amaliyoti"],
+    // Davomat eslatmalarida baho tekshirishdan chiqariladigan fanlar (davomat olinadi, baho qo'yilmaydi)
+    "grade_excluded_subject_patterns" => ["tanishuv amaliyoti", "quv amaliyoti"],
     "shakllar" =>
         [
             [

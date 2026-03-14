@@ -32,6 +32,8 @@ class TeacherAuthController extends Controller
 
     public function login(Request $request)
     {
+        $t0 = microtime(true);
+
         if (Auth::guard('teacher')->check()) {
             return redirect()->intended(route('teacher.dashboard'));
         }
@@ -40,9 +42,12 @@ class TeacherAuthController extends Controller
             'login' => ['required'],
             'password' => ['required'],
         ]);
+        Log::info('[TEACHER LOGIN TIMING] validation: ' . round((microtime(true) - $t0) * 1000) . 'ms');
 
         // Foydalanuvchini bazadan qidiramiz
+        $t1 = microtime(true);
         $teacher = Teacher::where('login', $credentials['login'])->first();
+        Log::info('[TEACHER LOGIN TIMING] db_query(teacher): ' . round((microtime(true) - $t1) * 1000) . 'ms');
 
         if (!$teacher) {
             return back()
@@ -50,28 +55,44 @@ class TeacherAuthController extends Controller
                 ->withInput($request->only('login', '_profile'));
         }
 
+        $t2 = microtime(true);
         if (Auth::guard('teacher')->attempt($credentials)) {
+            Log::info('[TEACHER LOGIN TIMING] auth_attempt(ok): ' . round((microtime(true) - $t2) * 1000) . 'ms');
             $teacher = Auth::guard('teacher')->user();
 
             // Boshqa guardlarni tozalash (admin/student session qoldiqlarini yo'q qilish)
+            $t3 = microtime(true);
             Auth::guard('web')->logout();
             Auth::guard('student')->logout();
             $request->session()->forget([
                 'impersonating', 'impersonator_id', 'impersonator_guard',
                 'impersonated_name', 'impersonator_active_role', 'active_role',
             ]);
+            Log::info('[TEACHER LOGIN TIMING] clear_guards: ' . round((microtime(true) - $t3) * 1000) . 'ms');
 
+            $t4 = microtime(true);
             $request->session()->regenerate();
+            Log::info('[TEACHER LOGIN TIMING] session_regenerate: ' . round((microtime(true) - $t4) * 1000) . 'ms');
 
             // Default active_role ni o'rnatish: oqituvchi roli bo'lsa shu, bo'lmasa birinchi rol
+            $t5 = microtime(true);
             $roles = $teacher->getRoleNames()->toArray();
+            Log::info('[TEACHER LOGIN TIMING] getRoleNames: ' . round((microtime(true) - $t5) * 1000) . 'ms');
+
             if (in_array('oqituvchi', $roles)) {
                 session(['active_role' => 'oqituvchi']);
             } elseif (count($roles) > 0) {
                 session(['active_role' => $roles[0]]);
             }
 
+            $t6 = microtime(true);
             ActivityLogService::logLogin('teacher');
+            Log::info('[TEACHER LOGIN TIMING] activity_log: ' . round((microtime(true) - $t6) * 1000) . 'ms');
+
+            Log::info('[TEACHER LOGIN TIMING] TOTAL: ' . round((microtime(true) - $t0) * 1000) . 'ms', [
+                'teacher_id' => $teacher->id,
+                'login' => $credentials['login'],
+            ]);
 
             if ($teacher->must_change_password) {
                 return redirect()->route('teacher.force-change-password');
@@ -83,6 +104,7 @@ class TeacherAuthController extends Controller
 
             return redirect()->intended(route('teacher.dashboard'));
         }
+        Log::info('[TEACHER LOGIN TIMING] auth_attempt(fail): ' . round((microtime(true) - $t2) * 1000) . 'ms');
 
         return back()
             ->withErrors(['login' => "Login yoki parol noto'g'ri."])

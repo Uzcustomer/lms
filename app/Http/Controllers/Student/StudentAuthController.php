@@ -20,18 +20,31 @@ class StudentAuthController extends Controller
 {
     public function login(Request $request)
     {
-        // Agar oldingi sessiya hali faol bo'lsa — avval logout qilamiz
-        if (Auth::guard('student')->check()) {
-            Auth::guard('student')->logout();
+        $loginStart = microtime(true);
+        $step = 'start';
+
+        try {
+            // Agar oldingi sessiya hali faol bo'lsa — avval logout qilamiz
+            $step = 'guard_check';
+            if (Auth::guard('student')->check()) {
+                Auth::guard('student')->logout();
+            }
+            Log::channel('student_auth')->info('[LOGIN TIMING] guard_check: ' . round((microtime(true) - $loginStart) * 1000) . 'ms');
+
+            $step = 'validation';
+            $request->validate([
+                'login' => ['required', 'string'],
+                'password' => ['required', 'string'],
+            ]);
+            Log::channel('student_auth')->info('[LOGIN TIMING] validation: ' . round((microtime(true) - $loginStart) * 1000) . 'ms');
+
+            $step = 'tryLocalPassword';
+            // Faqat lokal parol bilan kirish (HEMIS OAuth alohida tugma orqali)
+            return $this->tryLocalPassword($request, hemsFailed: false);
+        } catch (\Throwable $e) {
+            Log::channel('student_auth')->error("[LOGIN TIMEOUT DIAGNOSTIC] Step={$step}, elapsed=" . round((microtime(true) - $loginStart) * 1000) . "ms, error={$e->getMessage()}");
+            throw $e;
         }
-
-        $request->validate([
-            'login' => ['required', 'string'],
-            'password' => ['required', 'string'],
-        ]);
-
-        // Faqat lokal parol bilan kirish (HEMIS OAuth alohida tugma orqali)
-        return $this->tryLocalPassword($request, hemsFailed: false);
     }
 
     /**
@@ -39,6 +52,7 @@ class StudentAuthController extends Controller
      */
     private function tryLocalPassword(Request $request, bool $hemsFailed = false)
     {
+        $t0 = microtime(true);
         $loginId = $request->login;
 
         Log::channel('student_auth')->info('[LOCAL AUTH] Lokal parol tekshiruvi boshlanmoqda', [
@@ -48,6 +62,7 @@ class StudentAuthController extends Controller
         ]);
 
         $student = Student::where('student_id_number', $loginId)->first();
+        Log::channel('student_auth')->info('[LOGIN TIMING] db_query(student_id_number): ' . round((microtime(true) - $t0) * 1000) . 'ms');
 
         if (!$student) {
             Log::channel('student_auth')->warning('[LOCAL AUTH] Talaba bazada topilmadi', [
@@ -83,7 +98,9 @@ class StudentAuthController extends Controller
         }
 
         // Parol tekshiruvi
+        $t1 = microtime(true);
         if (!Hash::check($request->password, $student->local_password)) {
+            Log::channel('student_auth')->info('[LOGIN TIMING] hash_check(fail): ' . round((microtime(true) - $t1) * 1000) . 'ms');
             Log::channel('student_auth')->warning('[LOCAL AUTH] Lokal parol noto\'g\'ri', [
                 'login' => $loginId,
                 'student_id' => $student->id,
@@ -95,25 +112,34 @@ class StudentAuthController extends Controller
             }
             return back()->withErrors(['login' => "Login yoki parol noto'g'ri."])->onlyInput('login', '_profile');
         }
+        Log::channel('student_auth')->info('[LOGIN TIMING] hash_check(ok): ' . round((microtime(true) - $t1) * 1000) . 'ms');
 
         // Telegram 2FA: tasdiqlangan talabalar uchun
         if ($student->telegram_chat_id) {
+            Log::channel('student_auth')->info('[LOGIN TIMING] telegram_2fa_start: ' . round((microtime(true) - $t0) * 1000) . 'ms');
             return $this->sendLoginCode($student, $request);
         }
 
         // Boshqa guardlarni tozalash (admin/teacher session qoldiqlarini yo'q qilish)
+        $t2 = microtime(true);
         $this->clearOtherGuards($request);
+        Log::channel('student_auth')->info('[LOGIN TIMING] clearOtherGuards: ' . round((microtime(true) - $t2) * 1000) . 'ms');
 
+        $t3 = microtime(true);
         Auth::guard('student')->login($student);
-        $request->session()->regenerate();
-        ActivityLogService::logLogin('student');
+        Log::channel('student_auth')->info('[LOGIN TIMING] auth_login: ' . round((microtime(true) - $t3) * 1000) . 'ms');
 
-        Log::channel('student_auth')->info('[LOGIN SUCCESS] Talaba lokal parol bilan kirdi', [
+        $t4 = microtime(true);
+        $request->session()->regenerate();
+        Log::channel('student_auth')->info('[LOGIN TIMING] session_regenerate: ' . round((microtime(true) - $t4) * 1000) . 'ms');
+
+        $t5 = microtime(true);
+        ActivityLogService::logLogin('student');
+        Log::channel('student_auth')->info('[LOGIN TIMING] activity_log: ' . round((microtime(true) - $t5) * 1000) . 'ms');
+
+        Log::channel('student_auth')->info('[LOGIN TIMING] TOTAL: ' . round((microtime(true) - $t0) * 1000) . 'ms', [
             'login' => $loginId,
             'student_id' => $student->id,
-            'student_id_number' => $student->student_id_number,
-            'full_name' => $student->full_name,
-            'auth_method' => 'local_password',
         ]);
 
         if ($student->must_change_password) {

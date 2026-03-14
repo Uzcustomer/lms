@@ -17,24 +17,21 @@ class ConnectionDebugMiddleware
     public function handle(Request $request, Closure $next): Response
     {
         $startTime = microtime(true);
-        $debugInfo = [
-            'url' => $request->fullUrl(),
-            'method' => $request->method(),
-            'ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'timestamp' => now()->toDateTimeString(),
-        ];
 
-        // 1. Database ulanishini tekshirish
-        $dbStatus = $this->checkDatabaseConnection();
-        $debugInfo['database'] = $dbStatus;
-
-        // Agar DB ulanish muammo bo'lsa — darhol log yozamiz
-        if (!$dbStatus['connected']) {
-            try {
-                Log::channel('connection_debug')->error('DATABASE ULANISH YO\'QOLDI', $debugInfo);
-            } catch (\Throwable $e) {
-                // Log yozish xatosi asosiy javobni buzmasligi kerak
+        // DB ping faqat login route'larida — har requestda emas (timeout sabab bo'lishi mumkin)
+        $isLoginRoute = str_contains($request->path(), 'login');
+        if ($isLoginRoute) {
+            $dbStatus = $this->checkDatabaseConnection();
+            if (!$dbStatus['connected']) {
+                try {
+                    Log::channel('connection_debug')->error('DATABASE ULANISH YO\'QOLDI (login)', [
+                        'url' => $request->fullUrl(),
+                        'ip' => $request->ip(),
+                        'db_error' => $dbStatus['error'] ?? 'unknown',
+                    ]);
+                } catch (\Throwable $e) {
+                    // Log yozish xatosi asosiy javobni buzmasligi kerak
+                }
             }
         }
 
@@ -43,15 +40,15 @@ class ConnectionDebugMiddleware
             $response = $next($request);
         } catch (\Throwable $e) {
             $duration = round((microtime(true) - $startTime) * 1000, 2);
-            $debugInfo['duration_ms'] = $duration;
-            $debugInfo['error'] = [
-                'message' => $e->getMessage(),
-                'class' => get_class($e),
-                'file' => $e->getFile() . ':' . $e->getLine(),
-            ];
-
             try {
-                Log::channel('connection_debug')->error('REQUEST XATOLIK BILAN TUGADI', $debugInfo);
+                Log::channel('connection_debug')->error('REQUEST XATOLIK BILAN TUGADI', [
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'duration_ms' => $duration,
+                    'error' => $e->getMessage(),
+                    'class' => get_class($e),
+                    'file' => $e->getFile() . ':' . $e->getLine(),
+                ]);
             } catch (\Throwable $logEx) {
                 // Log yozish xatosi asosiy xatoni yutib yubormasligi kerak
             }
@@ -59,27 +56,34 @@ class ConnectionDebugMiddleware
         }
 
         $duration = round((microtime(true) - $startTime) * 1000, 2);
-        $debugInfo['duration_ms'] = $duration;
-        $debugInfo['status_code'] = $response->getStatusCode();
 
-        // 2. Sekin requestlarni log qilish (3 sekunddan oshsa)
-        // try-catch: log yozish xatosi asosiy javobni buzmaydi
         try {
+            // Sekin requestlarni log qilish (3 sekunddan oshsa)
             if ($duration > 3000) {
-                $debugInfo['query_count'] = count(DB::getQueryLog());
-                Log::channel('connection_debug')->warning('SEKIN REQUEST ANIQLANDI', $debugInfo);
+                Log::channel('connection_debug')->warning('SEKIN REQUEST ANIQLANDI', [
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'duration_ms' => $duration,
+                    'status_code' => $response->getStatusCode(),
+                ]);
             }
 
-            // 3. Server xatolik (5xx) bo'lsa log qilish
+            // Server xatolik (5xx) bo'lsa log qilish
             if ($response->getStatusCode() >= 500) {
-                Log::channel('connection_debug')->error('SERVER XATOLIK (5xx)', $debugInfo);
+                Log::channel('connection_debug')->error('SERVER XATOLIK (5xx)', [
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'duration_ms' => $duration,
+                ]);
             }
 
-            // 4. 419 (CSRF/Session expired) bo'lsa log qilish — bu ko'pincha "ulanish uzildi" deb ko'rinadi
+            // 419 (CSRF/Session expired) bo'lsa log qilish
             if ($response->getStatusCode() === 419) {
-                $debugInfo['session_id'] = session()->getId();
-                $debugInfo['session_driver'] = config('session.driver');
-                Log::channel('connection_debug')->warning('SESSION/CSRF MUDDATI TUGADI (419)', $debugInfo);
+                Log::channel('connection_debug')->warning('SESSION/CSRF MUDDATI TUGADI (419)', [
+                    'url' => $request->fullUrl(),
+                    'session_driver' => config('session.driver'),
+                    'duration_ms' => $duration,
+                ]);
             }
         } catch (\Throwable $e) {
             // Log yozish xatosi asosiy javobni buzmasligi kerak

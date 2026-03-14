@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\CurriculumWeek;
 use App\Models\StaffRegistrationDivision;
 use App\Services\TableImageGenerator;
 use App\Services\TelegramService;
@@ -330,33 +329,48 @@ class SendUnratedRegistrationsReport extends Command
     }
 
     /**
-     * Joriy semestrning eng erta boshlanish sanasini aniqlash.
+     * Joriy semestrning boshlanish sanasini aniqlash.
+     * Kuz va bahor semestrlarini ajratib, hozirgi vaqtga mos semestrni tanlaydi.
      */
     private function getSemesterStartDate(): ?Carbon
     {
-        // CurriculumWeek orqali joriy semestrlarni aniqlash
-        $targetSemesterIds = DB::table('curriculum_weeks')
-            ->select('semester_hemis_id')
-            ->groupBy('semester_hemis_id')
-            ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
-            ->pluck('semester_hemis_id')
-            ->toArray();
+        // 1. Joriy o'quv yilini aniqlash
+        $educationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
 
-        if (empty($targetSemesterIds)) {
-            // Fallback: Semester.current = true
-            $targetSemesterIds = DB::table('semesters')
-                ->where('current', true)
-                ->pluck('semester_hemis_id')
-                ->toArray();
-        }
-
-        if (empty($targetSemesterIds)) {
+        if (!$educationYear) {
             return null;
         }
 
-        $startDate = CurriculumWeek::whereIn('semester_hemis_id', $targetSemesterIds)
-            ->orderBy('start_date', 'asc')
-            ->value('start_date');
+        // 2. Shu o'quv yildagi joriy semestrlarni olish
+        $currentSemesterIds = DB::table('semesters')
+            ->where('current', true)
+            ->where('education_year', $educationYear)
+            ->pluck('semester_hemis_id');
+
+        if ($currentSemesterIds->isEmpty()) {
+            return null;
+        }
+
+        // 3. Bahor semestrlarini ajratish (yanvar oyidan keyin boshlanganlar)
+        $springCutoff = ($educationYear + 1) . '-01-01';
+
+        $springSemesterIds = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentSemesterIds)
+            ->groupBy('semester_hemis_id')
+            ->havingRaw('MIN(start_date) >= ?', [$springCutoff])
+            ->pluck('semester_hemis_id');
+
+        // Bahor semestri bor bo'lsa — uni tanlash, aks holda kuz semestri
+        $targetSemesterIds = $springSemesterIds->isNotEmpty()
+            ? $springSemesterIds
+            : $currentSemesterIds;
+
+        $startDate = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $targetSemesterIds)
+            ->min('start_date');
 
         return $startDate ? Carbon::parse($startDate) : null;
     }

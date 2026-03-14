@@ -155,4 +155,12 @@ class Teacher extends Authenticatable
             ->withTimestamps();
     }
 
+    /**
+     * Registrator ofisi bo'linmalari (front/back ofis biriktirishlari)
+     */
+    public function registrationDivisions()
+    {
+        return $this->hasMany(StaffRegistrationDivision::class);
+    }
+
 }

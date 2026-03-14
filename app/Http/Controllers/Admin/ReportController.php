@@ -4494,10 +4494,9 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
-        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
-        // 1-QADAM: Jadvallardan ma'lumot olish
+        // 1-QADAM: Asosiy jadval so'rovi (filtrlar bilan)
         $scheduleQuery = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
             ->leftJoin('semesters as sem', function ($join) {
@@ -4577,8 +4576,39 @@ class ReportController extends Controller
             $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
         }
 
+        // 2-QADAM: Baho mavjudligini SQL darajasida tekshirish (NOT EXISTS)
+        // 1-usul: subject_schedule_id orqali
+        $scheduleQuery->whereNotExists(function ($q) {
+            $q->select(DB::raw(1))
+                ->from('student_grades as sg1')
+                ->whereColumn('sg1.subject_schedule_id', 'sch.schedule_hemis_id')
+                ->whereNull('sg1.deleted_at')
+                ->where(function ($q2) {
+                    $q2->where('sg1.grade', '>', 0)
+                       ->orWhere('sg1.retake_grade', '>', 0)
+                       ->orWhere('sg1.status', 'recorded');
+                });
+        });
+
+        // 2-usul: guruh + fan + sana orqali
+        $scheduleQuery->whereNotExists(function ($q) {
+            $q->select(DB::raw(1))
+                ->from('student_grades as sg2')
+                ->join('students as st', 'st.hemis_id', '=', 'sg2.student_hemis_id')
+                ->whereColumn('st.group_id', 'sch.group_id')
+                ->whereColumn('sg2.subject_id', 'sch.subject_id')
+                ->whereRaw('DATE(sg2.lesson_date) = DATE(sch.lesson_date)')
+                ->whereNull('sg2.deleted_at')
+                ->whereNotNull('sg2.lesson_date')
+                ->where(function ($q2) {
+                    $q2->where('sg2.grade', '>', 0)
+                       ->orWhere('sg2.retake_grade', '>', 0)
+                       ->orWhere('sg2.status', 'recorded');
+                });
+        });
+
+        // 3-QADAM: Natijani olish — faqat baho qo'yilmaganlar + dars ochilganlik holati
         $schedules = $scheduleQuery->select(
-            'sch.schedule_hemis_id',
             'sch.employee_id',
             'sch.employee_name',
             'sch.faculty_name',
@@ -4597,90 +4627,23 @@ class ReportController extends Controller
             'sch.lesson_pair_start_time',
             'sch.lesson_pair_end_time',
             'g.id as group_db_id',
-            DB::raw('DATE(sch.lesson_date) as lesson_date_str')
+            DB::raw('DATE(sch.lesson_date) as lesson_date_str'),
+            DB::raw('EXISTS (SELECT 1 FROM lesson_openings lo WHERE lo.group_hemis_id = sch.group_id AND lo.subject_id = sch.subject_id AND lo.semester_code = sch.semester_code AND DATE(lo.lesson_date) = DATE(sch.lesson_date)) as has_opening')
         )->get();
 
         if ($schedules->isEmpty()) {
             return [];
         }
 
-        // 2-QADAM: Baho mavjudligini tekshirish
-        $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
-        $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
-        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
-        $minDate = $schedules->min('lesson_date_str');
-        $maxDate = $schedules->max('lesson_date_str');
-
-        // Baho (1-usul): subject_schedule_id orqali (grade YOKI retake_grade mavjud)
-        $gradeByScheduleId = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->where(function ($q) {
-                $q->where('grade', '>', 0)
-                  ->orWhere('retake_grade', '>', 0)
-                  ->orWhere('status', 'recorded');
-            })
-            ->pluck('subject_schedule_id')
-            ->unique()
-            ->flip();
-
-        // Baho (2-usul): guruh + fan + sana orqali (PHP Carbon bilan sanani normalize qilamiz)
-        // TIMESTAMP va DATETIME ustunlar orasidagi timezone farqlarini bartaraf etish uchun
-        // SQL DATE() o'rniga PHP Carbon::parse ishlatamiz (jurnal bilan bir xil usul).
-        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
-        $gradeRecords = DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->whereNull('sg.deleted_at')
-            ->whereIn('st.group_id', $groupHemisIds)
-            ->whereIn('sg.subject_id', $subjectIds)
-            ->whereNotNull('sg.lesson_date')
-            ->where(function ($q) {
-                $q->where('sg.grade', '>', 0)
-                  ->orWhere('sg.retake_grade', '>', 0)
-                  ->orWhere('sg.status', 'recorded');
-            })
-            ->select('st.group_id', 'sg.subject_id', 'sg.lesson_date')
-            ->distinct()
-            ->get();
-
-        $gradeByKey = [];
-        foreach ($gradeRecords as $row) {
-            $date = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
-            $key = $row->group_id . '|' . $row->subject_id . '|' . $date;
-            $gradeByKey[$key] = true;
-        }
-
-        // Dars ochilganlarni tekshirish (barcha statuslar — umuman ochilganmi)
-        $openingsByKey = DB::table('lesson_openings')
-            ->whereIn('group_hemis_id', $groupHemisIds)
-            ->get()
-            ->groupBy(function ($item) {
-                return $item->group_hemis_id . '|' . $item->subject_id . '|' . $item->semester_code . '|' . \Carbon\Carbon::parse($item->lesson_date)->format('Y-m-d');
-            });
-
-        // 3-QADAM: Faqat baho qo'yilmaganlarni filtrlash
+        // 4-QADAM: Guruhlab, dublikatlarni olib tashlash
         $grouped = [];
         foreach ($schedules as $sch) {
             $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                  . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
-            $gradeKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str;
-
-            $hasGrade = isset($gradeByScheduleId[$sch->schedule_hemis_id])
-                || isset($gradeByKey[$gradeKey]);
-
-            // Faqat baho qo'yilmaganlarni olamiz
-            if ($hasGrade) {
-                continue;
-            }
-
             $pairStart = $sch->lesson_pair_start_time ? substr($sch->lesson_pair_start_time, 0, 5) : '';
             $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
             $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '';
-
-            // Dars ochilganmi tekshirish
-            $openingKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code . '|' . $sch->lesson_date_str;
-            $hasOpening = isset($openingsByKey[$openingKey]);
 
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
@@ -4700,7 +4663,7 @@ class ReportController extends Controller
                     'training_type' => $sch->training_type_name,
                     'lesson_pair_time' => $pairTime,
                     'lesson_date' => $sch->lesson_date_str,
-                    'has_opening' => $hasOpening,
+                    'has_opening' => (bool) $sch->has_opening,
                 ];
             }
         }

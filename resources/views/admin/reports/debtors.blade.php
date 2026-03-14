@@ -590,14 +590,12 @@
                     gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th><th>Holat</th></tr></thead><tbody>';
                     for (var g = 0; g < grades.length; g++) {
                         var gr = grades[g];
-                        var point = gr.total_point || '-';
-                        var grade = gr.grade || '-';
-                        var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
+                        var point = (gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
+                        var grade = (gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
+                        // PHP bilan bir xil mantiq: grade '0' yoki '2' = qarzdor, boshqalar = o'tdi
+                        var isDebt = (grade === '-' || grade === '0' || grade === '2');
+                        var gradeClass = isDebt ? 'cell-fail' : 'cell-pass';
                         var subNameLower = (gr.subject_name || '').trim().toLowerCase();
-                        var hasPassingGrade = point !== '-' && parseFloat(point) >= 60 && grade !== '-' && grade !== '2' && grade !== '0';
-                        var isMissingGrade = (point === '-' && grade === '-');
-                        var isFailedGrade = (grade !== '-' && (grade === '2' || grade === '0'));
-                        var isDebt = !hasPassingGrade && (isMissingGrade || isFailedGrade || (point !== '-' && parseFloat(point) < 60));
                         var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
                         gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
@@ -609,7 +607,7 @@
                         gh += '<td>';
                         if (isDebt) {
                             gh += '<span class="reason-badge">Qarzdor</span>';
-                        } else if (hasPassingGrade) {
+                        } else {
                             gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';
                         }
                         gh += '</td>';

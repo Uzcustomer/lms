@@ -159,16 +159,6 @@
             Xodimlar
         </a>
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
-        <a href="{{ route('admin.staff-registration.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.staff-registration.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-            </svg>
-            Registrator bo'linmalari
-        </a>
-        @endif
-
         <a href="{{ route('admin.student-grades-week') }}"
            class="sidebar-link {{ request()->routeIs('admin.student-grades-week') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -695,6 +685,12 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
                     Sozlamalar
+                </a>
+                <a href="{{ route('admin.staff-registration.index') }}" class="profile-dropdown-link">
+                    <svg class="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                    Registrator bo'linmalari
                 </a>
             </div>
             @endif

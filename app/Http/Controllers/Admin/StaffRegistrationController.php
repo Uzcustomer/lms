@@ -19,11 +19,18 @@ class StaffRegistrationController extends Controller
      */
     public function index()
     {
-        $divisions = StaffRegistrationDivision::with(['teacher', 'department', 'specialty'])
+        $activeDivisions = StaffRegistrationDivision::active()
+            ->with(['teacher', 'department', 'specialty'])
             ->orderBy('division_type')
             ->orderBy('department_hemis_id')
             ->orderBy('specialty_hemis_id')
             ->orderBy('level_code')
+            ->get();
+
+        $historyDivisions = StaffRegistrationDivision::history()
+            ->with(['teacher', 'department', 'specialty'])
+            ->orderBy('ended_at', 'desc')
+            ->limit(50)
             ->get();
 
         $departments = Department::where('structure_type_code', '11')
@@ -43,11 +50,12 @@ class StaffRegistrationController extends Controller
             ->orderBy('level_code')
             ->get();
 
-        return view('admin.staff-registration.index', compact('divisions', 'departments', 'registrators', 'courses'));
+        return view('admin.staff-registration.index', compact('activeDivisions', 'historyDivisions', 'departments', 'registrators', 'courses'));
     }
 
     /**
      * Yangi biriktirish saqlash (bir nechta fakultet tanlash mumkin)
+     * Agar oldingi xodim bo'lsa - tarixga o'tkazib, yangisini biriktiradi
      */
     public function store(Request $request)
     {
@@ -67,19 +75,26 @@ class StaffRegistrationController extends Controller
 
         $teacher = Teacher::find($request->teacher_id);
         $created = 0;
-        $skipped = 0;
+        $replaced = 0;
 
         try {
             foreach ($request->department_hemis_ids as $deptHemisId) {
-                $exists = StaffRegistrationDivision::where('division_type', $request->division_type)
+                // Faol biriktirishni tekshirish
+                $existing = StaffRegistrationDivision::active()
+                    ->where('division_type', $request->division_type)
                     ->where('department_hemis_id', $deptHemisId)
                     ->where('specialty_hemis_id', $request->specialty_hemis_id)
                     ->where('level_code', $request->level_code)
-                    ->exists();
+                    ->first();
 
-                if ($exists) {
-                    $skipped++;
-                    continue;
+                if ($existing) {
+                    // Agar bir xil xodim - o'tkazib yuborish
+                    if ($existing->teacher_id == $request->teacher_id) {
+                        continue;
+                    }
+                    // Eskisini tarixga o'tkazish
+                    $existing->update(['ended_at' => now()->toDateString()]);
+                    $replaced++;
                 }
 
                 StaffRegistrationDivision::create([
@@ -88,6 +103,7 @@ class StaffRegistrationController extends Controller
                     'department_hemis_id' => $deptHemisId,
                     'specialty_hemis_id' => $request->specialty_hemis_id,
                     'level_code' => $request->level_code,
+                    'started_at' => now()->toDateString(),
                 ]);
                 $created++;
             }
@@ -95,8 +111,8 @@ class StaffRegistrationController extends Controller
             ActivityLogService::log('create', 'staff_registration', "Registrator bo'linma biriktirildi: {$teacher->full_name} ({$created} ta)", null);
 
             $msg = "{$created} ta biriktirish saqlandi.";
-            if ($skipped > 0) {
-                $msg .= " {$skipped} ta allaqachon mavjud bo'lgani o'tkazib yuborildi.";
+            if ($replaced > 0) {
+                $msg .= " {$replaced} ta oldingi biriktirish tarixga o'tkazildi.";
             }
 
             return redirect()->route('admin.staff-registration.index')->with('success', $msg);
@@ -107,20 +123,20 @@ class StaffRegistrationController extends Controller
     }
 
     /**
-     * Biriktirishni o'chirish
+     * Biriktirishni tugatish (tarixga o'tkazish)
      */
     public function destroy(StaffRegistrationDivision $division)
     {
         try {
             $teacher = $division->teacher;
-            $division->delete();
+            $division->update(['ended_at' => now()->toDateString()]);
 
-            ActivityLogService::log('delete', 'staff_registration', "Registrator bo'linma o'chirildi: {$teacher->full_name}", null);
+            ActivityLogService::log('delete', 'staff_registration', "Registrator bo'linma tugatildi: {$teacher->full_name}", null);
 
-            return redirect()->route('admin.staff-registration.index')->with('success', 'Biriktirish o\'chirildi.');
+            return redirect()->route('admin.staff-registration.index')->with('success', 'Biriktirish tugatildi va tarixga o\'tkazildi.');
         } catch (\Throwable $e) {
             Log::error('StaffRegistration destroy xatolik: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'O\'chirishda xatolik: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Tugatishda xatolik: ' . $e->getMessage());
         }
     }
 

@@ -25,6 +25,7 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use App\Models\StudentGrade;
 use App\Models\Setting;
+use App\Models\StaffRegistrationDivision;
 use App\Models\StudentPerformance;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -217,7 +218,15 @@ class StudentController extends Controller
         }
         $canToggleFive = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan']);
 
-        return view('admin.students.show', compact('student', 'canToggleFive'));
+        // Registrator ofisi xodimlari (front/back ofis)
+        $frontOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'front_office'
+        );
+        $backOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
+        );
+
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)

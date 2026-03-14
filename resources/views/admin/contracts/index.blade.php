@@ -117,10 +117,10 @@
                             <input type="text" id="student_id" placeholder="Talaba HEMIS ID" class="filter-input">
                         </div>
                         <div class="filter-item" style="max-width:170px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#0d9488;"></span> Joriy semestr</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#0d9488;"></span> Joriy kurs</label>
                             <div style="display:flex;align-items:center;height:36px;">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" id="current_semester_toggle">
+                                    <input type="checkbox" id="current_course_toggle">
                                     <span class="toggle-slider"></span>
                                 </label>
                                 <span id="toggle-label" style="margin-left:8px;font-size:12px;font-weight:600;color:#94a3b8;">O'chirilgan</span>
@@ -261,7 +261,7 @@
                 _status: $('#status_filter').val() || '',
                 _organization: $('#organization').val() || '',
                 search: $('#search_input').val() || '',
-                _current_semester: $('#current_semester_toggle').is(':checked') ? '1' : ''
+                _current_course: $('#current_course_toggle').is(':checked') ? '1' : ''
             };
         }
 
@@ -529,7 +529,7 @@
                 if (e.which === 13) loadContracts(1);
             });
 
-            $('#current_semester_toggle').on('change', function() {
+            $('#current_course_toggle').on('change', function() {
                 var label = $('#toggle-label');
                 if ($(this).is(':checked')) {
                     label.text('Yoqilgan').css('color', '#0d9488');

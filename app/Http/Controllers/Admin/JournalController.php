@@ -1160,6 +1160,33 @@ class JournalController extends Controller
             }
         }
 
+        // Dars jadvaldagi barcha darslar tugaganmi tekshirish
+        $allLessonsCompleted = true;
+        $remainingLessonsCount = 0;
+        $lastLessonDate = null;
+        if ($canSubmitYn || auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            $today = now()->toDateString();
+            $remainingLessonsCount = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->whereNotNull('lesson_date')
+                ->where('lesson_date', '>', $today)
+                ->count();
+            $allLessonsCompleted = $remainingLessonsCount === 0;
+
+            $lastLessonDate = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->whereNotNull('lesson_date')
+                ->max('lesson_date');
+        }
+
         // Sababli: tasdiqlangan sababli hujjatlarni olish (YN yuborilgandan keyin)
         $approvedExcuses = collect();
         $excuseGradeSnapshots = collect();
@@ -1246,6 +1273,9 @@ class JournalController extends Controller
             'ynSubmission',
             'examSchedule',
             'canSubmitYn',
+            'allLessonsCompleted',
+            'remainingLessonsCount',
+            'lastLessonDate',
             'levelDeadline',
             'approvedExcuses',
             'excuseGradeSnapshots',
@@ -4217,6 +4247,24 @@ class JournalController extends Controller
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;
         $groupHemisId = $request->group_hemis_id;
+
+        // Dars jadvaldagi barcha darslar tugaganmi tekshirish
+        $today = now()->toDateString();
+        $remainingLessons = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->where('lesson_date', '>', $today)
+            ->count();
+
+        if ($remainingLessons > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Hali {$remainingLessons} ta dars qolgan. Barcha darslar tugagandan keyin YN ga yuborish mumkin.",
+            ], 422);
+        }
 
         // Allaqachon yuborilganligini tekshirish
         $existing = YnSubmission::where('subject_id', $subjectId)

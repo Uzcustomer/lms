@@ -24,7 +24,7 @@ class SendUnratedRegistrationsReport extends Command
 
         // Baho tekshirishdan chiqariladigan mashg'ulot turlari
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
-        $gradeExcludedSubjectPatterns = config('app.grade_excluded_subject_patterns', []);
+        $gradeExcludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
         // 1-QADAM: Joriy semestr boshlanish sanasini aniqlash
         $semesterStart = $this->getSemesterStartDate();
@@ -62,6 +62,7 @@ class SendUnratedRegistrationsReport extends Command
             ->leftJoin('departments as d', 'd.department_hemis_id', '=', 'g.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->whereNotIn('sch.training_type_code', $gradeExcludedTypes)
+            ->where('sch.education_year_current', true)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) >= ?', [$semesterStartStr])
@@ -106,8 +107,11 @@ class SendUnratedRegistrationsReport extends Command
         $gradeByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
+            ->where(function ($q) {
+                $q->where('grade', '>', 0)
+                  ->orWhere('retake_grade', '>', 0)
+                  ->orWhere('status', 'recorded');
+            })
             ->pluck('subject_schedule_id')
             ->unique()
             ->flip();
@@ -120,8 +124,11 @@ class SendUnratedRegistrationsReport extends Command
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) >= ?', [$semesterStartStr])
             ->whereRaw('DATE(sg.lesson_date) <= ?', [$yesterdayStr])
-            ->whereNotNull('sg.grade')
-            ->where('sg.grade', '>', 0)
+            ->where(function ($q) {
+                $q->where('sg.grade', '>', 0)
+                  ->orWhere('sg.retake_grade', '>', 0)
+                  ->orWhere('sg.status', 'recorded');
+            })
             ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();

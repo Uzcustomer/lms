@@ -84,6 +84,8 @@ class SendUnratedRegistrationsReport extends Command
                 'sch.training_type_code',
                 'sch.training_type_name',
                 'sch.lesson_pair_code',
+                'sch.lesson_pair_start_time',
+                'sch.lesson_pair_end_time',
                 'g.department_hemis_id as group_department_hemis_id',
                 'g.specialty_hemis_id as group_specialty_hemis_id',
                 'sem.level_code',
@@ -166,8 +168,13 @@ class SendUnratedRegistrationsReport extends Command
                 $sch->level_code
             );
 
-            // Duplikatlarni tekshirish (bir xil dars bir necha schedule da bo'lishi mumkin)
-            $uniqueKey = $sch->employee_name . '|' . $sch->group_name . '|' . $sch->subject_name . '|' . $sch->lesson_date_str . '|' . $sch->training_type_name;
+            // Duplikatlarni tekshirish (web controller bilan bir xil 6 ta ID maydon)
+            $uniqueKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
+            $pairStart = $sch->lesson_pair_start_time ? substr($sch->lesson_pair_start_time, 0, 5) : '';
+            $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
+            $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '';
 
             $entry = [
                 'employee_name' => $sch->employee_name,
@@ -175,9 +182,9 @@ class SendUnratedRegistrationsReport extends Command
                 'subject_name' => $sch->subject_name,
                 'group_name' => $sch->group_name,
                 'training_type_name' => $sch->training_type_name,
+                'lesson_pair_time' => $pairTime,
                 'lesson_date' => $sch->lesson_date_str,
                 'has_opening' => $sch->has_opening ?? false,
-                '_unique_key' => $uniqueKey,
             ];
 
             if ($managerId) {
@@ -274,12 +281,13 @@ class SendUnratedRegistrationsReport extends Command
                         TableImageGenerator::truncate($entry['subject_name'] ?? '-', 24),
                         $entry['group_name'] ?? '-',
                         TableImageGenerator::truncate($entry['training_type_name'] ?? '-', 14),
+                        $entry['lesson_pair_time'] ?? '',
                         $lessonDate,
                         $entry['has_opening'] ? 'Ha' : 'Yo\'q',
                     ];
                 }
 
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'SANA', 'OCHILGAN'];
+                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN'];
                 $title = "{$managerName} — " . count($entries) . " ta baho qo'yilmagan";
 
                 $images = $generator->generate($headers, $tableRows, $title);
@@ -305,12 +313,13 @@ class SendUnratedRegistrationsReport extends Command
                         TableImageGenerator::truncate($entry['subject_name'] ?? '-', 24),
                         $entry['group_name'] ?? '-',
                         TableImageGenerator::truncate($entry['training_type_name'] ?? '-', 14),
+                        $entry['lesson_pair_time'] ?? '',
                         $lessonDate,
                         $entry['has_opening'] ? 'Ha' : 'Yo\'q',
                     ];
                 }
 
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'SANA', 'OCHILGAN'];
+                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN'];
                 $title = "MENEJER BIRIKTIRILMAGAN — " . count($unassigned) . " ta";
 
                 $images = $generator->generate($headers, $tableRows, $title);

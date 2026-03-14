@@ -55,6 +55,7 @@ return [
         'chat_id' => env('TELEGRAM_CHAT_ID'),
         'attendance_group_id' => env('TELEGRAM_ATTENDANCE_GROUP_ID'),
         'five_candidate_group_id' => env('TELEGRAM_FIVE_CANDIDATE_GROUP_ID'),
+        'registrar_group_id' => env('TELEGRAM_REGISTRAR_GROUP_ID'),
     ],
 
     'moodle' => [

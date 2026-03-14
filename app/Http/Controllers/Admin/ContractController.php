@@ -176,7 +176,7 @@ class ContractController extends Controller
                 $sub->select(DB::raw(1))
                     ->from('students')
                     ->whereColumn('students.hemis_id', 'contract_list.student_hemis_id')
-                    ->whereColumn('students.level_name', 'contract_list.edu_course');
+                    ->whereRaw('CAST(students.level_code AS UNSIGNED) % 10 = CAST(contract_list.edu_course AS UNSIGNED)');
             });
         }
 

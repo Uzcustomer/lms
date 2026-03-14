@@ -116,12 +116,14 @@ class SendUnratedRegistrationsReport extends Command
             ->unique()
             ->flip();
 
-        // Baho (2-usul): composite key orqali (zaxira)
+        // Baho (2-usul): guruh + fan + sana orqali (web controller bilan bir xil)
+        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $gradeByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
-            ->whereIn('sg.employee_id', $employeeIds)
             ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('sg.subject_id', $subjectIds)
+            ->whereNotNull('sg.lesson_date')
             ->whereRaw('DATE(sg.lesson_date) >= ?', [$semesterStartStr])
             ->whereRaw('DATE(sg.lesson_date) <= ?', [$yesterdayStr])
             ->where(function ($q) {
@@ -129,7 +131,7 @@ class SendUnratedRegistrationsReport extends Command
                   ->orWhere('sg.retake_grade', '>', 0)
                   ->orWhere('sg.status', 'recorded');
             })
-            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
+            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date)) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -146,9 +148,8 @@ class SendUnratedRegistrationsReport extends Command
                 continue;
             }
 
-            // Baho qo'yilganligini tekshirish
-            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
-                      . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+            // Baho qo'yilganligini tekshirish (guruh + fan + sana)
+            $gradeKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str;
 
             $hasGrade = isset($gradeByScheduleId[$sch->schedule_hemis_id]) || isset($gradeByKey[$gradeKey]);
 

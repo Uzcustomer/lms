@@ -79,7 +79,20 @@ class TeacherController extends Controller
             ->orderBy('name')
             ->get();
         $roles = ProjectRole::staffRoles();
-        return view('admin.teachers.show', compact('teacher', 'departments', 'roles'));
+
+        // Tyutor guruhlari va talabalar
+        $tutorGroups = $teacher->groups()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($group) {
+                $group->students = \App\Models\Student::where('group_id', $group->group_hemis_id)
+                    ->orderBy('full_name')
+                    ->get();
+                return $group;
+            });
+
+        return view('admin.teachers.show', compact('teacher', 'departments', 'roles', 'tutorGroups'));
     }
 
     public function edit(Teacher $teacher)

@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;
+use App\Models\YnSubmission;
 class OskiController extends Controller
 {
     public function index(Request $request)
@@ -370,7 +371,12 @@ class OskiController extends Controller
                     ->get();
             }
         }
-        return view('teacher.oski.grade', compact('oski', 'students'));
+        $ynLocked = YnSubmission::where('subject_id', $oski->subject->subject_id)
+            ->where('semester_code', $oski->semester_code)
+            ->where('group_hemis_id', $oski->group_hemis_id)
+            ->exists();
+
+        return view('teacher.oski.grade', compact('oski', 'students', 'ynLocked'));
 
     }
     function grade($id)
@@ -460,7 +466,12 @@ class OskiController extends Controller
                     ->get();
             }
         }
-        return view('admin.oski.grade', compact('oski', 'students'));
+        $ynLocked = YnSubmission::where('subject_id', $oski->subject->subject_id)
+            ->where('semester_code', $oski->semester_code)
+            ->where('group_hemis_id', $oski->group_hemis_id)
+            ->exists();
+
+        return view('admin.oski.grade', compact('oski', 'students', 'ynLocked'));
 
     }
     function grade_form($id)
@@ -548,7 +559,12 @@ class OskiController extends Controller
                     ->get();
             }
         }
-        return view('admin.oski.grade_form', compact('oski', 'students'));
+        $ynLocked = YnSubmission::where('subject_id', $oski->subject->subject_id)
+            ->where('semester_code', $oski->semester_code)
+            ->where('group_hemis_id', $oski->group_hemis_id)
+            ->exists();
+
+        return view('admin.oski.grade_form', compact('oski', 'students', 'ynLocked'));
 
     }
     function grade_save(Request $request)
@@ -556,6 +572,18 @@ class OskiController extends Controller
         try {
             DB::beginTransaction();
             $oski = Oski::find(intval($request->oski));
+
+            // YN ga yuborilganligini tekshirish — qulflangan bo'lsa baholash mumkin emas
+            $ynLocked = YnSubmission::where('subject_id', $oski->subject->subject_id)
+                ->where('semester_code', $oski->semester_code)
+                ->where('group_hemis_id', $oski->group_hemis_id)
+                ->exists();
+
+            if ($ynLocked) {
+                DB::rollBack();
+                return back()->with('error', 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.');
+            }
+
             $oski->status = 1;
             $oski->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $oski->save();

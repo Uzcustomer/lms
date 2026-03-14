@@ -281,6 +281,21 @@ class JournalController extends Controller
             abort(404, "Guruh topilmadi (ID: {$groupId})");
         }
 
+        // O'qituvchi uchun: faqat o'ziga biriktirilgan guruh+fan kombinatsiyasiga ruxsat
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if ($teacherHemisId) {
+                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
+                $hasSubject = in_array((int) $subjectId, $assignments['subject_ids']);
+                $hasGroup = in_array((int) $group->group_hemis_id, $assignments['group_ids']);
+                if (!$hasSubject || !$hasGroup) {
+                    abort(403, "Sizga bu guruh yoki fan bo'yicha jurnal ko'rish huquqi yo'q.");
+                }
+            } else {
+                abort(403, "O'qituvchi ma'lumotlari topilmadi.");
+            }
+        }
+
         // semester_code ni schedules jadvalidan tekshirish:
         // curriculum_subjects da semester_code=12 bo'lishi mumkin, lekin haqiqiy
         // dars jadvali schedules da boshqa semester_code (masalan 17) ishlatilgan bo'lishi mumkin.

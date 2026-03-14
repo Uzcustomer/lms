@@ -58,5 +58,8 @@ Schedule::command('students:send-exam-reminders')->dailyAt('20:00');
 // Registrator ofisiga kutilmoqda sababli arizalar eslatmasi (har kuni 16:00 da)
 Schedule::command('absence-excuses:send-pending-reminder')->dailyAt('16:00');
 
+// Registrator ofisiga baho qo'yilmaganlar hisoboti — back ofis menejerlari kesimida (har kuni 17:00 da)
+Schedule::command('registrar:send-unrated-report')->dailyAt('17:00');
+
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)

@@ -3926,6 +3926,32 @@ class ReportController extends Controller
             $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
             $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
 
+            // JN kunlik o'rtachasi uchun pairs_per_day hisoblash (jurnal formulasi bilan bir xil)
+            $pairsQuery = DB::table('schedules as sch2')
+                ->whereNotIn('sch2.training_type_code', $excludedCodes)
+                ->whereNotNull('sch2.lesson_date')
+                ->whereIn('sch2.group_id', $scheduleGroupIds)
+                ->whereIn('sch2.subject_id', $validSubjectIds)
+                ->whereIn('sch2.semester_code', $validSemesterCodes)
+                ->select('sch2.group_id', 'sch2.subject_id', 'sch2.semester_code', 'sch2.lesson_date', 'sch2.lesson_pair_code');
+
+            if ($isCurrentSemester) {
+                $pairsQuery
+                    ->where('sch2.education_year_current', true)
+                    ->whereNull('sch2.deleted_at');
+            }
+
+            $pairsPerDay = [];
+            foreach ($pairsQuery->get() as $schRow) {
+                $dateKey = substr($schRow->lesson_date, 0, 10);
+                $ppdKey = $schRow->group_id . '|' . $schRow->subject_id . '|' . $schRow->semester_code . '|' . $dateKey;
+                $pairKey = $ppdKey . '|' . $schRow->lesson_pair_code;
+                if (!isset($pairsPerDay[$ppdKey])) {
+                    $pairsPerDay[$ppdKey] = [];
+                }
+                $pairsPerDay[$ppdKey][$pairKey] = true;
+            }
+
             // Vedomost ma'lumotlarini olish
             $groupNameMap = DB::table('groups')
                 ->whereIn('group_hemis_id', $scheduleGroupIds)
@@ -4101,7 +4127,15 @@ class ReportController extends Controller
                         $dayAvg = 0;
 
                         if (!empty($dayData['grades'])) {
-                            $dayAvg = round(array_sum($dayData['grades']) / count($dayData['grades']));
+                            if ($dayData['lesson_type'] === 'JN') {
+                                // JN uchun jurnal formulasi: gradeSum / pairsInDay
+                                $ppdKey = $subjectData['group_id'] . '|' . $subjectData['subject_id'] . '|' . $subjectData['semester_code'] . '|' . $dayData['date'];
+                                $pairsInDay = isset($pairsPerDay[$ppdKey]) ? count($pairsPerDay[$ppdKey]) : count($dayData['grades']);
+                                $dayAvg = round(array_sum($dayData['grades']) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                            } else {
+                                // MT, ON, OSKI, Test uchun oddiy o'rtacha
+                                $dayAvg = round(array_sum($dayData['grades']) / count($dayData['grades']), 0, PHP_ROUND_HALF_UP);
+                            }
                         }
 
                         if ($dayData['absent']) {
@@ -4237,7 +4271,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', 'Joriy bahosi', 'Dars sanasi'];
+            'Fan', 'Dars turi', 'Joriy bahosi', 'Dars sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -4248,7 +4282,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
 
         $redFill = [
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
@@ -4265,22 +4299,23 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $row], $r['semester_name']);
             $sheet->setCellValue([8, $row], $r['group_name']);
             $sheet->setCellValue([9, $row], $r['subject_name']);
-            $sheet->setCellValue([10, $row], $r['grade']);
-            $sheet->setCellValue([11, $row], $r['lesson_date']);
+            $sheet->setCellValue([10, $row], $r['lesson_type']);
+            $sheet->setCellValue([11, $row], $r['grade']);
+            $sheet->setCellValue([12, $row], $r['lesson_date']);
 
             if ($r['grade'] < $scoreLimit) {
-                $sheet->getStyle("J{$row}")->applyFromArray($redFill);
+                $sheet->getStyle("K{$row}")->applyFromArray($redFill);
             }
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 12, 14];
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 10, 12, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

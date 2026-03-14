@@ -87,7 +87,8 @@ class SendUnratedRegistrationsReport extends Command
                 'g.department_hemis_id as group_department_hemis_id',
                 'g.specialty_hemis_id as group_specialty_hemis_id',
                 'sem.level_code',
-                DB::raw('DATE(sch.lesson_date) as lesson_date_str')
+                DB::raw('DATE(sch.lesson_date) as lesson_date_str'),
+                DB::raw('EXISTS (SELECT 1 FROM lesson_openings lo WHERE lo.group_hemis_id = sch.group_id AND lo.subject_id = sch.subject_id AND lo.semester_code = sch.semester_code AND DATE(lo.lesson_date) = DATE(sch.lesson_date)) as has_opening')
             )
             ->get();
 
@@ -165,6 +166,9 @@ class SendUnratedRegistrationsReport extends Command
                 $sch->level_code
             );
 
+            // Duplikatlarni tekshirish (bir xil dars bir necha schedule da bo'lishi mumkin)
+            $uniqueKey = $sch->employee_name . '|' . $sch->group_name . '|' . $sch->subject_name . '|' . $sch->lesson_date_str . '|' . $sch->training_type_name;
+
             $entry = [
                 'employee_name' => $sch->employee_name,
                 'department_name' => $sch->department_name,
@@ -172,14 +176,22 @@ class SendUnratedRegistrationsReport extends Command
                 'group_name' => $sch->group_name,
                 'training_type_name' => $sch->training_type_name,
                 'lesson_date' => $sch->lesson_date_str,
+                'has_opening' => $sch->has_opening ?? false,
+                '_unique_key' => $uniqueKey,
             ];
 
             if ($managerId) {
-                $unratedByManager[$managerId][] = $entry;
+                $unratedByManager[$managerId][$uniqueKey] = $entry;
             } else {
-                $unassigned[] = $entry;
+                $unassigned[$uniqueKey] = $entry;
             }
         }
+
+        // Unique array values (duplikatlar key bo'yicha allaqachon olib tashlangan)
+        foreach ($unratedByManager as $tid => $entries) {
+            $unratedByManager[$tid] = array_values($entries);
+        }
+        $unassigned = array_values($unassigned);
 
         $totalUnrated = array_sum(array_map('count', $unratedByManager)) + count($unassigned);
         $this->info("Baho qo'yilmaganlar: {$totalUnrated}");
@@ -253,13 +265,8 @@ class SendUnratedRegistrationsReport extends Command
                 // Darslarni sana bo'yicha saralash
                 usort($entries, fn($a, $b) => strcmp($a['lesson_date'], $b['lesson_date']));
 
-                // Duplikatlarni olib tashlash (bir xil dars bir necha schedule da bo'lishi mumkin)
-                $uniqueEntries = collect($entries)->unique(function ($e) {
-                    return $e['employee_name'] . '|' . $e['group_name'] . '|' . $e['subject_name'] . '|' . $e['lesson_date'] . '|' . $e['training_type_name'];
-                })->values();
-
                 $tableRows = [];
-                foreach ($uniqueEntries as $i => $entry) {
+                foreach ($entries as $i => $entry) {
                     $lessonDate = Carbon::parse($entry['lesson_date'])->format('d.m');
                     $tableRows[] = [
                         $i + 1,
@@ -268,11 +275,12 @@ class SendUnratedRegistrationsReport extends Command
                         $entry['group_name'] ?? '-',
                         TableImageGenerator::truncate($entry['training_type_name'] ?? '-', 14),
                         $lessonDate,
+                        $entry['has_opening'] ? 'Ha' : 'Yo\'q',
                     ];
                 }
 
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'SANA'];
-                $title = "{$managerName} — {$uniqueEntries->count()} ta baho qo'yilmagan";
+                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'SANA', 'OCHILGAN'];
+                $title = "{$managerName} — " . count($entries) . " ta baho qo'yilmagan";
 
                 $images = $generator->generate($headers, $tableRows, $title);
 
@@ -288,12 +296,8 @@ class SendUnratedRegistrationsReport extends Command
 
             // Menejer biriktirilmaganlar (agar bor bo'lsa)
             if (!empty($unassigned)) {
-                $uniqueUnassigned = collect($unassigned)->unique(function ($e) {
-                    return $e['employee_name'] . '|' . $e['group_name'] . '|' . $e['subject_name'] . '|' . $e['lesson_date'] . '|' . $e['training_type_name'];
-                })->values();
-
                 $tableRows = [];
-                foreach ($uniqueUnassigned as $i => $entry) {
+                foreach ($unassigned as $i => $entry) {
                     $lessonDate = Carbon::parse($entry['lesson_date'])->format('d.m');
                     $tableRows[] = [
                         $i + 1,
@@ -302,11 +306,12 @@ class SendUnratedRegistrationsReport extends Command
                         $entry['group_name'] ?? '-',
                         TableImageGenerator::truncate($entry['training_type_name'] ?? '-', 14),
                         $lessonDate,
+                        $entry['has_opening'] ? 'Ha' : 'Yo\'q',
                     ];
                 }
 
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'SANA'];
-                $title = "MENEJER BIRIKTIRILMAGAN — {$uniqueUnassigned->count()} ta";
+                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'SANA', 'OCHILGAN'];
+                $title = "MENEJER BIRIKTIRILMAGAN — " . count($unassigned) . " ta";
 
                 $images = $generator->generate($headers, $tableRows, $title);
 

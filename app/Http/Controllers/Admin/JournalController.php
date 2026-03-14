@@ -1148,15 +1148,27 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->first();
 
-        // YN ga yuborish huquqi: faqat shu fanga biriktirilgan o'qituvchi
+        // YN ga yuborish huquqi: faqat shu fan+guruh juftligiga biriktirilgan o'qituvchi
         $canSubmitYn = false;
         $isOqituvchi = is_active_oqituvchi();
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
             if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                $canSubmitYn = in_array($subjectId, $assignments['subject_ids'])
-                    && in_array($group->group_hemis_id, $assignments['group_ids']);
+                // 1-manba: curriculum_subject_teachers dan fan+guruh juftligini tekshirish
+                $isAssignedByCST = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('group_id', $group->group_hemis_id)
+                    ->exists();
+
+                // 2-manba: dars jadvalidan fan+guruh juftligini tekshirish
+                $isAssignedBySchedule = DB::table('schedules')
+                    ->where('employee_id', $teacherHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('group_id', $group->group_hemis_id)
+                    ->whereNull('deleted_at')
+                    ->exists();
+
+                $canSubmitYn = $isAssignedByCST || $isAssignedBySchedule;
             }
         }
 
@@ -4228,9 +4240,18 @@ class JournalController extends Controller
                     'message' => 'O\'qituvchi topilmadi.',
                 ], 403);
             }
-            $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-            $isAssigned = in_array($request->subject_id, $assignments['subject_ids'])
-                && in_array($request->group_hemis_id, $assignments['group_ids']);
+            // Fan+guruh juftligiga biriktirilganligini tekshirish
+            $isAssignedByCST = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                ->where('subject_id', $request->subject_id)
+                ->where('group_id', $request->group_hemis_id)
+                ->exists();
+            $isAssignedBySchedule = DB::table('schedules')
+                ->where('employee_id', $teacherHemisId)
+                ->where('subject_id', $request->subject_id)
+                ->where('group_id', $request->group_hemis_id)
+                ->whereNull('deleted_at')
+                ->exists();
+            $isAssigned = $isAssignedByCST || $isAssignedBySchedule;
             if (!$isAssigned) {
                 return response()->json([
                     'success' => false,

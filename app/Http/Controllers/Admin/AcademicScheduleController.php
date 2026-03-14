@@ -633,19 +633,42 @@ class AcademicScheduleController extends Controller
         $userId = auth()->id();
         $today = \Carbon\Carbon::today();
 
-        // Cheklov 2: Yangi sana kamida ertadan bo'lishi kerak
+        // Mavjud yozuvlarni oldindan yuklash (allaqachon saqlangan sanalarni validatsiyadan o'tkazib yuborish uchun)
+        $existingForValidation = ExamSchedule::where(function ($q) use ($validSchedules) {
+            foreach ($validSchedules as $s) {
+                $q->orWhere(function ($sub) use ($s) {
+                    $sub->where('group_hemis_id', $s['group_hemis_id'])
+                        ->where('subject_id', $s['subject_id'])
+                        ->where('semester_code', $s['semester_code']);
+                });
+            }
+        })->get()->keyBy(fn($r) => $r->group_hemis_id . '_' . $r->subject_id . '_' . $r->semester_code);
+
+        // Cheklov 2: Faqat YANGI sanalar kamida ertadan bo'lishi kerak (allaqachon saqlangan sanalar tekshirilmaydi)
         $tomorrow = $today->copy()->addDay();
         foreach ($validSchedules as $schedule) {
+            $existingRec = $existingForValidation->get(
+                $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
+            );
+
             if (!empty($schedule['oski_date'])) {
-                $oskiDate = \Carbon\Carbon::parse($schedule['oski_date']);
-                if ($oskiDate->lt($tomorrow)) {
-                    return redirect()->back()->with('error', 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                $alreadySaved = $existingRec && $existingRec->oski_date
+                    && $existingRec->oski_date->format('Y-m-d') === $schedule['oski_date'];
+                if (!$alreadySaved) {
+                    $oskiDate = \Carbon\Carbon::parse($schedule['oski_date']);
+                    if ($oskiDate->lt($tomorrow)) {
+                        return redirect()->back()->with('error', 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                    }
                 }
             }
             if (!empty($schedule['test_date'])) {
-                $testDate = \Carbon\Carbon::parse($schedule['test_date']);
-                if ($testDate->lt($tomorrow)) {
-                    return redirect()->back()->with('error', 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                $alreadySaved = $existingRec && $existingRec->test_date
+                    && $existingRec->test_date->format('Y-m-d') === $schedule['test_date'];
+                if (!$alreadySaved) {
+                    $testDate = \Carbon\Carbon::parse($schedule['test_date']);
+                    if ($testDate->lt($tomorrow)) {
+                        return redirect()->back()->with('error', 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                    }
                 }
             }
         }

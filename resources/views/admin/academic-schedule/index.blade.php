@@ -231,11 +231,8 @@
                                                         @endif
                                                     @else
                                                         <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}">
-                                                            <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
-                                                                   value=""
-                                                                   data-hidden="oski_h_{{ $rowIndex }}"
-                                                                   maxlength="10" autocomplete="off" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="" />
+                                                            <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
+                                                                   class="exam-sc-date" autocomplete="off" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
@@ -279,11 +276,8 @@
                                                         @endif
                                                     @else
                                                         <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}">
-                                                            <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
-                                                                   value=""
-                                                                   data-hidden="test_h_{{ $rowIndex }}"
-                                                                   maxlength="10" autocomplete="off" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="" />
+                                                            <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
+                                                                   class="exam-sc-date" autocomplete="off" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
@@ -373,10 +367,13 @@
             var wrap = document.getElementById(wrapId);
             if (checkbox.checked) {
                 wrap.style.display = 'none';
-                var txt = wrap.querySelector('.date-input-masked');
-                var hid = wrap.querySelector('input[type="hidden"]');
-                if (txt) { txt.value = ''; txt.classList.remove('date-error'); }
-                if (hid) hid.value = '';
+                // SC input tozalash
+                var scHidden = wrap.querySelector('input[type="hidden"].exam-sc-date');
+                var scDisplay = wrap.querySelector('.sc-wrap .date-input');
+                var scClear = wrap.querySelector('.sc-clear');
+                if (scHidden) scHidden.value = '';
+                if (scDisplay) scDisplay.value = '';
+                if (scClear) scClear.style.display = 'none';
             } else {
                 wrap.style.display = '';
             }
@@ -680,8 +677,10 @@
                 calTestTo.setValue('{{ request()->get("test_date_to") }}');
             @endif
 
-            // dd.mm.yyyy mask ishga tushirish
-            initDateMask();
+            // Jadval sana inputlari uchun ScrollCalendar ishga tushirish
+            document.querySelectorAll('.exam-sc-date').forEach(function(inp) {
+                new ScrollCalendar(inp.id);
+            });
 
             // Sort funksiyasi
             initTableSort();

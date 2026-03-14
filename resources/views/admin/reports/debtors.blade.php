@@ -592,8 +592,9 @@
                         var gr = grades[g];
                         var point = (gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
                         var grade = (gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
-                        // PHP bilan bir xil mantiq: grade '0' yoki '2' = qarzdor, boshqalar = o'tdi
-                        var isDebt = (grade === '-' || grade === '0' || grade === '2');
+                        // PHP bilan bir xil mantiq: grade 0 yoki 2 = qarzdor, boshqalar = o'tdi
+                        var gradeNum = (grade !== '-') ? parseFloat(grade) : null;
+                        var isDebt = (grade === '-' || gradeNum === null || isNaN(gradeNum) || gradeNum === 0 || gradeNum === 2);
                         var gradeClass = isDebt ? 'cell-fail' : 'cell-pass';
                         var subNameLower = (gr.subject_name || '').trim().toLowerCase();
                         var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';

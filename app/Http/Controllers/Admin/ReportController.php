@@ -2746,7 +2746,11 @@ class ReportController extends Controller
                     ->get();
 
                 foreach ($arRecords as $ar) {
-                    $arRecordsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = $ar;
+                    $key = $ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id;
+                    // Eng yaxshi bahoni saqlash (qayta topshirish va asl baho bo'lishi mumkin)
+                    if (!isset($arRecordsLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arRecordsLookup[$key]->grade ?? 0)) {
+                        $arRecordsLookup[$key] = $ar;
+                    }
                 }
                 unset($arRecords);
             }
@@ -2792,7 +2796,7 @@ class ReportController extends Controller
 
                     $isDebt = !$ar
                         || $ar->grade === null
-                        || in_array($ar->grade, ['2', '0'])
+                        || (float) $ar->grade == 0 || (float) $ar->grade == 2
                         || $ar->retraining_status;
 
                     if (!$isDebt) continue;
@@ -3109,6 +3113,12 @@ class ReportController extends Controller
             // Guruh suffiksi bo'yicha filtr: "d1/23-01b" → "b"
             $grades = $this->filterSubjectsByGroupSuffix($grades, $groupName);
 
+            // Deduplikatsiya: bitta fan uchun eng yaxshi bahoni saqlash
+            // (academic_records da qayta topshirish va asl baho bo'lishi mumkin)
+            $grades = $grades->groupBy('subject_name')->map(function ($items) {
+                return $items->sortByDesc(fn($item) => (float) ($item->grade ?? 0))->first();
+            })->values();
+
             $semesterName = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
                 ->where('semester_code', $semesterCode)
@@ -3192,7 +3202,10 @@ class ReportController extends Controller
 
             $arLookup = [];
             foreach ($arRecords as $ar) {
-                $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
+                $key = $ar->subject_id . '|' . $ar->semester_id;
+                if (!isset($arLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arLookup[$key]->grade ?? 0)) {
+                    $arLookup[$key] = $ar;
+                }
             }
 
             // student_subjects lookup — "Biriktirilgan" ro'yxati uchun
@@ -3217,7 +3230,7 @@ class ReportController extends Controller
 
                 $isDebt = !$ar
                     || $ar->grade === null
-                    || in_array($ar->grade, ['2', '0'])
+                    || (float) $ar->grade == 0 || (float) $ar->grade == 2
                     || $ar->retraining_status;
 
                 if (!$isDebt) continue;

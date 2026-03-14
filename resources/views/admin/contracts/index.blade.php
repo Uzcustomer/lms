@@ -116,6 +116,16 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Talaba ID</label>
                             <input type="text" id="student_id" placeholder="Talaba HEMIS ID" class="filter-input">
                         </div>
+                        <div class="filter-item" style="max-width:170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0d9488;"></span> Joriy kurs</label>
+                            <div style="display:flex;align-items:center;height:36px;">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="current_course_toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span id="toggle-label" style="margin-left:8px;font-size:12px;font-weight:600;color:#94a3b8;">O'chirilgan</span>
+                            </div>
+                        </div>
                         <div class="filter-item" style="max-width:90px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                             <select id="per_page" class="select2" style="width: 100%;">
@@ -250,7 +260,8 @@
                 _edu_form: $('#edu_form').val() || '',
                 _status: $('#status_filter').val() || '',
                 _organization: $('#organization').val() || '',
-                search: $('#search_input').val() || ''
+                search: $('#search_input').val() || '',
+                _current_course: $('#current_course_toggle').is(':checked') ? '1' : ''
             };
         }
 
@@ -518,6 +529,16 @@
                 if (e.which === 13) loadContracts(1);
             });
 
+            $('#current_course_toggle').on('change', function() {
+                var label = $('#toggle-label');
+                if ($(this).is(':checked')) {
+                    label.text('Yoqilgan').css('color', '#0d9488');
+                } else {
+                    label.text("O'chirilgan").css('color', '#94a3b8');
+                }
+                loadContracts(1);
+            });
+
             // Cascading filter functions
             function fp() {
                 return {
@@ -616,5 +637,12 @@
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
+
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #cbd5e1; border-radius: 24px; transition: 0.3s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+        .toggle-switch input:checked + .toggle-slider { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
     </style>
 </x-app-layout>

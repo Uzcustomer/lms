@@ -171,6 +171,15 @@ class ContractController extends Controller
             });
         }
 
+        if ($request->filled('_current_course')) {
+            $query->whereExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('students')
+                    ->whereColumn('students.hemis_id', 'contract_list.student_hemis_id')
+                    ->whereColumn('students.level_code', 'contract_list.edu_cours_id');
+            });
+        }
+
         if ($request->filled('_debt')) {
             $debt = $request->input('_debt');
             $thresholds = ['25' => 0.25, '50' => 0.50, '75' => 0.75, '100' => 1.00];

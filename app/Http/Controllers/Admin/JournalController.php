@@ -53,15 +53,9 @@ class JournalController extends Controller
 
         // O'qituvchi uchun fanga biriktirilgan cheklovi
         $isOqituvchi = is_active_oqituvchi();
-        $teacherSubjectIds = [];
-        $teacherGroupIds = [];
+        $teacherHemisId = null;
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
-            if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                $teacherSubjectIds = $assignments['subject_ids'];
-                $teacherGroupIds = $assignments['group_ids'];
-            }
         }
 
         // Get filter options for dropdowns
@@ -133,9 +127,17 @@ class JournalController extends Controller
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
-        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
-        if ($isOqituvchi) {
-            $kafedraQuery->whereIn('cs.subject_id', $teacherSubjectIds);
+        // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan fan+guruh
+        if ($isOqituvchi && $teacherHemisId) {
+            $kafedraQuery->whereExists(function ($sub) use ($teacherHemisId) {
+                $sub->select(DB::raw(1))
+                    ->from('schedules')
+                    ->whereColumn('schedules.subject_id', 'cs.subject_id')
+                    ->whereColumn('schedules.group_id', 'g.group_hemis_id')
+                    ->where('schedules.employee_id', $teacherHemisId)
+                    ->where('schedules.education_year_current', true)
+                    ->whereNull('schedules.deleted_at');
+            });
         }
         if ($request->get('current_semester', '1') == '1') {
             $kafedraQuery->whereIn('s.semester_hemis_id', function ($sub) {
@@ -192,14 +194,17 @@ class JournalController extends Controller
             $query->where('f.id', $request->faculty);
         }
 
-        // O'qituvchi uchun faqat o'zi o'tadigan fanlar va guruhlar
-        if ($isOqituvchi) {
-            $query->whereIn('cs.subject_id', $teacherSubjectIds);
-            // Guruh filtri faqat guruh ID lari mavjud bo'lganda qo'llanadi
-            // curriculum_subject_teachers da group_id ko'pincha NULL bo'ladi
-            if (!empty($teacherGroupIds)) {
-                $query->whereIn('g.group_hemis_id', $teacherGroupIds);
-            }
+        // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan fan+guruh kombinatsiyalari
+        if ($isOqituvchi && $teacherHemisId) {
+            $query->whereExists(function ($sub) use ($teacherHemisId) {
+                $sub->select(DB::raw(1))
+                    ->from('schedules')
+                    ->whereColumn('schedules.subject_id', 'cs.subject_id')
+                    ->whereColumn('schedules.group_id', 'g.group_hemis_id')
+                    ->where('schedules.employee_id', $teacherHemisId)
+                    ->where('schedules.education_year_current', true)
+                    ->whereNull('schedules.deleted_at');
+            });
         }
 
         if ($request->filled('department')) {
@@ -281,14 +286,18 @@ class JournalController extends Controller
             abort(404, "Guruh topilmadi (ID: {$groupId})");
         }
 
-        // O'qituvchi uchun: faqat o'ziga biriktirilgan guruh+fan kombinatsiyasiga ruxsat
+        // O'qituvchi uchun: faqat o'ziga dars jadvalida biriktirilgan guruh+fan kombinatsiyasiga ruxsat
         if (is_active_oqituvchi()) {
             $teacherHemisId = get_teacher_hemis_id();
             if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                $hasSubject = in_array((int) $subjectId, $assignments['subject_ids']);
-                $hasGroup = in_array((int) $group->group_hemis_id, $assignments['group_ids']);
-                if (!$hasSubject || !$hasGroup) {
+                $hasAccess = DB::table('schedules')
+                    ->where('employee_id', $teacherHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('group_id', $group->group_hemis_id)
+                    ->where('education_year_current', true)
+                    ->whereNull('deleted_at')
+                    ->exists();
+                if (!$hasAccess) {
                     abort(403, "Sizga bu guruh yoki fan bo'yicha jurnal ko'rish huquqi yo'q.");
                 }
             } else {
@@ -2936,16 +2945,11 @@ class JournalController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
 
-        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
-        // O'qituvchi uchun faqat o'zi o'tadigan fanlar/guruhlar
+        // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan fanlar
         $isOqituvchi = is_active_oqituvchi();
-        $teacherSubjectIds = [];
+        $teacherHemisId = null;
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
-            if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                $teacherSubjectIds = $assignments['subject_ids'];
-            }
         }
 
         // O'qituvchi uchun ta'lim turi filtrini qo'llamaydi
@@ -2980,8 +2984,16 @@ class JournalController extends Controller
             });
         }
 
-        if ($isOqituvchi) {
-            $query->whereIn('cs.subject_id', $teacherSubjectIds);
+        if ($isOqituvchi && $teacherHemisId) {
+            $query->whereExists(function ($sub) use ($teacherHemisId) {
+                $sub->select(DB::raw(1))
+                    ->from('schedules')
+                    ->whereColumn('schedules.subject_id', 'cs.subject_id')
+                    ->whereColumn('schedules.group_id', 'g.group_hemis_id')
+                    ->where('schedules.employee_id', $teacherHemisId)
+                    ->where('schedules.education_year_current', true)
+                    ->whereNull('schedules.deleted_at');
+            });
         }
 
         // Baho qo'yilmaydigan fanlarni dropdown'dan chiqarish
@@ -3001,16 +3013,11 @@ class JournalController extends Controller
     {
         $query = Group::where('department_active', true)->where('active', true);
 
-        // O'qituvchi uchun faqat o'zi o'tadigan guruhlar
-        // O'qituvchi uchun faqat o'zi o'tadigan fanlar/guruhlar
+        // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan guruhlar
         $isOqituvchi = is_active_oqituvchi();
-        $teacherGroupIds = [];
+        $teacherHemisId = null;
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
-            if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                $teacherGroupIds = $assignments['group_ids'];
-            }
         }
 
         if ($request->filled('faculty_id')) {
@@ -3087,8 +3094,14 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        if ($isOqituvchi) {
-            $query->whereIn('group_hemis_id', $teacherGroupIds);
+        if ($isOqituvchi && $teacherHemisId) {
+            $query->whereIn('group_hemis_id', function ($sub) use ($teacherHemisId) {
+                $sub->select('group_id')
+                    ->from('schedules')
+                    ->where('employee_id', $teacherHemisId)
+                    ->where('education_year_current', true)
+                    ->whereNull('deleted_at');
+            });
         }
 
         return $query->select('id', 'name')

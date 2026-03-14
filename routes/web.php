@@ -744,6 +744,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         });
 
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');
+        Route::get('/students/{student}', [TeacherMainController::class, 'showStudent'])->name('students.show');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
         Route::put('/student-grades/{gradeId}', [TeacherMainController::class, 'updateGrade'])->name('update.grade');
         Route::get('/student-grades-week/export', [TeacherMainController::class, 'exportStudentGrades'])->name('student-grades-week.export');

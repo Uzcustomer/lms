@@ -81,7 +81,7 @@
                                 <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
                                     <td style="padding: 10px 14px; color: #94a3b8; font-size: 12px;">{{ $students->firstItem() + $index }}</td>
                                     <td style="padding: 10px 14px;">
-                                        <span style="font-weight: 600; color: #1e293b;">{{ $student->full_name }}</span>
+                                        <a href="{{ route('teacher.students.show', $student) }}" style="font-weight: 600; color: #1e293b; text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='#2563eb'" onmouseout="this.style.color='#1e293b'">{{ $student->full_name }}</a>
                                     </td>
                                     <td style="padding: 10px 14px; color: #64748b; font-family: monospace; font-size: 12px;">{{ $student->student_id_number }}</td>
                                     <td style="padding: 10px 14px;">

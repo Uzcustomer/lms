@@ -75,19 +75,31 @@
                                     @endif
                                 </div>
 
-                                {{-- Fakultet --}}
+                                {{-- Fakultetlar (checkbox) --}}
                                 <div>
-                                    <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 4px;">Fakultet <span style="color: #dc2626;">*</span></label>
-                                    <select name="department_hemis_id" id="department-select" required onchange="loadSpecialties(this.value)" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; outline: none;">
-                                        <option value="">Fakultet tanlang...</option>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                        <label style="font-size: 12px; font-weight: 600; color: #374151;">Fakultetlar <span style="color: #dc2626;">*</span></label>
+                                        <label style="font-size: 11px; color: #6366f1; cursor: pointer; user-select: none; font-weight: 600;" onclick="toggleAllDepartments()">
+                                            <span id="toggle-all-dept-label">Barchasini tanlash</span>
+                                        </label>
+                                    </div>
+                                    <div id="departments-checkbox-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #d1d5db; border-radius: 8px; padding: 6px;">
                                         @foreach($departments as $dept)
-                                            <option value="{{ $dept->department_hemis_id }}" {{ old('department_hemis_id') == $dept->department_hemis_id ? 'selected' : '' }}>{{ $dept->name }}</option>
+                                            <label style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 12px;"
+                                                   onmouseover="this.style.backgroundColor='#f3f4f6'" onmouseout="this.style.backgroundColor='transparent'">
+                                                <input type="checkbox" name="department_hemis_ids[]" value="{{ $dept->department_hemis_id }}"
+                                                    class="dept-checkbox"
+                                                    {{ is_array(old('department_hemis_ids')) && in_array($dept->department_hemis_id, old('department_hemis_ids')) ? 'checked' : '' }}
+                                                    style="accent-color: #6366f1; width: 15px; height: 15px;">
+                                                <span>{{ $dept->name }}</span>
+                                            </label>
                                         @endforeach
-                                    </select>
+                                    </div>
+                                    <div id="dept-count" style="font-size: 10px; color: #9ca3af; margin-top: 2px;">0 ta tanlangan</div>
                                 </div>
 
-                                {{-- Yo'nalish --}}
-                                <div>
+                                {{-- Yo'nalish (faqat 1 ta fakultet tanlanganda ko'rinadi) --}}
+                                <div id="specialty-wrapper" style="display: none;">
                                     <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 4px;">Yo'nalish <span style="font-size: 10px; color: #9ca3af;">(ixtiyoriy)</span></label>
                                     <select name="specialty_hemis_id" id="specialty-select" style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; outline: none;">
                                         <option value="">Barcha yo'nalishlar</option>
@@ -207,6 +219,46 @@
     </div>
 
     <script>
+        // Fakultetlar checkbox - barchasini tanlash/bekor qilish
+        function toggleAllDepartments() {
+            var checkboxes = document.querySelectorAll('.dept-checkbox');
+            var allChecked = true;
+            checkboxes.forEach(function(cb) { if (!cb.checked) allChecked = false; });
+
+            checkboxes.forEach(function(cb) { cb.checked = !allChecked; });
+            updateDeptCount();
+        }
+
+        function updateDeptCount() {
+            var checkedBoxes = document.querySelectorAll('.dept-checkbox:checked');
+            var checked = checkedBoxes.length;
+            var total = document.querySelectorAll('.dept-checkbox').length;
+            document.getElementById('dept-count').textContent = checked + ' / ' + total + ' ta tanlangan';
+            var label = document.getElementById('toggle-all-dept-label');
+            label.textContent = (checked === total) ? 'Barchasini bekor qilish' : 'Barchasini tanlash';
+
+            // Yo'nalish: faqat 1 ta fakultet tanlanganda ko'rsatish
+            var specialtyWrapper = document.getElementById('specialty-wrapper');
+            var specialtySelect = document.getElementById('specialty-select');
+            if (checked === 1) {
+                specialtyWrapper.style.display = 'block';
+                loadSpecialties(checkedBoxes[0].value);
+            } else {
+                specialtyWrapper.style.display = 'none';
+                specialtySelect.innerHTML = '<option value="">Barcha yo\'nalishlar</option>';
+                specialtySelect.value = '';
+            }
+        }
+
+        // Har bir checkbox o'zgarganda hisobni yangilash
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.dept-checkbox').forEach(function(cb) {
+                cb.addEventListener('change', updateDeptCount);
+            });
+            updateDeptCount();
+        });
+
+        // Yo'nalishlarni AJAX bilan yuklash (bitta fakultet tanlanganda)
         function loadSpecialties(departmentHemisId) {
             var select = document.getElementById('specialty-select');
             select.innerHTML = '<option value="">Barcha yo\'nalishlar</option>';
@@ -232,18 +284,5 @@
                 console.error('Yo\'nalishlarni yuklashda xatolik:', error);
             });
         }
-
-        // Agar old() qiymati bor bo'lsa, yo'nalishlarni avtomatik yuklash
-        @if(old('department_hemis_id'))
-            document.addEventListener('DOMContentLoaded', function() {
-                loadSpecialties('{{ old("department_hemis_id") }}');
-                setTimeout(function() {
-                    var select = document.getElementById('specialty-select');
-                    @if(old('specialty_hemis_id'))
-                        select.value = '{{ old("specialty_hemis_id") }}';
-                    @endif
-                }, 500);
-            });
-        @endif
     </script>
 </x-app-layout>

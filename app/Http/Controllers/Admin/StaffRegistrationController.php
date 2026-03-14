@@ -47,41 +47,59 @@ class StaffRegistrationController extends Controller
     }
 
     /**
-     * Yangi biriktirish saqlash
+     * Yangi biriktirish saqlash (bir nechta fakultet tanlash mumkin)
      */
     public function store(Request $request)
     {
         $request->validate([
             'teacher_id' => 'required|exists:teachers,id',
             'division_type' => 'required|in:front_office,back_office',
-            'department_hemis_id' => 'required',
+            'department_hemis_ids' => 'required|array|min:1',
+            'department_hemis_ids.*' => 'required',
             'specialty_hemis_id' => 'nullable|string',
             'level_code' => 'nullable|string',
         ], [
             'teacher_id.required' => 'Xodimni tanlash majburiy.',
             'division_type.required' => 'Bo\'linma turini tanlash majburiy.',
-            'department_hemis_id.required' => 'Fakultetni tanlash majburiy.',
+            'department_hemis_ids.required' => 'Kamida bitta fakultetni tanlash majburiy.',
+            'department_hemis_ids.min' => 'Kamida bitta fakultetni tanlash majburiy.',
         ]);
 
-        $exists = StaffRegistrationDivision::where('division_type', $request->division_type)
-            ->where('department_hemis_id', $request->department_hemis_id)
-            ->where('specialty_hemis_id', $request->specialty_hemis_id)
-            ->where('level_code', $request->level_code)
-            ->exists();
-
-        if ($exists) {
-            return redirect()->back()->withInput()->with('error', 'Bu bo\'linma uchun allaqachon xodim biriktirilgan.');
-        }
+        $teacher = Teacher::find($request->teacher_id);
+        $created = 0;
+        $skipped = 0;
 
         try {
-            $division = StaffRegistrationDivision::create($request->only([
-                'teacher_id', 'division_type', 'department_hemis_id', 'specialty_hemis_id', 'level_code',
-            ]));
+            foreach ($request->department_hemis_ids as $deptHemisId) {
+                $exists = StaffRegistrationDivision::where('division_type', $request->division_type)
+                    ->where('department_hemis_id', $deptHemisId)
+                    ->where('specialty_hemis_id', $request->specialty_hemis_id)
+                    ->where('level_code', $request->level_code)
+                    ->exists();
 
-            $teacher = Teacher::find($request->teacher_id);
-            ActivityLogService::log('create', 'staff_registration', "Registrator bo'linma biriktirildi: {$teacher->full_name}", $division);
+                if ($exists) {
+                    $skipped++;
+                    continue;
+                }
 
-            return redirect()->route('admin.staff-registration.index')->with('success', 'Biriktirish muvaffaqiyatli saqlandi.');
+                StaffRegistrationDivision::create([
+                    'teacher_id' => $request->teacher_id,
+                    'division_type' => $request->division_type,
+                    'department_hemis_id' => $deptHemisId,
+                    'specialty_hemis_id' => $request->specialty_hemis_id,
+                    'level_code' => $request->level_code,
+                ]);
+                $created++;
+            }
+
+            ActivityLogService::log('create', 'staff_registration', "Registrator bo'linma biriktirildi: {$teacher->full_name} ({$created} ta)", null);
+
+            $msg = "{$created} ta biriktirish saqlandi.";
+            if ($skipped > 0) {
+                $msg .= " {$skipped} ta allaqachon mavjud bo'lgani o'tkazib yuborildi.";
+            }
+
+            return redirect()->route('admin.staff-registration.index')->with('success', $msg);
         } catch (\Throwable $e) {
             Log::error('StaffRegistration store xatolik: ' . $e->getMessage());
             return redirect()->back()->withInput()->with('error', 'Saqlashda xatolik: ' . $e->getMessage());

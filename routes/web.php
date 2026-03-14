@@ -39,9 +39,11 @@ use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\Admin\StaffRegistrationController;
+use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\MoodleImportController;
 use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\Student\StudentContractController as StudentContractCtrl;
 use App\Http\Controllers\LanguageController;
 
 
@@ -313,6 +315,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/', [StaffRegistrationController::class, 'store'])->name('store');
             Route::delete('/{division}', [StaffRegistrationController::class, 'destroy'])->name('destroy');
             Route::get('/specialties', [StaffRegistrationController::class, 'getSpecialties'])->name('specialties');
+        });
+
+        // Bitiruvchi shartnomalar (registrator ofisi)
+        Route::prefix('student-contracts')->name('student-contracts.')->group(function () {
+            Route::get('/', [AdminStudentContractController::class, 'index'])->name('index');
+            Route::get('/{studentContract}', [AdminStudentContractController::class, 'show'])->name('show');
+            Route::get('/{studentContract}/review', [AdminStudentContractController::class, 'review'])->name('review');
+            Route::post('/{studentContract}/approve', [AdminStudentContractController::class, 'approve'])->name('approve');
+            Route::post('/{studentContract}/reject', [AdminStudentContractController::class, 'reject'])->name('reject');
+            Route::get('/{studentContract}/download', [AdminStudentContractController::class, 'download'])->name('download');
+            Route::post('/{studentContract}/regenerate', [AdminStudentContractController::class, 'regenerate'])->name('regenerate');
         });
 
         // Xabarnomalar (Notifications)
@@ -681,6 +694,15 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'download'])->name('download');
             Route::post('/{id}/comment', [\App\Http\Controllers\Student\ExamAppealController::class, 'addComment'])->name('comment');
             Route::get('/comment/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
+        });
+
+        // Bitiruvchi shartnomalar (talaba)
+        Route::prefix('contracts')->name('contracts.')->group(function () {
+            Route::get('/', [StudentContractCtrl::class, 'index'])->name('index');
+            Route::get('/create', [StudentContractCtrl::class, 'create'])->name('create');
+            Route::post('/store', [StudentContractCtrl::class, 'store'])->name('store');
+            Route::get('/{contract}', [StudentContractCtrl::class, 'show'])->name('show');
+            Route::get('/{contract}/download', [StudentContractCtrl::class, 'download'])->name('download');
         });
 
         // Sababli dars qoldirish arizasi

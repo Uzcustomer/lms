@@ -20,12 +20,6 @@
                             {{ session('error') }}
                         </div>
                     @endif
-                    @if($ynLocked ?? false)
-                        <div class="mb-4 px-4 py-3 bg-blue-100 border border-blue-400 text-blue-800 rounded flex items-center">
-                            <span class="mr-2">&#128274;</span>
-                            <span>YN ga yuborilgan. Baholarni o'zgartirish mumkin emas.</span>
-                        </div>
-                    @endif
                     <div class="flex w-full">
                         <div class="w-3/4">
                             <input type="hidden" value="{{$oraliqnazorat->id}}" name="oraliqnazorat">

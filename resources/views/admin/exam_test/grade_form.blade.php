@@ -20,12 +20,6 @@
                             {{ session('error') }}
                         </div>
                     @endif
-                    @if($ynLocked ?? false)
-                        <div class="mb-4 px-4 py-3 bg-blue-100 border border-blue-400 text-blue-800 rounded flex items-center">
-                            <span class="mr-2">&#128274;</span>
-                            <span>YN ga yuborilgan. Baholarni o'zgartirish mumkin emas.</span>
-                        </div>
-                    @endif
                     <div class="flex w-full">
                         <div class="w-3/4">
                             <form method="POST" class="inline" action="{{ route('admin.examtest.grade.save') }}"
@@ -50,7 +44,7 @@
                                             <dt class="mt-1 text-sm font-medium text-gray-900 col-4">
                                                 {{ $student->full_name }}
                                             </dt>
-                                            @if (($examtest->status == 0 || auth()->user()->hasRole(['admin'])) && !($ynLocked ?? false))
+                                            @if ($examtest->status == 0 || auth()->user()->hasRole(['admin']))
                                                 <dd class="mt-1 text-sm font-medium text-gray-900 col-2">
                                                     <input type="number" name="baho[{{ $student->id }}]" placeholder="0-100"
                                                         onkeydown="focusNext(event)" value="{{$student->grade}}"
@@ -66,7 +60,7 @@
                                         </div>
                                     @endforeach
                                 </dl>
-                                @if (($examtest->status == 0 || auth()->user()->hasRole(['admin'])) && !($ynLocked ?? false))
+                                @if ($examtest->status == 0 || auth()->user()->hasRole(['admin']))
 
                                     <div class="mt-6">
                                         <button type="submit"

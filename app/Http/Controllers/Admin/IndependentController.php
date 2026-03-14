@@ -19,7 +19,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use App\Models\MarkingSystemScore;
-use App\Models\YnSubmission;
 class IndependentController extends Controller
 {
     public function index(Request $request)
@@ -275,12 +274,7 @@ class IndependentController extends Controller
             : null;
         $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
 
-        $ynLocked = YnSubmission::where('subject_id', $independent->subject->subject_id)
-            ->where('semester_code', $independent->semester_code)
-            ->where('group_hemis_id', $independent->group_hemis_id)
-            ->exists();
-
-        return view('admin.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit', 'ynLocked'));
+        return view('admin.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit'));
 
     }
     function grade_form($id)
@@ -338,12 +332,7 @@ class IndependentController extends Controller
             : null;
         $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
 
-        $ynLocked = YnSubmission::where('subject_id', $independent->subject->subject_id)
-            ->where('semester_code', $independent->semester_code)
-            ->where('group_hemis_id', $independent->group_hemis_id)
-            ->exists();
-
-        return view('admin.independent.grade_form', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit', 'ynLocked'));
+        return view('admin.independent.grade_form', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit'));
 
     }
     function grade_teacher($id, Request $request)
@@ -391,12 +380,7 @@ class IndependentController extends Controller
             : null;
         $minimumLimit = $markingScore ? $markingScore->minimum_limit : 60;
 
-        $ynLocked = YnSubmission::where('subject_id', $independent->subject->subject_id)
-            ->where('semester_code', $independent->semester_code)
-            ->where('group_hemis_id', $independent->group_hemis_id)
-            ->exists();
-
-        return view('teacher.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit', 'ynLocked'));
+        return view('teacher.independent.grade', compact('independent', 'students', 'submissions', 'gradeHistory', 'minimumLimit'));
 
     }
     function grade_save(Request $request)
@@ -404,18 +388,6 @@ class IndependentController extends Controller
         try {
             DB::beginTransaction();
             $independent = Independent::find(intval($request->independent));
-
-            // YN ga yuborilganligini tekshirish — qulflangan bo'lsa baholash mumkin emas
-            $ynLocked = YnSubmission::where('subject_id', $independent->subject->subject_id)
-                ->where('semester_code', $independent->semester_code)
-                ->where('group_hemis_id', $independent->group_hemis_id)
-                ->exists();
-
-            if ($ynLocked) {
-                DB::rollBack();
-                return back()->with('error', 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.');
-            }
-
             $independent->status = 1;
             $independent->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $independent->save();

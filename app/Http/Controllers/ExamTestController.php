@@ -19,7 +19,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Models\YnSubmission;
 
 class ExamTestController extends Controller
 {
@@ -370,12 +369,7 @@ class ExamTestController extends Controller
                     ->get();
             }
         }
-        $ynLocked = YnSubmission::where('subject_id', $examtest->subject->subject_id)
-            ->where('semester_code', $examtest->semester_code)
-            ->where('group_hemis_id', $examtest->group_hemis_id)
-            ->exists();
-
-        return view('admin.exam_test.grade', compact('examtest', 'students', 'ynLocked'));
+        return view('admin.exam_test.grade', compact('examtest', 'students'));
 
     }
     function grade_form($id)
@@ -463,12 +457,7 @@ class ExamTestController extends Controller
                     ->get();
             }
         }
-        $ynLocked = YnSubmission::where('subject_id', $examtest->subject->subject_id)
-            ->where('semester_code', $examtest->semester_code)
-            ->where('group_hemis_id', $examtest->group_hemis_id)
-            ->exists();
-
-        return view('admin.exam_test.grade_form', compact('examtest', 'students', 'ynLocked'));
+        return view('admin.exam_test.grade_form', compact('examtest', 'students'));
 
     }
     function grade_save(Request $request)
@@ -476,18 +465,6 @@ class ExamTestController extends Controller
         try {
             DB::beginTransaction();
             $exam_test = ExamTest::find(intval($request->examtest));
-
-            // YN ga yuborilganligini tekshirish — qulflangan bo'lsa baholash mumkin emas
-            $ynLocked = YnSubmission::where('subject_id', $exam_test->subject->subject_id)
-                ->where('semester_code', $exam_test->semester_code)
-                ->where('group_hemis_id', $exam_test->group_hemis_id)
-                ->exists();
-
-            if ($ynLocked) {
-                DB::rollBack();
-                return back()->with('error', 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.');
-            }
-
             $exam_test->status = 1;
             $exam_test->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $exam_test->save();

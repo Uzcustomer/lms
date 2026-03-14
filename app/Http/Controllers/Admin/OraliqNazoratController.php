@@ -17,7 +17,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use App\Models\YnSubmission;
 class OraliqNazoratController extends Controller
 {
     public function index(Request $request)
@@ -268,12 +267,7 @@ class OraliqNazoratController extends Controller
                 ->where('students.group_id', $oraliqnazorat->group_hemis_id)
                 ->get();
         }
-        $ynLocked = YnSubmission::where('subject_id', $oraliqnazorat->subject->subject_id)
-            ->where('semester_code', $oraliqnazorat->semester_code)
-            ->where('group_hemis_id', $oraliqnazorat->group_hemis_id)
-            ->exists();
-
-        return view('admin.oraliqnazorat.grade', compact('oraliqnazorat', 'students', 'ynLocked'));
+        return view('admin.oraliqnazorat.grade', compact('oraliqnazorat', 'students'));
 
     }
     function grade_form($id)
@@ -310,12 +304,7 @@ class OraliqNazoratController extends Controller
                 ->where('students.group_id', $oraliqnazorat->group_hemis_id)
                 ->get();
         }
-        $ynLocked = YnSubmission::where('subject_id', $oraliqnazorat->subject->subject_id)
-            ->where('semester_code', $oraliqnazorat->semester_code)
-            ->where('group_hemis_id', $oraliqnazorat->group_hemis_id)
-            ->exists();
-
-        return view('admin.oraliqnazorat.grade_form', compact('oraliqnazorat', 'students', 'ynLocked'));
+        return view('admin.oraliqnazorat.grade_form', compact('oraliqnazorat', 'students'));
 
     }
     function grade_teacher($id, Request $request)
@@ -335,12 +324,7 @@ class OraliqNazoratController extends Controller
                 ->where('students.group_id', $oraliqnazorat->group_hemis_id)
                 ->get();
         }
-        $ynLocked = YnSubmission::where('subject_id', $oraliqnazorat->subject->subject_id)
-            ->where('semester_code', $oraliqnazorat->semester_code)
-            ->where('group_hemis_id', $oraliqnazorat->group_hemis_id)
-            ->exists();
-
-        return view('teacher.oraliqnazorat.grade', compact('oraliqnazorat', 'students', 'ynLocked'));
+        return view('teacher.oraliqnazorat.grade', compact('oraliqnazorat', 'students'));
 
     }
     function grade_save(Request $request)
@@ -348,18 +332,6 @@ class OraliqNazoratController extends Controller
         try {
             DB::beginTransaction();
             $oraliqnazorat = OraliqNazorat::find(intval($request->oraliqnazorat));
-
-            // YN ga yuborilganligini tekshirish — qulflangan bo'lsa baholash mumkin emas
-            $ynLocked = YnSubmission::where('subject_id', $oraliqnazorat->subject->subject_id)
-                ->where('semester_code', $oraliqnazorat->semester_code)
-                ->where('group_hemis_id', $oraliqnazorat->group_hemis_id)
-                ->exists();
-
-            if ($ynLocked) {
-                DB::rollBack();
-                return back()->with('error', 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.');
-            }
-
             $oraliqnazorat->status = 1;
             $oraliqnazorat->grade_teacher = $request->user()->short_name ?? $request->user()->name;
             $oraliqnazorat->save();

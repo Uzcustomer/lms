@@ -20,12 +20,6 @@
                             {{ session('error') }}
                         </div>
                     @endif
-                    @if($ynLocked ?? false)
-                        <div class="mb-4 px-4 py-3 bg-blue-100 border border-blue-400 text-blue-800 rounded flex items-center">
-                            <span class="mr-2">&#128274;</span>
-                            <span>YN ga yuborilgan. Baholarni o'zgartirish mumkin emas.</span>
-                        </div>
-                    @endif
                     <div class="flex w-full">
                         <div class="w-3/4">
                             <form method="POST" class="inline" action="{{ route('teacher.oski.grade.save') }}">
@@ -46,7 +40,7 @@
                                             <dt class="mt-1 text-sm font-medium text-gray-900">
                                                 {{ $student->full_name }}
                                             </dt>
-                                            @if ($oski->status == 0 && !($ynLocked ?? false))
+                                            @if ($oski->status == 0)
                                                 <dd class="mt-1 text-sm font-medium text-gray-900">
                                                     <input type="number" name="baho[{{ $student->id }}]" placeholder="0-100"
                                                         min="0" max="100" onkeydown="focusNext(event)"
@@ -61,7 +55,7 @@
                                         </div>
                                     @endforeach
                                 </dl>
-                                @if ($oski->status == 0 && !($ynLocked ?? false))
+                                @if ($oski->status == 0)
 
                                     <div class="mt-6">
                                         <button type="submit"

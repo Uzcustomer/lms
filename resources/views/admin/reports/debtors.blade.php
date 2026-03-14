@@ -94,6 +94,15 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.SH</label>
                             <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." style="height:36px;border-radius:8px;border:1px solid #cbd5e1;font-size:0.8rem;" />
                         </div>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Talaba toifasi</label>
+                            <select id="student_type" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($studentTypes ?? [] as $type)
+                                    <option value="{{ $type->student_type_code }}">{{ $type->student_type_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="filter-item" style="min-width: 150px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Qarz holati</label>
                             <select id="debt_status" class="select2" style="width: 100%;">
@@ -188,6 +197,7 @@
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;"><a href="#" class="sort-link" data-sort="student_type_name">Toifa <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;" title="Fanga biriktirilgan (student_subjects) asosida"><a href="#" class="sort-link" data-sort="debt_count_ss">Biriktirilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;" title="O'quv reja (curriculum) asosida majburiy fanlar"><a href="#" class="sort-link" data-sort="debt_count_curr">Majburiy <span class="sort-icon active">&#9660;</span></a></th>
@@ -266,6 +276,7 @@
                 semester_code: $('#semester_code').val() || '',
                 group: $('#group').val() || '',
                 student_status: $('#student_status').val() || '',
+                student_type: $('#student_type').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 debt_status: $('#debt_status').val() || '',
                 min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
@@ -352,6 +363,14 @@
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td style="text-align:center;">';
+                if (r.student_type_name) {
+                    var isAcMob = r.student_type_name.toLowerCase().indexOf('mobillik') !== -1 || r.student_type_name.toLowerCase().indexOf('mobil') !== -1;
+                    html += '<span style="background:' + (isAcMob ? '#fef3c7' : '#f1f5f9') + ';color:' + (isAcMob ? '#b45309' : '#475569') + ';border:1px solid ' + (isAcMob ? '#fcd34d' : '#cbd5e1') + ';border-radius:6px;padding:3px 7px;font-size:11px;font-weight:600;white-space:nowrap;">' + esc(r.student_type_name) + '</span>';
+                } else {
+                    html += '<span style="color:#94a3b8;font-size:12px;">—</span>';
+                }
+                html += '</td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
                 var debtSS   = r.debt_count_ss;
                 var debtCurr = (r.debt_count_curr !== undefined) ? r.debt_count_curr : r.debt_count;

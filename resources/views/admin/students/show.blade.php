@@ -159,6 +159,41 @@
                                     </table>
                                 </div>
 
+                                {{-- Registrator ofisi xodimlari --}}
+                                @if(isset($frontOffice) || isset($backOffice))
+                                <div class="p-4 rounded-lg" style="background: linear-gradient(135deg, #eff6ff, #f0fdf4); border: 1px solid #bfdbfe;">
+                                    <h4 class="font-semibold text-base mb-3 border-b pb-2" style="color: #1e40af;">Registrator ofisi xodimlari</h4>
+                                    <table class="w-full text-sm">
+                                        <tr>
+                                            <td class="py-1.5 w-2/5" style="color: #2563eb; font-weight: 600;">Front ofis</td>
+                                            <td class="py-1.5">
+                                                @if($frontOffice)
+                                                    <span class="font-bold text-gray-900">{{ $frontOffice->teacher->full_name ?? '-' }}</span>
+                                                    @if($frontOffice->started_at)
+                                                        <span class="text-gray-400 text-xs ml-1">({{ $frontOffice->started_at->format('d.m.Y') }} dan)</span>
+                                                    @endif
+                                                @else
+                                                    <span class="text-gray-400">Biriktirilmagan</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="py-1.5 w-2/5" style="color: #b45309; font-weight: 600;">Back ofis</td>
+                                            <td class="py-1.5">
+                                                @if($backOffice)
+                                                    <span class="font-bold text-gray-900">{{ $backOffice->teacher->full_name ?? '-' }}</span>
+                                                    @if($backOffice->started_at)
+                                                        <span class="text-gray-400 text-xs ml-1">({{ $backOffice->started_at->format('d.m.Y') }} dan)</span>
+                                                    @endif
+                                                @else
+                                                    <span class="text-gray-400">Biriktirilmagan</span>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                @endif
+
                                 {{-- specialty --}}
                                 <div class="bg-gray-50 p-4 rounded-lg">
                                     <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">specialty</h4>

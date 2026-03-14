@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\Exportable;
@@ -64,6 +65,13 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
 
     public function map($student): array
     {
+        $frontOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'front_office'
+        );
+        $backOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
+        );
+
         return [
             $student->hemis_id,
             $student->student_id_number,
@@ -105,6 +113,8 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             $student->face_id_enabled ? 'Ha' : 'Yo\'q',
             $student->hemis_created_at ? $student->hemis_created_at->format('d.m.Y') : '',
             $student->hemis_updated_at ? $student->hemis_updated_at->format('d.m.Y') : '',
+            $frontOffice?->teacher?->full_name ?? '',
+            $backOffice?->teacher?->full_name ?? '',
         ];
     }
 
@@ -151,6 +161,8 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             'Face ID faol',
             'HEMIS yaratilgan',
             'HEMIS yangilangan',
+            'Front ofis xodimi',
+            'Back ofis xodimi',
         ];
     }
 

@@ -1584,18 +1584,20 @@
                                         </div>
                                     @endif
                                     @if(!($allLessonsCompleted ?? true))
-                                        <div class="text-sm text-red-600 mr-2">
-                                            Hali {{ $remainingLessonsCount ?? 0 }} ta dars qolgan
-                                            @if($lastLessonDate ?? false)
-                                                (oxirgi dars: {{ \Carbon\Carbon::parse($lastLessonDate)->format('d.m.Y') }})
-                                            @endif
+                                        <div class="flex flex-column items-end">
+                                            <button type="button" id="btn-submit-yn"
+                                                class="px-6 py-3 bg-red-400 text-white font-semibold rounded-lg cursor-not-allowed shadow-sm border border-red-500"
+                                                disabled
+                                                title="Barcha darslar tugagandan keyin YN ga yuborish mumkin">
+                                                YN ga yuborish
+                                            </button>
+                                            <div class="text-sm text-red-600 mt-2 font-medium">
+                                                Hali {{ $remainingLessonsCount ?? 0 }} ta dars qolgan
+                                                @if($lastLessonDate ?? false)
+                                                    (oxirgi dars: {{ \Carbon\Carbon::parse($lastLessonDate)->format('d.m.Y') }})
+                                                @endif
+                                            </div>
                                         </div>
-                                        <button type="button" id="btn-submit-yn"
-                                            class="px-6 py-3 bg-gray-400 text-white font-semibold rounded-lg cursor-not-allowed shadow-sm"
-                                            disabled
-                                            title="Barcha darslar tugagandan keyin YN ga yuborish mumkin">
-                                            YN ga yuborish
-                                        </button>
                                     @else
                                         <button type="button" id="btn-submit-yn"
                                             class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"

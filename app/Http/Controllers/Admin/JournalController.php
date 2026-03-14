@@ -133,26 +133,9 @@ class JournalController extends Controller
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
-        // O'qituvchi uchun faqat o'zi o'tadigan fan+guruh juftliklari
-        if ($isOqituvchi && !empty($teacherSubjectIds)) {
-            $teacherHemisIdForKafedra = get_teacher_hemis_id();
-            $kafedraQuery->where(function ($q) use ($teacherHemisIdForKafedra) {
-                $q->whereExists(function ($sub) use ($teacherHemisIdForKafedra) {
-                    $sub->select(DB::raw(1))
-                        ->from('curriculum_subject_teachers as cst')
-                        ->whereColumn('cst.subject_id', 'cs.subject_id')
-                        ->whereColumn('cst.group_id', 'g.group_hemis_id')
-                        ->where('cst.employee_id', $teacherHemisIdForKafedra);
-                })
-                ->orWhereExists(function ($sub) use ($teacherHemisIdForKafedra) {
-                    $sub->select(DB::raw(1))
-                        ->from('schedules as sch')
-                        ->whereColumn('sch.subject_id', 'cs.subject_id')
-                        ->whereColumn('sch.group_id', 'g.group_hemis_id')
-                        ->where('sch.employee_id', $teacherHemisIdForKafedra)
-                        ->whereNull('sch.deleted_at');
-                });
-            });
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar
+        if ($isOqituvchi) {
+            $kafedraQuery->whereIn('cs.subject_id', $teacherSubjectIds);
         }
         if ($request->get('current_semester', '1') == '1') {
             $kafedraQuery->whereIn('s.semester_hemis_id', function ($sub) {
@@ -209,28 +192,12 @@ class JournalController extends Controller
             $query->where('f.id', $request->faculty);
         }
 
-        // O'qituvchi uchun faqat o'zi o'tadigan fan+guruh juftliklari
-        if ($isOqituvchi && !empty($teacherSubjectIds)) {
-            $teacherHemisIdForFilter = get_teacher_hemis_id();
-            $query->where(function ($q) use ($teacherHemisIdForFilter) {
-                // curriculum_subject_teachers dan fan+guruh juftligi
-                $q->whereExists(function ($sub) use ($teacherHemisIdForFilter) {
-                    $sub->select(DB::raw(1))
-                        ->from('curriculum_subject_teachers as cst')
-                        ->whereColumn('cst.subject_id', 'cs.subject_id')
-                        ->whereColumn('cst.group_id', 'g.group_hemis_id')
-                        ->where('cst.employee_id', $teacherHemisIdForFilter);
-                })
-                // yoki dars jadvalidan fan+guruh juftligi
-                ->orWhereExists(function ($sub) use ($teacherHemisIdForFilter) {
-                    $sub->select(DB::raw(1))
-                        ->from('schedules as sch')
-                        ->whereColumn('sch.subject_id', 'cs.subject_id')
-                        ->whereColumn('sch.group_id', 'g.group_hemis_id')
-                        ->where('sch.employee_id', $teacherHemisIdForFilter)
-                        ->whereNull('sch.deleted_at');
-                });
-            });
+        // O'qituvchi uchun faqat o'zi o'tadigan fanlar va guruhlar
+        if ($isOqituvchi) {
+            $query->whereIn('cs.subject_id', $teacherSubjectIds);
+        }
+        if ($isOqituvchi) {
+            $query->whereIn('g.group_hemis_id', $teacherGroupIds);
         }
 
         if ($request->filled('department')) {

@@ -148,16 +148,16 @@ class ContractController extends Controller
             $tokens = array_filter(explode(' ', trim($search)));
             $query->where(function ($q) use ($tokens, $search) {
                 // Shartnoma raqami bo'yicha to'g'ridan-to'g'ri qidiruv
-                $q->where('contract_number', 'like', "%{$search}%");
+                $q->where('contract_list.contract_number', 'like', "%{$search}%");
                 // Ism-familiya bo'yicha — har bir so'z alohida tekshiriladi (istalgan tartibda)
                 if (count($tokens) > 1) {
                     $q->orWhere(function ($inner) use ($tokens) {
                         foreach ($tokens as $token) {
-                            $inner->where('full_name', 'like', "%{$token}%");
+                            $inner->where('contract_list.full_name', 'like', "%{$token}%");
                         }
                     });
                 } else {
-                    $q->orWhere('full_name', 'like', "%{$search}%");
+                    $q->orWhere('contract_list.full_name', 'like', "%{$search}%");
                 }
             });
         }

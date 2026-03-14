@@ -3899,8 +3899,16 @@ class ReportController extends Controller
             if ($request->filled('semester_code')) {
                 $scheduleQuery->where('sch.semester_code', $request->semester_code);
             }
+            // Guruh filtri: dropdown DB id yuboradi, schedule esa group_hemis_id ishlatadi
+            $filterGroupHemisId = null;
             if ($request->filled('group')) {
-                $scheduleQuery->where('sch.group_id', $request->group);
+                $filterGroup = DB::table('groups')->where('id', $request->group)->first();
+                if ($filterGroup) {
+                    $filterGroupHemisId = $filterGroup->group_hemis_id;
+                    $scheduleQuery->where('sch.group_id', $filterGroupHemisId);
+                } else {
+                    $scheduleQuery->where('sch.group_id', $request->group);
+                }
             }
             if ($request->filled('subject')) {
                 $scheduleQuery->where('sch.subject_id', $request->subject);
@@ -4013,8 +4021,8 @@ class ReportController extends Controller
             if ($request->filled('level_code')) {
                 $studentQuery->where('s.level_code', $request->level_code);
             }
-            if ($request->filled('group')) {
-                $studentQuery->where('s.group_id', $request->group);
+            if ($filterGroupHemisId) {
+                $studentQuery->where('s.group_id', $filterGroupHemisId);
             }
             if ($request->filled('education_type')) {
                 $studentQuery->where('s.education_type_code', $request->education_type);

@@ -171,7 +171,7 @@ class ContractController extends Controller
             });
         }
 
-        if ($request->filled('_current_semester')) {
+        if ($request->filled('_current_course')) {
             $query->whereExists(function ($sub) {
                 $sub->select(DB::raw(1))
                     ->from('students')

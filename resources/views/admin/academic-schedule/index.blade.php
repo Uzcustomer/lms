@@ -198,6 +198,18 @@
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
                                                         @endif
                                                         <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
+                                                        @if($canDelete)
+                                                        <form method="POST" action="{{ route($routePrefix . '.academic-schedule.clear-date') }}" onsubmit="return confirm('OSKI sanasini o\'chirishni tasdiqlaysizmi?')" style="display:inline;">
+                                                            @csrf
+                                                            <input type="hidden" name="group_hemis_id" value="{{ $item['group']->group_hemis_id }}">
+                                                            <input type="hidden" name="subject_id" value="{{ $item['subject']->subject_id }}">
+                                                            <input type="hidden" name="semester_code" value="{{ $item['subject']->semester_code }}">
+                                                            <input type="hidden" name="date_type" value="oski">
+                                                            <button type="submit" class="clear-date-btn" title="OSKI sanasini o'chirish">
+                                                                <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                            </button>
+                                                        </form>
+                                                        @endif
                                                     @else
                                                         <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}">
                                                             <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
@@ -234,6 +246,18 @@
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
                                                         @endif
                                                         <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
+                                                        @if($canDelete)
+                                                        <form method="POST" action="{{ route($routePrefix . '.academic-schedule.clear-date') }}" onsubmit="return confirm('Test sanasini o\'chirishni tasdiqlaysizmi?')" style="display:inline;">
+                                                            @csrf
+                                                            <input type="hidden" name="group_hemis_id" value="{{ $item['group']->group_hemis_id }}">
+                                                            <input type="hidden" name="subject_id" value="{{ $item['subject']->subject_id }}">
+                                                            <input type="hidden" name="semester_code" value="{{ $item['subject']->semester_code }}">
+                                                            <input type="hidden" name="date_type" value="test">
+                                                            <button type="submit" class="clear-date-btn" title="Test sanasini o'chirish">
+                                                                <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                            </button>
+                                                        </form>
+                                                        @endif
                                                     @else
                                                         <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}">
                                                             <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
@@ -698,5 +722,7 @@
         .date-input-locked:hover { border-color: #e2e8f0 !important; box-shadow: none !important; }
         .na-toggle-locked { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
         .lock-icon { font-size: 12px; flex-shrink: 0; opacity: 0.6; }
+        .clear-date-btn { background: none; border: none; cursor: pointer; padding: 2px 3px; color: #ef4444; opacity: 0.7; line-height: 1; border-radius: 4px; flex-shrink: 0; }
+        .clear-date-btn:hover { opacity: 1; background: #fee2e2; }
     </style>
 </x-app-layout>

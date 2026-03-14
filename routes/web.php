@@ -539,6 +539,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::post('/clear-date', [AcademicScheduleController::class, 'clearDate'])->name('clear-date');
             Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
@@ -894,6 +895,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::post('/clear-date', [AcademicScheduleController::class, 'clearDate'])->name('clear-date');
             Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');

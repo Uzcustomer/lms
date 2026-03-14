@@ -3926,8 +3926,8 @@ class ReportController extends Controller
             $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
             $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
 
-            // JN kunlik o'rtachasi uchun pairs_per_day hisoblash (jurnal formulasi bilan bir xil)
-            $pairsQuery = DB::table('schedules as sch2')
+            // Schedule dan date+pair columns olish (jnReportData formulasi bilan bir xil)
+            $scheduleDetailQuery = DB::table('schedules as sch2')
                 ->whereNotIn('sch2.training_type_code', $excludedCodes)
                 ->whereNotNull('sch2.lesson_date')
                 ->whereIn('sch2.group_id', $scheduleGroupIds)
@@ -3936,20 +3936,28 @@ class ReportController extends Controller
                 ->select('sch2.group_id', 'sch2.subject_id', 'sch2.semester_code', 'sch2.lesson_date', 'sch2.lesson_pair_code');
 
             if ($isCurrentSemester) {
-                $pairsQuery
-                    ->where('sch2.education_year_current', true)
+                $scheduleDetailQuery
+                    ->join('groups as gr3', 'gr3.group_hemis_id', '=', 'sch2.group_id')
+                    ->join('semesters as sem3', function ($join) {
+                        $join->on('sem3.code', '=', 'sch2.semester_code')
+                            ->on('sem3.curriculum_hemis_id', '=', 'gr3.curriculum_hemis_id');
+                    })
+                    ->where('sem3.current', true)
                     ->whereNull('sch2.deleted_at');
             }
 
-            $pairsPerDay = [];
-            foreach ($pairsQuery->get() as $schRow) {
+            $columns = [];    // [combo_key][date_pair] = true
+            $minDates = [];   // [combo_key] = eng kichik sana
+
+            foreach ($scheduleDetailQuery->get() as $schRow) {
                 $dateKey = substr($schRow->lesson_date, 0, 10);
-                $ppdKey = $schRow->group_id . '|' . $schRow->subject_id . '|' . $schRow->semester_code . '|' . $dateKey;
-                $pairKey = $ppdKey . '|' . $schRow->lesson_pair_code;
-                if (!isset($pairsPerDay[$ppdKey])) {
-                    $pairsPerDay[$ppdKey] = [];
+                $comboKey = $schRow->group_id . '|' . $schRow->subject_id . '|' . $schRow->semester_code;
+                $datePairKey = $dateKey . '_' . $schRow->lesson_pair_code;
+                $columns[$comboKey][$datePairKey] = true;
+
+                if (!isset($minDates[$comboKey]) || $dateKey < $minDates[$comboKey]) {
+                    $minDates[$comboKey] = $dateKey;
                 }
-                $pairsPerDay[$ppdKey][$pairKey] = true;
             }
 
             // Vedomost ma'lumotlarini olish
@@ -4020,26 +4028,11 @@ class ReportController extends Controller
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             $studentGroupMap = $students->pluck('group_id', 'hemis_id')->toArray();
 
-            // 3-QADAM: student_grades dan faqat JN baholarni olish
-            // Joriy semestr bo'lsa, faqat joriy semestr dars sanalaridan filtrlash
-            $minScheduleDate = null;
-            if ($isCurrentSemester) {
-                $minScheduleDate = DB::table('schedules as sch2')
-                    ->join('groups as gr2', 'gr2.group_hemis_id', '=', 'sch2.group_id')
-                    ->join('semesters as sem2', function ($join) {
-                        $join->on('sem2.code', '=', 'sch2.semester_code')
-                            ->on('sem2.curriculum_hemis_id', '=', 'gr2.curriculum_hemis_id');
-                    })
-                    ->where('sem2.current', true)
-                    ->where('sch2.education_year_current', true)
-                    ->whereNull('sch2.deleted_at')
-                    ->whereNotNull('sch2.lesson_date')
-                    ->min('sch2.lesson_date');
-            }
+            // 3-QADAM: student_grades dan faqat JN baholarni olish (jnReportData formulasi)
+            $cutoffDate = Carbon::now('Asia/Tashkent')->format('Y-m-d');
 
-            // Har bir talaba, fan, kun bo'yicha faqat JN baholar
-            $gradesByDay = [];   // [hemisId|subjectId|date] => [pair_code => grade]
-            $studentSubjects = []; // [hemisId|subjectId|semesterCode] => info
+            $gradesByDay = [];      // [student|subject|date] => [pair_code => grade]
+            $studentSubjects = [];  // [student|subject] => info
 
             foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
                 $gradesChunk = DB::table('student_grades')
@@ -4047,57 +4040,73 @@ class ReportController extends Controller
                     ->whereIn('subject_id', $validSubjectIds)
                     ->whereIn('semester_code', $validSemesterCodes)
                     ->whereNotIn('training_type_code', $excludedCodes)
+                    ->where(function ($q) {
+                        $q->whereNotNull('grade')->orWhereNotNull('retake_grade');
+                    })
                     ->whereNotNull('lesson_date')
-                    ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                     ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
-                        'grade', 'lesson_date', 'lesson_pair_code')
+                        'grade', 'lesson_date', 'lesson_pair_code', 'retake_grade', 'status', 'reason')
                     ->get();
 
                 foreach ($gradesChunk as $g) {
                     $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
                     if (!$groupId) continue;
 
-                    $dateKey = substr($g->lesson_date, 0, 10);
-                    $gradeKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $dateKey;
+                    $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
+                    $minDate = $minDates[$comboKey] ?? null;
 
-                    if ($g->grade !== null && $g->grade > 0) {
-                        $gradesByDay[$gradeKey][$g->lesson_pair_code] = (float) $g->grade;
+                    $dateKey = substr($g->lesson_date, 0, 10);
+                    if ($minDate && $dateKey < $minDate) continue;
+
+                    // Grade date_pair ni columns ga birlashtirish (jurnal fallback logikasi)
+                    $datePairKey = $dateKey . '_' . $g->lesson_pair_code;
+                    $columns[$comboKey][$datePairKey] = true;
+
+                    // Baholarni kun bo'yicha guruhlash (pair_code bo'yicha deduplikatsiya)
+                    $gradeKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $dateKey;
+                    $effectiveGrade = $this->getEffectiveGradeForJn($g);
+                    if ($effectiveGrade !== null) {
+                        $gradesByDay[$gradeKey][$g->lesson_pair_code] = $effectiveGrade;
                     }
 
-                    $ssKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
+                    // Student-subject ma'lumotlarini saqlash
+                    $ssKey = $g->student_hemis_id . '|' . $g->subject_id;
                     if (!isset($studentSubjects[$ssKey])) {
                         $studentSubjects[$ssKey] = [
                             'hemis_id' => $g->student_hemis_id,
                             'subject_id' => $g->subject_id,
                             'subject_name' => $g->subject_name,
                             'semester_code' => $g->semester_code,
-                            'group_id' => $groupId,
+                            'combo_key' => $comboKey,
                         ];
                     }
                 }
                 unset($gradesChunk);
             }
 
-            // Schedule dan lesson_dates va pairs_per_day olish (jurnal formulasi)
-            $lessonDatesMap = []; // [group_id|subject_id|semester_code] => [date1, date2, ...]
+            // pairs_per_day va lesson_dates ni yakuniy columns dan hisoblash (jnReportData kabi)
+            $pairsPerDay = [];   // [combo_key|date] => juftliklar soni
+            $lessonDates = [];   // [combo_key] => [date1, date2, ...]
 
-            foreach ($pairsPerDay as $ppdKey => $pairs) {
-                // ppdKey = group_id|subject_id|semester_code|date
-                $parts = explode('|', $ppdKey);
-                $comboKey = $parts[0] . '|' . $parts[1] . '|' . $parts[2];
-                $dateKey = $parts[3];
-                $lessonDatesMap[$comboKey][$dateKey] = true;
+            foreach ($columns as $comboKey => $datePairs) {
+                $datesSet = [];
+                foreach ($datePairs as $datePair => $v) {
+                    $dateKey = substr($datePair, 0, 10);
+                    $ppdKey = $comboKey . '|' . $dateKey;
+                    $pairsPerDay[$ppdKey] = ($pairsPerDay[$ppdKey] ?? 0) + 1;
+                    $datesSet[$dateKey] = true;
+                }
+                $dates = array_keys($datesSet);
+                sort($dates);
+                $lessonDates[$comboKey] = $dates;
             }
 
-            $cutoffDate = now()->format('Y-m-d');
-
-            // 4-QADAM: Har bir talaba-fan uchun JN o'rtachasini hisoblash (jurnal formulasi)
+            // 4-QADAM: Har bir talaba-fan uchun JN o'rtachasini hisoblash (jnReportData formulasi)
             $studentResults = [];
 
             foreach ($studentSubjects as $ssKey => $info) {
-                $comboKey = $info['group_id'] . '|' . $info['subject_id'] . '|' . $info['semester_code'];
-                $comboLessonDates = isset($lessonDatesMap[$comboKey]) ? array_keys($lessonDatesMap[$comboKey]) : [];
-                sort($comboLessonDates);
+                $comboKey = $info['combo_key'];
+                $comboLessonDates = $lessonDates[$comboKey] ?? [];
 
                 $dailySum = 0;
                 $daysForAverage = 0;
@@ -4110,7 +4119,7 @@ class ReportController extends Controller
                     $dayGrades = $gradesByDay[$gradeKey] ?? [];
 
                     $ppdKey = $comboKey . '|' . $dateKey;
-                    $pairsInDay = isset($pairsPerDay[$ppdKey]) ? count($pairsPerDay[$ppdKey]) : 1;
+                    $pairsInDay = $pairsPerDay[$ppdKey] ?? 1;
 
                     $gradeSum = array_sum($dayGrades);
                     $dailyAvg = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
@@ -4124,20 +4133,21 @@ class ReportController extends Controller
                     ? round($dailySum / $daysForAverage, 0, PHP_ROUND_HALF_UP)
                     : 0;
 
+                $groupId = explode('|', $comboKey)[0];
                 if ($jnAverage < $scoreLimit) {
                     $studentResults[] = [
                         'hemis_id' => $info['hemis_id'],
                         'subject_id' => $info['subject_id'],
                         'subject_name' => $info['subject_name'],
                         'semester_code' => $info['semester_code'],
-                        'group_id' => $info['group_id'],
+                        'group_id' => $groupId,
                         'grade' => $jnAverage,
                         'days_count' => $daysForAverage,
                         'last_date' => $lastDate,
                     ];
                 }
             }
-            unset($gradesByDay, $studentSubjects);
+            unset($gradesByDay, $studentSubjects, $columns);
 
             if (empty($studentResults)) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);

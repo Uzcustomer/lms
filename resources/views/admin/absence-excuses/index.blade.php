@@ -349,6 +349,7 @@
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Holat</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Natija hujjati</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tasdiqlagan</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ariza vaqti</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amallar</th>
                                 </tr>
                             </thead>
@@ -408,6 +409,10 @@
                                             @else
                                                 <span class="text-gray-400">-</span>
                                             @endif
+                                        </td>
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="text-xs">{{ $excuse->created_at?->format('d.m.Y') }}</div>
+                                            <div class="text-xs text-gray-400">{{ $excuse->created_at?->format('H:i') }}</div>
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
                                             <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"

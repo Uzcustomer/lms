@@ -4601,7 +4601,7 @@ class ReportController extends Controller
         )->get();
 
         if ($schedules->isEmpty()) {
-            return response()->json(['data' => [], 'total' => 0]);
+            return [];
         }
 
         // 2-QADAM: Baho mavjudligini tekshirish

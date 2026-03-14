@@ -27,6 +27,8 @@ use App\Models\StudentGrade;
 use App\Models\Setting;
 use App\Models\StaffRegistrationDivision;
 use App\Models\StudentPerformance;
+use App\Models\Teacher;
+use App\Models\TutorHistory;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -226,7 +228,24 @@ class StudentController extends Controller
             $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
         );
 
-        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice'));
+        // Hozirgi tyutor (group_teacher orqali)
+        $currentTutor = null;
+        if ($student->group_id) {
+            $group = Group::where('group_hemis_id', $student->group_id)->first();
+            if ($group) {
+                $currentTutor = $group->teachers()->first();
+            }
+        }
+
+        // Tyutor tarixi
+        $tutorHistory = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('tutor_history')) {
+            $tutorHistory = TutorHistory::where('student_id', $student->id)
+                ->orderBy('assigned_at', 'desc')
+                ->get();
+        }
+
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)

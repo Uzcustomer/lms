@@ -23,6 +23,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
+use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
@@ -39,9 +40,11 @@ use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\Admin\StaffRegistrationController;
+use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\MoodleImportController;
 use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\Student\StudentContractController as StudentContractCtrl;
 use App\Http\Controllers\LanguageController;
 
 
@@ -313,6 +316,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/', [StaffRegistrationController::class, 'store'])->name('store');
             Route::delete('/{division}', [StaffRegistrationController::class, 'destroy'])->name('destroy');
             Route::get('/specialties', [StaffRegistrationController::class, 'getSpecialties'])->name('specialties');
+        });
+
+        // Bitiruvchi shartnomalar (registrator ofisi)
+        Route::prefix('student-contracts')->name('student-contracts.')->group(function () {
+            Route::get('/', [AdminStudentContractController::class, 'index'])->name('index');
+            Route::get('/{studentContract}', [AdminStudentContractController::class, 'show'])->name('show');
+            Route::get('/{studentContract}/review', [AdminStudentContractController::class, 'review'])->name('review');
+            Route::post('/{studentContract}/approve', [AdminStudentContractController::class, 'approve'])->name('approve');
+            Route::post('/{studentContract}/reject', [AdminStudentContractController::class, 'reject'])->name('reject');
+            Route::get('/{studentContract}/download', [AdminStudentContractController::class, 'download'])->name('download');
+            Route::post('/{studentContract}/regenerate', [AdminStudentContractController::class, 'regenerate'])->name('regenerate');
         });
 
         // Xabarnomalar (Notifications)
@@ -683,6 +697,15 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/comment/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
         });
 
+        // Bitiruvchi shartnomalar (talaba)
+        Route::prefix('contracts')->name('contracts.')->group(function () {
+            Route::get('/', [StudentContractCtrl::class, 'index'])->name('index');
+            Route::get('/create', [StudentContractCtrl::class, 'create'])->name('create');
+            Route::post('/store', [StudentContractCtrl::class, 'store'])->name('store');
+            Route::get('/{contract}', [StudentContractCtrl::class, 'show'])->name('show');
+            Route::get('/{contract}/download', [StudentContractCtrl::class, 'download'])->name('download');
+        });
+
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');
@@ -744,7 +767,17 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         });
 
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');
+        Route::get('/students/{student}', [TeacherMainController::class, 'showStudent'])->name('students.show');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
+
+        // Tyutor hisobotlari
+        Route::get('/reports/jn', [TutorReportController::class, 'jnReport'])->name('reports.jn');
+        Route::get('/reports/absence-74', [TutorReportController::class, 'absenceReport74'])->name('reports.absence-74');
+        Route::get('/reports/absence-25', [TutorReportController::class, 'absenceReport25'])->name('reports.absence-25');
+        Route::get('/reports/debtors', [TutorReportController::class, 'debtorsReport'])->name('reports.debtors');
+        Route::get('/reports/top-students', [TutorReportController::class, 'topStudentsReport'])->name('reports.top-students');
+        Route::get('/reports/unrated', [TutorReportController::class, 'unratedReport'])->name('reports.unrated');
+        Route::get('/reports/contracts', [TutorReportController::class, 'contractsReport'])->name('reports.contracts');
         Route::put('/student-grades/{gradeId}', [TeacherMainController::class, 'updateGrade'])->name('update.grade');
         Route::get('/student-grades-week/export', [TeacherMainController::class, 'exportStudentGrades'])->name('student-grades-week.export');
         Route::get('/student-grades-week/export-box', [TeacherMainController::class, 'exportStudentGradesBox'])->name('student-grades-week.export-box');

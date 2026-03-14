@@ -39,6 +39,9 @@
                     </x-nav-link>
                 </div>
                 @if($navActiveRole !== 'oqituvchi')
+                @php
+                    $hasTutorGroups = auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0;
+                @endphp
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <div class="flex items-center">
                         <x-dropdown align="right" width="48">
@@ -54,33 +57,63 @@
                                 </button>
                             </x-slot>
                             <x-slot name="content">
-                                <x-dropdown-link :href="route('teacher.independent.index')"
-                                    :active="request()->routeIs('teacher.independent.index')">
-                                    {{ __('Mustaqil ta\'lim') }}
-                                </x-dropdown-link>
-                                <x-dropdown-link :href="route('teacher.oraliqnazorat.index')"
-                                    :active="request()->routeIs('teacher.oraliqnazorat.index')">
-                                    Oraliq nazorat
-                                </x-dropdown-link>
-                                @if( auth()->user()->hasRole(['dekan']))
-                                    <x-dropdown-link :href="route('teacher.oski.index')"
-                                        :active="request()->routeIs('teacher.oski.index')">
-                                        OSKI
+                                @if($hasTutorGroups)
+                                    <x-dropdown-link :href="route('teacher.reports.jn')"
+                                        :active="request()->routeIs('teacher.reports.jn')">
+                                        JN o'zlashtirish
                                     </x-dropdown-link>
-                                    <x-dropdown-link :href="route('teacher.examtest.index')"
-                                        :active="request()->routeIs('teacher.examtest.index')">
-                                        Test
+                                    <x-dropdown-link :href="route('teacher.reports.absence-74')"
+                                        :active="request()->routeIs('teacher.reports.absence-74')">
+                                        74 soat dars qoldirish
                                     </x-dropdown-link>
-                                    <x-dropdown-link :href="route('teacher.qaytnoma.index')"
-                                        :active="request()->routeIs('teacher.qaytnoma.index')">
-                                        YN oldi qaydnoma
+                                    <x-dropdown-link :href="route('teacher.reports.absence-25')"
+                                        :active="request()->routeIs('teacher.reports.absence-25')">
+                                        25% sababsiz
                                     </x-dropdown-link>
-                                    <x-dropdown-link :href="route('teacher.vedomost.index')"
-                                        :active="request()->routeIs('teacher.vedomost.index')">
-                                        Vedomost
+                                    <x-dropdown-link :href="route('teacher.reports.debtors')"
+                                        :active="request()->routeIs('teacher.reports.debtors')">
+                                        4&#8805;qarzdorlar
                                     </x-dropdown-link>
+                                    <x-dropdown-link :href="route('teacher.reports.top-students')"
+                                        :active="request()->routeIs('teacher.reports.top-students')">
+                                        5 ga da'vogar
+                                    </x-dropdown-link>
+                                    <x-dropdown-link :href="route('teacher.reports.unrated')"
+                                        :active="request()->routeIs('teacher.reports.unrated')">
+                                        Baho qo'ymaganlar
+                                    </x-dropdown-link>
+                                    <x-dropdown-link :href="route('teacher.reports.contracts')"
+                                        :active="request()->routeIs('teacher.reports.contracts')">
+                                        Kontraktlar
+                                    </x-dropdown-link>
+                                @else
+                                    <x-dropdown-link :href="route('teacher.independent.index')"
+                                        :active="request()->routeIs('teacher.independent.index')">
+                                        {{ __('Mustaqil ta\'lim') }}
+                                    </x-dropdown-link>
+                                    <x-dropdown-link :href="route('teacher.oraliqnazorat.index')"
+                                        :active="request()->routeIs('teacher.oraliqnazorat.index')">
+                                        Oraliq nazorat
+                                    </x-dropdown-link>
+                                    @if( auth()->user()->hasRole(['dekan']))
+                                        <x-dropdown-link :href="route('teacher.oski.index')"
+                                            :active="request()->routeIs('teacher.oski.index')">
+                                            OSKI
+                                        </x-dropdown-link>
+                                        <x-dropdown-link :href="route('teacher.examtest.index')"
+                                            :active="request()->routeIs('teacher.examtest.index')">
+                                            Test
+                                        </x-dropdown-link>
+                                        <x-dropdown-link :href="route('teacher.qaytnoma.index')"
+                                            :active="request()->routeIs('teacher.qaytnoma.index')">
+                                            YN oldi qaydnoma
+                                        </x-dropdown-link>
+                                        <x-dropdown-link :href="route('teacher.vedomost.index')"
+                                            :active="request()->routeIs('teacher.vedomost.index')">
+                                            Vedomost
+                                        </x-dropdown-link>
+                                    @endif
                                 @endif
-
                             </x-slot>
                         </x-dropdown>
                     </div>
@@ -469,37 +502,22 @@
                     {{ __('Jurnal') }}
                 </x-responsive-nav-link>
                 @if($navActiveRole !== 'oqituvchi')
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('teacher.independent.index')"
-                        :active="request()->routeIs('teacher.independent.index')">
-                        {{ __('Mustaqil ta\'lim') }}
-                    </x-nav-link>
-                </div>
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('teacher.oraliqnazorat.index')"
-                        :active="request()->routeIs('teacher.oraliqnazorat.index')">
-                        Oraliq nazorat
-                    </x-nav-link>
-                </div>
-
-                @if( auth()->user()->hasRole(['dekan']))
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('teacher.oski.index')" :active="request()->routeIs('teacher.oski.index')">
-                        OSKI
-                    </x-nav-link>
-                </div>
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('teacher.examtest.index')"
-                        :active="request()->routeIs('teacher.examtest.index')">
-                        Test
-                    </x-nav-link>
-                </div>
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('teacher.qaytnoma.index')"
-                        :active="request()->routeIs('teacher.qaytnoma.index')">
-                        YN oldi qaydnoma
-                    </x-nav-link>
-                </div>
+                @if($hasTutorGroups ?? false)
+                    <x-responsive-nav-link :href="route('teacher.reports.jn')">JN o'zlashtirish</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('teacher.reports.absence-74')">74 soat dars qoldirish</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('teacher.reports.absence-25')">25% sababsiz</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('teacher.reports.debtors')">4&#8805;qarzdorlar</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('teacher.reports.top-students')">5 ga da'vogar</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('teacher.reports.unrated')">Baho qo'ymaganlar</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('teacher.reports.contracts')">Kontraktlar</x-responsive-nav-link>
+                @else
+                    <x-responsive-nav-link :href="route('teacher.independent.index')">{{ __('Mustaqil ta\'lim') }}</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('teacher.oraliqnazorat.index')">Oraliq nazorat</x-responsive-nav-link>
+                    @if( auth()->user()->hasRole(['dekan']))
+                        <x-responsive-nav-link :href="route('teacher.oski.index')">OSKI</x-responsive-nav-link>
+                        <x-responsive-nav-link :href="route('teacher.examtest.index')">Test</x-responsive-nav-link>
+                        <x-responsive-nav-link :href="route('teacher.qaytnoma.index')">YN oldi qaydnoma</x-responsive-nav-link>
+                    @endif
                 @endif
                 @endif {{-- end oqituvchi check --}}
 

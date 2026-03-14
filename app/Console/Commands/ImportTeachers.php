@@ -4,10 +4,13 @@ namespace App\Console\Commands;
 
 use App\Enums\ProjectRole;
 use App\Models\Group;
+use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\TutorHistory;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 class ImportTeachers extends Command
 {
@@ -88,21 +91,61 @@ class ImportTeachers extends Command
                     $teacher->assignRole(ProjectRole::TEACHER->value);
                 }
 
+                // Tyutor guruhlarini sync qilish va tarixni yozish
+                $oldGroupIds = $teacher->groups()->pluck('groups.id')->toArray();
+                $newGroupIds = [];
+                $newGroups = [];
+
                 if (!empty($employeeData['tutorGroups'])) {
-                    $groupIds = [];
                     foreach ($employeeData['tutorGroups'] as $tutorGroup) {
                         $group = Group::where('group_hemis_id', $tutorGroup['id'])->first();
                         if ($group) {
-                            $groupIds[] = $group->id;
+                            $newGroupIds[] = $group->id;
+                            $newGroups[$group->id] = $group;
                         }
                     }
-                    if (!empty($groupIds)) {
-                        $teacher->groups()->sync($groupIds);
-                    } else {
-                        $teacher->groups()->detach();
-                    }
+                }
+
+                // Sync groups
+                if (!empty($newGroupIds)) {
+                    $teacher->groups()->sync($newGroupIds);
                 } else {
                     $teacher->groups()->detach();
+                }
+
+                // Tutor tarixini yozish (faqat jadval mavjud bo'lsa)
+                if (Schema::hasTable('tutor_history')) {
+                    // Olib tashlangan guruhlar — removed_at ni yozish
+                    $removedGroupIds = array_diff($oldGroupIds, $newGroupIds);
+                    if (!empty($removedGroupIds)) {
+                        $removedGroups = Group::whereIn('id', $removedGroupIds)->get();
+                        foreach ($removedGroups as $removedGroup) {
+                            $studentIds = Student::where('group_id', $removedGroup->group_hemis_id)->pluck('id');
+                            if ($studentIds->isNotEmpty()) {
+                                TutorHistory::where('teacher_id', $teacher->id)
+                                    ->whereIn('student_id', $studentIds)
+                                    ->whereNull('removed_at')
+                                    ->update(['removed_at' => now()]);
+                            }
+                        }
+                    }
+
+                    // Yangi qo'shilgan guruhlar — tarix yozuvlarini yaratish
+                    $addedGroupIds = array_diff($newGroupIds, $oldGroupIds);
+                    foreach ($addedGroupIds as $addedGroupId) {
+                        $group = $newGroups[$addedGroupId];
+                        $students = Student::where('group_id', $group->group_hemis_id)->get();
+                        foreach ($students as $student) {
+                            TutorHistory::create([
+                                'student_id' => $student->id,
+                                'teacher_id' => $teacher->id,
+                                'teacher_name' => $teacher->full_name,
+                                'group_hemis_id' => $group->group_hemis_id,
+                                'group_name' => $group->name,
+                                'assigned_at' => now(),
+                            ]);
+                        }
+                    }
                 }
                 $totalImported++;
 

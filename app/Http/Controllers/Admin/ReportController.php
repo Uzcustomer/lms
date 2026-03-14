@@ -3926,8 +3926,8 @@ class ReportController extends Controller
             $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
             $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
 
-            // JN kunlik o'rtachasi uchun pairs_per_day hisoblash (jurnal formulasi bilan bir xil)
-            $pairsQuery = DB::table('schedules as sch2')
+            // Schedule dan date+pair columns olish (jnReportData formulasi bilan bir xil)
+            $scheduleDetailQuery = DB::table('schedules as sch2')
                 ->whereNotIn('sch2.training_type_code', $excludedCodes)
                 ->whereNotNull('sch2.lesson_date')
                 ->whereIn('sch2.group_id', $scheduleGroupIds)
@@ -3936,20 +3936,28 @@ class ReportController extends Controller
                 ->select('sch2.group_id', 'sch2.subject_id', 'sch2.semester_code', 'sch2.lesson_date', 'sch2.lesson_pair_code');
 
             if ($isCurrentSemester) {
-                $pairsQuery
-                    ->where('sch2.education_year_current', true)
+                $scheduleDetailQuery
+                    ->join('groups as gr3', 'gr3.group_hemis_id', '=', 'sch2.group_id')
+                    ->join('semesters as sem3', function ($join) {
+                        $join->on('sem3.code', '=', 'sch2.semester_code')
+                            ->on('sem3.curriculum_hemis_id', '=', 'gr3.curriculum_hemis_id');
+                    })
+                    ->where('sem3.current', true)
                     ->whereNull('sch2.deleted_at');
             }
 
-            $pairsPerDay = [];
-            foreach ($pairsQuery->get() as $schRow) {
+            $columns = [];    // [combo_key][date_pair] = true
+            $minDates = [];   // [combo_key] = eng kichik sana
+
+            foreach ($scheduleDetailQuery->get() as $schRow) {
                 $dateKey = substr($schRow->lesson_date, 0, 10);
-                $ppdKey = $schRow->group_id . '|' . $schRow->subject_id . '|' . $schRow->semester_code . '|' . $dateKey;
-                $pairKey = $ppdKey . '|' . $schRow->lesson_pair_code;
-                if (!isset($pairsPerDay[$ppdKey])) {
-                    $pairsPerDay[$ppdKey] = [];
+                $comboKey = $schRow->group_id . '|' . $schRow->subject_id . '|' . $schRow->semester_code;
+                $datePairKey = $dateKey . '_' . $schRow->lesson_pair_code;
+                $columns[$comboKey][$datePairKey] = true;
+
+                if (!isset($minDates[$comboKey]) || $dateKey < $minDates[$comboKey]) {
+                    $minDates[$comboKey] = $dateKey;
                 }
-                $pairsPerDay[$ppdKey][$pairKey] = true;
             }
 
             // Vedomost ma'lumotlarini olish
@@ -4020,165 +4028,133 @@ class ReportController extends Controller
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             $studentGroupMap = $students->pluck('group_id', 'hemis_id')->toArray();
 
-            // 3-QADAM: student_grades dan baholarni olish
-            // Joriy semestr bo'lsa, faqat joriy semestr dars sanalaridan filtrlash
-            $minScheduleDate = null;
-            if ($isCurrentSemester) {
-                $minScheduleDate = DB::table('schedules as sch2')
-                    ->join('groups as gr2', 'gr2.group_hemis_id', '=', 'sch2.group_id')
-                    ->join('semesters as sem2', function ($join) {
-                        $join->on('sem2.code', '=', 'sch2.semester_code')
-                            ->on('sem2.curriculum_hemis_id', '=', 'gr2.curriculum_hemis_id');
-                    })
-                    ->where('sem2.current', true)
-                    ->where('sch2.education_year_current', true)
-                    ->whereNull('sch2.deleted_at')
-                    ->whereNotNull('sch2.lesson_date')
-                    ->min('sch2.lesson_date');
-            }
+            // 3-QADAM: student_grades dan faqat JN baholarni olish (jnReportData formulasi)
+            $cutoffDate = Carbon::now('Asia/Tashkent')->format('Y-m-d');
 
-            // Har bir talaba, fan, kun, dars turi bo'yicha
-            $allGrades = [];
+            $gradesByDay = [];      // [student|subject|date] => [pair_code => grade]
+            $studentSubjects = [];  // [student|subject] => info
 
             foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
                 $gradesChunk = DB::table('student_grades')
                     ->whereIn('student_hemis_id', $hemisChunk)
                     ->whereIn('subject_id', $validSubjectIds)
                     ->whereIn('semester_code', $validSemesterCodes)
+                    ->whereNotIn('training_type_code', $excludedCodes)
+                    ->where(function ($q) {
+                        $q->whereNotNull('grade')->orWhereNotNull('retake_grade');
+                    })
                     ->whereNotNull('lesson_date')
-                    ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                     ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
-                        'training_type_code', 'grade', 'lesson_date', 'reason')
+                        'grade', 'lesson_date', 'lesson_pair_code', 'retake_grade', 'status', 'reason')
                     ->get();
 
                 foreach ($gradesChunk as $g) {
                     $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
                     if (!$groupId) continue;
 
-                    $code = (int) $g->training_type_code;
+                    $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
+                    $minDate = $minDates[$comboKey] ?? null;
+
                     $dateKey = substr($g->lesson_date, 0, 10);
+                    if ($minDate && $dateKey < $minDate) continue;
 
-                    // Dars turini aniqlash
-                    if (!in_array($code, $excludedCodes)) {
-                        $lessonType = 'JN';
-                    } elseif ($code === 99) {
-                        $lessonType = 'MT';
-                    } elseif ($code === 100) {
-                        $lessonType = 'ON';
-                    } elseif ($code === 101) {
-                        $lessonType = 'OSKI';
-                    } elseif ($code === 102) {
-                        $lessonType = 'Test';
-                    } else {
-                        continue;
+                    // Grade date_pair ni columns ga birlashtirish (jurnal fallback logikasi)
+                    $datePairKey = $dateKey . '_' . $g->lesson_pair_code;
+                    $columns[$comboKey][$datePairKey] = true;
+
+                    // Baholarni kun bo'yicha guruhlash (pair_code bo'yicha deduplikatsiya)
+                    $gradeKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $dateKey;
+                    $effectiveGrade = $this->getEffectiveGradeForJn($g);
+                    if ($effectiveGrade !== null) {
+                        $gradesByDay[$gradeKey][$g->lesson_pair_code] = $effectiveGrade;
                     }
 
-                    $studentKey = $g->student_hemis_id;
-                    $subjectKey = $g->subject_id . '|' . $g->semester_code;
-
-                    if (!isset($allGrades[$studentKey])) {
-                        $allGrades[$studentKey] = [];
-                    }
-                    if (!isset($allGrades[$studentKey][$subjectKey])) {
-                        $allGrades[$studentKey][$subjectKey] = [
+                    // Student-subject ma'lumotlarini saqlash
+                    $ssKey = $g->student_hemis_id . '|' . $g->subject_id;
+                    if (!isset($studentSubjects[$ssKey])) {
+                        $studentSubjects[$ssKey] = [
+                            'hemis_id' => $g->student_hemis_id,
                             'subject_id' => $g->subject_id,
                             'subject_name' => $g->subject_name,
                             'semester_code' => $g->semester_code,
-                            'group_id' => $groupId,
-                            'days' => [],
+                            'combo_key' => $comboKey,
                         ];
-                    }
-
-                    $dayTypeKey = $dateKey . '|' . $lessonType;
-                    if (!isset($allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey])) {
-                        $allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey] = [
-                            'date' => $dateKey,
-                            'lesson_type' => $lessonType,
-                            'grades' => [],
-                            'absent' => false,
-                        ];
-                    }
-
-                    if ($g->reason === 'absent') {
-                        $allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey]['absent'] = true;
-                    }
-                    if ($g->grade !== null && $g->grade > 0) {
-                        $allGrades[$studentKey][$subjectKey]['days'][$dayTypeKey]['grades'][] = (float) $g->grade;
                     }
                 }
                 unset($gradesChunk);
             }
 
-            // 4-QADAM: Har bir talaba uchun < scoreLimit bo'lgan kunlarni hisoblash
+            // pairs_per_day va lesson_dates ni yakuniy columns dan hisoblash (jnReportData kabi)
+            $pairsPerDay = [];   // [combo_key|date] => juftliklar soni
+            $lessonDates = [];   // [combo_key] => [date1, date2, ...]
+
+            foreach ($columns as $comboKey => $datePairs) {
+                $datesSet = [];
+                foreach ($datePairs as $datePair => $v) {
+                    $dateKey = substr($datePair, 0, 10);
+                    $ppdKey = $comboKey . '|' . $dateKey;
+                    $pairsPerDay[$ppdKey] = ($pairsPerDay[$ppdKey] ?? 0) + 1;
+                    $datesSet[$dateKey] = true;
+                }
+                $dates = array_keys($datesSet);
+                sort($dates);
+                $lessonDates[$comboKey] = $dates;
+            }
+
+            // 4-QADAM: Har bir talaba-fan uchun JN o'rtachasini hisoblash (jnReportData formulasi)
             $studentResults = [];
 
-            foreach ($allGrades as $hemisId => $subjects) {
-                $lowDays = [];
-                $totalDays = 0;
-                $lowDayCount = 0;
+            foreach ($studentSubjects as $ssKey => $info) {
+                $comboKey = $info['combo_key'];
+                $comboLessonDates = $lessonDates[$comboKey] ?? [];
 
-                foreach ($subjects as $subjectKey => $subjectData) {
-                    $groupName = $groupNameMap[$subjectData['group_id']] ?? '';
-                    $vKey = $groupName . '|' . $subjectData['subject_name'] . '|' . $subjectData['semester_code'];
-                    $vedomost = $vedomostMap[$vKey] ?? null;
+                $dailySum = 0;
+                $daysForAverage = 0;
+                $lastDate = null;
 
-                    foreach ($subjectData['days'] as $dayTypeKey => $dayData) {
-                        $totalDays++;
-                        $dayAvg = 0;
+                foreach ($comboLessonDates as $dateKey) {
+                    if ($dateKey > $cutoffDate) continue;
 
-                        if (!empty($dayData['grades'])) {
-                            if ($dayData['lesson_type'] === 'JN') {
-                                // JN uchun jurnal formulasi: gradeSum / pairsInDay
-                                $ppdKey = $subjectData['group_id'] . '|' . $subjectData['subject_id'] . '|' . $subjectData['semester_code'] . '|' . $dayData['date'];
-                                $pairsInDay = isset($pairsPerDay[$ppdKey]) ? count($pairsPerDay[$ppdKey]) : count($dayData['grades']);
-                                $dayAvg = round(array_sum($dayData['grades']) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                            } else {
-                                // MT, ON, OSKI, Test uchun oddiy o'rtacha
-                                $dayAvg = round(array_sum($dayData['grades']) / count($dayData['grades']), 0, PHP_ROUND_HALF_UP);
-                            }
-                        }
+                    $gradeKey = $info['hemis_id'] . '|' . $info['subject_id'] . '|' . $dateKey;
+                    $dayGrades = $gradesByDay[$gradeKey] ?? [];
 
-                        if ($dayData['absent']) {
-                            $dayAvg = 0;
-                        }
+                    $ppdKey = $comboKey . '|' . $dateKey;
+                    $pairsInDay = $pairsPerDay[$ppdKey] ?? 1;
 
-                        if ($dayAvg < $scoreLimit) {
-                            $lowDayCount++;
-                            $lowDays[] = [
-                                'subject_name' => $subjectData['subject_name'],
-                                'subject_id' => $subjectData['subject_id'],
-                                'semester_code' => $subjectData['semester_code'],
-                                'group_id' => $subjectData['group_id'],
-                                'lesson_type' => $dayData['lesson_type'],
-                                'date' => $dayData['date'],
-                                'grade' => $dayAvg,
-                                'absent' => $dayData['absent'],
-                            ];
-                        }
-                    }
+                    $gradeSum = array_sum($dayGrades);
+                    $dailyAvg = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+
+                    $dailySum += $dailyAvg;
+                    $daysForAverage++;
+                    $lastDate = $dateKey;
                 }
 
-                if ($lowDayCount > 0) {
-                    // Kunlarni sana bo'yicha saralash
-                    usort($lowDays, function ($a, $b) {
-                        return strcmp($a['date'], $b['date']);
-                    });
+                $jnAverage = $daysForAverage > 0
+                    ? round($dailySum / $daysForAverage, 0, PHP_ROUND_HALF_UP)
+                    : 0;
 
-                    $studentResults[$hemisId] = [
-                        'low_days' => $lowDays,
-                        'low_day_count' => $lowDayCount,
-                        'total_days' => $totalDays,
+                $groupId = explode('|', $comboKey)[0];
+                if ($jnAverage < $scoreLimit) {
+                    $studentResults[] = [
+                        'hemis_id' => $info['hemis_id'],
+                        'subject_id' => $info['subject_id'],
+                        'subject_name' => $info['subject_name'],
+                        'semester_code' => $info['semester_code'],
+                        'group_id' => $groupId,
+                        'grade' => $jnAverage,
+                        'days_count' => $daysForAverage,
+                        'last_date' => $lastDate,
                     ];
                 }
             }
-            unset($allGrades);
+            unset($gradesByDay, $studentSubjects, $columns);
 
             if (empty($studentResults)) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
             }
 
             // Talaba ma'lumotlarini biriktirish
-            $hemisIds = array_keys($studentResults);
+            $hemisIds = array_unique(array_column($studentResults, 'hemis_id'));
             $studentInfo = DB::table('students')
                 ->whereIn('hemis_id', $hemisIds)
                 ->select('hemis_id', 'full_name', 'student_id_number', 'department_name',
@@ -4186,38 +4162,35 @@ class ReportController extends Controller
                 ->get()
                 ->keyBy('hemis_id');
 
-            // Har bir kun alohida qator bo'lsin (flat format)
+            // Har bir talaba-fan bitta qator
             $finalResults = [];
-            foreach ($studentResults as $hemisId => $result) {
-                $st = $studentInfo[$hemisId] ?? null;
+            foreach ($studentResults as $result) {
+                $st = $studentInfo[$result['hemis_id']] ?? null;
                 if (!$st) continue;
 
-                foreach ($result['low_days'] as $day) {
-                    $finalResults[] = [
-                        'hemis_id' => $hemisId,
-                        'full_name' => $st->full_name ?? 'Noma\'lum',
-                        'student_id_number' => $st->student_id_number ?? '-',
-                        'department_name' => $st->department_name ?? '-',
-                        'specialty_name' => $st->specialty_name ?? '-',
-                        'level_name' => $st->level_name ?? '-',
-                        'semester_name' => $st->semester_name ?? '-',
-                        'group_name' => $st->group_name ?? '-',
-                        'group_id' => $groupDbIdMap[$st->group_id] ?? '',
-                        'subject_name' => $day['subject_name'],
-                        'subject_id' => $day['subject_id'],
-                        'semester_code' => $day['semester_code'],
-                        'grade' => $day['grade'],
-                        'lesson_date' => \Carbon\Carbon::parse($day['date'])->format('d.m.Y'),
-                        'lesson_date_raw' => $day['date'],
-                        'lesson_type' => $day['lesson_type'],
-                        'absent' => $day['absent'],
-                    ];
-                }
+                $finalResults[] = [
+                    'hemis_id' => $result['hemis_id'],
+                    'full_name' => $st->full_name ?? 'Noma\'lum',
+                    'student_id_number' => $st->student_id_number ?? '-',
+                    'department_name' => $st->department_name ?? '-',
+                    'specialty_name' => $st->specialty_name ?? '-',
+                    'level_name' => $st->level_name ?? '-',
+                    'semester_name' => $st->semester_name ?? '-',
+                    'group_name' => $st->group_name ?? '-',
+                    'group_id' => $groupDbIdMap[$st->group_id] ?? '',
+                    'subject_name' => $result['subject_name'],
+                    'subject_id' => $result['subject_id'],
+                    'semester_code' => $result['semester_code'],
+                    'grade' => $result['grade'],
+                    'days_count' => $result['days_count'],
+                    'lesson_date' => $result['last_date'] ? \Carbon\Carbon::parse($result['last_date'])->format('d.m.Y') : '-',
+                    'lesson_date_raw' => $result['last_date'] ?? '',
+                ];
             }
 
             // Saralash
-            $sortColumn = $request->get('sort', 'lesson_date');
-            $sortDirection = $request->get('direction', 'desc');
+            $sortColumn = $request->get('sort', 'grade');
+            $sortDirection = $request->get('direction', 'asc');
             // lesson_date bo'yicha saralashda raw (yyyy-mm-dd) qiymatdan foydalanamiz
             $actualSortColumn = $sortColumn === 'lesson_date' ? 'lesson_date_raw' : $sortColumn;
 
@@ -4271,7 +4244,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', 'Dars turi', 'Joriy bahosi', 'Dars sanasi'];
+            'Fan', "JN o'rtacha", 'Darslar soni', 'Oxirgi dars'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -4299,16 +4272,16 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $row], $r['semester_name']);
             $sheet->setCellValue([8, $row], $r['group_name']);
             $sheet->setCellValue([9, $row], $r['subject_name']);
-            $sheet->setCellValue([10, $row], $r['lesson_type']);
-            $sheet->setCellValue([11, $row], $r['grade']);
+            $sheet->setCellValue([10, $row], $r['grade']);
+            $sheet->setCellValue([11, $row], $r['days_count'] ?? '-');
             $sheet->setCellValue([12, $row], $r['lesson_date']);
 
             if ($r['grade'] < $scoreLimit) {
-                $sheet->getStyle("K{$row}")->applyFromArray($redFill);
+                $sheet->getStyle("J{$row}")->applyFromArray($redFill);
             }
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 10, 12, 14];
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 12, 12, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
@@ -4341,7 +4314,7 @@ class ReportController extends Controller
         $sheet->setTitle('5 ga davogar toliq');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', 'Dars turi', 'Joriy bahosi', 'Dars sanasi', 'Holat'];
+            'Fan', "JN o'rtacha", 'Darslar soni', 'Oxirgi dars'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -4352,7 +4325,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
 
         $redFill = [
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
@@ -4369,24 +4342,23 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $row], $r['semester_name']);
             $sheet->setCellValue([8, $row], $r['group_name']);
             $sheet->setCellValue([9, $row], $r['subject_name']);
-            $sheet->setCellValue([10, $row], $r['lesson_type']);
-            $sheet->setCellValue([11, $row], $r['grade']);
+            $sheet->setCellValue([10, $row], $r['grade']);
+            $sheet->setCellValue([11, $row], $r['days_count'] ?? '-');
             $sheet->setCellValue([12, $row], $r['lesson_date']);
-            $sheet->setCellValue([13, $row], $r['absent'] ? 'Sababsiz' : ($r['grade'] < $scoreLimit ? "< {$scoreLimit}" : ''));
 
             if ($r['grade'] < $scoreLimit) {
-                $sheet->getStyle("K{$row}")->applyFromArray($redFill);
+                $sheet->getStyle("J{$row}")->applyFromArray($redFill);
             }
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 10, 12, 14, 12];
+        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 25, 12, 12, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

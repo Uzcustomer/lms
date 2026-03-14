@@ -1172,16 +1172,55 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->first();
 
-        // YN ga yuborish huquqi: faqat shu fanga biriktirilgan o'qituvchi
+        // YN ga yuborish huquqi: faqat shu fan+guruh juftligiga biriktirilgan o'qituvchi
         $canSubmitYn = false;
         $isOqituvchi = is_active_oqituvchi();
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
             if ($teacherHemisId) {
-                $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-                $canSubmitYn = in_array($subjectId, $assignments['subject_ids'])
-                    && in_array($group->group_hemis_id, $assignments['group_ids']);
+                // 1-manba: curriculum_subject_teachers dan fan+guruh juftligini tekshirish
+                $isAssignedByCST = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('group_id', $group->group_hemis_id)
+                    ->exists();
+
+                // 2-manba: dars jadvalidan fan+guruh juftligini tekshirish
+                $isAssignedBySchedule = DB::table('schedules')
+                    ->where('employee_id', $teacherHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('group_id', $group->group_hemis_id)
+                    ->whereNull('deleted_at')
+                    ->exists();
+
+                $canSubmitYn = $isAssignedByCST || $isAssignedBySchedule;
             }
+        }
+
+        // Dars jadvaldagi barcha darslar tugaganmi tekshirish
+        $allLessonsCompleted = true;
+        $remainingLessonsCount = 0;
+        $lastLessonDate = null;
+        if ($canSubmitYn || auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            $today = now()->toDateString();
+            $remainingLessonsCount = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->whereNotNull('lesson_date')
+                ->where('lesson_date', '>', $today)
+                ->count();
+            $allLessonsCompleted = $remainingLessonsCount === 0;
+
+            $lastLessonDate = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->whereNotNull('lesson_date')
+                ->max('lesson_date');
         }
 
         // Sababli: tasdiqlangan sababli hujjatlarni olish (YN yuborilgandan keyin)
@@ -1270,6 +1309,9 @@ class JournalController extends Controller
             'ynSubmission',
             'examSchedule',
             'canSubmitYn',
+            'allLessonsCompleted',
+            'remainingLessonsCount',
+            'lastLessonDate',
             'levelDeadline',
             'approvedExcuses',
             'excuseGradeSnapshots',
@@ -4226,9 +4268,18 @@ class JournalController extends Controller
                     'message' => 'O\'qituvchi topilmadi.',
                 ], 403);
             }
-            $assignments = $this->getTeacherSubjectAssignments($teacherHemisId);
-            $isAssigned = in_array($request->subject_id, $assignments['subject_ids'])
-                && in_array($request->group_hemis_id, $assignments['group_ids']);
+            // Fan+guruh juftligiga biriktirilganligini tekshirish
+            $isAssignedByCST = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                ->where('subject_id', $request->subject_id)
+                ->where('group_id', $request->group_hemis_id)
+                ->exists();
+            $isAssignedBySchedule = DB::table('schedules')
+                ->where('employee_id', $teacherHemisId)
+                ->where('subject_id', $request->subject_id)
+                ->where('group_id', $request->group_hemis_id)
+                ->whereNull('deleted_at')
+                ->exists();
+            $isAssigned = $isAssignedByCST || $isAssignedBySchedule;
             if (!$isAssigned) {
                 return response()->json([
                     'success' => false,
@@ -4245,6 +4296,24 @@ class JournalController extends Controller
         $subjectId = $request->subject_id;
         $semesterCode = $request->semester_code;
         $groupHemisId = $request->group_hemis_id;
+
+        // Dars jadvaldagi barcha darslar tugaganmi tekshirish
+        $today = now()->toDateString();
+        $remainingLessons = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->where('lesson_date', '>', $today)
+            ->count();
+
+        if ($remainingLessons > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Hali {$remainingLessons} ta dars qolgan. Barcha darslar tugagandan keyin YN ga yuborish mumkin.",
+            ], 422);
+        }
 
         // Allaqachon yuborilganligini tekshirish
         $existing = YnSubmission::where('subject_id', $subjectId)

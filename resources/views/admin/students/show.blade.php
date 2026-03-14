@@ -194,6 +194,59 @@
                                 </div>
                                 @endif
 
+                                {{-- Tyutor ma'lumotlari --}}
+                                <div class="p-4 rounded-lg" style="background: linear-gradient(135deg, #ecfdf5, #f0fdf4); border: 1px solid #a7f3d0;">
+                                    <h4 class="font-semibold text-base mb-3 border-b pb-2" style="color: #065f46;">Tyutor</h4>
+                                    <div class="mb-3">
+                                        @if(isset($currentTutor) && $currentTutor)
+                                            <div class="flex items-center gap-3 p-2 rounded-lg" style="background: #d1fae5;">
+                                                <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-weight: 700; font-size: 11px;">
+                                                    {{ mb_substr($currentTutor->first_name ?? '', 0, 1) }}{{ mb_substr($currentTutor->second_name ?? '', 0, 1) }}
+                                                </div>
+                                                <div>
+                                                    <a href="{{ route('admin.teachers.show', $currentTutor->id) }}" class="font-bold text-sm text-gray-900 hover:text-green-700 transition">
+                                                        {{ $currentTutor->full_name }}
+                                                    </a>
+                                                    <div class="text-xs text-gray-500">{{ $currentTutor->department ?? '' }}</div>
+                                                </div>
+                                            </div>
+                                        @else
+                                            <div class="text-sm text-gray-400 p-2">Tyutor biriktirilmagan</div>
+                                        @endif
+                                    </div>
+
+                                    @if(isset($tutorHistory) && $tutorHistory->count() > 0)
+                                        <div style="border-top: 1px solid #a7f3d0; padding-top: 8px;">
+                                            <p class="text-xs font-semibold mb-2" style="color: #065f46;">Tyutor tarixi</p>
+                                            @foreach($tutorHistory as $history)
+                                                <div class="flex items-start gap-2 py-1.5 text-xs" style="border-bottom: 1px solid #ecfdf5;">
+                                                    <div class="flex-shrink-0 mt-0.5">
+                                                        @if($history->removed_at)
+                                                            <span class="inline-block w-2 h-2 rounded-full" style="background: #d1d5db;"></span>
+                                                        @else
+                                                            <span class="inline-block w-2 h-2 rounded-full" style="background: #10b981;"></span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <span class="font-semibold text-gray-900">{{ $history->teacher_name }}</span>
+                                                        @if($history->group_name)
+                                                            <span class="text-gray-400"> ({{ $history->group_name }})</span>
+                                                        @endif
+                                                        <div class="text-gray-400">
+                                                            {{ $history->assigned_at->format('d.m.Y') }}
+                                                            @if($history->removed_at)
+                                                                — {{ $history->removed_at->format('d.m.Y') }}
+                                                            @else
+                                                                — hozirgi
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+
                                 {{-- specialty --}}
                                 <div class="bg-gray-50 p-4 rounded-lg">
                                     <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">specialty</h4>

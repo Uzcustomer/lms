@@ -13,10 +13,13 @@ use App\Models\Group;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Deadline;
+use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
+use App\Models\TutorHistory;
 use App\Services\StudentGradeService;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -36,7 +39,54 @@ class TeacherMainController extends Controller
     }
     public function index()
     {
-        return view('teacher.dashboard');
+        $teacher = auth()->guard('teacher')->user();
+        $userRoles = $teacher->getRoleNames()->toArray();
+        $activeRole = session('active_role', $userRoles[0] ?? '');
+        if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
+            $activeRole = $userRoles[0];
+        }
+
+        // Tyutor dashboard statistikasi
+        $tutorGroups = $teacher->groups()->where('active', true)->orderBy('name')->get();
+        $tutorStats = null;
+
+        if ($tutorGroups->count() > 0) {
+            $groupHemisIds = $tutorGroups->pluck('group_hemis_id')->toArray();
+            $students = Student::whereIn('group_id', $groupHemisIds)->get();
+
+            // Guruh bo'yicha statistika
+            $groupStats = [];
+            foreach ($tutorGroups as $group) {
+                $groupStudents = $students->where('group_id', $group->group_hemis_id);
+                $groupStats[] = [
+                    'name' => $group->name,
+                    'total' => $groupStudents->count(),
+                    'male' => $groupStudents->where('gender_code', '11')->count(),
+                    'female' => $groupStudents->where('gender_code', '12')->count(),
+                ];
+            }
+
+            // Viloyat bo'yicha statistika
+            $provinceStats = $students->groupBy('province_name')
+                ->map(fn($group, $key) => [
+                    'name' => $key ?: 'Noma\'lum',
+                    'count' => $group->count(),
+                ])
+                ->sortByDesc('count')
+                ->values()
+                ->toArray();
+
+            $tutorStats = [
+                'totalGroups' => $tutorGroups->count(),
+                'totalStudents' => $students->count(),
+                'maleCount' => $students->where('gender_code', '11')->count(),
+                'femaleCount' => $students->where('gender_code', '12')->count(),
+                'groupStats' => $groupStats,
+                'provinceStats' => $provinceStats,
+            ];
+        }
+
+        return view('teacher.dashboard', compact('tutorStats'));
     }
 
     public function info()
@@ -59,6 +109,12 @@ class TeacherMainController extends Controller
             return $this->studentsAdmin($request);
         }
 
+        // Tyutor guruhlari mavjud bo'lsa, guruh bo'yicha talabalarni ko'rsat
+        $tutorGroups = $teacher->groups()->where('active', true)->orderBy('name')->get();
+        if ($tutorGroups->count() > 0) {
+            return $this->studentsTutor($request, $teacher, $tutorGroups);
+        }
+
         $query = StudentGrade::with(['student', 'teacher'])
             ->where('employee_id', $teacher->hemis_id);
 
@@ -77,6 +133,88 @@ class TeacherMainController extends Controller
         });
 
         return view('teacher.students', compact('groupedStudents', 'studentGrades'));
+    }
+
+    private function studentsTutor(Request $request, $teacher, $tutorGroups)
+    {
+        $groupHemisIds = $tutorGroups->pluck('group_hemis_id')->toArray();
+        $selectedGroup = $request->input('group');
+
+        $query = Student::query();
+
+        if ($selectedGroup) {
+            $query->where('group_id', $selectedGroup);
+        } else {
+            $query->whereIn('group_id', $groupHemisIds);
+        }
+
+        if ($request->filled('search')) {
+            $searchTerm = $request->search;
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('full_name', 'like', "%{$searchTerm}%")
+                    ->orWhere('student_id_number', 'like', "%{$searchTerm}%");
+            });
+        }
+
+        if ($request->filled('gender')) {
+            $query->where('gender_code', $request->gender);
+        }
+
+        if ($request->filled('province')) {
+            $query->where('province_name', $request->province);
+        }
+
+        $perPage = $request->get('per_page', 50);
+        $students = $query->orderBy('group_name')->orderBy('full_name')->paginate($perPage)->appends($request->query());
+
+        // Viloyatlar ro'yxati (filtr uchun)
+        $provinces = Student::whereIn('group_id', $groupHemisIds)
+            ->whereNotNull('province_name')
+            ->distinct()
+            ->pluck('province_name')
+            ->sort()
+            ->values();
+
+        return view('teacher.students-tutor', compact('students', 'tutorGroups', 'provinces'));
+    }
+
+    public function showStudent(Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+
+        // Tyutor faqat o'z guruhidagi talabalarni ko'rishi mumkin
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403, 'Bu talaba sizga biriktirilgan guruhda emas.');
+        }
+
+        $canToggleFive = false;
+
+        $frontOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'front_office'
+        );
+        $backOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
+        );
+
+        // Hozirgi tyutor
+        $currentTutor = null;
+        if ($student->group_id) {
+            $group = Group::where('group_hemis_id', $student->group_id)->first();
+            if ($group) {
+                $currentTutor = $group->teachers()->first();
+            }
+        }
+
+        // Tyutor tarixi
+        $tutorHistory = collect();
+        if (Schema::hasTable('tutor_history')) {
+            $tutorHistory = TutorHistory::where('student_id', $student->id)
+                ->orderBy('assigned_at', 'desc')
+                ->get();
+        }
+
+        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory'));
     }
 
     private function studentsAdmin(Request $request)

@@ -36,6 +36,9 @@
                     <x-nav-link :href="route('student.absence-excuses.index')" :active="request()->routeIs('student.absence-excuses.*')">
                         {{ __('Sababli ariza') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('student.contracts.index')" :active="request()->routeIs('student.contracts.*')">
+                        {{ __('Ishga joylashish') }}
+                    </x-nav-link>
                 </div>
             </div>
 

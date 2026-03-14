@@ -55,6 +55,10 @@ class AcademicScheduleController extends Controller
         $selectedStatus = $request->get('status');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
+        $oskiDateFrom = $request->get('oski_date_from');
+        $oskiDateTo = $request->get('oski_date_to');
+        $testDateFrom = $request->get('test_date_from');
+        $testDateTo = $request->get('test_date_to');
         $currentSemesterToggle = $request->get('current_semester', '1');
         $isSearched = $request->has('searched');
 
@@ -67,6 +71,32 @@ class AcademicScheduleController extends Controller
                 $selectedLevelCode, $selectedSubject, $selectedStatus,
                 $currentSemesterToggle, false, $dateFrom, $dateTo
             );
+
+            // OSKI sanasi bo'yicha filtr
+            if ($oskiDateFrom || $oskiDateTo) {
+                $scheduleData = $scheduleData->map(function ($items) use ($oskiDateFrom, $oskiDateTo) {
+                    return $items->filter(function ($item) use ($oskiDateFrom, $oskiDateTo) {
+                        $d = $item['oski_date'];
+                        if (!$d) return false;
+                        if ($oskiDateFrom && $d < $oskiDateFrom) return false;
+                        if ($oskiDateTo && $d > $oskiDateTo) return false;
+                        return true;
+                    });
+                })->filter(fn($items) => $items->isNotEmpty());
+            }
+
+            // Test sanasi bo'yicha filtr
+            if ($testDateFrom || $testDateTo) {
+                $scheduleData = $scheduleData->map(function ($items) use ($testDateFrom, $testDateTo) {
+                    return $items->filter(function ($item) use ($testDateFrom, $testDateTo) {
+                        $d = $item['test_date'];
+                        if (!$d) return false;
+                        if ($testDateFrom && $d < $testDateFrom) return false;
+                        if ($testDateTo && $d > $testDateTo) return false;
+                        return true;
+                    });
+                })->filter(fn($items) => $items->isNotEmpty());
+            }
         }
 
         $routePrefix = $this->routePrefix();
@@ -86,6 +116,10 @@ class AcademicScheduleController extends Controller
             'selectedStatus',
             'dateFrom',
             'dateTo',
+            'oskiDateFrom',
+            'oskiDateTo',
+            'testDateFrom',
+            'testDateTo',
             'currentSemesterToggle',
             'isSearched',
             'currentEducationYear',

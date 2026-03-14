@@ -114,6 +114,25 @@
                             </button>
                         </div>
                     </div>
+                    <!-- Row 3: OSKI sanasi va Test sanasi filtrlari -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#7c3aed;"></span> OSKI sanasi (dan)</label>
+                            <input type="text" id="oski_date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#7c3aed;"></span> OSKI sanasi (gacha)</label>
+                            <input type="text" id="oski_date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0891b2;"></span> Test sanasi (dan)</label>
+                            <input type="text" id="test_date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0891b2;"></span> Test sanasi (gacha)</label>
+                            <input type="text" id="test_date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Results -->
@@ -598,6 +617,10 @@
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
             var dateFrom = $('#date_from').val();
             var dateTo = $('#date_to').val();
+            var oskiDateFrom = $('#oski_date_from').val();
+            var oskiDateTo = $('#oski_date_to').val();
+            var testDateFrom = $('#test_date_from').val();
+            var testDateTo = $('#test_date_to').val();
             if (et) url.searchParams.set('education_type', et);
             if (dept) url.searchParams.set('department_id', dept);
             if (spec) url.searchParams.set('specialty_id', spec);
@@ -608,6 +631,10 @@
             if (status) url.searchParams.set('status', status);
             if (dateFrom) url.searchParams.set('date_from', dateFrom);
             if (dateTo) url.searchParams.set('date_to', dateTo);
+            if (oskiDateFrom) url.searchParams.set('oski_date_from', oskiDateFrom);
+            if (oskiDateTo) url.searchParams.set('oski_date_to', oskiDateTo);
+            if (testDateFrom) url.searchParams.set('test_date_from', testDateFrom);
+            if (testDateTo) url.searchParams.set('test_date_to', testDateTo);
             url.searchParams.set('current_semester', cs);
             window.location.href = url.toString();
         }
@@ -630,11 +657,27 @@
             // Scroll calendar for date filters
             var calFrom = new ScrollCalendar('date_from');
             var calTo = new ScrollCalendar('date_to');
+            var calOskiFrom = new ScrollCalendar('oski_date_from');
+            var calOskiTo = new ScrollCalendar('oski_date_to');
+            var calTestFrom = new ScrollCalendar('test_date_from');
+            var calTestTo = new ScrollCalendar('test_date_to');
             @if(request()->get('date_from'))
                 calFrom.setValue('{{ request()->get("date_from") }}');
             @endif
             @if(request()->get('date_to'))
                 calTo.setValue('{{ request()->get("date_to") }}');
+            @endif
+            @if(request()->get('oski_date_from'))
+                calOskiFrom.setValue('{{ request()->get("oski_date_from") }}');
+            @endif
+            @if(request()->get('oski_date_to'))
+                calOskiTo.setValue('{{ request()->get("oski_date_to") }}');
+            @endif
+            @if(request()->get('test_date_from'))
+                calTestFrom.setValue('{{ request()->get("test_date_from") }}');
+            @endif
+            @if(request()->get('test_date_to'))
+                calTestTo.setValue('{{ request()->get("test_date_to") }}');
             @endif
 
             // dd.mm.yyyy mask ishga tushirish

@@ -168,9 +168,9 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="lesson_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="grade">Joriy bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="grade">JN o'rtacha <span class="sort-icon active">&#9650;</span></a></th>
+                                        <th>Darslar</th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_date">Oxirgi dars <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;">Jurnal</th>
                                     </tr>
                                 </thead>
@@ -189,8 +189,8 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'lesson_date';
-        let currentDirection = 'desc';
+        let currentSort = 'grade';
+        let currentDirection = 'asc';
         let currentPage = 1;
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
@@ -279,11 +279,6 @@
             });
         }
 
-        function lessonTypeBadge(type) {
-            var map = { 'JN': 'badge-type-jn', 'MT': 'badge-type-mt', 'ON': 'badge-type-on', 'OSKI': 'badge-type-oski', 'Test': 'badge-type-test' };
-            return map[type] || 'badge-teal';
-        }
-
         function gradeClass(val, minLimit) {
             minLimit = minLimit || 60;
             if (val < minLimit) return 'badge-grade-red';
@@ -309,8 +304,8 @@
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
-                html += '<td><span class="badge ' + lessonTypeBadge(r.lesson_type) + '">' + esc(r.lesson_type) + '</span></td>';
                 html += '<td><span class="badge ' + gradeClass(r.grade, scoreLimit) + '">' + r.grade + '</span></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + (r.days_count || '-') + '</td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + esc(r.lesson_date) + '</td>';
                 html += '<td style="text-align:center;"><a href="' + journalUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
                 html += '</tr>';
@@ -466,12 +461,6 @@
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-teal { background: #ccfbf1; color: #0f766e; border: 1px solid #99f6e4; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
-        .badge-type-jn { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-        .badge-type-mt { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-        .badge-type-on { background: #fefce8; color: #a16207; border: 1px solid #fde68a; }
-        .badge-type-oski { background: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8; }
-        .badge-type-test { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
-
         .badge-grade-red { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
         .badge-grade-yellow { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }
         .badge-grade-green { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12.5px; font-weight: 700; }

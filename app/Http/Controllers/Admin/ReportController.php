@@ -2924,8 +2924,8 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Qarzdorlar hisoboti');
 
-        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Qarzdor fanlar soni', 'Darslar soni (kun)'];
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Toifa', 'Semestr',
+            'Biriktirilgan (qarz)', 'Majburiy (qarz)', 'Status', 'Darslar soni (kun)'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -2936,7 +2936,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -2946,20 +2946,28 @@ class ReportController extends Controller
             $sheet->setCellValue([4, $row], $r['department_name']);
             $sheet->setCellValue([5, $row], $r['specialty_name']);
             $sheet->setCellValue([6, $row], $r['level_name']);
-            $sheet->setCellValue([7, $row], $r['semester_name']);
-            $sheet->setCellValue([8, $row], $r['group_name']);
-            $sheet->setCellValue([9, $row], $r['debt_count']);
-            $sheet->setCellValue([10, $row], $r['lesson_days']);
+            $sheet->setCellValue([7, $row], $r['group_name']);
+            $sheet->setCellValue([8, $row], $r['student_type_name'] ?? '');
+            $sheet->setCellValue([9, $row], $r['semester_name']);
+            $sheet->setCellValue([10, $row], $r['debt_count_ss'] ?? '');
+            $sheet->setCellValue([11, $row], $r['debt_count_curr']);
+            $statusLabel = match($r['debt_status'] ?? '') {
+                'teng'      => 'Teng',
+                'teng_emas' => 'Teng emas',
+                default     => "Noma'lum",
+            };
+            $sheet->setCellValue([12, $row], $statusLabel);
+            $sheet->setCellValue([13, $row], $r['lesson_days']);
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 12, 60];
+        $widths = [5, 30, 15, 25, 30, 8, 15, 18, 10, 12, 12, 12, 12];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:J{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }
@@ -2984,8 +2992,8 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Qarzdorlar toliq');
 
-        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh',
-            'Fan', 'JB', 'MT', 'ON', 'JN%', 'OSKI', 'Test', 'Davomat %', 'Sababsiz soat', 'Auditoriya soati', 'Sabab'];
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Toifa', 'Semestr',
+            'Fan', 'Fan semestri', 'JB', 'MT', 'ON', 'JN%', 'OSKI', 'Test', 'Davomat %', 'Sababsiz soat', 'Auditoriya soati', 'Sabab'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -2996,7 +3004,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:S1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:U1')->applyFromArray($headerStyle);
 
         $rowNum = 2;
         $idx = 1;
@@ -3008,45 +3016,47 @@ class ReportController extends Controller
                 $sheet->setCellValue([4, $rowNum], $student['department_name']);
                 $sheet->setCellValue([5, $rowNum], $student['specialty_name']);
                 $sheet->setCellValue([6, $rowNum], $student['level_name']);
-                $sheet->setCellValue([7, $rowNum], $student['semester_name']);
-                $sheet->setCellValue([8, $rowNum], $student['group_name']);
-                $sheet->setCellValue([9, $rowNum], $debt['subject_name']);
-                $sheet->setCellValue([10, $rowNum], $debt['jb']);
-                $sheet->setCellValue([11, $rowNum], $debt['mt']);
-                $sheet->setCellValue([12, $rowNum], $debt['on'] ?? '-');
-                $sheet->setCellValue([13, $rowNum], $debt['jn_percent']);
-                $sheet->setCellValue([14, $rowNum], $debt['oski'] ?? '-');
-                $sheet->setCellValue([15, $rowNum], $debt['test'] ?? '-');
-                $sheet->setCellValue([16, $rowNum], $debt['absence_percent'] . '%');
-                $sheet->setCellValue([17, $rowNum], $debt['unexcused_hours']);
-                $sheet->setCellValue([18, $rowNum], $debt['auditory_hours']);
-                $sheet->setCellValue([19, $rowNum], implode('; ', $debt['reasons']));
+                $sheet->setCellValue([7, $rowNum], $student['group_name']);
+                $sheet->setCellValue([8, $rowNum], $student['student_type_name'] ?? '');
+                $sheet->setCellValue([9, $rowNum], $student['semester_name']);
+                $sheet->setCellValue([10, $rowNum], $debt['subject_name']);
+                $sheet->setCellValue([11, $rowNum], $debt['semester_name'] ?? '');
+                $sheet->setCellValue([12, $rowNum], $debt['jb']);
+                $sheet->setCellValue([13, $rowNum], $debt['mt']);
+                $sheet->setCellValue([14, $rowNum], $debt['on'] ?? '-');
+                $sheet->setCellValue([15, $rowNum], $debt['jn_percent']);
+                $sheet->setCellValue([16, $rowNum], $debt['oski'] ?? '-');
+                $sheet->setCellValue([17, $rowNum], $debt['test'] ?? '-');
+                $sheet->setCellValue([18, $rowNum], $debt['absence_percent'] . '%');
+                $sheet->setCellValue([19, $rowNum], $debt['unexcused_hours']);
+                $sheet->setCellValue([20, $rowNum], $debt['auditory_hours']);
+                $sheet->setCellValue([21, $rowNum], implode('; ', $debt['reasons']));
 
                 // Qizil fon yiqilgan ballarga
                 $redFill = [
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFF0F0']],
                 ];
                 $minLimit = $debt['minimum_limit'] ?? 60;
-                if ($debt['jn_percent'] < $minLimit) $sheet->getStyle("M{$rowNum}")->applyFromArray($redFill);
-                if ($debt['mt'] < $minLimit) $sheet->getStyle("K{$rowNum}")->applyFromArray($redFill);
-                if ($debt['on'] !== null && $debt['on'] < $minLimit) $sheet->getStyle("L{$rowNum}")->applyFromArray($redFill);
-                if ($debt['oski'] !== null && $debt['oski'] < $minLimit) $sheet->getStyle("N{$rowNum}")->applyFromArray($redFill);
-                if ($debt['test'] !== null && $debt['test'] < $minLimit) $sheet->getStyle("O{$rowNum}")->applyFromArray($redFill);
-                if ($debt['absence_percent'] > 25) $sheet->getStyle("P{$rowNum}")->applyFromArray($redFill);
+                if ($debt['jn_percent'] < $minLimit) $sheet->getStyle("O{$rowNum}")->applyFromArray($redFill);
+                if ($debt['mt'] < $minLimit) $sheet->getStyle("M{$rowNum}")->applyFromArray($redFill);
+                if ($debt['on'] !== null && $debt['on'] < $minLimit) $sheet->getStyle("N{$rowNum}")->applyFromArray($redFill);
+                if ($debt['oski'] !== null && $debt['oski'] < $minLimit) $sheet->getStyle("P{$rowNum}")->applyFromArray($redFill);
+                if ($debt['test'] !== null && $debt['test'] < $minLimit) $sheet->getStyle("Q{$rowNum}")->applyFromArray($redFill);
+                if ($debt['absence_percent'] > 25) $sheet->getStyle("R{$rowNum}")->applyFromArray($redFill);
 
                 $rowNum++;
                 $idx++;
             }
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 10, 15, 35, 8, 8, 8, 8, 8, 8, 12, 12, 12, 40];
+        $widths = [5, 30, 15, 25, 30, 8, 15, 18, 10, 35, 12, 8, 8, 8, 8, 8, 8, 12, 12, 12, 40];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = $rowNum - 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:S{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:U{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }
@@ -4591,7 +4601,7 @@ class ReportController extends Controller
         )->get();
 
         if ($schedules->isEmpty()) {
-            return response()->json(['data' => [], 'total' => 0]);
+            return [];
         }
 
         // 2-QADAM: Baho mavjudligini tekshirish

@@ -2648,11 +2648,19 @@ class ReportController extends Controller
             ->orderBy('student_status_name')
             ->get();
 
+        $studentTypes = DB::table('students')
+            ->select('student_type_code', 'student_type_name')
+            ->whereNotNull('student_type_code')
+            ->groupBy('student_type_code', 'student_type_name')
+            ->orderBy('student_type_name')
+            ->get();
+
         return view('admin.reports.debtors', compact(
             'educationTypes',
             'selectedEducationType',
             'faculties',
             'studentStatuses',
+            'studentTypes',
             'dekanFacultyId'
         ));
     }
@@ -2680,7 +2688,8 @@ class ReportController extends Controller
                 ->select('s.hemis_id', 's.full_name', 's.student_id_number',
                     's.department_name', 's.specialty_name', 's.level_name',
                     's.semester_name', 's.semester_code', 's.group_name',
-                    's.group_id', 's.curriculum_id');
+                    's.group_id', 's.curriculum_id',
+                    's.student_type_code', 's.student_type_name');
 
             if ($request->filled('student_status')) {
                 $studentQuery->where('s.student_status_code', $request->student_status);
@@ -2705,6 +2714,9 @@ class ReportController extends Controller
             }
             if ($request->filled('education_type')) {
                 $studentQuery->where('s.education_type_code', $request->education_type);
+            }
+            if ($request->filled('student_type')) {
+                $studentQuery->where('s.student_type_code', $request->student_type);
             }
 
             $students = $studentQuery->get();
@@ -2832,6 +2844,7 @@ class ReportController extends Controller
                     'semester_name'     => $st->semester_name ?? '-',
                     'group_name'        => $st->group_name ?? '-',
                     'group_id'          => $st->group_id ?? '',
+                    'student_type_name' => $st->student_type_name ?? null,
                     'debt_count'        => $debtCountCurr,
                     'debt_count_curr'   => $debtCountCurr,
                     'debt_count_ss'     => $debtCountAssigned, // null = ma'lumot yo'q

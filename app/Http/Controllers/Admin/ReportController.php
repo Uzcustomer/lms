@@ -2735,6 +2735,7 @@ class ReportController extends Controller
                 ->where('is_active', true)
                 ->where('subject_code', 'not like', '%/%')
                 ->select('curricula_hemis_id', 'semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+                ->distinct()
                 ->get();
 
             // 3-QADAM: Academic records olish (grade va retraining_status ham kerak)
@@ -2746,7 +2747,11 @@ class ReportController extends Controller
                     ->get();
 
                 foreach ($arRecords as $ar) {
-                    $arRecordsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = $ar;
+                    $key = $ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id;
+                    // Eng yaxshi bahoni saqlash (qayta topshirish va asl baho bo'lishi mumkin)
+                    if (!isset($arRecordsLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arRecordsLookup[$key]->grade ?? 0)) {
+                        $arRecordsLookup[$key] = $ar;
+                    }
                 }
                 unset($arRecords);
             }
@@ -2792,7 +2797,7 @@ class ReportController extends Controller
 
                     $isDebt = !$ar
                         || $ar->grade === null
-                        || in_array($ar->grade, ['2', '0'])
+                        || (float) $ar->grade == 0 || (float) $ar->grade == 2
                         || $ar->retraining_status;
 
                     if (!$isDebt) continue;
@@ -3092,18 +3097,12 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
-            $grades = DB::table('curriculum_subjects as cs')
-                ->leftJoin('academic_records as ar', function ($join) use ($studentId, $semesterCode) {
-                    $join->on('ar.subject_id', '=', 'cs.subject_id')
-                        ->where('ar.student_id', '=', $studentId)
-                        ->where('ar.semester_id', '=', $semesterCode);
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
-                ->where('cs.semester_code', $semesterCode)
-                ->where('cs.is_active', true)
-                ->where('cs.subject_code', 'not like', '%/%')
-                ->select('cs.subject_name', 'cs.credit', 'cs.total_acload', 'ar.total_point', 'ar.grade')
-                ->orderBy('cs.subject_name')
+            // academic_records dan to'g'ridan-to'g'ri — join kerak emas
+            $grades = DB::table('academic_records')
+                ->where('student_id', $studentId)
+                ->where('semester_id', $semesterCode)
+                ->select('subject_name', 'credit', 'total_acload', 'total_point', 'grade')
+                ->orderBy('subject_name')
                 ->get();
 
             // Guruh suffiksi bo'yicha filtr: "d1/23-01b" → "b"
@@ -3152,6 +3151,7 @@ class ReportController extends Controller
                 ->where('is_active', true)
                 ->where('subject_code', 'not like', '%/%')
                 ->select('semester_code', 'semester_name', 'subject_name')
+                ->distinct()
                 ->orderBy('semester_code')
                 ->get();
 
@@ -3178,6 +3178,7 @@ class ReportController extends Controller
                 ->where('is_active', true)
                 ->where('subject_code', 'not like', '%/%')
                 ->select('semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+                ->distinct()
                 ->orderBy('semester_code')
                 ->orderBy('subject_name')
                 ->get();
@@ -3192,7 +3193,10 @@ class ReportController extends Controller
 
             $arLookup = [];
             foreach ($arRecords as $ar) {
-                $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
+                $key = $ar->subject_id . '|' . $ar->semester_id;
+                if (!isset($arLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arLookup[$key]->grade ?? 0)) {
+                    $arLookup[$key] = $ar;
+                }
             }
 
             // student_subjects lookup — "Biriktirilgan" ro'yxati uchun
@@ -3217,7 +3221,7 @@ class ReportController extends Controller
 
                 $isDebt = !$ar
                     || $ar->grade === null
-                    || in_array($ar->grade, ['2', '0'])
+                    || (float) $ar->grade == 0 || (float) $ar->grade == 2
                     || $ar->retraining_status;
 
                 if (!$isDebt) continue;

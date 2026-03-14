@@ -13,10 +13,13 @@ use App\Models\Group;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Deadline;
+use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
+use App\Models\TutorHistory;
 use App\Services\StudentGradeService;
+use Illuminate\Support\Facades\Schema;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -172,6 +175,45 @@ class TeacherMainController extends Controller
             ->values();
 
         return view('teacher.students-tutor', compact('students', 'tutorGroups', 'provinces'));
+    }
+
+    public function showStudent(Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+
+        // Tyutor faqat o'z guruhidagi talabalarni ko'rishi mumkin
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403, 'Bu talaba sizga biriktirilgan guruhda emas.');
+        }
+
+        $canToggleFive = false;
+
+        $frontOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'front_office'
+        );
+        $backOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
+        );
+
+        // Hozirgi tyutor
+        $currentTutor = null;
+        if ($student->group_id) {
+            $group = Group::where('group_hemis_id', $student->group_id)->first();
+            if ($group) {
+                $currentTutor = $group->teachers()->first();
+            }
+        }
+
+        // Tyutor tarixi
+        $tutorHistory = collect();
+        if (Schema::hasTable('tutor_history')) {
+            $tutorHistory = TutorHistory::where('student_id', $student->id)
+                ->orderBy('assigned_at', 'desc')
+                ->get();
+        }
+
+        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory'));
     }
 
     private function studentsAdmin(Request $request)

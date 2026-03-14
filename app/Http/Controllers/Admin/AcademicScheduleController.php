@@ -70,6 +70,9 @@ class AcademicScheduleController extends Controller
         }
 
         $routePrefix = $this->routePrefix();
+        $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
+        $user = auth()->user() ?? auth('teacher')->user();
+        $canDelete = $user && $user->hasAnyRole($adminRoles);
 
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
@@ -87,6 +90,7 @@ class AcademicScheduleController extends Controller
             'isSearched',
             'currentEducationYear',
             'routePrefix',
+            'canDelete',
         ));
     }
 
@@ -678,6 +682,56 @@ class AcademicScheduleController extends Controller
             DB::rollBack();
             return redirect()->back()->with('error', 'Xatolik yuz berdi: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Faqat admin: saqlangan YN sanasini o'chirish (oski yoki test)
+     */
+    public function clearDate(Request $request)
+    {
+        $user = auth()->user() ?? auth('teacher')->user();
+        $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
+        if (!$user || !$user->hasAnyRole($adminRoles)) {
+            abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
+        }
+
+        $groupHemisId = $request->input('group_hemis_id');
+        $subjectId = $request->input('subject_id');
+        $semesterCode = $request->input('semester_code');
+        $dateType = $request->input('date_type'); // 'oski' yoki 'test'
+
+        if (!$groupHemisId || !$subjectId || !$semesterCode || !in_array($dateType, ['oski', 'test'])) {
+            return redirect()->back()->with('error', 'Noto\'g\'ri so\'rov.');
+        }
+
+        $record = ExamSchedule::where('group_hemis_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        if (!$record) {
+            return redirect()->back()->with('error', 'Yozuv topilmadi.');
+        }
+
+        if ($dateType === 'oski') {
+            $record->oski_date = null;
+            $record->oski_na = false;
+        } else {
+            $record->test_date = null;
+            $record->test_na = false;
+        }
+
+        $record->updated_by = auth()->id() ?? auth('teacher')->id();
+
+        // Agar ikkala sana ham bo'sh bo'lsa — yozuvni o'chiramiz
+        if (!$record->oski_date && !$record->oski_na && !$record->test_date && !$record->test_na) {
+            $record->delete();
+        } else {
+            $record->save();
+        }
+
+        $typeLabel = $dateType === 'oski' ? 'OSKI' : 'Test';
+        return redirect()->back()->with('success', "{$typeLabel} sanasi muvaffaqiyatli o'chirildi.");
     }
 
     /**

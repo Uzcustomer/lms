@@ -129,7 +129,7 @@
         elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
         elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
         elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
-        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
+        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.contracts.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
     @endphp
     <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
         <!-- Boshqalar popup overlay -->

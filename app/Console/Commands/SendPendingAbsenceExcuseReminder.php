@@ -36,28 +36,19 @@ class SendPendingAbsenceExcuseReminder extends Command
         $today = Carbon::now()->format('d.m.Y');
 
         $lines = [];
-        $lines[] = "📋 <b>Sababli arizalar eslatmasi</b>";
-        $lines[] = "📅 Sana: {$today} | Soat: 16:00";
-        $lines[] = "";
-        $lines[] = "⏳ <b>Kutilmoqda: {$count} ta ariza</b>";
+        $lines[] = "Quyidagi talabalar sababli dars qoldirishga ariza jo'natgan. Zudlik bilan ko'rib chiqishingiz so'raladi.";
         $lines[] = "";
 
         foreach ($pendingExcuses as $index => $excuse) {
             $num = $index + 1;
-            $reasonLabel = AbsenceExcuse::REASONS[$excuse->reason]['label'] ?? $excuse->reason;
             $startDate = $excuse->start_date ? $excuse->start_date->format('d.m.Y') : '—';
             $endDate = $excuse->end_date ? $excuse->end_date->format('d.m.Y') : '—';
-            $submittedAt = $excuse->created_at ? $excuse->created_at->format('d.m.Y') : '—';
 
-            $lines[] = "{$num}. <b>{$excuse->student_full_name}</b>";
-            $lines[] = "   👥 Guruh: {$excuse->group_name}";
-            $lines[] = "   📌 Sabab: {$reasonLabel}";
-            $lines[] = "   🗓 Sana: {$startDate} – {$endDate}";
-            $lines[] = "   📤 Yuborilgan: {$submittedAt}";
-            $lines[] = "";
+            $lines[] = "{$num}. <b>{$excuse->student_full_name}</b> ({$excuse->group_name}) — {$startDate} / {$endDate}";
         }
 
-        $lines[] = "🔗 Arizalarni ko'rish: <a href=\"https://mark.tashmedunitf.uz/admin/absence-excuses?status=pending\">Admin panelga o'tish</a>";
+        $lines[] = "";
+        $lines[] = "🔗 <a href=\"https://mark.tashmedunitf.uz/admin/absence-excuses?status=pending\">Arizalarni ko'rish</a>";
 
         $message = implode("\n", $lines);
 

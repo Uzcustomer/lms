@@ -38,6 +38,7 @@ use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
+use App\Http\Controllers\Admin\StaffRegistrationController;
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\MoodleImportController;
 use App\Http\Controllers\Admin\NotificationController;
@@ -305,6 +306,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/teachers/{teacher}/contact', [TeacherController::class, 'updateContact'])->name('teachers.update-contact');
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
+
+        // Registrator ofisi bo'linmalari
+        Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
+            Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');
+            Route::post('/', [StaffRegistrationController::class, 'store'])->name('store');
+            Route::delete('/{division}', [StaffRegistrationController::class, 'destroy'])->name('destroy');
+            Route::get('/specialties', [StaffRegistrationController::class, 'getSpecialties'])->name('specialties');
+        });
 
         // Xabarnomalar (Notifications)
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');

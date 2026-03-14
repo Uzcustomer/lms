@@ -80,11 +80,14 @@ class TutorReportController extends Controller
         // Baholarni olish
         $students = Student::whereIn('group_id', $groupIds)->get();
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
+        $validSubjectIds = $scheduleQuery->pluck('subject_id')->unique()->toArray();
+        $validSemesterCodes = $scheduleQuery->pluck('semester_code')->unique()->toArray();
 
         $grades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
+            ->whereIn('subject_id', $validSubjectIds)
+            ->whereIn('semester_code', $validSemesterCodes)
             ->whereNotIn('training_type_code', $excludedCodes)
-            ->where('education_year_current', true)
             ->select('student_hemis_id', 'subject_id', 'grade', 'lesson_date')
             ->get();
 
@@ -424,11 +427,13 @@ class TutorReportController extends Controller
             return view('teacher.reports.top-students', compact('tutorGroups', 'scoreLimit'))->with('results', []);
         }
 
+        $validSubjectIds = $scheduleSubjects->pluck('subject_id')->unique()->toArray();
+
         // Baholarni olish
         $grades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
+            ->whereIn('subject_id', $validSubjectIds)
             ->whereNotIn('training_type_code', $excludedCodes)
-            ->where('education_year_current', true)
             ->select('student_hemis_id', 'subject_id', 'grade', 'lesson_date')
             ->get();
 
@@ -543,7 +548,6 @@ class TutorReportController extends Controller
             ->whereIn('student_hemis_id', $students->pluck('hemis_id')->toArray())
             ->whereIn('subject_id', $subjectIds)
             ->whereNotIn('training_type_code', $excludedCodes)
-            ->where('education_year_current', true)
             ->select('student_hemis_id', 'subject_id', DB::raw('DATE(lesson_date) as lesson_date'))
             ->distinct()
             ->get();

@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
 use App\Models\ContractList;
+use App\Models\CurriculumSubject;
 use App\Models\Setting;
 use App\Models\Student;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -48,7 +50,39 @@ class TutorReportController extends Controller
     }
 
     /**
-     * JN o'zlashtirish hisoboti
+     * Admin ReportController bilan bir xil baho hisoblash mantiqi
+     */
+    private function getEffectiveGradeForJn($row): ?float
+    {
+        if (($row->status ?? null) === 'pending') {
+            return null;
+        }
+
+        if (($row->reason ?? null) === 'absent' && $row->grade === null) {
+            return $row->retake_grade !== null ? (float) $row->retake_grade : null;
+        }
+
+        if (($row->status ?? null) === 'closed' && ($row->reason ?? null) === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+            return null;
+        }
+
+        if (($row->status ?? null) === 'recorded') {
+            return $row->grade !== null ? (float) $row->grade : null;
+        }
+
+        if (($row->status ?? null) === 'closed') {
+            return $row->grade !== null ? (float) $row->grade : null;
+        }
+
+        if ($row->retake_grade !== null) {
+            return (float) $row->retake_grade;
+        }
+
+        return null;
+    }
+
+    /**
+     * JN o'zlashtirish hisoboti (admin mantiqi bilan)
      */
     public function jnReport(Request $request)
     {
@@ -77,7 +111,7 @@ class TutorReportController extends Controller
             return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
         }
 
-        // Baholarni olish
+        // Baholarni olish (admin mantiqi: status, reason, retake_grade ham)
         $students = Student::whereIn('group_id', $groupIds)->get();
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
         $validSubjectIds = $scheduleQuery->pluck('subject_id')->unique()->toArray();
@@ -88,15 +122,19 @@ class TutorReportController extends Controller
             ->whereIn('subject_id', $validSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
             ->whereNotIn('training_type_code', $excludedCodes)
-            ->select('student_hemis_id', 'subject_id', 'grade', 'lesson_date')
+            ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason',
+                'lesson_date', 'lesson_pair_code')
             ->get();
 
-        // Har bir talaba uchun har bir fandan kunlik o'rtacha hisoblash
+        // Admin mantiqi: kunlik o'rtachani pair_code bo'yicha hisoblash
         $gradeMap = [];
         foreach ($grades as $g) {
+            $effectiveGrade = $this->getEffectiveGradeForJn($g);
+            if ($effectiveGrade === null) continue;
+
             $key = $g->student_hemis_id . '|' . $g->subject_id;
             $date = substr($g->lesson_date, 0, 10);
-            $gradeMap[$key][$date][] = (float) $g->grade;
+            $gradeMap[$key][$date][] = $effectiveGrade;
         }
 
         // Guruh nomi map
@@ -105,7 +143,7 @@ class TutorReportController extends Controller
             ->pluck('name', 'group_hemis_id')
             ->toArray();
 
-        // Natijalarni yig'ish: guruh > fan > talabalar
+        // Natijalarni yig'ish
         $results = [];
         foreach ($scheduleQuery as $combo) {
             $groupName = $groupNameMap[$combo->group_id] ?? $combo->group_id;
@@ -118,12 +156,11 @@ class TutorReportController extends Controller
                 if (empty($dailyGrades)) {
                     $avg = null;
                 } else {
-                    // Kunlik o'rtachalar
                     $dailyAvgs = [];
                     foreach ($dailyGrades as $dayGrades) {
-                        $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades));
+                        $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades), 0, PHP_ROUND_HALF_UP);
                     }
-                    $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 1);
+                    $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 0, PHP_ROUND_HALF_UP);
                 }
 
                 $results[] = [
@@ -137,14 +174,13 @@ class TutorReportController extends Controller
             }
         }
 
-        // Filtr: faqat bahosi past yoki bahosiz
+        // Filtr
         if ($request->filled('filter') && $request->filter === 'low') {
             $results = array_filter($results, fn($r) => $r['avg_grade'] !== null && $r['avg_grade'] < 60);
         } elseif ($request->filled('filter') && $request->filter === 'no_grade') {
             $results = array_filter($results, fn($r) => $r['avg_grade'] === null);
         }
 
-        // Guruh va fan bo'yicha saralash
         usort($results, function ($a, $b) {
             $cmp = strcmp($a['group_name'], $b['group_name']);
             if ($cmp !== 0) return $cmp;
@@ -202,7 +238,7 @@ class TutorReportController extends Controller
     }
 
     /**
-     * 25% sababsiz hisoboti
+     * 25% sababsiz hisoboti (admin mantiqi: student_grades reason='absent')
      */
     public function absenceReport25(Request $request)
     {
@@ -210,8 +246,8 @@ class TutorReportController extends Controller
         $groupIds = $this->getFilteredGroupIds($request);
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
-        // Schedule dan umumiy soatlarni olish (fan bo'yicha)
-        $scheduleHours = DB::table('schedules as sch')
+        // Schedule kombinatsiyalarini olish (joriy semestr)
+        $scheduleCombos = DB::table('schedules as sch')
             ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
             ->join('semesters as sem', function ($join) {
                 $join->on('sem.code', '=', 'sch.semester_code')
@@ -223,77 +259,164 @@ class TutorReportController extends Controller
             ->where('sem.current', true)
             ->where('sch.education_year_current', true)
             ->whereNull('sch.deleted_at')
-            ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name',
-                DB::raw('COUNT(DISTINCT CONCAT(DATE(sch.lesson_date), "_", sch.lesson_pair_code)) as total_pairs'))
-            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name')
+            ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
+            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
             ->get();
 
-        $scheduleMap = [];
-        foreach ($scheduleHours as $sh) {
-            $scheduleMap[$sh->group_id . '|' . $sh->subject_id] = [
-                'total_pairs' => $sh->total_pairs,
-                'subject_name' => $sh->subject_name,
+        if ($scheduleCombos->isEmpty()) {
+            return view('teacher.reports.absence-25', compact('tutorGroups'))->with('results', []);
+        }
+
+        $scheduleGroupIds = $scheduleCombos->pluck('group_id')->unique()->toArray();
+        $validSubjectIds = $scheduleCombos->pluck('subject_id')->unique()->toArray();
+        $validSemesterCodes = $scheduleCombos->pluck('semester_code')->unique()->toArray();
+
+        // Auditoriya soatlarini curriculum_subjects dan olish (admin mantiqi)
+        $groupsData = DB::table('groups')
+            ->whereIn('group_hemis_id', $scheduleGroupIds)
+            ->select('group_hemis_id', 'curriculum_hemis_id')
+            ->get();
+
+        $groupCurriculumMap = [];
+        foreach ($groupsData as $g) {
+            $groupCurriculumMap[$g->group_hemis_id] = $g->curriculum_hemis_id;
+        }
+
+        $comboKeys = [];
+        foreach ($scheduleCombos as $row) {
+            $comboKeys[$row->group_id . '|' . $row->subject_id . '|' . $row->semester_code] = [
+                'group_id' => $row->group_id,
+                'subject_id' => $row->subject_id,
+                'semester_code' => $row->semester_code,
+                'subject_name' => $row->subject_name,
             ];
         }
 
-        // Baholardan sababsiz soatlarni hisoblash
-        $students = Student::whereIn('group_id', $groupIds)->get();
+        $curriculumSubjects = CurriculumSubject::whereIn('curricula_hemis_id', array_unique(array_values($groupCurriculumMap)))
+            ->whereIn('subject_id', $validSubjectIds)
+            ->whereIn('semester_code', $validSemesterCodes)
+            ->get()
+            ->keyBy(function ($item) {
+                return $item->curricula_hemis_id . '|' . $item->subject_id . '|' . $item->semester_code;
+            });
+
+        $nonAuditoriumCodes = ['17'];
+        $auditoryHours = [];
+        foreach ($comboKeys as $comboKey => $combo) {
+            $currHemisId = $groupCurriculumMap[$combo['group_id']] ?? null;
+            if (!$currHemisId) continue;
+
+            $csKey = $currHemisId . '|' . $combo['subject_id'] . '|' . $combo['semester_code'];
+            $cs = $curriculumSubjects[$csKey] ?? null;
+            if (!$cs) continue;
+
+            $hours = 0;
+            if (is_array($cs->subject_details)) {
+                foreach ($cs->subject_details as $detail) {
+                    $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                    if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                        $hours += (float) ($detail['academic_load'] ?? 0);
+                    }
+                }
+            }
+            if ($hours <= 0) {
+                $hours = (float) ($cs->total_acload ?? 0);
+            }
+
+            $auditoryHours[$comboKey] = $hours;
+        }
+
+        // Talabalar
+        $students = Student::whereIn('group_id', $scheduleGroupIds)->get();
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
         if (empty($studentHemisIds)) {
             return view('teacher.reports.absence-25', compact('tutorGroups'))->with('results', []);
         }
 
-        $absenceData = DB::table('attendances as a')
-            ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
-            ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
-            ->whereIn('s.group_id', $groupIds)
-            ->whereExists(function ($q) {
-                $q->select(DB::raw(1))
-                    ->from('semesters as sem')
-                    ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
-                    ->whereColumn('sem.code', 'a.semester_code')
-                    ->where('sem.current', true);
-            })
-            ->select(
-                'a.student_hemis_id',
-                's.full_name',
-                's.student_id_number',
-                's.group_name',
-                's.group_id',
-                's.image',
-                'a.subject_id',
-                'a.subject_name',
-                DB::raw('SUM(a.absent_off) as unexcused_hours'),
-                DB::raw('SUM(a.absent_on + a.absent_off) as total_absent_hours')
-            )
-            ->groupBy('a.student_hemis_id', 's.full_name', 's.student_id_number',
-                's.group_name', 's.group_id', 's.image', 'a.subject_id', 'a.subject_name')
-            ->having('unexcused_hours', '>', 0)
-            ->get();
+        $studentGroupMap = [];
+        foreach ($students as $st) {
+            $studentGroupMap[$st->hemis_id] = $st->group_id;
+        }
+
+        // student_grades dan davomatni olish (admin mantiqi: reason='absent')
+        $minScheduleDate = DB::table('schedules')
+            ->where('education_year_current', true)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->min('lesson_date');
+
+        $studentSubjectData = [];
+        foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
+            $gradesChunk = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $hemisChunk)
+                ->whereIn('subject_id', $validSubjectIds)
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotNull('lesson_date')
+                ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+                ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                    'grade', 'lesson_date', 'reason', 'status')
+                ->get();
+
+            foreach ($gradesChunk as $g) {
+                $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
+                if (!$groupId) continue;
+
+                $ssKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
+                $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
+
+                if (!isset($studentSubjectData[$ssKey])) {
+                    $studentSubjectData[$ssKey] = [
+                        'student_hemis_id' => $g->student_hemis_id,
+                        'subject_id' => $g->subject_id,
+                        'subject_name' => $g->subject_name,
+                        'semester_code' => $g->semester_code,
+                        'combo_key' => $comboKey,
+                        'group_id' => $groupId,
+                        'total_absent_hours' => 0,
+                        'unexcused_absent_hours' => 0,
+                    ];
+                }
+
+                if ($g->reason === 'absent') {
+                    $studentSubjectData[$ssKey]['total_absent_hours'] += 2;
+                    if ($g->status !== 'retake') {
+                        $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
+                    }
+                }
+            }
+            unset($gradesChunk);
+        }
+
+        // Natijalarni hisoblash
+        $now = Carbon::now('Asia/Tashkent');
+        $spravkaDays = (int) Setting::get('spravka_deadline_days', 10);
 
         $results = [];
-        foreach ($absenceData as $row) {
-            $schedKey = $row->group_id . '|' . $row->subject_id;
-            $schedInfo = $scheduleMap[$schedKey] ?? null;
-            if (!$schedInfo || $schedInfo['total_pairs'] == 0) continue;
+        foreach ($studentSubjectData as $data) {
+            $comboKey = $data['combo_key'];
+            $totalAuditoryHours = $auditoryHours[$comboKey] ?? 0;
 
-            // 2 soat per pair (auditoriya soatlari)
-            $totalAuditHours = $schedInfo['total_pairs'] * 2;
-            $percentage = ($row->unexcused_hours / $totalAuditHours) * 100;
+            if ($totalAuditoryHours <= 0) continue;
 
-            if ($percentage >= 25) {
-                $results[] = [
-                    'full_name' => $row->full_name,
-                    'student_id' => $row->student_id_number,
-                    'group_name' => $row->group_name,
-                    'image' => $row->image,
-                    'subject_name' => $row->subject_name,
-                    'unexcused_hours' => (int) $row->unexcused_hours,
-                    'total_hours' => $totalAuditHours,
-                    'percentage' => round($percentage, 1),
-                ];
-            }
+            $unexcusedPercent = round(($data['unexcused_absent_hours'] / $totalAuditoryHours) * 100);
+
+            if ($unexcusedPercent < 25) continue;
+
+            $studentInfo = $students->firstWhere('hemis_id', $data['student_hemis_id']);
+
+            $results[] = [
+                'full_name' => $studentInfo->full_name ?? 'Noma\'lum',
+                'student_id' => $studentInfo->student_id_number ?? '-',
+                'group_name' => $studentInfo->group_name ?? '-',
+                'image' => $studentInfo->image ?? null,
+                'subject_name' => $data['subject_name'],
+                'unexcused_hours' => $data['unexcused_absent_hours'],
+                'total_absent_hours' => $data['total_absent_hours'],
+                'auditory_hours' => $totalAuditoryHours,
+                'percentage' => $unexcusedPercent,
+            ];
         }
 
         usort($results, fn($a, $b) => $b['percentage'] <=> $a['percentage']);
@@ -302,7 +425,7 @@ class TutorReportController extends Controller
     }
 
     /**
-     * 4≥qarzdorlar hisoboti
+     * 4+ qarzdorlar hisoboti
      */
     public function debtorsReport(Request $request)
     {
@@ -356,7 +479,6 @@ class TutorReportController extends Controller
             $debts = [];
 
             foreach ($subjects as $sub) {
-                // Faqat o'tilgan semestrlar
                 if ((int) $sub->semester_code >= (int) $st->semester_code) continue;
 
                 $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
@@ -395,7 +517,7 @@ class TutorReportController extends Controller
     }
 
     /**
-     * 5 ga da'vogar talabalar hisoboti
+     * 5 ga da'vogar talabalar hisoboti (admin mantiqi bilan)
      */
     public function topStudentsReport(Request $request)
     {
@@ -429,19 +551,22 @@ class TutorReportController extends Controller
 
         $validSubjectIds = $scheduleSubjects->pluck('subject_id')->unique()->toArray();
 
-        // Baholarni olish
+        // Baholarni olish (admin mantiqi: status, reason, retake_grade)
         $grades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
             ->whereNotIn('training_type_code', $excludedCodes)
-            ->select('student_hemis_id', 'subject_id', 'grade', 'lesson_date')
+            ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason', 'lesson_date')
             ->get();
 
         $gradeMap = [];
         foreach ($grades as $g) {
+            $effectiveGrade = $this->getEffectiveGradeForJn($g);
+            if ($effectiveGrade === null) continue;
+
             $key = $g->student_hemis_id . '|' . $g->subject_id;
             $date = substr($g->lesson_date, 0, 10);
-            $gradeMap[$key][$date][] = (float) $g->grade;
+            $gradeMap[$key][$date][] = $effectiveGrade;
         }
 
         // Guruh nomi map
@@ -471,9 +596,9 @@ class TutorReportController extends Controller
                 $hasAnyGrade = true;
                 $dailyAvgs = [];
                 foreach ($dailyGrades as $dayGrades) {
-                    $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades));
+                    $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades), 0, PHP_ROUND_HALF_UP);
                 }
-                $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 1);
+                $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 0, PHP_ROUND_HALF_UP);
                 $subjectAvgs[] = ['name' => $sub->subject_name, 'avg' => $avg];
 
                 if ($avg < $scoreLimit) {
@@ -535,15 +660,12 @@ class TutorReportController extends Controller
             return view('teacher.reports.unrated', compact('tutorGroups'))->with('results', []);
         }
 
-        // Har bir schedule uchun baholar borligini tekshirish
         $subjectIds = $schedules->pluck('subject_id')->unique()->toArray();
         $scheduleGroupIds = $schedules->pluck('group_id')->unique()->toArray();
 
-        // Talabalarni olish
         $students = Student::whereIn('group_id', $scheduleGroupIds)->get();
         $studentMap = $students->groupBy('group_id');
 
-        // Mavjud baholarni olish
         $existingGrades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $students->pluck('hemis_id')->toArray())
             ->whereIn('subject_id', $subjectIds)
@@ -557,7 +679,6 @@ class TutorReportController extends Controller
             $gradeExists[$eg->student_hemis_id . '|' . $eg->subject_id . '|' . $eg->lesson_date] = true;
         }
 
-        // Baho qo'yilmagan darslarni aniqlash
         $unrated = [];
         $scheduleCombos = $schedules->groupBy(function ($item) {
             return $item->group_id . '|' . $item->subject_id . '|' . $item->lesson_date;
@@ -613,7 +734,6 @@ class TutorReportController extends Controller
             ->orderBy('full_name')
             ->get();
 
-        // Talaba ma'lumotlarini qo'shish
         $studentMap = $students->keyBy('hemis_id');
         foreach ($contracts as $contract) {
             $contract->student_data = $studentMap[$contract->student_hemis_id] ?? null;

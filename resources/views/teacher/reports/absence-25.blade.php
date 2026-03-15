@@ -1,54 +1,55 @@
 <x-teacher-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">25% sababsiz hisoboti</h2>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">25% sababsiz davomat hisoboti</h2>
     </x-slot>
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
-            <div class="report-container">
-                <form method="GET" action="{{ route('teacher.reports.absence-25') }}">
-                    <div class="report-filter">
-                        <div class="filter-item">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+
+                <div class="filter-container">
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select name="group">
+                            <select name="group" id="group-select" class="filter-select">
                                 <option value="">Barchasi</option>
                                 @foreach($tutorGroups as $group)
                                     <option value="{{ $group->group_hemis_id }}" {{ request('group') == $group->group_hemis_id ? 'selected' : '' }}>{{ $group->name }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        <div>
+                        <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="submit" class="btn-filter">
-                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                Qidirish
+                            <button type="button" class="btn-calc" onclick="applyFilter()">
+                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                Hisoblash
                             </button>
                         </div>
                     </div>
-                </form>
-
-                <div class="report-header">
-                    <span class="report-badge report-badge-warning">25%+ sababsiz: {{ count($results ?? []) }} ta</span>
                 </div>
 
-                <div class="overflow-x-auto">
-                    <table class="report-table">
+                <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;">
+                    <span class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">25%+ sababsiz: {{ count($results ?? []) }} ta</span>
+                </div>
+
+                <div style="max-height:calc(100vh - 300px);overflow-y:auto;overflow-x:auto;">
+                    <table class="journal-table">
                         <thead>
                         <tr>
-                            <th>#</th>
-                            <th>Talaba</th>
-                            <th>ID</th>
+                            <th class="th-num">#</th>
+                            <th>Talaba FISH</th>
                             <th>Guruh</th>
-                            <th>Fan</th>
-                            <th style="text-align:center;">Sababsiz</th>
-                            <th style="text-align:center;">Umumiy soat</th>
-                            <th style="text-align:center;">Foiz</th>
+                            <th class="th-fan">Fan</th>
+                            <th class="th-hour" style="text-align:center;">Sababsiz soat</th>
+                            <th class="th-hour" style="text-align:center;">Jami qoldirgan</th>
+                            <th class="th-hour" style="text-align:center;">Auditoriya soati</th>
+                            <th style="text-align:center;">Sababsiz %</th>
                         </tr>
                         </thead>
                         <tbody>
                         @forelse($results ?? [] as $i => $row)
                             <tr>
-                                <td style="color:#94a3b8;font-size:12px;">{{ $i + 1 }}</td>
+                                <td class="td-num">{{ $i + 1 }}</td>
                                 <td>
                                     <div class="student-name-cell">
                                         @if($row['image'])
@@ -56,24 +57,20 @@
                                         @else
                                             <div class="student-avatar-placeholder">{{ mb_substr($row['full_name'], 0, 1) }}</div>
                                         @endif
-                                        <span style="font-weight:600;color:#1e293b;">{{ $row['full_name'] }}</span>
+                                        <span class="text-cell" style="font-weight:700;color:#0f172a;">{{ $row['full_name'] }}</span>
                                     </div>
                                 </td>
-                                <td style="color:#64748b;font-family:monospace;font-size:12px;">{{ $row['student_id'] }}</td>
-                                <td><span class="badge-sm badge-indigo">{{ $row['group_name'] }}</span></td>
-                                <td style="font-size:12px;color:#475569;max-width:200px;">{{ $row['subject_name'] }}</td>
+                                <td><span class="badge badge-indigo">{{ $row['group_name'] }}</span></td>
+                                <td><span class="text-cell text-subject">{{ $row['subject_name'] }}</span></td>
+                                <td style="text-align:center;"><span class="badge badge-grade-red">{{ $row['unexcused_hours'] }}</span></td>
+                                <td style="text-align:center;font-weight:600;color:#475569;">{{ $row['total_absent_hours'] }}</td>
+                                <td style="text-align:center;font-weight:600;color:#475569;">{{ $row['auditory_hours'] }}</td>
                                 <td style="text-align:center;">
-                                    <span class="badge-sm badge-red" style="font-weight:700;">{{ $row['unexcused_hours'] }}</span>
-                                </td>
-                                <td style="text-align:center;color:#64748b;">{{ $row['total_hours'] }}</td>
-                                <td style="text-align:center;">
-                                    <span class="badge-sm {{ $row['percentage'] >= 50 ? 'badge-red' : 'badge-yellow' }}" style="font-weight:700;">
-                                        {{ $row['percentage'] }}%
-                                    </span>
+                                    <span class="badge badge-grade-red">{{ $row['percentage'] }}%</span>
                                 </td>
                             </tr>
                         @empty
-                            <tr class="empty-row"><td colspan="8">25%+ sababsiz talaba topilmadi</td></tr>
+                            <tr><td colspan="8" style="padding:40px;text-align:center;color:#94a3b8;font-size:14px;">25%+ sababsiz talaba topilmadi</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -83,4 +80,12 @@
     </div>
 
     @include('teacher.reports.partials.report-styles')
+    <script>
+        function applyFilter() {
+            var group = document.getElementById('group-select').value;
+            var url = '{{ route("teacher.reports.absence-25") }}';
+            if (group) url += '?group=' + encodeURIComponent(group);
+            window.location.href = url;
+        }
+    </script>
 </x-teacher-app-layout>

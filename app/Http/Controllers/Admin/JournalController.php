@@ -5933,25 +5933,7 @@ class JournalController extends Controller
         $spreadsheet = SpreadsheetIOFactory::load($templatePath);
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Shablon formulalarida noto'g'ri apostrof belgisini (U+0027) to'g'ri o'zbek
-        // apostrof belgisi (U+02BC ʼ va U+02BB ʻ) bilan almashtirish
-        foreach ($sheet->getRowIterator() as $rowObj) {
-            foreach ($rowObj->getCellIterator() as $cell) {
-                $val = $cell->getValue();
-                if (is_string($val) && str_starts_with($val, '=')) {
-                    $fixed = str_replace(
-                        ["\"a'lo\"", "\"o'rta\"", "\"qo'yilmadi\""],
-                        ['"a' . "\u{02BC}" . 'lo"', '"o' . "\u{02BB}" . 'rta"', '"qo' . "\u{02BB}" . 'yilmadi"'],
-                        $val
-                    );
-                    if ($fixed !== $val) {
-                        $cell->setValue($fixed);
-                    }
-                }
-            }
-        }
-
-        $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet'), 0, 31);
+$sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet'), 0, 31);
         $sheet->setTitle($sheetName);
 
         // Kurs va semestr raqamlarini hisoblash

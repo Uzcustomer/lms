@@ -122,6 +122,7 @@ class TutorReportController extends Controller
             ->whereIn('subject_id', $validSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
             ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason',
                 'lesson_date', 'lesson_pair_code')
             ->get();
@@ -556,6 +557,7 @@ class TutorReportController extends Controller
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
             ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotNull('lesson_date')
             ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason', 'lesson_date')
             ->get();
 

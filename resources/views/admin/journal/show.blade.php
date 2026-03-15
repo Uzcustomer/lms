@@ -1728,33 +1728,46 @@
                                     </select>
                                 </div>
                                 <div class="border-t border-gray-200 my-2"></div>
+                                @php
+                                    $hasOski = !($examSchedule && $examSchedule->oski_na);
+                                    $hasTest = !($examSchedule && $examSchedule->test_na);
+                                    if ($hasOski && $hasTest) {
+                                        $defaultJn = 50; $defaultMt = 20; $defaultOn = 0; $defaultOski = 15; $defaultTest = 15;
+                                    } elseif ($hasOski && !$hasTest) {
+                                        $defaultJn = 50; $defaultMt = 20; $defaultOn = 0; $defaultOski = 30; $defaultTest = 0;
+                                    } elseif (!$hasOski && $hasTest) {
+                                        $defaultJn = 50; $defaultMt = 20; $defaultOn = 0; $defaultOski = 0; $defaultTest = 30;
+                                    } else {
+                                        $defaultJn = 70; $defaultMt = 30; $defaultOn = 0; $defaultOski = 0; $defaultTest = 0;
+                                    }
+                                @endphp
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">JN</label>
-                                    <input type="number" id="yn-weight-jn" min="0" max="100" value="30"
+                                    <input type="number" id="yn-weight-jn" min="0" max="100" value="{{ $defaultJn }}"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">MT</label>
-                                    <input type="number" id="yn-weight-mt" min="0" max="100" value="10"
+                                    <input type="number" id="yn-weight-mt" min="0" max="100" value="{{ $defaultMt }}"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">ON</label>
-                                    <input type="number" id="yn-weight-on" min="0" max="100" value="0"
+                                    <input type="number" id="yn-weight-on" min="0" max="100" value="{{ $defaultOn }}"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">OSKI</label>
-                                    <input type="number" id="yn-weight-oski" min="0" max="100" value="0"
+                                    <input type="number" id="yn-weight-oski" min="0" max="100" value="{{ $defaultOski }}"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>
                                 <div class="flex items-center justify-between">
                                     <label class="text-sm font-semibold text-gray-700 w-20">Test</label>
-                                    <input type="number" id="yn-weight-test" min="0" max="100" value="60"
+                                    <input type="number" id="yn-weight-test" min="0" max="100" value="{{ $defaultTest }}"
                                         class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         oninput="updateYnWeightsTotal()">
                                 </div>
@@ -4367,6 +4380,39 @@
 
         // YN qaydnoma vazn modali
         function openYnWeightsModal() {
+            @php
+                $hasOskiJs = !($examSchedule && $examSchedule->oski_na) ? 'true' : 'false';
+                $hasTestJs  = !($examSchedule && $examSchedule->test_na)  ? 'true' : 'false';
+            @endphp
+            var hasOski = {{ $hasOskiJs }};
+            var hasTest  = {{ $hasTestJs }};
+
+            if (hasOski && hasTest) {
+                document.getElementById('yn-weight-jn').value   = 50;
+                document.getElementById('yn-weight-mt').value   = 20;
+                document.getElementById('yn-weight-on').value   = 0;
+                document.getElementById('yn-weight-oski').value = 15;
+                document.getElementById('yn-weight-test').value = 15;
+            } else if (hasOski && !hasTest) {
+                document.getElementById('yn-weight-jn').value   = 50;
+                document.getElementById('yn-weight-mt').value   = 20;
+                document.getElementById('yn-weight-on').value   = 0;
+                document.getElementById('yn-weight-oski').value = 30;
+                document.getElementById('yn-weight-test').value = 0;
+            } else if (!hasOski && hasTest) {
+                document.getElementById('yn-weight-jn').value   = 50;
+                document.getElementById('yn-weight-mt').value   = 20;
+                document.getElementById('yn-weight-on').value   = 0;
+                document.getElementById('yn-weight-oski').value = 0;
+                document.getElementById('yn-weight-test').value = 30;
+            } else {
+                document.getElementById('yn-weight-jn').value   = 70;
+                document.getElementById('yn-weight-mt').value   = 30;
+                document.getElementById('yn-weight-on').value   = 0;
+                document.getElementById('yn-weight-oski').value = 0;
+                document.getElementById('yn-weight-test').value = 0;
+            }
+
             document.getElementById('yn-weights-modal').classList.remove('hidden');
             updateYnWeightsTotal();
         }

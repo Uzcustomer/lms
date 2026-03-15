@@ -5944,14 +5944,19 @@ class JournalController extends Controller
         } else {
             $kurs = preg_replace('/\D/', '', $semester->level_code ?? '');
         }
-        // Semestrni kurs ichidagi pozitsiyasini aniqlash (1 yoki 2)
-        $levelSemesters = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
-            ->where('level_code', $semester->level_code)
-            ->orderBy('code')
-            ->pluck('code')
-            ->values();
-        $semesterPos = $levelSemesters->search($semester->code);
-        $semesterInYear = $semesterPos !== false ? $semesterPos + 1 : 1;
+        // Semestr raqamini name'dan olish (masalan "10-semestr" → 10)
+        $semesterInYear = 1;
+        if (preg_match('/(\d+)/', $semester->name ?? '', $m)) {
+            $semesterInYear = (int) $m[1];
+        } else {
+            $levelSemesters = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('level_code', $semester->level_code)
+                ->orderBy('code')
+                ->pluck('code')
+                ->values();
+            $semesterPos = $levelSemesters->search($semester->code);
+            $semesterInYear = $semesterPos !== false ? $semesterPos + 1 : 1;
+        }
 
         // Header
         $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $faculty->name ?? '');

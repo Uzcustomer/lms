@@ -53,7 +53,7 @@
                         </tr>
                         </thead>
                         <tbody>
-                        @forelse($results ?? [] as $i => $row)
+                        @forelse(($results ?? []) as $i => $row)
                             <tr>
                                 <td class="td-num">{{ $i + 1 }}</td>
                                 <td><span class="badge badge-indigo">{{ $row['group_name'] }}</span></td>

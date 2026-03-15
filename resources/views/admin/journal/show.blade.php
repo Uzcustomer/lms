@@ -1738,7 +1738,7 @@
                                     } elseif (!$hasOski && $hasTest) {
                                         $defaultJn = 50; $defaultMt = 20; $defaultOn = 0; $defaultOski = 0; $defaultTest = 30;
                                     } else {
-                                        $defaultJn = 70; $defaultMt = 30; $defaultOn = 0; $defaultOski = 0; $defaultTest = 0;
+                                        $defaultJn = 80; $defaultMt = 20; $defaultOn = 0; $defaultOski = 0; $defaultTest = 0;
                                     }
                                 @endphp
                                 <div class="flex items-center justify-between">
@@ -4406,8 +4406,8 @@
                 document.getElementById('yn-weight-oski').value = 0;
                 document.getElementById('yn-weight-test').value = 30;
             } else {
-                document.getElementById('yn-weight-jn').value   = 70;
-                document.getElementById('yn-weight-mt').value   = 30;
+                document.getElementById('yn-weight-jn').value   = 80;
+                document.getElementById('yn-weight-mt').value   = 20;
                 document.getElementById('yn-weight-on').value   = 0;
                 document.getElementById('yn-weight-oski').value = 0;
                 document.getElementById('yn-weight-test').value = 0;

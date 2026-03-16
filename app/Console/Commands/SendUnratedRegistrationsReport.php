@@ -118,10 +118,18 @@ class SendUnratedRegistrationsReport extends Command
             ->select('group_id', DB::raw('COUNT(*) as cnt'))
             ->pluck('cnt', 'group_id');
 
-        // Baho (1-usul): subject_schedule_id orqali — baho qo'yilgan talabalar soni
+        // Chetlashgan talabalar ro'yxati (baho sanashdan chiqarish uchun)
+        $excludedStudentHemisIds = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', '60')
+            ->pluck('hemis_id')
+            ->toArray();
+
+        // Baho (1-usul): subject_schedule_id orqali — baho qo'yilgan faol talabalar soni
         $gradeCountByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->when(!empty($excludedStudentHemisIds), fn($q) => $q->whereNotIn('student_hemis_id', $excludedStudentHemisIds))
             ->where(function ($q) {
                 $q->where('grade', '>', 0)
                   ->orWhere('retake_grade', '>', 0)
@@ -132,7 +140,7 @@ class SendUnratedRegistrationsReport extends Command
             ->select('subject_schedule_id', DB::raw('COUNT(DISTINCT student_hemis_id) as graded_count'))
             ->pluck('graded_count', 'subject_schedule_id');
 
-        // Baho (2-usul): guruh + fan + sana orqali — baho qo'yilgan talabalar soni
+        // Baho (2-usul): guruh + fan + sana orqali — baho qo'yilgan faol talabalar soni
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $gradeCountByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
@@ -142,6 +150,7 @@ class SendUnratedRegistrationsReport extends Command
             ->whereNotNull('sg.lesson_date')
             ->whereRaw('DATE(sg.lesson_date) >= ?', [$semesterStartStr])
             ->whereRaw('DATE(sg.lesson_date) <= ?', [$yesterdayStr])
+            ->where('st.student_status_code', '!=', '60')
             ->where(function ($q) {
                 $q->where('sg.grade', '>', 0)
                   ->orWhere('sg.retake_grade', '>', 0)

@@ -67,26 +67,178 @@ class VedomostTekshirishController extends Controller
         ));
     }
 
+    public function search(Request $request)
+    {
+        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
+
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        $currentSemester = $request->input('current_semester', '1') == '1';
+        $excludedCodes   = [11, 99, 100, 101, 102, 103];
+
+        // --- Base query: curriculum_subjects × groups × semesters ---
+        $query = DB::table('curriculum_subjects as cs')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('semesters as s', function ($j) {
+                $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+                  ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+
+        if ($currentSemester) {
+            $query->where('s.current', true);
+        }
+
+        // Education type
+        if ($request->filled('education_type')) {
+            $et = $request->education_type;
+            $query->whereExists(function ($sub) use ($et) {
+                $sub->select(DB::raw(1))->from('curricula as c')
+                    ->whereColumn('c.curricula_hemis_id', 'cs.curricula_hemis_id')
+                    ->where('c.education_type_code', $et);
+            });
+        }
+
+        // Faculty
+        if ($request->filled('faculty_id')) {
+            $dh = Department::find($request->faculty_id)?->department_hemis_id;
+            if ($dh) $query->where('g.department_hemis_id', $dh);
+        }
+
+        // Dekan restriction
+        if (!empty($dekanFacultyIds)) {
+            $dhs = Department::whereIn('id', $dekanFacultyIds)->pluck('department_hemis_id');
+            $query->whereIn('g.department_hemis_id', $dhs);
+        }
+
+        if ($request->filled('specialty_id')) {
+            $query->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($request->filled('level_code')) {
+            $query->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('semester_code')) {
+            $query->where('cs.semester_code', $request->semester_code);
+        }
+        if ($request->filled('department_id')) {
+            $query->where('cs.department_id', $request->department_id);
+        }
+        if ($request->filled('group_ids')) {
+            $query->whereIn('g.id', (array) $request->group_ids);
+        }
+        if ($request->filled('subject_ids')) {
+            $query->whereIn('cs.subject_id', (array) $request->subject_ids);
+        }
+
+        $rows = $query
+            ->select('g.id as group_pk', 'g.group_hemis_id', 'g.name as group_name',
+                     'sp.name as specialty_name', 'cs.subject_id', 'cs.subject_name',
+                     'cs.credit', 'cs.semester_code')
+            ->orderBy('g.name')->orderBy('cs.subject_name')
+            ->distinct()->get();
+
+        if ($rows->isEmpty()) {
+            return response()->json([]);
+        }
+
+        // --- Batch schedule date queries ---
+        $allGroupHemisIds = $rows->pluck('group_hemis_id')->unique()->values()->toArray();
+        $allSubjectIds    = $rows->pluck('subject_id')->unique()->values()->toArray();
+
+        $schedDates = DB::table('schedules')
+            ->whereNull('deleted_at')
+            ->whereIn('group_id', $allGroupHemisIds)
+            ->whereIn('subject_id', $allSubjectIds)
+            ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotNull('lesson_date')
+            ->selectRaw('group_id, subject_id, semester_code, MIN(lesson_date) as min_date, MAX(lesson_date) as max_date')
+            ->groupBy('group_id', 'subject_id', 'semester_code')
+            ->get()
+            ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
+
+        $oskiDates = DB::table('schedules')
+            ->whereNull('deleted_at')
+            ->whereIn('group_id', $allGroupHemisIds)
+            ->whereIn('subject_id', $allSubjectIds)
+            ->where('training_type_code', 101)
+            ->whereNotNull('lesson_date')
+            ->selectRaw('group_id, subject_id, semester_code, MIN(lesson_date) as oski_date')
+            ->groupBy('group_id', 'subject_id', 'semester_code')
+            ->get()
+            ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
+
+        $testDates = DB::table('schedules')
+            ->whereNull('deleted_at')
+            ->whereIn('group_id', $allGroupHemisIds)
+            ->whereIn('subject_id', $allSubjectIds)
+            ->where('training_type_code', 102)
+            ->whereNotNull('lesson_date')
+            ->selectRaw('group_id, subject_id, semester_code, MIN(lesson_date) as test_date')
+            ->groupBy('group_id', 'subject_id', 'semester_code')
+            ->get()
+            ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
+
+        // YN date filter
+        $ynFrom = $request->filled('yn_date_from') ? Carbon::createFromFormat('d.m.Y', $request->yn_date_from)?->format('Y-m-d') : null;
+        $ynTo   = $request->filled('yn_date_to')   ? Carbon::createFromFormat('d.m.Y', $request->yn_date_to)?->format('Y-m-d')   : null;
+
+        $result = [];
+        foreach ($rows as $row) {
+            $key       = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code;
+            $sched     = $schedDates[$key] ?? null;
+            $oskiRow   = $oskiDates[$key] ?? null;
+            $testRow   = $testDates[$key] ?? null;
+
+            $dateStart = $sched?->min_date ? Carbon::parse($sched->min_date)->format('d.m.Y') : null;
+            $dateEnd   = $sched?->max_date ? Carbon::parse($sched->max_date)->format('d.m.Y') : null;
+            $oskiDate  = $oskiRow?->oski_date ? Carbon::parse($oskiRow->oski_date)->format('d.m.Y') : null;
+            $testDate  = $testRow?->test_date ? Carbon::parse($testRow->test_date)->format('d.m.Y') : null;
+
+            // YN date filter
+            if ($ynFrom || $ynTo) {
+                $checkDate = $oskiRow?->oski_date ?? $testRow?->test_date ?? null;
+                if (!$checkDate) continue;
+                if ($ynFrom && $checkDate < $ynFrom) continue;
+                if ($ynTo   && $checkDate > $ynTo)   continue;
+            }
+
+            $result[] = [
+                'group_pk'       => $row->group_pk,
+                'group_hemis_id' => $row->group_hemis_id,
+                'group_name'     => $row->group_name,
+                'specialty_name' => $row->specialty_name ?? '',
+                'subject_id'     => $row->subject_id,
+                'subject_name'   => $row->subject_name,
+                'credit'         => $row->credit,
+                'semester_code'  => $row->semester_code,
+                'date_start'     => $dateStart,
+                'date_end'       => $dateEnd,
+                'oski_date'      => $oskiDate,
+                'test_date'      => $testDate,
+            ];
+        }
+
+        return response()->json($result);
+    }
+
     public function export(Request $request)
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
         $request->validate([
-            'group_ids'     => 'required|array|min:1',
-            'group_ids.*'   => 'required',
-            'subject_ids'   => 'required|array|min:1',
-            'subject_ids.*' => 'required|string',
-            'semester_code' => 'required|string',
-            'weight_jn'     => 'nullable|integer|min:0|max:100',
-            'weight_mt'     => 'nullable|integer|min:0|max:100',
-            'weight_on'     => 'nullable|integer|min:0|max:100',
-            'weight_oski'   => 'nullable|integer|min:0|max:100',
-            'weight_test'   => 'nullable|integer|min:0|max:100',
+            'rows'                 => 'required|array|min:1',
+            'rows.*.group_id'      => 'required',
+            'rows.*.subject_id'    => 'required|string',
+            'rows.*.semester_code' => 'required|string',
+            'weight_jn'    => 'nullable|integer|min:0|max:100',
+            'weight_mt'    => 'nullable|integer|min:0|max:100',
+            'weight_on'    => 'nullable|integer|min:0|max:100',
+            'weight_oski'  => 'nullable|integer|min:0|max:100',
+            'weight_test'  => 'nullable|integer|min:0|max:100',
         ]);
 
-        $groupIds     = $request->input('group_ids');
-        $subjectIds   = $request->input('subject_ids');
-        $semesterCode = $request->input('semester_code');
+        $exportRows   = $request->input('rows');
         $wJn   = (int) ($request->weight_jn   ?? 50);
         $wMt   = (int) ($request->weight_mt   ?? 20);
         $wOn   = (int) ($request->weight_on   ?? 0);
@@ -212,10 +364,14 @@ class VedomostTekshirishController extends Controller
         $roundHalfUp = fn($v) => (int) floor((float) $v + 0.5);
 
         // --- Ma'lumot yig'ish ---
-        $dataRow = 2;
+        $dataRow  = 2;
+        $rowIndex = 1;
 
-        foreach ($subjectIds as $subjectId) {
-        foreach ($groupIds as $groupId) {
+        foreach ($exportRows as $rowData) {
+            $groupId      = $rowData['group_id'];
+            $subjectId    = $rowData['subject_id'];
+            $semesterCode = $rowData['semester_code'];
+
             $group = is_numeric($groupId)
                 ? Group::find($groupId)
                 : Group::where('group_hemis_id', $groupId)->first();
@@ -467,7 +623,6 @@ class VedomostTekshirishController extends Controller
             $divisor = max(1, $validDates);
 
             // --- Qatorlarni yozish ---
-            $rowIndex = 1;
             foreach ($students as $stu) {
                 $hId = $stu->hemis_id;
 
@@ -553,8 +708,7 @@ class VedomostTekshirishController extends Controller
                 $dataRow++;
                 $rowIndex++;
             }
-        } // end group loop
-        } // end subject loop
+        } // end rows loop
 
         // Freeze pane
         $sheet->freezePane('D2');

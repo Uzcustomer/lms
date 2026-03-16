@@ -71,6 +71,7 @@ class VedomostTekshirishController extends Controller
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
+        try {
         $dekanFacultyIds = get_dekan_faculty_ids();
         $currentSemester = $request->input('current_semester', '1') == '1';
         $excludedCodes   = [11, 99, 100, 101, 102, 103];
@@ -180,8 +181,14 @@ class VedomostTekshirishController extends Controller
             ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
 
         // YN date filter
-        $ynFrom = $request->filled('yn_date_from') ? Carbon::createFromFormat('d.m.Y', $request->yn_date_from)?->format('Y-m-d') : null;
-        $ynTo   = $request->filled('yn_date_to')   ? Carbon::createFromFormat('d.m.Y', $request->yn_date_to)?->format('Y-m-d')   : null;
+        $ynFrom = null;
+        $ynTo   = null;
+        if ($request->filled('yn_date_from')) {
+            try { $ynFrom = Carbon::createFromFormat('d.m.Y', $request->yn_date_from)->format('Y-m-d'); } catch (\Throwable $e) {}
+        }
+        if ($request->filled('yn_date_to')) {
+            try { $ynTo = Carbon::createFromFormat('d.m.Y', $request->yn_date_to)->format('Y-m-d'); } catch (\Throwable $e) {}
+        }
 
         $result = [];
         foreach ($rows as $row) {
@@ -220,6 +227,11 @@ class VedomostTekshirishController extends Controller
         }
 
         return response()->json($result);
+
+        } catch (\Throwable $e) {
+            \Log::error('VedomostTekshirish search error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     public function export(Request $request)

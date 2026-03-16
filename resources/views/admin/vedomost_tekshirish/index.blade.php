@@ -471,8 +471,8 @@
                 html+='<td class="td-num">'+(i+1)+'</td>';
                 html+='<td><span class="text-cell" style="color:#0f172a;font-size:12px;">'+esc(r.faculty_name||'—')+'</span></td>';
                 html+='<td><span class="text-cell text-cyan">'+esc(r.specialty_name||'—')+'</span></td>';
-                html+='<td style="text-align:center;font-weight:600;color:#6d28d9;">'+(r.level_code?r.level_code+'-kurs':'—')+'</td>';
-                html+='<td style="text-align:center;font-weight:600;color:#0369a1;">'+(r.semester_code?r.semester_code+'-sem':'—')+'</td>';
+                html+='<td style="text-align:center;font-weight:600;color:#6d28d9;">'+esc(r.level_name||'—')+'</td>';
+                html+='<td style="text-align:center;font-weight:600;color:#0369a1;">'+esc(r.semester_name||'—')+'</td>';
                 html+='<td><span class="badge badge-indigo">'+esc(r.group_name)+'</span></td>';
                 html+='<td><span class="text-cell text-subject">'+esc(r.subject_name)+'</span></td>';
                 html+='<td style="text-align:center;font-weight:700;color:#475569;">'+esc(r.credit||'')+'</td>';

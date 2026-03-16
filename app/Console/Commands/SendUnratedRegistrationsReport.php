@@ -101,27 +101,48 @@ class SendUnratedRegistrationsReport extends Command
 
         $this->info("Jami darslar: {$schedules->count()}");
 
-        // 4-QADAM: Baho qo'yilganligini tekshirish
+        // 4-QADAM: Baho qo'yilganligini tekshirish (har bir talaba uchun)
         $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
 
-        // Baho (1-usul): subject_schedule_id orqali
-        $gradeByScheduleId = DB::table('student_grades')
+        // Guruhdagi faol talabalar soni (chetlashganlar — status_code=60 — hisobga olinmaydi)
+        $groupStudentCounts = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->where('student_status_code', '!=', '60')
+                  ->orWhereNull('student_status_code');
+            })
+            ->groupBy('group_id')
+            ->select('group_id', DB::raw('COUNT(*) as cnt'))
+            ->pluck('cnt', 'group_id');
+
+        // Chetlashgan talabalar ro'yxati (baho sanashdan chiqarish uchun)
+        $excludedStudentHemisIds = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', '60')
+            ->pluck('hemis_id')
+            ->toArray();
+
+        // Baho (1-usul): subject_schedule_id orqali — baho qo'yilgan faol talabalar soni
+        $gradeCountByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->when(!empty($excludedStudentHemisIds), fn($q) => $q->whereNotIn('student_hemis_id', $excludedStudentHemisIds))
             ->where(function ($q) {
                 $q->where('grade', '>', 0)
                   ->orWhere('retake_grade', '>', 0)
-                  ->orWhere('status', 'recorded');
+                  ->orWhere('status', 'recorded')
+                  ->orWhere('reason', 'absent');
             })
-            ->pluck('subject_schedule_id')
-            ->unique()
-            ->flip();
+            ->groupBy('subject_schedule_id')
+            ->select('subject_schedule_id', DB::raw('COUNT(DISTINCT student_hemis_id) as graded_count'))
+            ->pluck('graded_count', 'subject_schedule_id');
 
-        // Baho (2-usul): guruh + fan + sana orqali (web controller bilan bir xil)
+        // Baho (2-usul): guruh + fan + sana orqali — baho qo'yilgan faol talabalar soni
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
-        $gradeByKey = DB::table('student_grades as sg')
+        $gradeCountByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
@@ -129,14 +150,19 @@ class SendUnratedRegistrationsReport extends Command
             ->whereNotNull('sg.lesson_date')
             ->whereRaw('DATE(sg.lesson_date) >= ?', [$semesterStartStr])
             ->whereRaw('DATE(sg.lesson_date) <= ?', [$yesterdayStr])
+            ->where('st.student_status_code', '!=', '60')
             ->where(function ($q) {
                 $q->where('sg.grade', '>', 0)
                   ->orWhere('sg.retake_grade', '>', 0)
-                  ->orWhere('sg.status', 'recorded');
+                  ->orWhere('sg.status', 'recorded')
+                  ->orWhere('sg.reason', 'absent');
             })
-            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date)) as gk"))
-            ->pluck('gk')
-            ->flip();
+            ->groupBy('st.group_id', 'sg.subject_id', DB::raw('DATE(sg.lesson_date)'))
+            ->select(
+                DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date)) as gk"),
+                DB::raw('COUNT(DISTINCT sg.student_hemis_id) as graded_count')
+            )
+            ->pluck('graded_count', 'gk');
 
         // 5-QADAM: Baho qo'yilmagan darslarni filtrlash va menejerga biriktirish
         $unratedByManager = []; // teacher_id => [darslar ro'yxati]
@@ -151,13 +177,21 @@ class SendUnratedRegistrationsReport extends Command
                 continue;
             }
 
-            // Baho qo'yilganligini tekshirish (guruh + fan + sana)
+            // Guruhdagi faol talabalar soni
+            $groupTotal = $groupStudentCounts[$sch->group_id] ?? 0;
+            if ($groupTotal === 0) {
+                continue; // Guruhda faol talaba yo'q
+            }
+
+            // Baho qo'yilgan talabalar soni (ikkala usuldan kattasini olish)
             $gradeKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str;
+            $gradedBySchedule = $gradeCountByScheduleId[$sch->schedule_hemis_id] ?? 0;
+            $gradedByKey = $gradeCountByKey[$gradeKey] ?? 0;
+            $gradedCount = max($gradedBySchedule, $gradedByKey);
 
-            $hasGrade = isset($gradeByScheduleId[$sch->schedule_hemis_id]) || isset($gradeByKey[$gradeKey]);
-
-            if ($hasGrade) {
-                continue; // Baho qo'yilgan — o'tkazib yuborish
+            // Barcha talabaga baho/NB qo'yilgan bo'lsa — o'tkazib yuborish
+            if ($gradedCount >= $groupTotal) {
+                continue;
             }
 
             // Mas'ul back ofis menejerni topish

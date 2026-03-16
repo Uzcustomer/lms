@@ -336,6 +336,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{studentContract}/regenerate', [AdminStudentContractController::class, 'regenerate'])->name('regenerate');
         });
 
+        // Ish e'lonlari (Admin/Registrator)
+        Route::get('/job-listings', function () {
+            return view('admin.job-listings');
+        })->name('job-listings.index');
+
         // Xabarnomalar (Notifications)
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');

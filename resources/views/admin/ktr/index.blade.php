@@ -102,6 +102,7 @@
                                     <option value="">Barchasi</option>
                                     <option value="created" {{ request('ktr_status') == 'created' ? 'selected' : '' }}>Yaratildi</option>
                                     <option value="not_created" {{ request('ktr_status') == 'not_created' ? 'selected' : '' }}>Yaratilmadi</option>
+                                    <option value="pending" {{ request('ktr_status') == 'pending' ? 'selected' : '' }}>Tasdiqlanmoqda</option>
                                 </select>
                             </div>
 
@@ -261,10 +262,14 @@
                                             @endif
                                         </td>
                                         <td style="text-align: center;">
-                                            @if($item->has_ktr ?? false)
-                                                <span class="badge" style="background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratildi</span>
+                                            @if(intval($item->has_ktr ?? 0))
+                                                @if(($item->pending_change_status ?? null) === 'pending')
+                                                    <span class="badge" style="background:#fef3c7;color:#92400e;font-size:11px;padding:2px 8px;border-radius:6px;" title="KTR #{{ $item->ktr_plan_id }} — o'zgartirish kutilmoqda (cs.id={{ $item->id }})">Tasdiqlanmoqda</span>
+                                                @else
+                                                    <span class="badge" style="background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:6px;" title="KTR #{{ $item->ktr_plan_id }} (cs.id={{ $item->id }})">Yaratildi</span>
+                                                @endif
                                             @else
-                                                <span class="badge" style="background:#fef2f2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratilmadi</span>
+                                                <span class="badge" style="background:#fef2f2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:6px;" title="cs.id={{ $item->id }}">Yaratilmadi</span>
                                             @endif
                                         </td>
                                     </tr>

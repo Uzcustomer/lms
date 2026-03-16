@@ -103,6 +103,7 @@ class KtrController extends Controller
         ];
         $hasGuardColumn = $hasKtrTable && Schema::hasColumn('ktr_plans', 'created_by_guard');
         if ($hasKtrTable) {
+            $selectColumns[] = DB::raw('kp.id as ktr_plan_id');
             $selectColumns[] = DB::raw('(CASE WHEN kp.id IS NOT NULL THEN 1 ELSE 0 END) as has_ktr');
             $selectColumns[] = 'kp.created_at as ktr_created_at';
             $selectColumns[] = 'kp.created_by as ktr_created_by';
@@ -110,10 +111,17 @@ class KtrController extends Controller
                 ? 'kp.created_by_guard as ktr_created_by_guard'
                 : DB::raw("'teacher' as ktr_created_by_guard");
         } else {
+            $selectColumns[] = DB::raw('NULL as ktr_plan_id');
             $selectColumns[] = DB::raw('0 as has_ktr');
             $selectColumns[] = DB::raw('NULL as ktr_created_at');
             $selectColumns[] = DB::raw('NULL as ktr_created_by');
             $selectColumns[] = DB::raw("'teacher' as ktr_created_by_guard");
+        }
+        $hasChangeRequests = Schema::hasTable('ktr_change_requests');
+        if ($hasChangeRequests) {
+            $selectColumns[] = DB::raw('(SELECT kcr.status FROM ktr_change_requests kcr WHERE kcr.curriculum_subject_id = cs.id AND kcr.status = \'pending\' ORDER BY kcr.id DESC LIMIT 1) as pending_change_status');
+        } else {
+            $selectColumns[] = DB::raw('NULL as pending_change_status');
         }
         $query = $baseQuery()->select($selectColumns);
 
@@ -173,12 +181,20 @@ class KtrController extends Controller
             });
         }
 
-        // KTR holati filtri (yaratildi/yaratilmadi)
+        // KTR holati filtri (yaratildi/yaratilmadi/tasdiqlanmoqda)
         $ktrStatus = $request->get('ktr_status', '');
-        if ($ktrStatus === 'created' && Schema::hasTable('ktr_plans')) {
+        if ($ktrStatus === 'created' && $hasKtrTable) {
             $query->whereNotNull('kp.id');
-        } elseif ($ktrStatus === 'not_created' && Schema::hasTable('ktr_plans')) {
+        } elseif ($ktrStatus === 'not_created' && $hasKtrTable) {
             $query->whereNull('kp.id');
+        } elseif ($ktrStatus === 'pending' && $hasKtrTable && $hasChangeRequests) {
+            $query->whereNotNull('kp.id')
+                ->whereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('ktr_change_requests')
+                        ->whereColumn('ktr_change_requests.curriculum_subject_id', 'cs.id')
+                        ->where('ktr_change_requests.status', 'pending');
+                });
         }
 
         // Sorting

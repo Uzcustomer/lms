@@ -34,7 +34,7 @@ enum ProjectRole: string
             self::ACCOUNTANT => 'Buxgalteriya',
             self::SPIRITUAL_AFFAIRS => "Ma'naviyat",
             self::TUTOR => 'Tyutor',
-            self::DEAN => 'Dekan',
+            self::DEAN => 'Dekanat',
             self::DEPARTMENT_HEAD => 'Kafedra mudiri',
             self::SUBJECT_RESPONSIBLE => "Fan mas'uli",
             self::TEACHER => "O'qituvchi",

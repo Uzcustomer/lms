@@ -194,6 +194,7 @@ class TeacherController extends Controller
         $request->validate([
             'roles' => 'nullable|array',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
+            'lavozim' => 'nullable|string|max:255',
             'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
             'dean_faculties.*' => 'exists:departments,department_hemis_id',
             'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
@@ -202,6 +203,9 @@ class TeacherController extends Controller
             'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
             'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
         ]);
+
+        $teacher->lavozim = $request->input('lavozim') ?: null;
+        $teacher->save();
 
         try {
             foreach ($roles as $roleName) {

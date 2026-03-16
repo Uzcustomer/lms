@@ -5973,6 +5973,28 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
         $sheet->setCellValue('D13', $subject->total_acload ?? 0);
         $sheet->setCellValue('G13', $subject->credit ?? 0);
 
+        // Dekan (E60) — fakultetga biriktirilgan, lavozimi 'Dekan' bo'lgan xodim
+        $dekanForExcel = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $faculty?->department_hemis_id ?? ''))
+            ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
+            ->where('is_active', true)
+            ->orderByRaw("CASE WHEN lavozim = 'Dekan' THEN 0 ELSE 1 END")
+            ->first();
+        $dekanExcelName = '';
+        if ($dekanForExcel) {
+            $nameParts = preg_split('/\s+/', trim($dekanForExcel->full_name));
+            if (count($nameParts) >= 3) {
+                $surname = mb_strtoupper(mb_substr($nameParts[0], 0, 1)) . mb_strtolower(mb_substr($nameParts[0], 1));
+                $initials = '';
+                for ($i = 1; $i < count($nameParts); $i++) {
+                    $initials .= mb_strtoupper(mb_substr($nameParts[$i], 0, 1)) . '.';
+                }
+                $dekanExcelName = $initials . $surname;
+            } else {
+                $dekanExcelName = $dekanForExcel->full_name;
+            }
+        }
+        $sheet->setCellValue('E60', $dekanExcelName);
+
         // Kafedra mudiri
         $kafedra = Department::where('department_hemis_id', $subject->department_id)->first();
         $kafedraMudiriName = '';

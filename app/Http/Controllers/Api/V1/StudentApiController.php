@@ -1071,7 +1071,7 @@ class StudentApiController extends Controller
         $student = $request->user();
         $student->telegram_username = $request->telegram_username;
 
-        $code = strtoupper(\Illuminate\Support\Str::random(6));
+        $code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
         $student->telegram_verification_code = $code;
         $student->telegram_verified_at = null;
         $student->telegram_chat_id = null;

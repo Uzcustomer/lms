@@ -357,7 +357,7 @@ class StudentAuthController extends Controller
         $student = Auth::guard('student')->user();
         $student->telegram_username = $request->telegram_username;
 
-        $code = strtoupper(Str::random(6));
+        $code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
         $student->telegram_verification_code = $code;
         $student->telegram_verified_at = null;
         $student->telegram_chat_id = null;

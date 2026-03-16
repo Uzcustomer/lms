@@ -84,8 +84,10 @@ class VedomostTekshirishController extends Controller
                   ->on('s.code', '=', 'cs.semester_code');
             })
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
+            ->leftJoin('departments as dep', 'dep.department_hemis_id', '=', 'g.department_hemis_id')
             ->where('g.department_active', true)
-            ->where('g.active', true);
+            ->where('g.active', true)
+            ->where('cs.active', true);
 
         if ($currentSemester) {
             $query->where('s.current', true);
@@ -135,7 +137,8 @@ class VedomostTekshirishController extends Controller
         $rows = $query
             ->select('g.id as group_pk', 'g.group_hemis_id', 'g.name as group_name',
                      'sp.name as specialty_name', 'cs.subject_id', 'cs.subject_name',
-                     'cs.credit', 'cs.semester_code')
+                     'cs.credit', 'cs.semester_code', 's.level_code',
+                     'dep.name as faculty_name')
             ->orderBy('g.name')->orderBy('cs.subject_name')
             ->distinct()->get();
 
@@ -184,10 +187,14 @@ class VedomostTekshirishController extends Controller
         $ynFrom = null;
         $ynTo   = null;
         if ($request->filled('yn_date_from')) {
-            try { $ynFrom = Carbon::createFromFormat('d.m.Y', $request->yn_date_from)->format('Y-m-d'); } catch (\Throwable $e) {}
+            try { $ynFrom = Carbon::createFromFormat('Y-m-d', trim($request->yn_date_from))->format('Y-m-d'); } catch (\Throwable $e) {
+                try { $ynFrom = Carbon::createFromFormat('d.m.Y', trim($request->yn_date_from))->format('Y-m-d'); } catch (\Throwable $e2) {}
+            }
         }
         if ($request->filled('yn_date_to')) {
-            try { $ynTo = Carbon::createFromFormat('d.m.Y', $request->yn_date_to)->format('Y-m-d'); } catch (\Throwable $e) {}
+            try { $ynTo = Carbon::createFromFormat('Y-m-d', trim($request->yn_date_to))->format('Y-m-d'); } catch (\Throwable $e) {
+                try { $ynTo = Carbon::createFromFormat('d.m.Y', trim($request->yn_date_to))->format('Y-m-d'); } catch (\Throwable $e2) {}
+            }
         }
 
         $result = [];
@@ -214,7 +221,9 @@ class VedomostTekshirishController extends Controller
                 'group_pk'       => $row->group_pk,
                 'group_hemis_id' => $row->group_hemis_id,
                 'group_name'     => $row->group_name,
+                'faculty_name'   => $row->faculty_name ?? '',
                 'specialty_name' => $row->specialty_name ?? '',
+                'level_code'     => $row->level_code ?? '',
                 'subject_id'     => $row->subject_id,
                 'subject_name'   => $row->subject_name,
                 'credit'         => $row->credit,

@@ -49,6 +49,10 @@ class VedomostTekshirishController extends Controller
             ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
+        $defaultEducationType = $educationTypes
+            ->first(fn($t) => str_contains(mb_strtolower($t->education_type_name ?? ''), 'bakalavr'))
+            ?->education_type_code ?? '';
+
         $kafedras = DB::table('curriculum_subjects as cs')
             ->join('semesters as s', function ($j) {
                 $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
@@ -63,7 +67,7 @@ class VedomostTekshirishController extends Controller
             ->get();
 
         return view('admin.vedomost_tekshirish.index', compact(
-            'faculties', 'educationTypes', 'kafedras', 'dekanFacultyIds'
+            'faculties', 'educationTypes', 'kafedras', 'dekanFacultyIds', 'defaultEducationType'
         ));
     }
 

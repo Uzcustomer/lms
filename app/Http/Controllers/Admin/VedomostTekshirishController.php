@@ -160,27 +160,13 @@ class VedomostTekshirishController extends Controller
             ->get()
             ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
 
-        $oskiDates = DB::table('schedules')
-            ->whereNull('deleted_at')
-            ->whereIn('group_id', $allGroupHemisIds)
+        // OSKI/Test sanalar exam_schedules jadvalida saqlanadi
+        $examSchedules = DB::table('exam_schedules')
+            ->whereIn('group_hemis_id', $allGroupHemisIds)
             ->whereIn('subject_id', $allSubjectIds)
-            ->where('training_type_code', 101)
-            ->whereNotNull('lesson_date')
-            ->selectRaw('group_id, subject_id, semester_code, MIN(lesson_date) as oski_date')
-            ->groupBy('group_id', 'subject_id', 'semester_code')
+            ->select('group_hemis_id', 'subject_id', 'semester_code', 'oski_date', 'test_date')
             ->get()
-            ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
-
-        $testDates = DB::table('schedules')
-            ->whereNull('deleted_at')
-            ->whereIn('group_id', $allGroupHemisIds)
-            ->whereIn('subject_id', $allSubjectIds)
-            ->where('training_type_code', 102)
-            ->whereNotNull('lesson_date')
-            ->selectRaw('group_id, subject_id, semester_code, MIN(lesson_date) as test_date')
-            ->groupBy('group_id', 'subject_id', 'semester_code')
-            ->get()
-            ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
+            ->keyBy(fn($r) => $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code);
 
         // YN date filter
         $ynFrom = null;
@@ -198,22 +184,23 @@ class VedomostTekshirishController extends Controller
 
         $result = [];
         foreach ($rows as $row) {
-            $key       = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code;
-            $sched     = $schedDates[$key] ?? null;
-            $oskiRow   = $oskiDates[$key] ?? null;
-            $testRow   = $testDates[$key] ?? null;
+            $key      = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code;
+            $sched    = $schedDates[$key] ?? null;
+            $examRow  = $examSchedules[$key] ?? null;
 
             $dateStart = $sched?->min_date ? Carbon::parse($sched->min_date)->format('d.m.Y') : null;
             $dateEnd   = $sched?->max_date ? Carbon::parse($sched->max_date)->format('d.m.Y') : null;
-            $oskiDate  = $oskiRow?->oski_date ? Carbon::parse($oskiRow->oski_date)->format('d.m.Y') : null;
-            $testDate  = $testRow?->test_date ? Carbon::parse($testRow->test_date)->format('d.m.Y') : null;
+            $oskiDate  = $examRow?->oski_date ? Carbon::parse($examRow->oski_date)->format('d.m.Y') : null;
+            $testDate  = $examRow?->test_date ? Carbon::parse($examRow->test_date)->format('d.m.Y') : null;
 
-            // YN date filter
+            // YN date filter — exam_schedules jadvalidagi oski_date/test_date bo'yicha
             if ($ynFrom || $ynTo) {
-                $checkDate = $oskiRow?->oski_date ?? $testRow?->test_date ?? null;
-                if (!$checkDate) continue;
-                if ($ynFrom && $checkDate < $ynFrom) continue;
-                if ($ynTo   && $checkDate > $ynTo)   continue;
+                $oskiRaw = $examRow?->oski_date;
+                $testRaw = $examRow?->test_date;
+                // OSKI yoki Test sanalaridan kamida biri oraliqqa to'g'ri kelsa ko'rsatiladi
+                $oskiMatch = $oskiRaw && (!$ynFrom || $oskiRaw >= $ynFrom) && (!$ynTo || $oskiRaw <= $ynTo);
+                $testMatch = $testRaw && (!$ynFrom || $testRaw >= $ynFrom) && (!$ynTo || $testRaw <= $ynTo);
+                if (!$oskiMatch && !$testMatch) continue;
             }
 
             $result[] = [

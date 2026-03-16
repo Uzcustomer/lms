@@ -313,8 +313,8 @@
                 yn_date_to:      $('#yn_date_to').val()||'',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active')?'1':'0',
             };
-            var gv=$('#groups').val(); if(gv&&gv.length) params['group_ids[]']=gv;
-            var sv=$('#subjects').val(); if(sv&&sv.length) params['subject_ids[]']=sv;
+            var gv=$('#groups').val(); if(gv&&gv.length) params.group_ids=gv;
+            var sv=$('#subjects').val(); if(sv&&sv.length) params.subject_ids=sv;
 
             $('#empty-state').hide(); $('#no-results').hide(); $('#results-area').hide();
             $('#search-loading').css('display','flex');

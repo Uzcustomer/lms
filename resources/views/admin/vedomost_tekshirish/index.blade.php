@@ -253,6 +253,12 @@
             // close all
             ['groups','subjects'].forEach(function(x){ document.getElementById(x+'-panel').style.display='none'; });
             if (!isOpen) {
+                // Position using fixed coords to escape overflow:hidden
+                var btn = document.getElementById(id+'-btn');
+                var rect = btn.getBoundingClientRect();
+                panel.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+                panel.style.left = rect.left + 'px';
+                panel.style.width = Math.max(rect.width, 260) + 'px';
                 panel.style.display = 'block';
                 var srch = document.getElementById(id+'-search');
                 if (srch) { srch.value=''; filterCb(id); srch.focus(); }
@@ -330,7 +336,9 @@
             ['groups','subjects'].forEach(function(id){
                 var wrap = document.getElementById(id+'-wrap');
                 var panel = document.getElementById(id+'-panel');
-                if (wrap && panel && !wrap.contains(e.target)) panel.style.display='none';
+                if (wrap && panel && !wrap.contains(e.target) && !panel.contains(e.target)) {
+                    panel.style.display='none';
+                }
             });
         });
 
@@ -590,7 +598,7 @@
         .cb-btn { width:100%; height:36px; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:0 10px; background:#fff; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.04); transition:border-color .15s; }
         .cb-btn:hover { border-color:#2b5ea7; }
         .cb-label-text { flex:1; font-size:.8rem; font-weight:500; color:#94a3b8; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .cb-panel { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.14); z-index:9000; padding:8px; min-width:220px; max-width:400px; }
+        .cb-panel { position:fixed; background:#fff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.14); z-index:99999; padding:8px; min-width:220px; }
         .cb-search { width:100%; height:32px; border:1px solid #cbd5e1; border-radius:7px; padding:0 10px; font-size:.8rem; outline:none; margin-bottom:6px; box-sizing:border-box; }
         .cb-search:focus { border-color:#2b5ea7; }
         .cb-all-label { display:flex; align-items:center; gap:8px; padding:5px 4px; font-size:.8rem; font-weight:700; color:#334155; cursor:pointer; border-bottom:1px solid #f1f5f9; margin-bottom:4px; }

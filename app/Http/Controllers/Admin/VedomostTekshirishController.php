@@ -33,7 +33,38 @@ class VedomostTekshirishController extends Controller
     public function index()
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
-        return view('admin.vedomost_tekshirish.index');
+
+        $dekanFacultyIds = get_dekan_faculty_ids();
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
+        }
+        $faculties = $facultyQuery->get();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $kafedras = DB::table('curriculum_subjects as cs')
+            ->join('semesters as s', function ($j) {
+                $j->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+                  ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->where('s.current', true)
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name')
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
+        return view('admin.vedomost_tekshirish.index', compact(
+            'faculties', 'educationTypes', 'kafedras', 'dekanFacultyIds'
+        ));
     }
 
     public function export(Request $request)
@@ -41,20 +72,21 @@ class VedomostTekshirishController extends Controller
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
         $request->validate([
-            'group_ids'    => 'required|array|min:1',
-            'group_ids.*'  => 'required',
-            'subject_id'   => 'required|string',
+            'group_ids'     => 'required|array|min:1',
+            'group_ids.*'   => 'required',
+            'subject_ids'   => 'required|array|min:1',
+            'subject_ids.*' => 'required|string',
             'semester_code' => 'required|string',
-            'weight_jn'    => 'nullable|integer|min:0|max:100',
-            'weight_mt'    => 'nullable|integer|min:0|max:100',
-            'weight_on'    => 'nullable|integer|min:0|max:100',
-            'weight_oski'  => 'nullable|integer|min:0|max:100',
-            'weight_test'  => 'nullable|integer|min:0|max:100',
+            'weight_jn'     => 'nullable|integer|min:0|max:100',
+            'weight_mt'     => 'nullable|integer|min:0|max:100',
+            'weight_on'     => 'nullable|integer|min:0|max:100',
+            'weight_oski'   => 'nullable|integer|min:0|max:100',
+            'weight_test'   => 'nullable|integer|min:0|max:100',
         ]);
 
-        $groupIds = $request->input('group_ids');
-        $subjectId     = $request->input('subject_id');
-        $semesterCode  = $request->input('semester_code');
+        $groupIds     = $request->input('group_ids');
+        $subjectIds   = $request->input('subject_ids');
+        $semesterCode = $request->input('semester_code');
         $wJn   = (int) ($request->weight_jn   ?? 50);
         $wMt   = (int) ($request->weight_mt   ?? 20);
         $wOn   = (int) ($request->weight_on   ?? 0);
@@ -182,6 +214,7 @@ class VedomostTekshirishController extends Controller
         // --- Ma'lumot yig'ish ---
         $dataRow = 2;
 
+        foreach ($subjectIds as $subjectId) {
         foreach ($groupIds as $groupId) {
             $group = is_numeric($groupId)
                 ? Group::find($groupId)
@@ -520,7 +553,8 @@ class VedomostTekshirishController extends Controller
                 $dataRow++;
                 $rowIndex++;
             }
-        }
+        } // end group loop
+        } // end subject loop
 
         // Freeze pane
         $sheet->freezePane('D2');

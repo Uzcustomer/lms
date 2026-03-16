@@ -5,147 +5,132 @@
         </h2>
     </x-slot>
 
-    @if(session('error'))
-        <div class="relative px-4 py-3 mb-4 text-red-700 bg-red-100 border border-red-400 rounded" role="alert">
-            <strong class="font-bold">Xato!</strong>
-            <span class="block sm:inline">{{ session('error') }}</span>
-        </div>
+    @if(isset($dekanFacultyIds) && count($dekanFacultyIds) === 1)
+        <input type="hidden" id="dekan_faculty_id" value="{{ $dekanFacultyIds[0] }}">
     @endif
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow: visible;">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
 
-                <form id="export-form" method="POST" action="{{ route('admin.vedomost-tekshirish.export') }}">
+                <form id="export-form" method="POST" action="{{ route('admin.vedomost-tekshirish.export') }}" target="_blank">
                     @csrf
                     <input type="hidden" name="semester_code" id="hidden_semester_code">
-                    <input type="hidden" name="subject_id" id="hidden_subject_id">
 
                     <div class="filter-container">
-
-                        <!-- Row 1 -->
+                        <!-- Row 1: Ta'lim turi, Fakultet, Yo'nalish -->
                         <div class="filter-row">
-                            <div class="filter-item" style="flex: 1; min-width: 200px;">
-                                <label class="filter-label fl-emerald">
-                                    <span class="fl-dot" style="background:#10b981;"></span> Fakultet
-                                </label>
-                                <select id="faculty" class="select2" style="width: 100%;">
+                            <div class="filter-item" style="min-width: 160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
+                                <select id="education_type" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
+                                    @foreach($educationTypes as $type)
+                                        <option value="{{ $type->education_type_code }}">{{ $type->education_type_name }}</option>
+                                    @endforeach
                                 </select>
                             </div>
 
-                            <div class="filter-item" style="flex: 1; min-width: 240px;">
-                                <label class="filter-label fl-cyan">
-                                    <span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish
-                                </label>
+                            <div class="filter-item" style="flex: 1; min-width: 200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
+                                <select id="faculty" class="select2" style="width: 100%;">
+                                    @if(!isset($dekanFacultyIds) || empty($dekanFacultyIds))
+                                        <option value="">Barchasi</option>
+                                    @endif
+                                    @foreach($faculties as $faculty)
+                                        <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="filter-item" style="flex: 1.5; min-width: 240px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                                 <select id="specialty" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                 </select>
                             </div>
+                        </div>
 
-                            <div class="filter-item" style="min-width: 140px;">
-                                <label class="filter-label fl-violet">
-                                    <span class="fl-dot" style="background:#8b5cf6;"></span> Kurs
-                                </label>
+                        <!-- Row 2: Kurs, Semestr, Guruh(multi), Kafedra, Fan(multi), Og'irlik, Excel -->
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width: 130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
                                 <select id="level_code" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                 </select>
                             </div>
 
-                            <div class="filter-item" style="min-width: 150px;">
-                                <label class="filter-label fl-teal">
-                                    <span class="fl-dot" style="background:#14b8a6;"></span> Semestr
-                                </label>
+                            <div class="filter-item" style="min-width: 140px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
                                 <select id="semester_code" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                 </select>
                             </div>
 
-                            <div class="filter-item" style="flex: 1.5; min-width: 280px;">
-                                <label class="filter-label fl-subject">
+                            <div class="filter-item" style="min-width: 200px; flex: 1;">
+                                <label class="filter-label">
+                                    <span class="fl-dot" style="background:#1a3268;"></span> Guruh
+                                    <span id="groups-count" style="font-weight:400;font-size:10px;margin-left:3px;color:#64748b;"></span>
+                                </label>
+                                <select id="groups" name="group_ids[]" class="select2-multi" multiple style="width: 100%;">
+                                </select>
+                            </div>
+
+                            <div class="filter-item" style="flex: 1; min-width: 200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
+                                <select id="department" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($kafedras as $kafedra)
+                                        <option value="{{ $kafedra->department_id }}">{{ $kafedra->department_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="filter-item" style="flex: 1.5; min-width: 240px;">
+                                <label class="filter-label">
                                     <span class="fl-dot" style="background:#0f172a;"></span> Fan
+                                    <span id="subjects-count" style="font-weight:400;font-size:10px;margin-left:3px;color:#64748b;"></span>
                                 </label>
-                                <select id="subject" class="select2" style="width: 100%;">
-                                    <option value="">Tanlang</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Row 2 -->
-                        <div class="filter-row">
-                            <div class="filter-item" style="flex: 2; min-width: 320px;">
-                                <label class="filter-label fl-indigo">
-                                    <span class="fl-dot" style="background:#1a3268;"></span> Guruhlar
-                                    <span id="groups-count" style="font-weight:400; margin-left: 4px;"></span>
-                                </label>
-                                <select id="groups" name="group_ids[]" class="select2-multiple" multiple style="width: 100%;">
+                                <select id="subjects" name="subject_ids[]" class="select2-multi" multiple style="width: 100%;">
                                 </select>
                             </div>
 
-                            <div class="filter-item" style="min-width: 300px;">
-                                <label class="filter-label" style="color:#475569;">
-                                    Og'irlik koeffitsientlari (JN+MT+ON+OSKI+Test = 100%)
-                                </label>
-                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                                    <div class="weight-item">
-                                        <span class="weight-label">JN</span>
-                                        <input type="number" name="weight_jn" id="weight_jn" value="50" min="0" max="100" class="weight-input">
-                                        <span class="weight-pct">%</span>
-                                    </div>
-                                    <div class="weight-item">
-                                        <span class="weight-label">MT</span>
-                                        <input type="number" name="weight_mt" id="weight_mt" value="20" min="0" max="100" class="weight-input">
-                                        <span class="weight-pct">%</span>
-                                    </div>
-                                    <div class="weight-item">
-                                        <span class="weight-label">ON</span>
-                                        <input type="number" name="weight_on" id="weight_on" value="0" min="0" max="100" class="weight-input">
-                                        <span class="weight-pct">%</span>
-                                    </div>
-                                    <div class="weight-item">
-                                        <span class="weight-label">OSKI</span>
-                                        <input type="number" name="weight_oski" id="weight_oski" value="0" min="0" max="100" class="weight-input">
-                                        <span class="weight-pct">%</span>
-                                    </div>
-                                    <div class="weight-item">
-                                        <span class="weight-label">Test</span>
-                                        <input type="number" name="weight_test" id="weight_test" value="30" min="0" max="100" class="weight-input">
-                                        <span class="weight-pct">%</span>
-                                    </div>
-                                    <div id="weight-sum-indicator" class="weight-sum">100%</div>
+                            <div class="filter-item">
+                                <label class="filter-label" style="white-space:nowrap;">Og'irlik (JN+MT+ON+OSKI+Test)</label>
+                                <div style="display:flex;gap:6px;align-items:center;flex-wrap:nowrap;">
+                                    <div class="w-item"><span class="w-label">JN</span><input type="number" name="weight_jn"   id="w_jn"   value="50" min="0" max="100" class="w-input"><span class="w-pct">%</span></div>
+                                    <div class="w-item"><span class="w-label">MT</span><input type="number" name="weight_mt"   id="w_mt"   value="20" min="0" max="100" class="w-input"><span class="w-pct">%</span></div>
+                                    <div class="w-item"><span class="w-label">ON</span><input type="number" name="weight_on"   id="w_on"   value="0"  min="0" max="100" class="w-input"><span class="w-pct">%</span></div>
+                                    <div class="w-item"><span class="w-label">OSKI</span><input type="number" name="weight_oski" id="w_oski" value="0"  min="0" max="100" class="w-input"><span class="w-pct">%</span></div>
+                                    <div class="w-item"><span class="w-label">Test</span><input type="number" name="weight_test" id="w_test" value="30" min="0" max="100" class="w-input"><span class="w-pct">%</span></div>
+                                    <div id="w-sum" class="w-sum">100%</div>
                                 </div>
                             </div>
 
-                            <div style="display: flex; align-items: flex-end; padding-bottom: 6px; gap: 8px;">
-                                <div id="export-loading" style="display: none; align-items: center; color: #2b5ea7;">
-                                    <svg class="animate-spin" style="height: 16px; width: 16px; margin-right: 4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                        <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            <div style="display:flex;align-items:flex-end;padding-bottom:2px;gap:6px;">
+                                <div id="export-loading" style="display:none;align-items:center;color:#2b5ea7;">
+                                    <svg class="animate-spin" style="height:16px;width:16px;margin-right:4px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle style="opacity:.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path style="opacity:.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
                                 </div>
-                                <button type="submit" id="export-btn" class="export-btn" disabled>
-                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                <button type="submit" id="export-btn" class="btn-excel" disabled>
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
-                                    Excel yuklab olish
+                                    Excel
                                 </button>
                             </div>
                         </div>
                     </div>
-
-                    <!-- Info panel -->
-                    <div id="subject-info" style="display:none; padding: 10px 20px; background:#f0f9ff; border-bottom: 1px solid #bae6fd; font-size:13px; color:#0369a1;">
-                        <span id="subject-info-text"></span>
-                    </div>
                 </form>
 
-                <!-- Help text -->
-                <div style="padding: 40px 20px; text-align: center; color: #94a3b8;">
-                    <svg style="width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                <!-- Empty state -->
+                <div style="padding:60px 20px;text-align:center;">
+                    <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                     </svg>
-                    <p style="font-size:14px;">Fan va guruhlarni tanlab, "Excel yuklab olish" tugmasini bosing.</p>
-                    <p style="font-size:12px; margin-top:4px;">Bir vaqtda bir nechta guruhni tanlash mumkin.</p>
+                    <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Excel" tugmasini bosing</p>
+                    <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Fan va guruhlarni belgilang (bir nechta tanlash mumkin)</p>
                 </div>
             </div>
         </div>
@@ -156,349 +141,188 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        const sidebarUrl = '{{ route("admin.journal.get-sidebar-options") }}';
-
-        function stripSpecialChars(str) {
-            return str.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase();
-        }
+        function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
             if ($.trim(params.term) === '') return data;
             if (typeof data.text === 'undefined') return null;
-            var sc = stripSpecialChars(params.term);
-            var oc = stripSpecialChars(data.text);
-            if (oc.indexOf(sc) > -1) return $.extend({}, data, true);
+            if (stripSpecialChars(data.text).indexOf(stripSpecialChars(params.term)) > -1) return $.extend({}, data, true);
             if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
             return null;
         }
 
         $(document).ready(function () {
-
-            // Init select2 singles
-            ['#faculty', '#specialty', '#level_code', '#semester_code', '#subject'].forEach(function(sel) {
-                $(sel).select2({
-                    theme: 'classic',
-                    width: '100%',
-                    allowClear: true,
-                    placeholder: $(sel).find('option:first').text(),
-                    matcher: fuzzyMatcher
-                }).on('select2:open', function() {
-                    setTimeout(function() {
-                        var sf = document.querySelector('.select2-container--open .select2-search__field');
-                        if (sf) sf.focus();
-                    }, 10);
-                });
+            // Single selects
+            $('.select2').each(function () {
+                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
+                .on('select2:open', function () { setTimeout(function () { var s = document.querySelector('.select2-container--open .select2-search__field'); if (s) s.focus(); }, 10); });
             });
 
-            // Init select2 multiple for groups
-            $('#groups').select2({
-                theme: 'classic',
-                width: '100%',
-                placeholder: 'Guruhlarni tanlang',
-                matcher: fuzzyMatcher,
-                closeOnSelect: false
-            }).on('change', function() {
-                var count = $(this).val() ? $(this).val().length : 0;
-                $('#groups-count').text(count > 0 ? '(' + count + ' ta tanlangan)' : '');
-                updateExportBtn();
+            // Multi selects
+            $('.select2-multi').each(function () {
+                $(this).select2({ theme: 'classic', width: '100%', placeholder: 'Tanlang...', closeOnSelect: false, matcher: fuzzyMatcher })
+                .on('select2:open', function () { setTimeout(function () { var s = document.querySelector('.select2-container--open .select2-search__field'); if (s) s.focus(); }, 10); });
             });
 
-            function getParams() {
+            // Count badges
+            $('#groups').on('change', function () {
+                var c = $(this).val() ? $(this).val().length : 0;
+                $('#groups-count').text(c > 0 ? '(' + c + ' ta)' : '');
+                updateBtn();
+            });
+            $('#subjects').on('change', function () {
+                var c = $(this).val() ? $(this).val().length : 0;
+                $('#subjects-count').text(c > 0 ? '(' + c + ' ta)' : '');
+                updateBtn();
+            });
+
+            function fp() {
+                var df = document.getElementById('dekan_faculty_id');
                 return {
-                    faculty_id: $('#faculty').val() || '',
+                    education_type: $('#education_type').val() || '',
+                    faculty_id: df ? df.value : ($('#faculty').val() || ''),
                     specialty_id: $('#specialty').val() || '',
+                    department_id: $('#department').val() || '',
                     level_code: $('#level_code').val() || '',
                     semester_code: $('#semester_code').val() || '',
-                    subject_id: $('#subject').val() || '',
                 };
             }
 
-            function resetEl(sel, ph) {
-                $(sel).empty().append('<option value="">' + ph + '</option>');
-                if ($(sel).hasClass('select2-hidden-accessible')) {
-                    $(sel).trigger('change.select2');
-                }
-            }
-
-            function populateSelect(sel, data, ph) {
-                resetEl(sel, ph || 'Barchasi');
-                $.each(data, function(k, v) {
-                    $(sel).append('<option value="' + k + '">' + v + '</option>');
+            function rd(el, ph) { $(el).empty().append('<option value="">' + (ph || 'Barchasi') + '</option>'); }
+            function pd(url, p, el, cb) {
+                $.get(url, p, function (d) {
+                    $.each(d, function (k, v) { $(el).append('<option value="' + k + '">' + v + '</option>'); });
+                    if (cb) cb();
                 });
-                if ($(sel).hasClass('select2-hidden-accessible')) {
-                    $(sel).trigger('change.select2');
-                }
             }
-
-            function populateGroups(data) {
-                $('#groups').empty();
-                $.each(data, function(k, v) {
-                    $('#groups').append('<option value="' + k + '">' + v + '</option>');
+            function pdu(url, p, el, cb) {
+                $.get(url, p, function (d) {
+                    var u = {};
+                    $.each(d, function (k, v) { if (!u[v]) u[v] = k; });
+                    $.each(u, function (n, k) { $(el).append('<option value="' + k + '">' + n + '</option>'); });
+                    if (cb) cb();
                 });
-                $('#groups').trigger('change.select2');
-                updateExportBtn();
             }
-
-            function refreshAll() {
-                var p = getParams();
-                $.ajax({
-                    url: sidebarUrl,
-                    type: 'GET',
-                    data: p,
-                    success: function(d) {
-                        // Faculties
-                        populateSelect('#faculty', d.faculties, 'Barchasi');
-                        if (p.faculty_id) $('#faculty').val(p.faculty_id).trigger('change.select2');
-                        // Specialties
-                        populateSelect('#specialty', d.specialties, 'Barchasi');
-                        if (p.specialty_id) $('#specialty').val(p.specialty_id).trigger('change.select2');
-                        // Levels
-                        populateSelect('#level_code', d.levels, 'Barchasi');
-                        if (p.level_code) $('#level_code').val(p.level_code).trigger('change.select2');
-                        // Semesters
-                        populateSelect('#semester_code', d.semesters, 'Barchasi');
-                        if (p.semester_code) $('#semester_code').val(p.semester_code).trigger('change.select2');
-                        // Subjects
-                        var curSubject = $('#subject').val();
-                        populateSelect('#subject', d.subjects, 'Tanlang');
-                        if (curSubject && d.subjects[curSubject]) $('#subject').val(curSubject).trigger('change.select2');
-                        // Groups
-                        populateGroups(d.groups);
-
-                        // Subject info
-                        if (p.subject_id && d.kafedra_name) {
-                            $('#subject-info-text').text('Kafedra: ' + d.kafedra_name);
-                            $('#subject-info').show();
-                        } else {
-                            $('#subject-info').hide();
+            function pdMulti(url, p, el, cb) {
+                var prev = $(el).val() || [];
+                $(el).empty();
+                $.get(url, p, function (d) {
+                    var seen = {};
+                    $.each(d, function (k, v) {
+                        if (!seen[v]) {
+                            seen[v] = true;
+                            $(el).append('<option value="' + k + '">' + v + '</option>');
                         }
+                    });
+                    // Restore previous selection if still available
+                    if (prev.length) {
+                        var vals = $(el).find('option').map(function () { return this.value; }).get();
+                        var keep = prev.filter(function (v) { return vals.indexOf(v) >= 0; });
+                        if (keep.length) $(el).val(keep);
                     }
+                    $(el).trigger('change');
+                    if (cb) cb();
                 });
             }
 
-            function updateExportBtn() {
-                var hasSubject = !!$('#subject').val();
-                var hasSemester = !!$('#semester_code').val();
-                var hasGroups = $('#groups').val() && $('#groups').val().length > 0;
-                var weightOk = checkWeightSum();
-                var canExport = hasSubject && hasSemester && hasGroups && weightOk;
-                $('#export-btn').prop('disabled', !canExport);
-                if (canExport) {
-                    $('#export-btn').addClass('export-btn-active');
-                } else {
-                    $('#export-btn').removeClass('export-btn-active');
-                }
-            }
+            function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rGrp()  { pdMulti('{{ route("admin.journal.get-groups") }}', fp(), '#groups'); }
+            function rSubj() { pdMulti('{{ route("admin.journal.get-subjects") }}', fp(), '#subjects'); }
+
+            $('#education_type').change(function () { rSpec(); rSubj(); rGrp(); });
+            $('#faculty').change(function () { rSpec(); rSubj(); rGrp(); });
+            $('#specialty').change(function () { rGrp(); rSubj(); });
+            $('#department').change(function () { rSubj(); rGrp(); });
+            $('#level_code').change(function () {
+                var lc = $(this).val();
+                rd('#semester_code');
+                if (lc) pd('{{ route("admin.journal.get-semesters") }}', { level_code: lc }, '#semester_code');
+                rSubj(); rGrp();
+            });
+            $('#semester_code').change(function () {
+                $('#hidden_semester_code').val($(this).val());
+                rSubj(); rGrp();
+                updateBtn();
+            });
+
+            // Weight
+            $('.w-input').on('input', function () { checkWeightSum(); updateBtn(); });
 
             function checkWeightSum() {
-                var sum = parseInt($('#weight_jn').val() || 0)
-                        + parseInt($('#weight_mt').val() || 0)
-                        + parseInt($('#weight_on').val() || 0)
-                        + parseInt($('#weight_oski').val() || 0)
-                        + parseInt($('#weight_test').val() || 0);
-                var ok = sum === 100;
-                $('#weight-sum-indicator').text(sum + '%');
-                $('#weight-sum-indicator').css('color', ok ? '#16a34a' : '#dc2626');
-                return ok;
+                var sum = [parseInt($('#w_jn').val() || 0), parseInt($('#w_mt').val() || 0),
+                           parseInt($('#w_on').val() || 0), parseInt($('#w_oski').val() || 0),
+                           parseInt($('#w_test').val() || 0)].reduce(function (a, b) { return a + b; }, 0);
+                $('#w-sum').text(sum + '%').css('color', sum === 100 ? '#16a34a' : '#dc2626');
+                return sum === 100;
             }
 
-            // Change handlers
-            $('#faculty').on('change', function() {
-                refreshAll();
-            });
-            $('#specialty').on('change', function() {
-                var p = getParams();
-                $.ajax({ url: sidebarUrl, type: 'GET', data: p, success: function(d) {
-                    populateSelect('#level_code', d.levels, 'Barchasi');
-                    populateSelect('#semester_code', d.semesters, 'Barchasi');
-                    populateSelect('#subject', d.subjects, 'Tanlang');
-                    populateGroups(d.groups);
-                }});
-            });
-            $('#level_code').on('change', function() {
-                var p = getParams();
-                $.ajax({ url: sidebarUrl, type: 'GET', data: p, success: function(d) {
-                    populateSelect('#semester_code', d.semesters, 'Barchasi');
-                    populateSelect('#subject', d.subjects, 'Tanlang');
-                    populateGroups(d.groups);
-                }});
-            });
-            $('#semester_code').on('change', function() {
-                var val = $(this).val();
-                $('#hidden_semester_code').val(val);
-                var p = getParams();
-                $.ajax({ url: sidebarUrl, type: 'GET', data: p, success: function(d) {
-                    var curSubject = $('#subject').val();
-                    populateSelect('#subject', d.subjects, 'Tanlang');
-                    if (curSubject && d.subjects[curSubject]) $('#subject').val(curSubject).trigger('change.select2');
-                    populateGroups(d.groups);
-                    updateExportBtn();
-                }});
-            });
-            $('#subject').on('change', function() {
-                var val = $(this).val();
-                $('#hidden_subject_id').val(val);
-                var p = getParams();
-                $.ajax({ url: sidebarUrl, type: 'GET', data: p, success: function(d) {
-                    populateGroups(d.groups);
-                    if (val && d.kafedra_name) {
-                        $('#subject-info-text').text('Kafedra: ' + d.kafedra_name);
-                        $('#subject-info').show();
-                    } else {
-                        $('#subject-info').hide();
-                    }
-                    updateExportBtn();
-                }});
-            });
+            function updateBtn() {
+                var hasSemester = !!$('#semester_code').val();
+                var hasSubjects = $('#subjects').val() && $('#subjects').val().length > 0;
+                var hasGroups   = $('#groups').val()   && $('#groups').val().length   > 0;
+                var weightOk    = checkWeightSum();
+                var ok = hasSemester && hasSubjects && hasGroups && weightOk;
+                $('#export-btn').prop('disabled', !ok).toggleClass('btn-excel-active', ok);
+            }
 
-            // Weight inputs
-            $('.weight-input').on('input', function() {
-                checkWeightSum();
-                updateExportBtn();
-            });
-
-            // Export form submit
-            $('#export-form').on('submit', function(e) {
-                if ($('#export-btn').prop('disabled')) {
-                    e.preventDefault();
-                    return;
-                }
+            // Submit
+            $('#export-form').on('submit', function (e) {
+                if ($('#export-btn').prop('disabled')) { e.preventDefault(); return; }
                 $('#export-loading').css('display', 'flex');
-                $('#export-btn').prop('disabled', true).text('Yuklanmoqda...');
-                setTimeout(function() {
+                $('#export-btn').prop('disabled', true);
+                setTimeout(function () {
                     $('#export-loading').hide();
-                    $('#export-btn').prop('disabled', false).html(
-                        '<svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-                        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>' +
-                        '</svg> Excel yuklab olish'
-                    );
-                    updateExportBtn();
-                }, 5000);
+                    updateBtn();
+                }, 6000);
             });
 
             // Initial load
-            refreshAll();
+            pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
+            pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
+            pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
+            pdMulti('{{ route("admin.journal.get-subjects") }}', fp(), '#subjects');
+            pdMulti('{{ route("admin.journal.get-groups") }}', fp(), '#groups');
             checkWeightSum();
         });
     </script>
 
     <style>
-        .filter-container {
-            padding: 16px 20px 12px;
-            background: linear-gradient(135deg, #f0f4f8 0%, #e8edf5 100%);
-            border-bottom: 2px solid #dbe4ef;
-        }
-        .filter-row {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-bottom: 10px;
-            align-items: flex-end;
-        }
+        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
         .filter-row:last-child { margin-bottom: 0; }
-        .filter-label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            margin-bottom: 4px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: #475569;
-        }
-        .fl-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            display: inline-block;
-            flex-shrink: 0;
-        }
-        .select2-container--classic .select2-selection--single {
-            height: 36px;
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            background: #ffffff;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-        }
-        .select2-container--classic .select2-selection--single .select2-selection__rendered {
-            line-height: 34px;
-            padding-left: 10px;
-            padding-right: 52px;
-            color: #1e293b;
-            font-size: 0.8rem;
-            font-weight: 500;
-        }
-        .select2-container--classic .select2-selection--single .select2-selection__arrow {
-            height: 34px;
-            width: 22px;
-            background: transparent;
-            border-left: none;
-        }
-        .select2-container--classic .select2-selection--multiple {
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            background: #ffffff;
-            min-height: 36px;
-        }
-        .weight-item {
-            display: flex;
-            align-items: center;
-            gap: 3px;
-        }
-        .weight-label {
-            font-size: 11px;
-            font-weight: 700;
-            color: #475569;
-            min-width: 30px;
-        }
-        .weight-input {
-            width: 46px;
-            height: 30px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 12px;
-            font-weight: 600;
-            padding: 0 4px;
-            outline: none;
-        }
-        .weight-input:focus {
-            border-color: #2b5ea7;
-            box-shadow: 0 0 0 2px rgba(43,94,167,0.12);
-        }
-        .weight-pct {
-            font-size: 11px;
-            color: #64748b;
-        }
-        .weight-sum {
-            font-size: 13px;
-            font-weight: 700;
-            padding: 4px 8px;
-            border-radius: 6px;
-            background: #f1f5f9;
-            margin-left: 4px;
-        }
-        .export-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 18px;
-            background: #94a3b8;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: not-allowed;
-            transition: background 0.2s;
-            white-space: nowrap;
-        }
-        .export-btn.export-btn-active {
-            background: #2b5ea7;
-            cursor: pointer;
-        }
-        .export-btn.export-btn-active:hover {
-            background: #1e4080;
-        }
+        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+        .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+        /* Single select2 */
+        .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+        .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; }
+        .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }
+
+        /* Multi select2 */
+        .select2-container--classic .select2-selection--multiple { border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; min-height: 36px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+        .select2-container--classic .select2-selection--multiple:hover { border-color: #2b5ea7; }
+        .select2-container--classic .select2-selection--multiple .select2-selection__choice { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 5px; padding: 1px 6px; font-size: 11px; font-weight: 600; margin: 3px 3px 0; }
+        .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove { color: #93c5fd; margin-right: 4px; font-weight: 700; }
+        .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove:hover { color: #dc2626; }
+
+        /* Dropdown */
+        .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+        .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; }
+        .select2-container--classic .select2-results__option[aria-selected=true] { background: #eff6ff; color: #1e40af; }
+
+        /* Weight inputs */
+        .w-item { display: flex; align-items: center; gap: 2px; }
+        .w-label { font-size: 10px; font-weight: 700; color: #475569; min-width: 28px; }
+        .w-input { width: 40px; height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-size: 12px; font-weight: 600; padding: 0 3px; outline: none; }
+        .w-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,.12); }
+        .w-pct { font-size: 11px; color: #64748b; }
+        .w-sum { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #f1f5f9; margin-left: 4px; white-space: nowrap; }
+
+        /* Excel button */
+        .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; background: #94a3b8; color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: not-allowed; box-shadow: 0 2px 8px rgba(22,163,74,.15); height: 36px; white-space: nowrap; transition: all .2s; }
+        .btn-excel.btn-excel-active { background: linear-gradient(135deg, #16a34a, #22c55e); cursor: pointer; box-shadow: 0 2px 8px rgba(22,163,74,.3); }
+        .btn-excel.btn-excel-active:hover { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(22,163,74,.4); }
     </style>
 </x-app-layout>

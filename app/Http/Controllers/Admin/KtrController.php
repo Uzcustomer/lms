@@ -169,6 +169,22 @@ class KtrController extends Controller
             $query->where('cs.is_active', false);
         }
 
+        // Agar fanning (a), (b), (c) variantlari mavjud bo'lsa (bir xil semester_code da),
+        // asosiy nomini (harfsiz) yashirish — faqat variantlarini ko'rsatish
+        $query->where(function ($q) {
+            $q->whereRaw("cs.subject_name REGEXP '\\\\([a-z]\\\\)$'")
+              ->orWhereRaw("NOT EXISTS (
+                  SELECT 1 FROM curriculum_subjects cs2
+                  WHERE cs2.semester_code = cs.semester_code
+                  AND cs2.curricula_hemis_id = cs.curricula_hemis_id
+                  AND (
+                      cs2.subject_name = CONCAT(cs.subject_name, ' (a)')
+                      OR cs2.subject_name = CONCAT(cs.subject_name, ' (b)')
+                      OR cs2.subject_name = CONCAT(cs.subject_name, ' (c)')
+                  )
+              )");
+        });
+
         // Joriy semestr (barcha rollar uchun default ON)
         // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
         $currentSemesterDefault = '1';

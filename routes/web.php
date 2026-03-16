@@ -675,6 +675,11 @@ Route::prefix('student')->name('student.')->group(function () {
             return view('student.services');
         })->name('services');
 
+        // Ish e'lonlari
+        Route::get('/job-listings', function () {
+            return view('student.job-listings');
+        })->name('job-listings');
+
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\NotificationController::class, 'index'])->name('index');

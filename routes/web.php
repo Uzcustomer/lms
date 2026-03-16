@@ -283,6 +283,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Vedomost tekshirish
         Route::prefix('vedomost-tekshirish')->name('vedomost-tekshirish.')->group(function () {
             Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
+            Route::get('/search', [VedomostTekshirishController::class, 'search'])->name('search');
             Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
         });
 

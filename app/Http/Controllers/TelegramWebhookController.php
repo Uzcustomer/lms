@@ -25,10 +25,16 @@ class TelegramWebhookController extends Controller
         }
 
         $chatId = $message['chat']['id'] ?? null;
+        $chatType = $message['chat']['type'] ?? null;
         $text = trim($message['text'] ?? '');
         $username = $message['from']['username'] ?? null;
 
         if (!$chatId || !$text) {
+            return response()->json(['ok' => true]);
+        }
+
+        // Faqat shaxsiy chatda ishlash — guruh chatlarini e'tiborsiz qoldirish
+        if ($chatType !== 'private') {
             return response()->json(['ok' => true]);
         }
 

@@ -143,65 +143,16 @@
                     @endif
 
                     <div class="bg-white shadow rounded-lg p-6">
-                        <h4 class="text-lg font-semibold mb-4">Fanlar bo'yicha baholar</h4>
-                        @if($gradesBySubject->isEmpty())
-                            <p class="text-sm text-gray-500">Hozircha baholar yo'q.</p>
-                        @else
-                            <div class="space-y-4">
-                                @foreach($gradesBySubject as $subjectName => $grades)
-                                    <div class="border border-gray-200 rounded-lg overflow-hidden">
-                                        <div class="bg-gray-50 px-4 py-3 flex items-center justify-between">
-                                            <h5 class="text-sm font-semibold text-gray-800">{{ $subjectName }}</h5>
-                                            <span class="text-xs text-gray-500">{{ $grades->count() }} ta baho</span>
-                                        </div>
-                                        <div class="overflow-x-auto">
-                                            <table class="min-w-full divide-y divide-gray-200">
-                                                <thead class="bg-gray-50/50">
-                                                    <tr>
-                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Turi</th>
-                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Baho</th>
-                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Holat</th>
-                                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sana</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody class="bg-white divide-y divide-gray-100">
-                                                    @foreach($grades as $grade)
-                                                        @php
-                                                            $statusMap = [
-                                                                'pending' => ['color' => 'yellow', 'text' => 'Kutilmoqda'],
-                                                                'recorded' => ['color' => 'green', 'text' => 'Baholangan'],
-                                                                'retake' => ['color' => 'blue', 'text' => 'Qayta topshirilgan'],
-                                                                'closed' => ['color' => 'red', 'text' => 'Yopilgan'],
-                                                            ];
-                                                            $badge = $statusMap[$grade->status] ?? ['color' => 'gray', 'text' => 'Noma\'lum'];
-                                                        @endphp
-                                                        <tr>
-                                                            <td class="px-4 py-2 text-sm text-gray-500">{{ $grade->training_type_name }}</td>
-                                                            <td class="px-4 py-2 text-sm font-medium text-gray-900">
-                                                                @if($grade->status == 'pending')
-                                                                    {{ $grade->reason == 'absent' ? '0 (NB)' : $grade->grade }}
-                                                                @elseif($grade->status == 'retake')
-                                                                    {{ $grade->grade ?? '0 (NB)' }}/{{ $grade->retake_grade }}
-                                                                @else
-                                                                    {{ $grade->grade }}
-                                                                @endif
-                                                            </td>
-                                                            <td class="px-4 py-2 text-sm">
-                                                                <span class="px-2 inline-flex items-center text-xs leading-5 font-semibold rounded-full bg-{{ $badge['color'] }}-100 text-{{ $badge['color'] }}-800">
-                                                                    <svg class="mr-1 h-2 w-2 text-{{ $badge['color'] }}-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3"/></svg>
-                                                                    {{ $badge['text'] }}
-                                                                </span>
-                                                            </td>
-                                                            <td class="px-4 py-2 text-sm text-gray-500">{{ format_date($grade->lesson_date) }}</td>
-                                                        </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                @endforeach
-                            </div>
-                        @endif
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-lg font-semibold">Ish e'lonlari</h4>
+                            <a href="{{ route('student.job-listings') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">Barchasi</a>
+                        </div>
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                            <p class="mt-3 text-sm text-gray-500">Hech qanday e'lon yo'q</p>
+                        </div>
                     </div>
                 </div>
             </div>

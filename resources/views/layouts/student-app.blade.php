@@ -136,51 +136,39 @@
         <div x-show="boshqalarOpen" @click="boshqalarOpen = false" style="position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.3);display:none;"></div>
 
         <!-- Boshqalar popup menu -->
-        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;" class="mx-auto max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-3">
+        <div x-show="boshqalarOpen" @click.away="boshqalarOpen = false" style="position:absolute;bottom:100%;margin-bottom:0.5rem;left:1rem;right:1rem;z-index:9999;display:none;background-color:#eef2ff;" class="mx-auto max-w-sm rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-3">
             <div class="grid grid-cols-2 gap-2">
-                <a href="{{ route('student.exam-schedule') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.exam-schedule') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                <a href="{{ route('student.exam-schedule') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.exam-schedule') ? 'bg-white dark:bg-indigo-900/30 shadow-sm' : 'bg-white/70 hover:bg-white dark:hover:bg-gray-700' }}" style="padding:10px;">
                     <div class="rounded-xl bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
                         <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                         </svg>
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Imtihon jadvali</span>
-                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
                 </a>
-                <a href="{{ route('student.services') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                <a href="{{ route('student.services') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') ? 'bg-white dark:bg-indigo-900/30 shadow-sm' : 'bg-white/70 hover:bg-white dark:hover:bg-gray-700' }}" style="padding:10px;">
                     <div class="rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
                         <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
                         </svg>
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Xizmatlar</span>
-                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
                 </a>
-                <a href="{{ route('student.attendance') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.attendance') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                <a href="{{ route('student.attendance') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.attendance') ? 'bg-white dark:bg-indigo-900/30 shadow-sm' : 'bg-white/70 hover:bg-white dark:hover:bg-gray-700' }}" style="padding:10px;">
                     <div class="rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
                         <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Davomat</span>
-                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
                 </a>
-                <a href="{{ route('student.pending-lessons') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.pending-lessons') ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-700' }}" style="padding:10px;">
+                <a href="{{ route('student.pending-lessons') }}" class="flex items-center rounded-xl transition {{ request()->routeIs('student.pending-lessons') ? 'bg-white dark:bg-indigo-900/30 shadow-sm' : 'bg-white/70 hover:bg-white dark:hover:bg-gray-700' }}" style="padding:10px;">
                     <div class="rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
                         <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
                         </svg>
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">Qayta topshirish</span>
-                    <svg class="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
                 </a>
             </div>
         </div>

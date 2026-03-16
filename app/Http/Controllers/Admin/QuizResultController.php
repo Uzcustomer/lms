@@ -174,14 +174,17 @@ class QuizResultController extends Controller
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
             $jnGrades = [];
             if (!empty($studentHemisIds) && !empty($fanIds)) {
-                $jnRows = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereIn('subject_id', $fanIds)
-                    ->whereNotIn('training_type_code', $excludedCodes)
-                    ->whereNotNull('grade')
-                    ->get(['student_hemis_id', 'subject_id', 'grade', 'lesson_date']);
-                foreach ($jnRows as $row) {
-                    $k = $row->student_hemis_id . '|' . $row->subject_id;
-                    $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
+                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                    $jnRows = StudentGrade::whereIn('student_hemis_id', $chunk)
+                        ->whereIn('subject_id', $fanIds)
+                        ->whereNotIn('training_type_code', $excludedCodes)
+                        ->whereNotNull('grade')
+                        ->get(['student_hemis_id', 'subject_id', 'grade', 'lesson_date']);
+                    foreach ($jnRows as $row) {
+                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
+                    }
+                    unset($jnRows);
                 }
             }
 
@@ -455,6 +458,7 @@ class QuizResultController extends Controller
             Log::error('yuklanmaganNatijalar xatolik: ' . $e->getMessage(), [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
+                'memory_peak_mb' => round(memory_get_peak_usage(true) / 1024 / 1024, 1),
                 'trace' => $e->getTraceAsString(),
             ]);
 

@@ -86,8 +86,7 @@ class VedomostTekshirishController extends Controller
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->leftJoin('departments as dep', 'dep.department_hemis_id', '=', 'g.department_hemis_id')
             ->where('g.department_active', true)
-            ->where('g.active', true)
-            ->where('cs.active', true);
+            ->where('g.active', true);
 
         if ($currentSemester) {
             $query->where('s.current', true);

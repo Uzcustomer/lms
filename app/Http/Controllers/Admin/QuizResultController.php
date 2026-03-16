@@ -65,6 +65,9 @@ class QuizResultController extends Controller
      */
     public function yuklanmaganNatijalar(Request $request)
     {
+        ini_set('memory_limit', '512M');
+        set_time_limit(300);
+
         try {
             // Faqat yuklanmagan natijalarni olish
             $query = HemisQuizResult::where('is_active', 1)
@@ -106,8 +109,15 @@ class QuizResultController extends Controller
                 $query->whereDate('date_finish', '<=', $request->date_to);
             }
 
+            $totalCount = (clone $query)->count();
+            if ($totalCount > 5000) {
+                return response()->json([
+                    'error' => "Tanlangan oraliqda {$totalCount} ta natija mavjud. Iltimos, sanani qisqartiring (5000 tagacha bo'lishi kerak).",
+                ], 422);
+            }
+
             $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')
-                ->limit(10000)
+                ->limit(5000)
                 ->get();
 
             // ====== TARTIBGA SOL LOGIKASI (diagnostika bilan bir xil) ======

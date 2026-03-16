@@ -42,6 +42,7 @@ use App\Http\Controllers\Admin\KtrController;
 use App\Http\Controllers\Admin\StaffRegistrationController;
 use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
+use App\Http\Controllers\Admin\VedomostTekshirishController;
 use App\Http\Controllers\MoodleImportController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Student\StudentContractController as StudentContractCtrl;
@@ -277,6 +278,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/fetch-yn-results', [JournalController::class, 'fetchYnResults'])->name('fetch-yn-results');
             Route::post('/generate-yakuniy-qaydnoma', [JournalController::class, 'generateYakuniyQaydnoma'])->name('generate-yakuniy-qaydnoma');
             Route::post('/export-yn-qaydnoma', [JournalController::class, 'exportYnQaydnoma'])->name('export-yn-qaydnoma');
+        });
+
+        // Vedomost tekshirish
+        Route::prefix('vedomost-tekshirish')->name('vedomost-tekshirish.')->group(function () {
+            Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
+            Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');

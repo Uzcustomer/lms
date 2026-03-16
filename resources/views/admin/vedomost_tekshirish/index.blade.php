@@ -523,6 +523,32 @@
         // Weight modal
         function openWeightModal() {
             if($('.row-cb:checked').length===0) return;
+
+            // Tanlangan qatorlarda oski_date va test_date borligini aniqlash
+            var hasOski = false, hasTest = false;
+            $('.row-cb:checked').each(function(){
+                var idx = parseInt($(this).data('idx'));
+                var r = searchData[idx];
+                if(r && r.oski_date) hasOski = true;
+                if(r && r.test_date) hasTest = true;
+            });
+
+            // Default vaznlarni belgilash
+            if(hasOski && hasTest){
+                // Ikkalasi ham bor: JN=50, MT=20, OSKI=15, Test=15
+                $('#m_jn').val(50); $('#m_mt').val(20); $('#m_on').val(0);
+                $('#m_oski').val(15); $('#m_test').val(15);
+            } else if(hasOski || hasTest){
+                // Faqat bittasi bor: JN=50, MT=20, OSKI yoki Test=30
+                $('#m_jn').val(50); $('#m_mt').val(20); $('#m_on').val(0);
+                $('#m_oski').val(hasOski ? 30 : 0);
+                $('#m_test').val(hasTest ? 30 : 0);
+            } else {
+                // Ikkalasi ham yo'q: JN=80, MT=20
+                $('#m_jn').val(80); $('#m_mt').val(20); $('#m_on').val(0);
+                $('#m_oski').val(0); $('#m_test').val(0);
+            }
+
             checkModalSum();
             document.getElementById('weight-modal').style.display='flex';
         }

@@ -218,16 +218,10 @@
                                                         @endif
                                                         <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
                                                         @if($canDelete)
-                                                        <form method="POST" action="{{ route($routePrefix . '.academic-schedule.clear-date') }}" onsubmit="return confirm('OSKI sanasini o\'chirishni tasdiqlaysizmi?')" style="display:inline;">
-                                                            @csrf
-                                                            <input type="hidden" name="group_hemis_id" value="{{ $item['group']->group_hemis_id }}">
-                                                            <input type="hidden" name="subject_id" value="{{ $item['subject']->subject_id }}">
-                                                            <input type="hidden" name="semester_code" value="{{ $item['subject']->semester_code }}">
-                                                            <input type="hidden" name="date_type" value="oski">
-                                                            <button type="submit" class="clear-date-btn" title="OSKI sanasini o'chirish">
-                                                                <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" class="clear-date-btn" title="OSKI sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'oski')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
                                                         @endif
                                                     @else
                                                         <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}">
@@ -263,16 +257,10 @@
                                                         @endif
                                                         <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
                                                         @if($canDelete)
-                                                        <form method="POST" action="{{ route($routePrefix . '.academic-schedule.clear-date') }}" onsubmit="return confirm('Test sanasini o\'chirishni tasdiqlaysizmi?')" style="display:inline;">
-                                                            @csrf
-                                                            <input type="hidden" name="group_hemis_id" value="{{ $item['group']->group_hemis_id }}">
-                                                            <input type="hidden" name="subject_id" value="{{ $item['subject']->subject_id }}">
-                                                            <input type="hidden" name="semester_code" value="{{ $item['subject']->semester_code }}">
-                                                            <input type="hidden" name="date_type" value="test">
-                                                            <button type="submit" class="clear-date-btn" title="Test sanasini o'chirish">
-                                                                <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                                            </button>
-                                                        </form>
+                                                        <button type="button" class="clear-date-btn" title="Test sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'test')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
                                                         @endif
                                                     @else
                                                         <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}">
@@ -328,6 +316,15 @@
         </div>
     </div>
 
+    {{-- O'chirish form'i - asosiy store form'idan tashqarida (ichma-ich form HTML da ruxsat etilmaydi) --}}
+    <form id="clear-date-form" method="POST" action="{{ route(($routePrefix ?? 'admin') . '.academic-schedule.clear-date') }}" style="display:none;">
+        @csrf
+        <input type="hidden" name="group_hemis_id" id="clear-group-hemis-id">
+        <input type="hidden" name="subject_id" id="clear-subject-id">
+        <input type="hidden" name="semester_code" id="clear-semester-code">
+        <input type="hidden" name="date_type" id="clear-date-type">
+    </form>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -335,6 +332,16 @@
     <script src="/js/scroll-calendar.js"></script>
 
     <script>
+        function clearExamDate(groupHemisId, subjectId, semesterCode, dateType) {
+            var typeLabel = dateType === 'oski' ? 'OSKI' : 'Test';
+            if (!confirm(typeLabel + ' sanasini o\'chirishni tasdiqlaysizmi?')) return;
+            document.getElementById('clear-group-hemis-id').value = groupHemisId;
+            document.getElementById('clear-subject-id').value = subjectId;
+            document.getElementById('clear-semester-code').value = semesterCode;
+            document.getElementById('clear-date-type').value = dateType;
+            document.getElementById('clear-date-form').submit();
+        }
+
         var isUpdatingFilters = false;
         var filterUrl = '{{ route($routePrefix . ".academic-schedule.get-filter-options") }}';
 

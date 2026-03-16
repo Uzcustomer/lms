@@ -5933,7 +5933,7 @@ class JournalController extends Controller
         $spreadsheet = SpreadsheetIOFactory::load($templatePath);
         $sheet = $spreadsheet->getActiveSheet();
 
-        $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet'), 0, 31);
+$sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet'), 0, 31);
         $sheet->setTitle($sheetName);
 
         // Kurs va semestr raqamlarini hisoblash

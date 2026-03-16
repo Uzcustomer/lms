@@ -29,6 +29,7 @@ class Teacher extends Authenticatable
         'employment_form',
         'employment_staff',
         'staff_position',
+        'lavozim',
         'employee_status',
         'employee_type',
         'contract_number',

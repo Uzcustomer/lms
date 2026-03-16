@@ -61,7 +61,14 @@
                         @endif
                         <div class="profile-name-section">
                             <h1 class="profile-name">{{ $teacher->full_name }}</h1>
-                            <p class="profile-position">{{ $teacher->staff_position ?? '-' }}</p>
+                            <p class="profile-position">
+                                @if($teacher->lavozim)
+                                    {{ $teacher->lavozim }}
+                                    <span style="color: #94a3b8; font-size: 11px; margin-left: 4px;">(HEMIS: {{ $teacher->staff_position ?? '-' }})</span>
+                                @else
+                                    {{ $teacher->staff_position ?? '-' }}
+                                @endif
+                            </p>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
                                 <span class="badge {{ $teacher->status ? 'badge-green' : 'badge-red' }}">
                                     {{ $teacher->status ? 'Faol' : 'Nofaol' }}
@@ -396,6 +403,24 @@
                                         </div>
                                     </label>
                                 @endforeach
+                            </div>
+
+                            {{-- Lavozim (barcha xodimlar uchun, Dekanat roli tanlanganda yorqinroq) --}}
+                            <div style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                <label style="font-size: 11px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Lavozim (tizimga kiruvchi lavozim, HEMIS dan alohida):</label>
+                                <input type="text" name="lavozim" value="{{ old('lavozim', $teacher->lavozim) }}"
+                                       list="lavozim-options"
+                                       placeholder="Masalan: Dekan, O'quv ishlari bo'yicha dekan o'rinbosari..."
+                                       style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none;">
+                                <datalist id="lavozim-options">
+                                    <option value="Dekan">
+                                    <option value="O'quv ishlari bo'yicha dekan o'rinbosari">
+                                    <option value="Yoshlar ishlari bo'yicha dekan o'rinbosari">
+                                    <option value="Kafedra mudiri">
+                                    <option value="Katta o'qituvchi">
+                                    <option value="Dotsent">
+                                    <option value="Professor">
+                                </datalist>
                             </div>
 
                             @php

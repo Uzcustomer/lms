@@ -361,6 +361,11 @@
                 .on('select2:open', function () { setTimeout(function(){ var s=document.querySelector('.select2-container--open .select2-search__field'); if(s)s.focus(); },10); });
             });
 
+            // Ta'lim turi — by default Bakalavr
+            @if($defaultEducationType)
+            $('#education_type').val('{{ $defaultEducationType }}').trigger('change');
+            @endif
+
             // Calendar
             new ScrollCalendar('yn_date_from');
             new ScrollCalendar('yn_date_to');
@@ -466,8 +471,9 @@
             var html='';
             for(var i=0;i<data.length;i++){
                 var r=data[i];
-                html+='<tr data-idx="'+i+'">';
-                html+='<td style="text-align:center;"><input type="checkbox" class="row-cb" data-idx="'+i+'" onchange="onRowCheck()" style="width:15px;height:15px;cursor:pointer;"></td>';
+                var journalUrl='{{ url("admin/journal/show") }}/'+r.group_pk+'/'+r.subject_id+'/'+r.semester_code;
+                html+='<tr data-idx="'+i+'" data-journal="'+journalUrl+'" style="cursor:pointer;" class="journal-row">';
+                html+='<td style="text-align:center;" onclick="event.stopPropagation();"><input type="checkbox" class="row-cb" data-idx="'+i+'" onchange="onRowCheck()" style="width:15px;height:15px;cursor:pointer;"></td>';
                 html+='<td class="td-num">'+(i+1)+'</td>';
                 html+='<td><span class="text-cell" style="color:#0f172a;font-size:12px;">'+esc(r.faculty_name||'—')+'</span></td>';
                 html+='<td><span class="text-cell text-cyan">'+esc(r.specialty_name||'—')+'</span></td>';
@@ -484,6 +490,11 @@
             }
             $('#results-body').html(html);
             $('#select-all').prop('checked',false).prop('indeterminate',false);
+
+            // Qatorga bosganda jurnal sahifasiga o'tish
+            $('#results-body').off('click', '.journal-row').on('click', '.journal-row', function(){
+                window.open($(this).data('journal'), '_blank');
+            });
         }
 
         function onRowCheck() {

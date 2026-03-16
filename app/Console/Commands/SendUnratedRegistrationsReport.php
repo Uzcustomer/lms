@@ -113,7 +113,8 @@ class SendUnratedRegistrationsReport extends Command
             ->where(function ($q) {
                 $q->where('grade', '>', 0)
                   ->orWhere('retake_grade', '>', 0)
-                  ->orWhere('status', 'recorded');
+                  ->orWhere('status', 'recorded')
+                  ->orWhere('reason', 'absent');
             })
             ->pluck('subject_schedule_id')
             ->unique()
@@ -132,7 +133,8 @@ class SendUnratedRegistrationsReport extends Command
             ->where(function ($q) {
                 $q->where('sg.grade', '>', 0)
                   ->orWhere('sg.retake_grade', '>', 0)
-                  ->orWhere('sg.status', 'recorded');
+                  ->orWhere('sg.status', 'recorded')
+                  ->orWhere('sg.reason', 'absent');
             })
             ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date)) as gk"))
             ->pluck('gk')

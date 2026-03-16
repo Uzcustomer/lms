@@ -72,7 +72,17 @@
                                 <span class="fl-dot" style="background:#1a3268;"></span> Guruh
                                 <span id="groups-count" style="font-weight:400;font-size:10px;margin-left:3px;color:#64748b;"></span>
                             </label>
-                            <select id="groups" class="select2-multi" multiple style="width:100%;"></select>
+                            <div class="cb-wrap" id="groups-wrap">
+                                <button type="button" class="cb-btn" id="groups-btn" onclick="toggleCb('groups')">
+                                    <span id="groups-label" class="cb-label-text">Tanlang...</span>
+                                    <svg style="width:12px;height:12px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                                </button>
+                                <div class="cb-panel" id="groups-panel" style="display:none;">
+                                    <input type="text" class="cb-search" id="groups-search" placeholder="Qidirish..." oninput="filterCb('groups')">
+                                    <label class="cb-all-label"><input type="checkbox" id="groups-all" onchange="toggleAllCb('groups', this)"><span>Barchasi tanlash</span></label>
+                                    <div class="cb-list" id="groups-list"></div>
+                                </div>
+                            </div>
                         </div>
                         <div class="filter-item" style="flex:1;min-width:210px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
@@ -88,7 +98,17 @@
                                 <span class="fl-dot" style="background:#0f172a;"></span> Fan
                                 <span id="subjects-count" style="font-weight:400;font-size:10px;margin-left:3px;color:#64748b;"></span>
                             </label>
-                            <select id="subjects" class="select2-multi" multiple style="width:100%;"></select>
+                            <div class="cb-wrap" id="subjects-wrap">
+                                <button type="button" class="cb-btn" id="subjects-btn" onclick="toggleCb('subjects')">
+                                    <span id="subjects-label" class="cb-label-text">Tanlang...</span>
+                                    <svg style="width:12px;height:12px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                                </button>
+                                <div class="cb-panel" id="subjects-panel" style="display:none;">
+                                    <input type="text" class="cb-search" id="subjects-search" placeholder="Qidirish..." oninput="filterCb('subjects')">
+                                    <label class="cb-all-label"><input type="checkbox" id="subjects-all" onchange="toggleAllCb('subjects', this)"><span>Barchasi tanlash</span></label>
+                                    <div class="cb-list" id="subjects-list"></div>
+                                </div>
+                            </div>
                         </div>
                         <div style="display:flex;align-items:flex-end;padding-bottom:2px;gap:8px;">
                             <div id="search-loading" style="display:none;align-items:center;color:#2b5ea7;">
@@ -128,9 +148,12 @@
                                 <tr>
                                     <th style="width:34px;text-align:center;">☐</th>
                                     <th style="width:36px;">#</th>
-                                    <th style="min-width:110px;">Guruh</th>
+                                    <th style="min-width:140px;">Fakultet</th>
                                     <th style="min-width:130px;">Yo'nalish</th>
-                                    <th style="min-width:280px;">Fan nomi</th>
+                                    <th style="width:70px;text-align:center;">Kurs</th>
+                                    <th style="width:80px;text-align:center;">Semestr</th>
+                                    <th style="min-width:100px;">Guruh</th>
+                                    <th style="min-width:260px;">Fan nomi</th>
                                     <th style="width:60px;text-align:center;">Kredit</th>
                                     <th style="width:110px;text-align:center;">Dars boshlanish</th>
                                     <th style="width:110px;text-align:center;">Dars tugash</th>
@@ -220,6 +243,96 @@
 
     <script>
         var searchData = [];
+        // cbData[id] = [{value, label}] — full list for each checkbox dropdown
+        var cbData = { groups: [], subjects: [] };
+
+        /* ===== Checkbox dropdown helpers ===== */
+        function toggleCb(id) {
+            var panel = document.getElementById(id+'-panel');
+            var isOpen = panel.style.display !== 'none';
+            // close all
+            ['groups','subjects'].forEach(function(x){ document.getElementById(x+'-panel').style.display='none'; });
+            if (!isOpen) {
+                panel.style.display = 'block';
+                var srch = document.getElementById(id+'-search');
+                if (srch) { srch.value=''; filterCb(id); srch.focus(); }
+            }
+        }
+        function filterCb(id) {
+            var q = (document.getElementById(id+'-search').value||'').toLowerCase().replace(/\s+/g,'');
+            var list = document.getElementById(id+'-list');
+            var items = list.querySelectorAll('.cb-item');
+            items.forEach(function(el){
+                var label = (el.getAttribute('data-label')||'').toLowerCase().replace(/\s+/g,'');
+                el.style.display = label.indexOf(q) > -1 ? '' : 'none';
+            });
+            updateCbAllState(id);
+        }
+        function toggleAllCb(id, cb) {
+            var list = document.getElementById(id+'-list');
+            list.querySelectorAll('.cb-item-cb:not([style*="display: none"]) input, .cb-item:not([style*="display: none"]) input').forEach(function(inp){
+                inp.checked = cb.checked;
+            });
+            updateCbLabel(id);
+        }
+        function updateCbAllState(id) {
+            var list = document.getElementById(id+'-list');
+            var visible = list.querySelectorAll('.cb-item:not([style*="display: none"]) input');
+            var checked = 0;
+            visible.forEach(function(inp){ if(inp.checked) checked++; });
+            var allCb = document.getElementById(id+'-all');
+            if (allCb) {
+                allCb.checked = visible.length > 0 && checked === visible.length;
+                allCb.indeterminate = checked > 0 && checked < visible.length;
+            }
+        }
+        function onCbItemChange(id) { updateCbAllState(id); updateCbLabel(id); }
+        function updateCbLabel(id) {
+            var vals = getCbValues(id);
+            var label = document.getElementById(id+'-label');
+            var count = document.getElementById(id+'-count');
+            if (vals.length === 0) {
+                label.textContent = 'Tanlang...';
+                label.style.color = '#94a3b8';
+                if (count) count.textContent = '';
+            } else {
+                label.textContent = vals.length + ' ta tanlangan';
+                label.style.color = '#1e40af';
+                if (count) count.textContent = '(' + vals.length + ' ta)';
+            }
+        }
+        function getCbValues(id) {
+            var list = document.getElementById(id+'-list');
+            var vals = [];
+            list.querySelectorAll('input[type=checkbox]:checked').forEach(function(inp){ vals.push(inp.value); });
+            return vals;
+        }
+        function loadCbItems(id, items, keepVals) {
+            keepVals = keepVals || [];
+            cbData[id] = items;
+            var list = document.getElementById(id+'-list');
+            var html = '';
+            items.forEach(function(it) {
+                var checked = keepVals.indexOf(it.value) > -1 ? ' checked' : '';
+                html += '<label class="cb-item" data-label="'+escAttr(it.label)+'">'
+                      + '<input type="checkbox" value="'+escAttr(it.value)+'"'+checked+' onchange="onCbItemChange(\''+id+'\')">'
+                      + '<span>'+escHtml(it.label)+'</span></label>';
+            });
+            list.innerHTML = html;
+            updateCbAllState(id);
+            updateCbLabel(id);
+        }
+        function escAttr(s){ return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+        function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+        // Close panels when clicking outside
+        document.addEventListener('click', function(e){
+            ['groups','subjects'].forEach(function(id){
+                var wrap = document.getElementById(id+'-wrap');
+                var panel = document.getElementById(id+'-panel');
+                if (wrap && panel && !wrap.contains(e.target)) panel.style.display='none';
+            });
+        });
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g,'').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -238,21 +351,6 @@
             $('.select2').each(function () {
                 $(this).select2({ theme:'classic', width:'100%', allowClear:true, placeholder:$(this).find('option:first').text(), matcher:fuzzyMatcher })
                 .on('select2:open', function () { setTimeout(function(){ var s=document.querySelector('.select2-container--open .select2-search__field'); if(s)s.focus(); },10); });
-            });
-
-            // Multi selects
-            $('.select2-multi').each(function () {
-                $(this).select2({ theme:'classic', width:'100%', placeholder:'Tanlang...', closeOnSelect:false, matcher:fuzzyMatcher })
-                .on('select2:open', function () { setTimeout(function(){ var s=document.querySelector('.select2-container--open .select2-search__field'); if(s)s.focus(); },10); });
-            });
-
-            $('#groups').on('change', function () {
-                var c=$(this).val()?$(this).val().length:0;
-                $('#groups-count').text(c>0?'('+c+' ta)':'');
-            });
-            $('#subjects').on('change', function () {
-                var c=$(this).val()?$(this).val().length:0;
-                $('#subjects-count').text(c>0?'('+c+' ta)':'');
             });
 
             // Calendar
@@ -275,11 +373,24 @@
             function rd(el){ $(el).empty().append('<option value="">Barchasi</option>'); }
             function pd(url,p,el,cb){ $.get(url,p,function(d){ $.each(d,function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb)cb(); }); }
             function pdu(url,p,el,cb){ $.get(url,p,function(d){ var u={}; $.each(d,function(k,v){ if(!u[v])u[v]=k; }); $.each(u,function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb)cb(); }); }
-            function pdm(url,p,el,ph){ var prev=$(el).val()||[]; $(el).empty(); $.get(url,p,function(d){ var seen={}; $.each(d,function(k,v){ if(!seen[v]){seen[v]=true;$(el).append('<option value="'+k+'">'+v+'</option>');} }); var vals=$(el).find('option').map(function(){return this.value;}).get(); var keep=prev.filter(function(v){return vals.indexOf(v)>=0;}); if(keep.length)$(el).val(keep); $(el).trigger('change'); }); }
 
             function rSpec(){ rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}',fp(),'#specialty'); }
-            function rGrp(){ pdm('{{ route("admin.journal.get-groups") }}',fp(),'#groups'); }
-            function rSubj(){ pdm('{{ route("admin.journal.get-subjects") }}',fp(),'#subjects'); }
+            function rGrp(){
+                var prev=getCbValues('groups');
+                $.get('{{ route("admin.journal.get-groups") }}',fp(),function(d){
+                    var seen={},items=[];
+                    $.each(d,function(k,v){ if(!seen[v]){seen[v]=true;items.push({value:k,label:v});} });
+                    loadCbItems('groups',items,prev);
+                });
+            }
+            function rSubj(){
+                var prev=getCbValues('subjects');
+                $.get('{{ route("admin.journal.get-subjects") }}',fp(),function(d){
+                    var seen={},items=[];
+                    $.each(d,function(k,v){ if(!seen[v]){seen[v]=true;items.push({value:k,label:v});} });
+                    loadCbItems('subjects',items,prev);
+                });
+            }
 
             $('#education_type').change(function(){ rSpec(); rSubj(); rGrp(); });
             $('#faculty').change(function(){ rSpec(); rSubj(); rGrp(); });
@@ -292,12 +403,11 @@
             });
             $('#semester_code').change(function(){ rSubj(); rGrp(); });
 
-            // Initial
+            // Initial load
             pdu('{{ route("admin.journal.get-specialties") }}',fp(),'#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}',{},'#level_code');
             pd('{{ route("admin.journal.get-semesters") }}',{},'#semester_code');
-            pdm('{{ route("admin.journal.get-subjects") }}',fp(),'#subjects');
-            pdm('{{ route("admin.journal.get-groups") }}',fp(),'#groups');
+            rSubj(); rGrp();
         });
 
         function doSearch() {
@@ -313,8 +423,8 @@
                 yn_date_to:      $('#yn_date_to').val()||'',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active')?'1':'0',
             };
-            var gv=$('#groups').val(); if(gv&&gv.length) params.group_ids=gv;
-            var sv=$('#subjects').val(); if(sv&&sv.length) params.subject_ids=sv;
+            var gv=getCbValues('groups'); if(gv.length) params.group_ids=gv;
+            var sv=getCbValues('subjects'); if(sv.length) params.subject_ids=sv;
 
             $('#empty-state').hide(); $('#no-results').hide(); $('#results-area').hide();
             $('#search-loading').css('display','flex');
@@ -348,12 +458,14 @@
             var html='';
             for(var i=0;i<data.length;i++){
                 var r=data[i];
-                var rowKey=encodeURIComponent(JSON.stringify({group_id:r.group_pk,subject_id:r.subject_id,semester_code:r.semester_code}));
                 html+='<tr data-idx="'+i+'">';
                 html+='<td style="text-align:center;"><input type="checkbox" class="row-cb" data-idx="'+i+'" onchange="onRowCheck()" style="width:15px;height:15px;cursor:pointer;"></td>';
                 html+='<td class="td-num">'+(i+1)+'</td>';
+                html+='<td><span class="text-cell" style="color:#0f172a;font-size:12px;">'+esc(r.faculty_name||'—')+'</span></td>';
+                html+='<td><span class="text-cell text-cyan">'+esc(r.specialty_name||'—')+'</span></td>';
+                html+='<td style="text-align:center;font-weight:600;color:#6d28d9;">'+(r.level_code?r.level_code+'-kurs':'—')+'</td>';
+                html+='<td style="text-align:center;font-weight:600;color:#0369a1;">'+(r.semester_code?r.semester_code+'-sem':'—')+'</td>';
                 html+='<td><span class="badge badge-indigo">'+esc(r.group_name)+'</span></td>';
-                html+='<td><span class="text-cell text-cyan">'+esc(r.specialty_name)+'</span></td>';
                 html+='<td><span class="text-cell text-subject">'+esc(r.subject_name)+'</span></td>';
                 html+='<td style="text-align:center;font-weight:700;color:#475569;">'+esc(r.credit||'')+'</td>';
                 html+='<td style="text-align:center;">'+dateCell(r.date_start)+'</td>';
@@ -468,15 +580,26 @@
         .select2-container--classic .select2-selection--single .select2-selection__clear { position:absolute; right:22px; top:50%; transform:translateY(-50%); font-size:16px; font-weight:bold; color:#94a3b8; cursor:pointer; padding:2px 6px; z-index:2; background:#fff; border-radius:50%; line-height:1; }
         .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color:#fff; background:#ef4444; }
 
-        /* Select2 multiple */
-        .select2-container--classic .select2-selection--multiple { border:1px solid #cbd5e1; border-radius:8px; background:#fff; min-height:36px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
-        .select2-container--classic .select2-selection--multiple:hover { border-color:#2b5ea7; }
-        .select2-container--classic .select2-selection--multiple .select2-selection__choice { background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:5px; padding:1px 6px; font-size:11px; font-weight:600; margin:3px 3px 0; }
-        .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove { color:#93c5fd; margin-right:4px; font-weight:700; }
-        .select2-container--classic .select2-selection--multiple .select2-selection__choice__remove:hover { color:#dc2626; }
+        /* Select2 (single only) */
         .select2-dropdown { font-size:.8rem; border-radius:8px; border:1px solid #cbd5e1; box-shadow:0 8px 24px rgba(0,0,0,.12); }
         .select2-container--classic .select2-results__option--highlighted { background-color:#2b5ea7; }
         .select2-container--classic .select2-results__option[aria-selected=true] { background:#eff6ff; color:#1e40af; }
+
+        /* Checkbox dropdown */
+        .cb-wrap { position:relative; width:100%; }
+        .cb-btn { width:100%; height:36px; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:0 10px; background:#fff; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.04); transition:border-color .15s; }
+        .cb-btn:hover { border-color:#2b5ea7; }
+        .cb-label-text { flex:1; font-size:.8rem; font-weight:500; color:#94a3b8; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .cb-panel { position:absolute; top:calc(100% + 4px); left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.14); z-index:9000; padding:8px; min-width:220px; max-width:400px; }
+        .cb-search { width:100%; height:32px; border:1px solid #cbd5e1; border-radius:7px; padding:0 10px; font-size:.8rem; outline:none; margin-bottom:6px; box-sizing:border-box; }
+        .cb-search:focus { border-color:#2b5ea7; }
+        .cb-all-label { display:flex; align-items:center; gap:8px; padding:5px 4px; font-size:.8rem; font-weight:700; color:#334155; cursor:pointer; border-bottom:1px solid #f1f5f9; margin-bottom:4px; }
+        .cb-all-label input { width:14px; height:14px; cursor:pointer; accent-color:#2b5ea7; }
+        .cb-list { max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:1px; }
+        .cb-item { display:flex; align-items:center; gap:8px; padding:5px 4px; font-size:.8rem; color:#1e293b; cursor:pointer; border-radius:5px; }
+        .cb-item:hover { background:#eff6ff; }
+        .cb-item input[type=checkbox] { width:14px; height:14px; cursor:pointer; accent-color:#2b5ea7; flex-shrink:0; }
+        .cb-item span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
         /* Date input */
         .date-input { height:36px; border:1px solid #cbd5e1; border-radius:8px; padding:0 30px 0 10px; font-size:.8rem; font-weight:500; color:#1e293b; background:#fff; width:100%; box-shadow:0 1px 2px rgba(0,0,0,.04); outline:none; }

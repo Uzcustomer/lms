@@ -323,7 +323,7 @@ class TeacherAuthController extends Controller
         $teacher->telegram_username = $request->telegram_username;
 
         // Tasdiqlash kodi generatsiya qilish
-        $code = strtoupper(Str::random(6));
+        $code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
         $teacher->telegram_verification_code = $code;
         $teacher->telegram_verified_at = null;
         $teacher->telegram_chat_id = null;

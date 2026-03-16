@@ -1,4 +1,4 @@
-<nav class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+<nav class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sm:bg-white" style="background-color:#ffd980;">
     <!-- Primary Navigation Menu -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16">
@@ -6,7 +6,7 @@
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('student.dashboard') }}">
-                        <x-application-logo class="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200" />
+                        <x-application-logo class="block fill-current text-gray-800 dark:text-gray-200" style="width:50px;height:50px;" />
                     </a>
                 </div>
 
@@ -92,7 +92,7 @@
                    x-data="{ unread: 0 }"
                    x-init="fetch('{{ route('student.notifications.unread-count') }}').then(r=>r.json()).then(d=>unread=d.count).catch(()=>{})"
                 >
-                    <svg class="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                    <svg class="w-6 h-6 text-white sm:text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                     </svg>
                     <span x-show="unread > 0" x-text="unread > 9 ? '9+' : unread"

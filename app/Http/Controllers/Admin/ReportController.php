@@ -3676,17 +3676,15 @@ class ReportController extends Controller
         }
 
         // 4-QADAM: HEMIS da davomat yo'q bo'lgan approved arizalarni ham qo'shish
-        // Attendance da topilgan excuse_id larni yig'ish
-        $matchedExcuseStudents = [];
+        // Attendance da topilgan talabalarni yig'ish (mark_status ga qaramay)
+        $studentsInAttendance = [];
         foreach ($results as $r) {
-            if (str_contains($r['mark_status'], 'Sababli')) {
-                $matchedExcuseStudents[$r['student_hemis_id']] = true;
-            }
+            $studentsInAttendance[$r['student_hemis_id']] = true;
         }
 
         foreach ($allApprovedExcuses as $exc) {
             // Bu talaba allaqachon attendance da topilgan bo'lsa — o'tkazib yuborish
-            if (isset($matchedExcuseStudents[$exc->student_hemis_id])) {
+            if (isset($studentsInAttendance[$exc->student_hemis_id])) {
                 continue;
             }
 
@@ -3720,7 +3718,7 @@ class ReportController extends Controller
                 'journal_url' => '#',
             ];
             // Bir marta qo'shilgandan keyin belgilash
-            $matchedExcuseStudents[$exc->student_hemis_id] = true;
+            $studentsInAttendance[$exc->student_hemis_id] = true;
         }
 
         // Qidirish filtri

@@ -3710,8 +3710,8 @@ class ReportController extends Controller
                 'mark_status' => 'Sababli (ariza)',
                 'match' => 'mismatch',
                 'pairs' => [[
-                    'lesson_date' => $startDate ? date('d.m.Y', strtotime($startDate)) : '-',
-                    'lesson_pair' => $endDate ? date('d.m.Y', strtotime($endDate)) : '-',
+                    'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
+                    'lesson_pair' => '-',
                     'hemis_status' => 'Davomat topilmadi',
                     'mark_status' => 'Sababli (ariza)',
                     'absent_on' => 0,

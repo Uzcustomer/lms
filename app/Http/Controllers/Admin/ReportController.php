@@ -3639,6 +3639,19 @@ class ReportController extends Controller
             $results[] = $row;
         }
 
+        // Qidirish filtri
+        if ($request->filled('search')) {
+            $search = mb_strtolower($request->search);
+            $results = array_values(array_filter($results, function ($r) use ($search) {
+                return str_contains(mb_strtolower($r['full_name'] ?? ''), $search)
+                    || str_contains(mb_strtolower($r['group_name'] ?? ''), $search)
+                    || str_contains(mb_strtolower($r['subject_name'] ?? ''), $search)
+                    || str_contains(mb_strtolower($r['department_name'] ?? ''), $search)
+                    || str_contains(mb_strtolower($r['student_hemis_id'] ?? ''), $search)
+                    || str_contains(mb_strtolower($r['specialty_name'] ?? ''), $search);
+            }));
+        }
+
         // Filtrlash: faqat nomuvofiqlarni ko'rsatish
         if ($request->get('filter_status') === 'mismatch') {
             $results = array_values(array_filter($results, fn($r) => $r['match'] === 'mismatch'));

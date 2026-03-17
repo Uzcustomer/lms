@@ -653,17 +653,10 @@ class ReportController extends Controller
             ->get()
             ->keyBy('subject_schedule_id');
 
-        // 3. student_grades da bor schedule IDlar (grade yoki retake_grade > 0)
+        // 3. student_grades da bor schedule IDlar (baho, retake, yoki NB — barchasi hisobga olinadi)
         $gradeRecords = DB::table('student_grades')
             ->whereIn('subject_schedule_id', $scheduleIds)
             ->whereNull('deleted_at')
-            ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereNotNull('grade')->where('grade', '>', 0);
-                })->orWhere(function ($q2) {
-                    $q2->whereNotNull('retake_grade')->where('retake_grade', '>', 0);
-                });
-            })
             ->select('subject_schedule_id')
             ->distinct()
             ->pluck('subject_schedule_id')
@@ -895,17 +888,10 @@ class ReportController extends Controller
             ->flip();
 
         // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
-        // retake_grade ham tekshiriladi (absent bo'lgan talabalar uchun)
+        // Baho > 0, retake_grade > 0, YOKI NB (reason='absent') — barchasi "o'qituvchi ishni bajargan" hisoblanadi
         $gradeByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereNotNull('grade')->where('grade', '>', 0);
-                })->orWhere(function ($q2) {
-                    $q2->whereNotNull('retake_grade')->where('retake_grade', '>', 0);
-                });
-            })
             ->pluck('subject_schedule_id')
             ->unique()
             ->flip();
@@ -915,19 +901,13 @@ class ReportController extends Controller
         // (HEMIS da employee_id farq qilishi yoki o'rinbosar o'qituvchi)
         // training_type_code tekshirilmaydi, chunki HEMIS API schedule va grade endpointlari
         // bitta dars uchun turli training_type qaytarishi mumkin (JournalController:468 izoh)
+        // Baho > 0, retake > 0, NB (absent) — barchasi "o'qituvchi ishni bajargan" deb hisoblanadi
         $gradeByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
-            ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereNotNull('sg.grade')->where('sg.grade', '>', 0);
-                })->orWhere(function ($q2) {
-                    $q2->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '>', 0);
-                });
-            })
             ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();

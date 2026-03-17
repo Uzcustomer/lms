@@ -3427,7 +3427,7 @@ class ReportController extends Controller
      */
     public function sababliCheckData(Request $request)
     {
-        // Filtrlar uchun umumiy funksiya
+        // Filtrlar
         $groupIds = [];
         if ($request->filled('education_type')) {
             $groupIds = DB::table('groups')
@@ -3440,61 +3440,37 @@ class ReportController extends Controller
         }
         $currentSemesterFilter = $request->get('current_semester', '1') == '1';
 
-        // 1-QADAM: Tasdiqlangan sababli arizalarni olish (absence_excuses + makeups)
-        $excuseQuery = DB::table('absence_excuses as ae')
-            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
-            ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
-            ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
-            ->where('g.department_active', true)
-            ->where('g.active', true)
-            ->where('ae.status', 'approved')
-            ->whereNotNull('aem.subject_id');
-
-        if ($request->filled('education_type')) {
-            $excuseQuery->whereIn('s.group_id', $groupIds);
-        }
-        if ($request->filled('faculty')) {
-            $faculty = Department::find($request->faculty);
-            if ($faculty) {
-                $excuseQuery->where('s.department_id', $faculty->department_hemis_id);
-            }
-        }
-        if ($request->filled('specialty')) {
-            $excuseQuery->where('s.specialty_id', $request->specialty);
-        }
-        if ($request->filled('level_code')) {
-            $excuseQuery->where('s.level_code', $request->level_code);
-        }
-        if ($request->filled('group')) {
-            $excuseQuery->where('s.group_id', $request->group);
-        }
-
-        $excuseRows = $excuseQuery->select(
-            'ae.student_hemis_id',
-            's.full_name',
-            'g.id as group_pk',
-            's.department_name',
-            's.specialty_name',
-            's.level_name',
-            's.group_name',
-            'aem.subject_id',
-            'aem.subject_name',
-            'ae.start_date',
-            'ae.end_date'
-        )->get();
-
-        // 2-QADAM: Ariza talabalarining attendances yozuvlarini olish
-        $studentHemisIds = $excuseRows->pluck('student_hemis_id')->unique()->toArray();
-
-        $attendanceQuery = DB::table('attendances as a')
+        // 1-QADAM: HEMIS dagi barcha sababli va sababsiz davomatlarni olish
+        $attQuery = DB::table('attendances as a')
             ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
             ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
-            ->whereIn('a.student_hemis_id', $studentHemisIds);
+            ->where(function ($q) {
+                $q->where('a.absent_on', '>', 0)
+                    ->orWhere('a.absent_off', '>', 0);
+            });
 
+        if ($request->filled('education_type')) {
+            $attQuery->whereIn('s.group_id', $groupIds);
+        }
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $attQuery->where('s.department_id', $faculty->department_hemis_id);
+            }
+        }
+        if ($request->filled('specialty')) {
+            $attQuery->where('s.specialty_id', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $attQuery->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('group')) {
+            $attQuery->where('s.group_id', $request->group);
+        }
         if ($currentSemesterFilter) {
-            $attendanceQuery->whereExists(function ($q) {
+            $attQuery->whereExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('semesters as sem')
                     ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
@@ -3504,168 +3480,27 @@ class ReportController extends Controller
             });
         }
 
-        $attendanceRows = $attendanceQuery->select(
-            'a.student_hemis_id', 'a.subject_id', 'a.lesson_date',
-            'a.lesson_pair_code', 'a.lesson_pair_start_time', 'a.lesson_pair_end_time',
-            'a.absent_on', 'a.absent_off', 'a.semester_code',
-            'a.subject_name as att_subject_name'
-        )->get();
-
-        // attendances ni indekslash: student_hemis_id|subject_id|lesson_date
-        $attendanceByStudentSubject = [];
-        foreach ($attendanceRows as $att) {
-            $dateStr = substr($att->lesson_date, 0, 10);
-            $groupKey = $att->student_hemis_id . '|' . $att->subject_id;
-            $attendanceByStudentSubject[$groupKey][] = $att;
-        }
-
-        // Ariza uchun indeks: student_hemis_id|subject_id => [{start_date, end_date}]
-        $excuseMap = [];
-        foreach ($excuseRows as $exc) {
-            $excKey = $exc->student_hemis_id . '|' . $exc->subject_id;
-            $excuseMap[$excKey][] = $exc;
-        }
-
-        // 3-QADAM: Ariza sababli → HEMIS tekshiruvi
-        $results = [];
-        $processedKeys = [];
-
-        foreach ($excuseRows as $exc) {
-            $groupKey = $exc->student_hemis_id . '|' . $exc->subject_id;
-            $startDate = substr($exc->start_date, 0, 10);
-            $endDate = substr($exc->end_date, 0, 10);
-
-            // Shu ariza sanalar oralig'idagi attendances larni topish
-            $atts = $attendanceByStudentSubject[$groupKey] ?? [];
-            $foundAny = false;
-
-            foreach ($atts as $att) {
-                $dateStr = substr($att->lesson_date, 0, 10);
-                if ($dateStr < $startDate || $dateStr > $endDate) {
-                    continue;
-                }
-
-                $uniqueKey = $att->student_hemis_id . '|' . $att->subject_id . '|' . $dateStr . '|' . $att->lesson_pair_code;
-                if (isset($processedKeys[$uniqueKey])) {
-                    continue;
-                }
-                $processedKeys[$uniqueKey] = true;
-                $foundAny = true;
-
-                // HEMIS holati
-                $hemisSababli = false;
-                $hemisStatus = 'Kelgan';
-
-                if ((int) $att->absent_on > 0 && (int) $att->absent_off == 0) {
-                    $hemisSababli = true;
-                    $hemisStatus = 'Sababli';
-                } elseif ((int) $att->absent_off > 0 && (int) $att->absent_on == 0) {
-                    $hemisStatus = 'Sababsiz';
-                } elseif ((int) $att->absent_on > 0 && (int) $att->absent_off > 0) {
-                    $hemisSababli = true;
-                    $hemisStatus = 'Aralash';
-                }
-
-                $match = $hemisSababli ? 'match' : 'mismatch';
-
-                $results[] = [
-                    'student_hemis_id' => $exc->student_hemis_id,
-                    'full_name' => $exc->full_name,
-                    'department_name' => $exc->department_name ?? '-',
-                    'specialty_name' => $exc->specialty_name ?? '-',
-                    'level_name' => $exc->level_name ?? '-',
-                    'group_name' => $exc->group_name ?? '-',
-                    'subject_name' => $exc->subject_name ?? $att->att_subject_name ?? '-',
-                    'lesson_date' => date('d.m.Y', strtotime($dateStr)),
-                    'lesson_pair' => ($att->lesson_pair_start_time && $att->lesson_pair_end_time)
-                        ? $att->lesson_pair_start_time . '-' . $att->lesson_pair_end_time : '-',
-                    'mark_status' => 'Sababli (ariza)',
-                    'hemis_status' => $hemisStatus,
-                    'match' => $match,
-                    'journal_url' => route('admin.journal.show', [
-                        'groupId' => $exc->group_pk,
-                        'subjectId' => $att->subject_id,
-                        'semesterCode' => $att->semester_code,
-                    ]),
-                ];
-            }
-
-            // Agar attendances topilmasa — HEMIS da davomat yozuvi yo'q
-            if (!$foundAny) {
-                $results[] = [
-                    'student_hemis_id' => $exc->student_hemis_id,
-                    'full_name' => $exc->full_name,
-                    'department_name' => $exc->department_name ?? '-',
-                    'specialty_name' => $exc->specialty_name ?? '-',
-                    'level_name' => $exc->level_name ?? '-',
-                    'group_name' => $exc->group_name ?? '-',
-                    'subject_name' => $exc->subject_name ?? '-',
-                    'lesson_date' => date('d.m.Y', strtotime($startDate)) . '-' . date('d.m.Y', strtotime($endDate)),
-                    'lesson_pair' => '-',
-                    'mark_status' => 'Sababli (ariza)',
-                    'hemis_status' => 'Davomat topilmadi',
-                    'match' => 'mismatch',
-                    'journal_url' => '#',
-                ];
-            }
-        }
-
-        // 4-QADAM: HEMIS sababli (absent_on > 0) → Arizada yo'q
-        $reverseQuery = DB::table('attendances as a')
-            ->join('students as s2', 's2.hemis_id', '=', 'a.student_hemis_id')
-            ->join('groups as g2', 'g2.group_hemis_id', '=', 's2.group_id')
-            ->where('g2.department_active', true)
-            ->where('g2.active', true)
-            ->where('a.absent_on', '>', 0);
-
-        if ($request->filled('education_type')) {
-            $reverseQuery->whereIn('s2.group_id', $groupIds);
-        }
-        if ($request->filled('faculty')) {
-            $faculty2 = Department::find($request->faculty);
-            if ($faculty2) {
-                $reverseQuery->where('s2.department_id', $faculty2->department_hemis_id);
-            }
-        }
-        if ($request->filled('specialty')) {
-            $reverseQuery->where('s2.specialty_id', $request->specialty);
-        }
-        if ($request->filled('level_code')) {
-            $reverseQuery->where('s2.level_code', $request->level_code);
-        }
-        if ($request->filled('group')) {
-            $reverseQuery->where('s2.group_id', $request->group);
-        }
-        if ($currentSemesterFilter) {
-            $reverseQuery->whereExists(function ($q) {
-                $q->select(DB::raw(1))
-                    ->from('semesters as sem2')
-                    ->whereColumn('sem2.curriculum_hemis_id', 'g2.curriculum_hemis_id')
-                    ->whereColumn('sem2.code', 'a.semester_code')
-                    ->whereColumn('sem2.education_year', 'a.education_year_code')
-                    ->where('sem2.current', true);
-            });
-        }
-
-        $reverseRows = $reverseQuery->select(
+        $attRows = $attQuery->select(
             'a.student_hemis_id',
-            's2.full_name',
-            'g2.id as group_pk',
-            's2.department_name',
-            's2.specialty_name',
-            's2.level_name',
-            's2.group_name',
+            's.full_name',
+            'g.id as group_pk',
+            's.department_name',
+            's.specialty_name',
+            's.level_name',
+            's.group_name',
+            's.semester_name',
             'a.subject_id',
             'a.subject_name',
             'a.lesson_date',
             'a.lesson_pair_code',
             'a.lesson_pair_start_time',
             'a.lesson_pair_end_time',
+            'a.absent_on',
+            'a.absent_off',
             'a.semester_code'
         )->get();
 
-        // Ariza bo'yicha indeks allaqachon bor: $excuseMap
-        // Barcha ariza talabalarini ham olish kerak
+        // 2-QADAM: Barcha tasdiqlangan arizalarni olish
         $allExcuses = DB::table('absence_excuses as ae')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
             ->where('ae.status', 'approved')
@@ -3673,26 +3508,40 @@ class ReportController extends Controller
             ->select('ae.student_hemis_id', 'aem.subject_id', 'ae.start_date', 'ae.end_date')
             ->get();
 
-        $fullExcuseMap = [];
+        // Indekslash: student_hemis_id|subject_id => [{start_date, end_date}]
+        $excuseMap = [];
         foreach ($allExcuses as $exc) {
             $excKey = $exc->student_hemis_id . '|' . $exc->subject_id;
-            $fullExcuseMap[$excKey][] = $exc;
+            $excuseMap[$excKey][] = $exc;
         }
 
-        foreach ($reverseRows as $ar) {
-            $dateStr = substr($ar->lesson_date, 0, 10);
-            $key = $ar->student_hemis_id . '|' . $ar->subject_id . '|' . $dateStr . '|' . $ar->lesson_pair_code;
+        // Semester nomlarini olish
+        $semesterNames = DB::table('semesters')
+            ->pluck('name', 'code')
+            ->toArray();
 
-            // Allaqachon ariza tomondan qayd etilganlarni o'tkazib yuborish
-            if (isset($processedKeys[$key])) {
-                continue;
+        // 3-QADAM: Har bir HEMIS davomat yozuvini ariza bilan solishtirish
+        $results = [];
+
+        foreach ($attRows as $att) {
+            $dateStr = substr($att->lesson_date, 0, 10);
+
+            // HEMIS holati
+            if ((int) $att->absent_on > 0 && (int) $att->absent_off == 0) {
+                $hemisStatus = 'Sababli';
+            } elseif ((int) $att->absent_off > 0 && (int) $att->absent_on == 0) {
+                $hemisStatus = 'Sababsiz';
+            } elseif ((int) $att->absent_on > 0 && (int) $att->absent_off > 0) {
+                $hemisStatus = 'Aralash';
+            } else {
+                $hemisStatus = 'Noaniq';
             }
 
-            // Ariza bor-yo'qligini tekshirish
-            $excKey = $ar->student_hemis_id . '|' . $ar->subject_id;
+            // Mark holati: approved ariza bor-yo'qligini tekshirish
+            $excKey = $att->student_hemis_id . '|' . $att->subject_id;
             $hasExcuse = false;
-            if (isset($fullExcuseMap[$excKey])) {
-                foreach ($fullExcuseMap[$excKey] as $exc) {
+            if (isset($excuseMap[$excKey])) {
+                foreach ($excuseMap[$excKey] as $exc) {
                     $excStart = substr($exc->start_date, 0, 10);
                     $excEnd = substr($exc->end_date, 0, 10);
                     if ($dateStr >= $excStart && $dateStr <= $excEnd) {
@@ -3702,29 +3551,37 @@ class ReportController extends Controller
                 }
             }
 
-            // Faqat ariza yo'q bo'lganlarni ko'rsatish
-            if ($hasExcuse) {
-                continue;
+            $markStatus = $hasExcuse ? 'Sababli (ariza)' : 'Ariza yo\'q';
+
+            // Moslik: HEMIS sababli + Ariza bor = match, qolgan hammasi = mismatch
+            $hemisIsSababli = in_array($hemisStatus, ['Sababli', 'Aralash']);
+            if ($hemisIsSababli && $hasExcuse) {
+                $match = 'match';
+            } elseif (!$hemisIsSababli && !$hasExcuse) {
+                $match = 'match';
+            } else {
+                $match = 'mismatch';
             }
 
             $results[] = [
-                'student_hemis_id' => $ar->student_hemis_id,
-                'full_name' => $ar->full_name,
-                'department_name' => $ar->department_name ?? '-',
-                'specialty_name' => $ar->specialty_name ?? '-',
-                'level_name' => $ar->level_name ?? '-',
-                'group_name' => $ar->group_name ?? '-',
-                'subject_name' => $ar->subject_name ?? '-',
+                'student_hemis_id' => $att->student_hemis_id,
+                'full_name' => $att->full_name,
+                'department_name' => $att->department_name ?? '-',
+                'specialty_name' => $att->specialty_name ?? '-',
+                'level_name' => $att->level_name ?? '-',
+                'group_name' => $att->group_name ?? '-',
+                'semester_name' => $att->semester_name ?? ($semesterNames[$att->semester_code] ?? $att->semester_code ?? '-'),
+                'subject_name' => $att->subject_name ?? '-',
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
-                'lesson_pair' => ($ar->lesson_pair_start_time && $ar->lesson_pair_end_time)
-                    ? $ar->lesson_pair_start_time . '-' . $ar->lesson_pair_end_time : '-',
-                'mark_status' => 'Ariza yo\'q',
-                'hemis_status' => 'Sababli',
-                'match' => 'mismatch',
+                'lesson_pair' => ($att->lesson_pair_start_time && $att->lesson_pair_end_time)
+                    ? $att->lesson_pair_start_time . '-' . $att->lesson_pair_end_time : '-',
+                'mark_status' => $markStatus,
+                'hemis_status' => $hemisStatus,
+                'match' => $match,
                 'journal_url' => route('admin.journal.show', [
-                    'groupId' => $ar->group_pk,
-                    'subjectId' => $ar->subject_id,
-                    'semesterCode' => $ar->semester_code,
+                    'groupId' => $att->group_pk,
+                    'subjectId' => $att->subject_id,
+                    'semesterCode' => $att->semester_code,
                 ]),
             ];
         }
@@ -3789,7 +3646,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sababli check');
 
-        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Fan', 'Sana', 'Juftlik', 'Mark', 'HEMIS holati', 'Natija'];
+        $headers = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Semestr', 'Fan', 'Sana', 'Juftlik', 'Mark', 'HEMIS holati', 'Natija'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -3800,7 +3657,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -3810,35 +3667,36 @@ class ReportController extends Controller
             $sheet->setCellValue([4, $row], $r['specialty_name']);
             $sheet->setCellValue([5, $row], $r['level_name']);
             $sheet->setCellValue([6, $row], $r['group_name']);
-            $sheet->setCellValue([7, $row], $r['subject_name']);
-            $sheet->setCellValue([8, $row], $r['lesson_date']);
-            $sheet->setCellValue([9, $row], $r['lesson_pair'] ?? '-');
-            $sheet->setCellValue([10, $row], $r['mark_status']);
-            $sheet->setCellValue([11, $row], $r['hemis_status']);
-            $sheet->setCellValue([12, $row], $r['match'] === 'match' ? 'Mos' : 'Mos emas');
+            $sheet->setCellValue([7, $row], $r['semester_name'] ?? '-');
+            $sheet->setCellValue([8, $row], $r['subject_name']);
+            $sheet->setCellValue([9, $row], $r['lesson_date']);
+            $sheet->setCellValue([10, $row], $r['lesson_pair'] ?? '-');
+            $sheet->setCellValue([11, $row], $r['mark_status']);
+            $sheet->setCellValue([12, $row], $r['hemis_status']);
+            $sheet->setCellValue([13, $row], $r['match'] === 'match' ? 'Mos' : 'Mos emas');
 
             // Natija rangini qo'yish
             if ($r['match'] === 'match') {
-                $sheet->getStyle("L{$row}")->applyFromArray([
+                $sheet->getStyle("M{$row}")->applyFromArray([
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D1FAE5']],
                     'font' => ['bold' => true, 'color' => ['rgb' => '065F46']],
                 ]);
             } else {
-                $sheet->getStyle("L{$row}")->applyFromArray([
+                $sheet->getStyle("M{$row}")->applyFromArray([
                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
                     'font' => ['bold' => true, 'color' => ['rgb' => 'DC2626']],
                 ]);
             }
         }
 
-        $widths = [5, 30, 25, 30, 8, 15, 35, 12, 20, 18, 18, 12];
+        $widths = [5, 30, 25, 30, 8, 15, 15, 35, 12, 20, 18, 18, 12];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

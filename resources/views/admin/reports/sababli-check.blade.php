@@ -114,11 +114,11 @@
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="lesson_date">Sana <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="lesson_pair">Juftlik <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="total_hours">Nb soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="mark_status">Mark <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="hemis_status">HEMIS holati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="match">Natija <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;width:50px;">Info</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -127,6 +127,33 @@
                         <div id="pagination-area" style="padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Juftliklar modali -->
+    <div id="pairs-modal-overlay" class="pairs-modal-overlay" style="display:none;" onclick="closePairsModal(event)">
+        <div class="pairs-modal" onclick="event.stopPropagation()">
+            <div class="pairs-modal-header">
+                <h3 id="pairs-modal-title" style="margin:0;font-size:15px;font-weight:700;color:#0f172a;"></h3>
+                <button class="pairs-modal-close" onclick="closePairsModal()">&times;</button>
+            </div>
+            <div class="pairs-modal-subtitle" id="pairs-modal-subtitle" style="padding:0 20px 12px;font-size:12px;color:#64748b;"></div>
+            <div class="pairs-modal-body">
+                <table class="pairs-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Sana</th>
+                            <th>Juftlik</th>
+                            <th>Sababli (soat)</th>
+                            <th>Sababsiz (soat)</th>
+                            <th>HEMIS holati</th>
+                            <th>Mark holati</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pairs-modal-body"></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -225,12 +252,8 @@
                 var valA = a[currentSort] || '';
                 var valB = b[currentSort] || '';
                 var cmp;
-                if (currentSort === 'lesson_date') {
-                    // dd.mm.yyyy → Date ga parse qilish
-                    var pA = valA.split('.'), pB = valB.split('.');
-                    var dA = new Date(pA[2], pA[1] - 1, pA[0]);
-                    var dB = new Date(pB[2], pB[1] - 1, pB[0]);
-                    cmp = dA - dB;
+                if (currentSort === 'total_hours') {
+                    cmp = (parseInt(valA) || 0) - (parseInt(valB) || 0);
                 } else {
                     cmp = valA.toString().localeCompare(valB.toString(), 'uz', {numeric: true});
                 }
@@ -250,6 +273,7 @@
                 pageData[i].row_num = offset + i + 1;
             }
 
+            currentPageData = pageData;
             renderTable(pageData);
             renderPagination({current_page: currentPage, last_page: lastPage, total: total});
         }
@@ -267,13 +291,14 @@
         }
 
         function markBadge(val) {
-            if (val === 'Sababli (ariza)') return '<span class="badge badge-lms">Sababli (ariza)</span>';
+            if (val && val.indexOf('Sababli') === 0) return '<span class="badge badge-lms">' + esc(val) + '</span>';
             return '<span class="badge badge-hemis-bad">Ariza yo\'q</span>';
         }
 
         function hemisBadge(val) {
             if (val === 'Sababli') return '<span class="badge badge-hemis-ok">Sababli</span>';
             if (val === 'Sababsiz') return '<span class="badge badge-hemis-bad">Sababsiz</span>';
+            if (val === 'Aralash') return '<span class="badge badge-hemis-mixed">Aralash</span>';
             if (val === 'Davomat topilmadi') return '<span class="badge badge-hemis-none">Topilmadi</span>';
             return '<span class="badge badge-hemis-none">' + esc(val) + '</span>';
         }
@@ -283,21 +308,51 @@
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var rowClass = r.match === 'mismatch' ? 'row-mismatch' : '';
-                html += '<tr class="journal-row ' + rowClass + '" style="cursor:pointer;" onclick="window.open(\'' + r.journal_url + '\', \'_blank\')">';
+                html += '<tr class="journal-row ' + rowClass + '">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
-                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
+                html += '<td style="cursor:pointer;" onclick="window.open(\'' + r.journal_url + '\', \'_blank\')"><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.semester_name) + '</td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
-                html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_date) + '</td>';
-                html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_pair) + '</td>';
+                html += '<td style="text-align:center;font-weight:700;font-size:13px;color:#dc2626;">' + r.total_hours + '</td>';
                 html += '<td style="text-align:center;">' + markBadge(r.mark_status) + '</td>';
                 html += '<td style="text-align:center;">' + hemisBadge(r.hemis_status) + '</td>';
                 html += '<td style="text-align:center;">' + matchBadge(r.match) + '</td>';
+                html += '<td style="text-align:center;"><button class="btn-detail" onclick="openPairsModal(' + i + ')" title="Batafsil"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
+        }
+
+        var currentPageData = [];
+
+        function openPairsModal(idx) {
+            var r = currentPageData[idx];
+            if (!r) return;
+            $('#pairs-modal-title').text(r.full_name + ' — ' + r.subject_name);
+            $('#pairs-modal-subtitle').text(r.group_name + ' | ' + r.semester_name + ' | Jami: ' + r.total_hours + ' soat (sababli: ' + r.total_absent_on + ', sababsiz: ' + r.total_absent_off + ')');
+            var html = '';
+            var pairs = r.pairs || [];
+            for (var i = 0; i < pairs.length; i++) {
+                var p = pairs[i];
+                html += '<tr>';
+                html += '<td style="text-align:center;">' + (i + 1) + '</td>';
+                html += '<td style="text-align:center;">' + esc(p.lesson_date) + '</td>';
+                html += '<td style="text-align:center;">' + esc(p.lesson_pair) + '</td>';
+                html += '<td style="text-align:center;color:#065f46;font-weight:600;">' + p.absent_on + '</td>';
+                html += '<td style="text-align:center;color:#dc2626;font-weight:600;">' + p.absent_off + '</td>';
+                html += '<td style="text-align:center;">' + hemisBadge(p.hemis_status) + '</td>';
+                html += '<td style="text-align:center;">' + markBadge(p.mark_status) + '</td>';
+                html += '</tr>';
+            }
+            $('#pairs-modal-body').html(html);
+            $('#pairs-modal-overlay').fadeIn(150);
+        }
+
+        function closePairsModal(e) {
+            if (e && e.target !== e.currentTarget) return;
+            $('#pairs-modal-overlay').fadeOut(150);
         }
 
         function downloadExcel() {
@@ -429,6 +484,23 @@
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
         .text-subject { color: #0f172a; font-weight: 700; font-size: 12.5px; max-width: 260px; white-space: normal; word-break: break-word; }
+
+        .badge-hemis-mixed { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+
+        .btn-detail { display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer;color:#64748b;transition:all 0.15s; }
+        .btn-detail:hover { background:#f0f9ff;border-color:#2b5ea7;color:#2b5ea7; }
+
+        .pairs-modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center; }
+        .pairs-modal { background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.2);width:90%;max-width:800px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden; }
+        .pairs-modal-header { display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc; }
+        .pairs-modal-close { background:none;border:none;font-size:24px;color:#94a3b8;cursor:pointer;padding:0 4px;line-height:1; }
+        .pairs-modal-close:hover { color:#dc2626; }
+        .pairs-modal-body { overflow-y:auto;padding:0; }
+
+        .pairs-table { width:100%;border-collapse:collapse;font-size:12px; }
+        .pairs-table thead { background:#f0f4f8;position:sticky;top:0;z-index:1; }
+        .pairs-table th { padding:10px 8px;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;color:#475569;border-bottom:2px solid #cbd5e1; }
+        .pairs-table td { padding:8px;border-bottom:1px solid #f1f5f9; }
 
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #f0f9ff; border-color: #2b5ea7; color: #2b5ea7; }

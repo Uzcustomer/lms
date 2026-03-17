@@ -449,7 +449,7 @@ class SendAttendanceGroupSummary extends Command
                 $r['lesson_pair_time'],
                 $r['student_count'],
                 $r['has_attendance'],
-                $r['has_grades'] === null ? '-' : ($r['has_grades'] ? true : 'badge:red:' . $r['graded_count'] . '/' . $r['student_count']),
+                $r['has_grades'] === null ? '-' : ($r['has_grades'] ? true : 'badge:red:Yo\'q (' . $r['missing_grade_count'] . ')'),
                 $now->format('H:i') . ' ' . $r['lesson_date'],
             ];
         }

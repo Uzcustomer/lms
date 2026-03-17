@@ -3676,49 +3676,107 @@ class ReportController extends Controller
         }
 
         // 4-QADAM: HEMIS da davomat yo'q bo'lgan approved arizalarni ham qo'shish
-        // Attendance da topilgan talabalarni yig'ish (mark_status ga qaramay)
+        // Attendance da topilgan student+subject juftliklarni yig'ish
+        $attendancePairs = [];
         $studentsInAttendance = [];
         foreach ($results as $r) {
             $studentsInAttendance[$r['student_hemis_id']] = true;
+            if (!empty($r['subject_id'])) {
+                $attendancePairs[$r['student_hemis_id'] . '|' . $r['subject_id']] = true;
+            }
         }
 
-        foreach ($allApprovedExcuses as $exc) {
-            // Bu talaba allaqachon attendance da topilgan bo'lsa — o'tkazib yuborish
-            if (isset($studentsInAttendance[$exc->student_hemis_id])) {
-                continue;
-            }
+        // Barcha approved arizalarning makeup fanlari
+        $excuseIds = $allApprovedExcuses->pluck('excuse_id')->toArray();
+        $allMakeups = !empty($excuseIds)
+            ? DB::table('absence_excuse_makeups')
+                ->whereIn('absence_excuse_id', $excuseIds)
+                ->whereNotNull('subject_id')
+                ->select('absence_excuse_id', 'subject_id', 'subject_name')
+                ->get()
+                ->groupBy('absence_excuse_id')
+            : collect();
 
+        // Qo'shilgan juftliklarni kuzatish (dublikat oldini olish)
+        $addedPairs = [];
+
+        foreach ($allApprovedExcuses as $exc) {
             $startDate = substr($exc->start_date, 0, 10);
             $endDate = substr($exc->end_date, 0, 10);
+            $makeups = $allMakeups->get($exc->excuse_id, collect());
 
-            $results[] = [
-                'student_hemis_id' => $exc->student_hemis_id,
-                'full_name' => $exc->full_name ?? '-',
-                'department_name' => $exc->department_name ?? '-',
-                'specialty_name' => $exc->specialty_name ?? '-',
-                'level_name' => $exc->level_name ?? '-',
-                'group_name' => $exc->group_name ?? '-',
-                'semester_name' => $exc->semester_name ?? '-',
-                'subject_name' => 'Ariza: ' . ($startDate ? date('d.m.Y', strtotime($startDate)) : '') . ' - ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : ''),
-                'subject_id' => null,
-                'total_absent_on' => 0,
-                'total_absent_off' => 0,
-                'total_hours' => 0,
-                'hemis_status' => 'Davomat topilmadi',
-                'mark_status' => 'Sababli (ariza)',
-                'match' => 'mismatch',
-                'pairs' => [[
-                    'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
-                    'lesson_pair' => '-',
-                    'hemis_status' => 'Davomat topilmadi',
+            if ($makeups->isNotEmpty()) {
+                // Arizada fanlar bor — har bir fan uchun alohida tekshirish
+                foreach ($makeups as $mk) {
+                    $pairKey = $exc->student_hemis_id . '|' . $mk->subject_id;
+
+                    // Bu student+subject allaqachon attendance da bor yoki allaqachon qo'shilgan
+                    if (isset($attendancePairs[$pairKey]) || isset($addedPairs[$pairKey])) {
+                        continue;
+                    }
+
+                    $results[] = [
+                        'student_hemis_id' => $exc->student_hemis_id,
+                        'full_name' => $exc->full_name ?? '-',
+                        'department_name' => $exc->department_name ?? '-',
+                        'specialty_name' => $exc->specialty_name ?? '-',
+                        'level_name' => $exc->level_name ?? '-',
+                        'group_name' => $exc->group_name ?? '-',
+                        'semester_name' => $exc->semester_name ?? '-',
+                        'subject_name' => $mk->subject_name,
+                        'subject_id' => $mk->subject_id,
+                        'total_absent_on' => 0,
+                        'total_absent_off' => 0,
+                        'total_hours' => 0,
+                        'hemis_status' => 'Topilmadi',
+                        'mark_status' => 'Sababli (ariza)',
+                        'match' => 'mismatch',
+                        'pairs' => [[
+                            'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
+                            'lesson_pair' => '-',
+                            'hemis_status' => 'Topilmadi',
+                            'mark_status' => 'Sababli (ariza)',
+                            'absent_on' => 0,
+                            'absent_off' => 0,
+                        ]],
+                        'journal_url' => '#',
+                    ];
+                    $addedPairs[$pairKey] = true;
+                }
+            } else {
+                // Arizada fan yo'q (umumiy ariza) — talaba attendance da umuman yo'q bo'lsa qo'shish
+                if (isset($studentsInAttendance[$exc->student_hemis_id])) {
+                    continue;
+                }
+
+                $results[] = [
+                    'student_hemis_id' => $exc->student_hemis_id,
+                    'full_name' => $exc->full_name ?? '-',
+                    'department_name' => $exc->department_name ?? '-',
+                    'specialty_name' => $exc->specialty_name ?? '-',
+                    'level_name' => $exc->level_name ?? '-',
+                    'group_name' => $exc->group_name ?? '-',
+                    'semester_name' => $exc->semester_name ?? '-',
+                    'subject_name' => 'Ariza: ' . ($startDate ? date('d.m.Y', strtotime($startDate)) : '') . ' - ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : ''),
+                    'subject_id' => null,
+                    'total_absent_on' => 0,
+                    'total_absent_off' => 0,
+                    'total_hours' => 0,
+                    'hemis_status' => 'Topilmadi',
                     'mark_status' => 'Sababli (ariza)',
-                    'absent_on' => 0,
-                    'absent_off' => 0,
-                ]],
-                'journal_url' => '#',
-            ];
-            // Bir marta qo'shilgandan keyin belgilash
-            $studentsInAttendance[$exc->student_hemis_id] = true;
+                    'match' => 'mismatch',
+                    'pairs' => [[
+                        'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
+                        'lesson_pair' => '-',
+                        'hemis_status' => 'Topilmadi',
+                        'mark_status' => 'Sababli (ariza)',
+                        'absent_on' => 0,
+                        'absent_off' => 0,
+                    ]],
+                    'journal_url' => '#',
+                ];
+                $studentsInAttendance[$exc->student_hemis_id] = true;
+            }
         }
 
         // Qidirish filtri

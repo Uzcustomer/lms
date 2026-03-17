@@ -908,11 +908,25 @@ class ReportController extends Controller
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code)"))
             ->pluck('cnt', 'gk');
 
-        // 3-QADAM: Talaba sonini guruh bo'yicha hisoblash (faqat faol talabalar, chetlashtirilganlar hisobga olinmaydi)
+        // 3-QADAM: Fanga biriktirilgan faol talabalar sonini hisoblash
+        // student_subjects jadvalidan — HEMIS da fanga biriktirilgan talabalarni olish
+        // Chetlashtirilgan talabalar (student_status_code != 11) hisobga olinmaydi
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
-        $studentCounts = DB::table('students')
+        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+
+        $subjectStudentCounts = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->where('st.student_status_code', 11) // Faqat faol talabalar
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->pluck('cnt', 'gs_key');
+
+        // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
+        $groupStudentCounts = DB::table('students')
             ->whereIn('group_id', $groupIds)
-            ->where('student_status_code', 11) // Faol talabalar
+            ->where('student_status_code', 11)
             ->select('group_id', DB::raw('COUNT(*) as cnt'))
             ->groupBy('group_id')
             ->pluck('cnt', 'group_id');
@@ -937,9 +951,11 @@ class ReportController extends Controller
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
                    || isset($attendanceByKey[$attKey]);
 
-            // Baho: haqiqiy baho qo'yilgan talabalar soni va baho qo'yilmaganlar soni
+            // Baho: fanga biriktirilgan talabalar soni va baho qo'yilmaganlar soni
             $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
-            $totalStudents = $studentCounts[$sch->group_id] ?? 0;
+            // Fanga biriktirilgan talabalar soni (student_subjects), topilmasa guruh soni
+            $gsKey = $sch->group_id . '|' . $sch->subject_id;
+            $totalStudents = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
 
             if ($skipGradeCheck) {
                 $hasGrade = null;

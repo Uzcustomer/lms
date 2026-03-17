@@ -106,7 +106,24 @@ class SendUnratedRegistrationsReport extends Command
         $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
         $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
 
-        // Guruhdagi faol talabalar soni (chetlashganlar — status_code=60 — hisobga olinmaydi)
+        // Fanga biriktirilgan faol talabalar soni (student_subjects jadvalidan)
+        // Chetlashganlar (status_code=60) hisobga olinmaydi
+        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+
+        $subjectStudentCounts = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->whereNull('st.deleted_at')
+            ->where(function ($q) {
+                $q->where('st.student_status_code', '!=', '60')
+                  ->orWhereNull('st.student_status_code');
+            })
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->pluck('cnt', 'gs_key');
+
+        // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
         $groupStudentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
             ->whereNull('deleted_at')
@@ -177,10 +194,11 @@ class SendUnratedRegistrationsReport extends Command
                 continue;
             }
 
-            // Guruhdagi faol talabalar soni
-            $groupTotal = $groupStudentCounts[$sch->group_id] ?? 0;
-            if ($groupTotal === 0) {
-                continue; // Guruhda faol talaba yo'q
+            // Fanga biriktirilgan faol talabalar soni (student_subjects), topilmasa guruh soni
+            $gsKey = $sch->group_id . '|' . $sch->subject_id;
+            $subjectTotal = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
+            if ($subjectTotal === 0) {
+                continue; // Bu fanga biriktirilgan faol talaba yo'q
             }
 
             // Baho qo'yilgan talabalar soni (ikkala usuldan kattasini olish)
@@ -189,8 +207,8 @@ class SendUnratedRegistrationsReport extends Command
             $gradedByKey = $gradeCountByKey[$gradeKey] ?? 0;
             $gradedCount = max($gradedBySchedule, $gradedByKey);
 
-            // Barcha talabaga baho/NB qo'yilgan bo'lsa — o'tkazib yuborish
-            if ($gradedCount >= $groupTotal) {
+            // Barcha biriktirilgan talabaga baho/NB qo'yilgan bo'lsa — o'tkazib yuborish
+            if ($gradedCount >= $subjectTotal) {
                 continue;
             }
 

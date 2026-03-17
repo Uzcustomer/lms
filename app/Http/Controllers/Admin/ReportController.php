@@ -3946,6 +3946,95 @@ class ReportController extends Controller
         }
         unset($item);
 
+        // DEBUG LOG: Topilmagan subject_id larni aniqlash
+        $debugLog = [];
+        $allMakeupRows = DB::table('absence_excuse_makeups as aem')
+            ->join('absence_excuses as ae', 'ae.id', '=', 'aem.absence_excuse_id')
+            ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
+            ->where('ae.status', 'approved')
+            ->whereNotNull('aem.subject_id')
+            ->select(
+                'aem.id as makeup_id',
+                'aem.subject_name',
+                'aem.subject_id as original_subject_id',
+                'ae.student_hemis_id',
+                's.full_name',
+                's.group_name',
+                's.curriculum_id',
+                's.semester_code'
+            )
+            ->get();
+
+        foreach ($allMakeupRows as $m) {
+            // 1) student_subjects dan qidirish
+            $ssResult = DB::table('student_subjects')
+                ->where('student_hemis_id', $m->student_hemis_id)
+                ->where('subject_name', $m->subject_name)
+                ->select('subject_id', 'subject_name')
+                ->first();
+
+            // 2) curriculum_subjects dan aniq qidirish
+            $csExact = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $m->curriculum_id)
+                ->where('semester_code', $m->semester_code)
+                ->where('subject_name', $m->subject_name)
+                ->select('subject_id', 'subject_name')
+                ->first();
+
+            // 3) curriculum_subjects dan LIKE qidirish
+            $csLike = null;
+            if (!$ssResult && !$csExact) {
+                $csLike = DB::table('curriculum_subjects')
+                    ->where('curricula_hemis_id', $m->curriculum_id)
+                    ->where('semester_code', $m->semester_code)
+                    ->where('subject_name', 'LIKE', '%' . mb_substr($m->subject_name, 0, 15) . '%')
+                    ->select('subject_id', 'subject_name')
+                    ->first();
+            }
+
+            $resolvedId = $ssResult->subject_id ?? $csExact->subject_id ?? $csLike->subject_id ?? $m->original_subject_id;
+            $resolvedVia = $ssResult ? 'student_subjects' : ($csExact ? 'curriculum_subjects (aniq)' : ($csLike ? 'curriculum_subjects (LIKE)' : 'original (o\'zgartirilmadi)'));
+
+            // attendance da bor-yo'qligini tekshirish
+            $attExists = DB::table('attendances')
+                ->where('student_hemis_id', $m->student_hemis_id)
+                ->where('subject_id', $resolvedId)
+                ->where(function ($q) {
+                    $q->where('absent_on', '>', 0)->orWhere('absent_off', '>', 0);
+                })
+                ->exists();
+
+            // Faqat muammoli yozuvlarni log ga qo'shish
+            if (!$attExists || $resolvedVia === 'original (o\'zgartirilmadi)') {
+                $reason = [];
+                if (!$ssResult) {
+                    $reason[] = 'student_subjects da "' . $m->subject_name . '" topilmadi';
+                }
+                if (!$csExact) {
+                    $reason[] = 'curriculum_subjects da aniq mos topilmadi (curriculum_id=' . $m->curriculum_id . ', semester=' . $m->semester_code . ')';
+                }
+                if (!$csLike && !$ssResult && !$csExact) {
+                    $reason[] = 'curriculum_subjects da LIKE bilan ham topilmadi';
+                }
+                if (!$attExists) {
+                    $reason[] = 'attendance da nb yozuvi yo\'q (resolved_id=' . $resolvedId . ')';
+                }
+
+                $debugLog[] = [
+                    'makeup_id' => $m->makeup_id,
+                    'student_hemis_id' => $m->student_hemis_id,
+                    'full_name' => $m->full_name,
+                    'group_name' => $m->group_name,
+                    'subject_name' => $m->subject_name,
+                    'original_id' => $m->original_subject_id,
+                    'resolved_id' => $resolvedId,
+                    'resolved_via' => $resolvedVia,
+                    'att_exists' => $attExists,
+                    'reason' => implode(' | ', $reason),
+                ];
+            }
+        }
+
         return response()->json([
             'data' => $pageData,
             'total' => $total,
@@ -3954,6 +4043,7 @@ class ReportController extends Controller
             'last_page' => (int) ceil($total / max($perPage, 1)),
             'match_count' => $matchCount,
             'mismatch_count' => $mismatchCount,
+            'debug_log' => $debugLog,
         ]);
     }
 

@@ -130,6 +130,37 @@
                             </table>
                         </div>
                         <div id="pagination-area" style="padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;"></div>
+
+                        <!-- Debug Log -->
+                        <div id="debug-log-area" style="display:none;">
+                            <div style="border-top:2px solid #fbbf24;background:#fffbeb;padding:12px 20px;cursor:pointer;" onclick="$('#debug-log-table').toggle();$(this).find('.debug-arrow').toggleClass('open');">
+                                <span style="font-size:13px;font-weight:700;color:#92400e;">
+                                    <span class="debug-arrow" style="display:inline-block;transition:transform 0.2s;">&#9654;</span>
+                                    DEBUG LOG — Topilmagan / Muammoli arizalar
+                                    (<span id="debug-log-count">0</span> ta)
+                                </span>
+                                <span style="font-size:11px;color:#b45309;margin-left:8px;">(bosing ochish/yopish uchun)</span>
+                            </div>
+                            <div id="debug-log-table" style="display:none;max-height:400px;overflow:auto;">
+                                <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+                                    <thead style="background:#fef3c7;position:sticky;top:0;z-index:1;">
+                                        <tr>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">#</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Makeup ID</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Talaba</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Guruh</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Fan nomi</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Asl ID</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Resolved ID</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Qayerdan</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Att?</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Sabab</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="debug-log-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -243,6 +274,7 @@
                     $('#mismatch-badge').text('Mos emas: ' + (res.mismatch_count || 0));
                     $('#time-badge').text(elapsed + ' soniyada tekshirildi');
                     renderPage();
+                    renderDebugLog(res.debug_log || []);
                     $('#table-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
@@ -385,6 +417,35 @@
         function closePairsModal(e) {
             if (e && e.target !== e.currentTarget) return;
             $('#pairs-modal-overlay').fadeOut(150);
+        }
+
+        function renderDebugLog(logs) {
+            if (!logs || logs.length === 0) {
+                $('#debug-log-area').hide();
+                return;
+            }
+            $('#debug-log-count').text(logs.length);
+            var html = '';
+            for (var i = 0; i < logs.length; i++) {
+                var l = logs[i];
+                var attIcon = l.att_exists ? '<span style="color:#16a34a;">&#10004;</span>' : '<span style="color:#dc2626;">&#10008;</span>';
+                var idChanged = l.original_id != l.resolved_id;
+                var rowBg = i % 2 === 0 ? '#fff' : '#fffbeb';
+                html += '<tr style="background:' + rowBg + ';border-bottom:1px solid #fef3c7;">';
+                html += '<td style="padding:6px;color:#92400e;font-weight:600;">' + (i + 1) + '</td>';
+                html += '<td style="padding:6px;font-weight:700;color:#0f172a;">' + l.makeup_id + '</td>';
+                html += '<td style="padding:6px;">' + esc(l.full_name) + ' <span style="color:#94a3b8;font-size:10px;">(' + l.student_hemis_id + ')</span></td>';
+                html += '<td style="padding:6px;">' + esc(l.group_name) + '</td>';
+                html += '<td style="padding:6px;font-weight:600;color:#0f172a;">' + esc(l.subject_name) + '</td>';
+                html += '<td style="padding:6px;text-align:center;' + (idChanged ? 'color:#dc2626;text-decoration:line-through;' : '') + '">' + l.original_id + '</td>';
+                html += '<td style="padding:6px;text-align:center;font-weight:700;' + (idChanged ? 'color:#16a34a;' : 'color:#64748b;') + '">' + l.resolved_id + '</td>';
+                html += '<td style="padding:6px;"><span style="background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">' + esc(l.resolved_via) + '</span></td>';
+                html += '<td style="padding:6px;text-align:center;">' + attIcon + '</td>';
+                html += '<td style="padding:6px;color:#b45309;font-size:11px;">' + esc(l.reason) + '</td>';
+                html += '</tr>';
+            }
+            $('#debug-log-body').html(html);
+            $('#debug-log-area').show();
         }
 
         function downloadExcel() {
@@ -575,5 +636,6 @@
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #f0f9ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
+        .debug-arrow.open { transform: rotate(90deg); }
     </style>
 </x-app-layout>

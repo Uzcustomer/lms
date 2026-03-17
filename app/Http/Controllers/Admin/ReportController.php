@@ -887,22 +887,52 @@ class ReportController extends Controller
             ->pluck('ck')
             ->flip();
 
-        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
-        // Baho > 0, retake_grade > 0, YOKI NB (reason='absent') — barchasi "o'qituvchi ishni bajargan" hisoblanadi
-        $gradeByScheduleId = DB::table('student_grades')
+        // Baho (1-usul): subject_schedule_id bo'yicha haqiqiy baho qo'yilgan talabalar soni
+        // Faqat grade > 0 yoki retake_grade > 0 — haqiqiy baho hisoblanadi
+        // NB (reason='absent', grade=NULL) — baho emas, faqat davomat
+        $gradedCountByScheduleId = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('grade')->where('grade', '>', 0);
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('retake_grade')->where('retake_grade', '>', 0);
+                });
+            })
+            ->select('subject_schedule_id', DB::raw('COUNT(DISTINCT student_hemis_id) as cnt'))
+            ->groupBy('subject_schedule_id')
+            ->pluck('cnt', 'subject_schedule_id');
+
+        // Baho (1-usul-b): subject_schedule_id bo'yicha BIRORTA yozuv mavjudmi (NB ham)
+        // Agar hech qanday yozuv yo'q bo'lsa — o'qituvchi umuman ishlamagan
+        $anyRecordByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
             ->pluck('subject_schedule_id')
             ->unique()
             ->flip();
 
-        // Baho (2-usul): group + subject + date + lesson_pair
-        // employee_id tekshirilmaydi, chunki bahoni boshqa o'qituvchi qo'ygan bo'lishi mumkin
-        // (HEMIS da employee_id farq qilishi yoki o'rinbosar o'qituvchi)
-        // training_type_code tekshirilmaydi, chunki HEMIS API schedule va grade endpointlari
-        // bitta dars uchun turli training_type qaytarishi mumkin (JournalController:468 izoh)
-        // Baho > 0, retake > 0, NB (absent) — barchasi "o'qituvchi ishni bajargan" deb hisoblanadi
-        $gradeByKey = DB::table('student_grades as sg')
+        // Baho (2-usul): group + subject + date + lesson_pair bo'yicha haqiqiy baho soni
+        $gradedCountByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('sg.grade')->where('sg.grade', '>', 0);
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '>', 0);
+                });
+            })
+            ->select(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code)"))
+            ->pluck('cnt', 'gk');
+
+        // Baho (2-usul-b): birorta yozuv mavjudmi (NB ham)
+        $anyRecordByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
@@ -912,7 +942,7 @@ class ReportController extends Controller
             ->pluck('gk')
             ->flip();
 
-        // 3-QADAM: Talaba sonini guruh bo'yicha hisoblash
+        // 3-QADAM: Talaba sonini guruh bo'yicha hisoblash (faqat faol talabalar, chetlashtirilganlar hisobga olinmaydi)
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
         $studentCounts = DB::table('students')
             ->whereIn('group_id', $groupIds)
@@ -941,12 +971,40 @@ class ReportController extends Controller
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
                    || isset($attendanceByKey[$attKey]);
 
-            // Baho: schedule_hemis_id orqali yoki atribut kaliti (group_id bilan) orqali
+            // Baho: haqiqiy baho qo'yilgan talabalar soni va baho qo'yilmaganlar soni
             $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
-            $hasGrade = $skipGradeCheck ? null : (
-                isset($gradeByScheduleId[$sch->schedule_hemis_id])
-                || isset($gradeByKey[$gradeKey])
-            );
+            $totalStudents = $studentCounts[$sch->group_id] ?? 0;
+
+            if ($skipGradeCheck) {
+                $hasGrade = null;
+                $missingGradeCount = 0;
+            } else {
+                // 1-usul: schedule_hemis_id orqali
+                $gradedBySchedule = $gradedCountByScheduleId[$sch->schedule_hemis_id] ?? 0;
+                $hasAnyBySchedule = isset($anyRecordByScheduleId[$sch->schedule_hemis_id]);
+
+                // 2-usul: kalit orqali
+                $gradedByComposite = $gradedCountByKey[$gradeKey] ?? 0;
+                $hasAnyByComposite = isset($anyRecordByKey[$gradeKey]);
+
+                // Eng ko'p baho topilgan usulni tanlash
+                $gradedCount = max($gradedBySchedule, $gradedByComposite);
+                $hasAnyRecord = $hasAnyBySchedule || $hasAnyByComposite;
+
+                if (!$hasAnyRecord) {
+                    // Hech qanday yozuv yo'q — o'qituvchi umuman ishlamagan
+                    $hasGrade = false;
+                    $missingGradeCount = $totalStudents;
+                } elseif ($gradedCount >= $totalStudents) {
+                    // Barcha faol talabalarga baho qo'yilgan
+                    $hasGrade = true;
+                    $missingGradeCount = 0;
+                } else {
+                    // Ba'zi talabalarga baho qo'yilmagan
+                    $hasGrade = false;
+                    $missingGradeCount = $totalStudents - $gradedCount;
+                }
+            }
 
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
@@ -966,18 +1024,23 @@ class ReportController extends Controller
                     'lesson_pair_time' => $pairTime,
                     'semester_code' => $sch->semester_code,
                     'lesson_date' => $sch->lesson_date_str,
-                    'student_count' => $studentCounts[$sch->group_id] ?? 0,
+                    'student_count' => $totalStudents,
                     'has_attendance' => $hasAtt,
                     'has_grades' => $hasGrade,
+                    'missing_grade_count' => $missingGradeCount,
                 ];
             } else {
                 // Dublikat schedule (bir xil kalit, boshqa schedule_hemis_id) —
-                // agar biror dublikatda davomat/baho topilsa, "Ha" deb belgilash
+                // agar biror dublikatda davomat/baho topilsa, eng yaxshi natijani olish
                 if ($hasAtt && !$grouped[$key]['has_attendance']) {
                     $grouped[$key]['has_attendance'] = true;
                 }
                 if ($hasGrade === true && $grouped[$key]['has_grades'] === false) {
                     $grouped[$key]['has_grades'] = true;
+                    $grouped[$key]['missing_grade_count'] = 0;
+                } elseif ($hasGrade === false && $grouped[$key]['has_grades'] === false) {
+                    // Eng kam missing sonini olish (eng ko'p baho topilgan usul)
+                    $grouped[$key]['missing_grade_count'] = min($grouped[$key]['missing_grade_count'], $missingGradeCount);
                 }
             }
         }
@@ -1072,7 +1135,7 @@ class ReportController extends Controller
             $sheet->setCellValue([11, $row], $r['lesson_pair_time'] ?? '');
             $sheet->setCellValue([12, $row], $r['student_count']);
             $sheet->setCellValue([13, $row], $r['has_attendance'] ? 'Ha' : "Yo'q");
-            $sheet->setCellValue([14, $row], $r['has_grades'] === null ? '-' : ($r['has_grades'] ? 'Ha' : "Yo'q"));
+            $sheet->setCellValue([14, $row], $r['has_grades'] === null ? '-' : ($r['has_grades'] ? 'Ha' : "Yo'q (" . ($r['missing_grade_count'] ?? 0) . ")"));
             $sheet->setCellValue([15, $row], $r['lesson_date']);
         }
 

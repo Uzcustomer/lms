@@ -49,6 +49,7 @@ class SendAttendanceGroupSummary extends Command
             $importService->importBetween(
                 $today->copy()->startOfDay(),
                 $today->copy()->endOfDay(),
+                '',
                 fn(int $page, int $total) => $reporter->updateProgress($page, $total)
             );
             $reporter->completeStep();

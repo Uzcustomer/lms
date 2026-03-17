@@ -3537,12 +3537,32 @@ class ReportController extends Controller
         )->get();
 
         // 2-QADAM: Barcha tasdiqlangan arizalarni olish
-        // A) Subject bilan bog'langan arizalar
+        // A) Subject bilan bog'langan arizalar (to'g'ri subject_id ni aniqlash)
         $subjectExcuses = DB::table('absence_excuses as ae')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+            ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->where('ae.status', 'approved')
             ->whereNotNull('aem.subject_id')
-            ->select('ae.id as excuse_id', 'ae.student_hemis_id', 'aem.subject_id', 'ae.start_date', 'ae.end_date')
+            ->select(
+                'ae.id as excuse_id',
+                'ae.student_hemis_id',
+                DB::raw("COALESCE(
+                    (SELECT ss.subject_id FROM student_subjects ss
+                     WHERE ss.student_hemis_id = ae.student_hemis_id
+                     AND ss.subject_name = aem.subject_name LIMIT 1),
+                    (SELECT cs.subject_id FROM curriculum_subjects cs
+                     WHERE cs.curricula_hemis_id = s.curriculum_id
+                     AND cs.semester_code = s.semester_code
+                     AND cs.subject_name = aem.subject_name LIMIT 1),
+                    (SELECT cs2.subject_id FROM curriculum_subjects cs2
+                     WHERE cs2.curricula_hemis_id = s.curriculum_id
+                     AND cs2.semester_code = s.semester_code
+                     AND cs2.subject_name LIKE CONCAT('%', LEFT(aem.subject_name, 15), '%') LIMIT 1),
+                    aem.subject_id
+                ) as subject_id"),
+                'ae.start_date',
+                'ae.end_date'
+            )
             ->get();
 
         // B) Subject siz arizalar (subject_id NULL yoki makeups yo'q) — faqat sana bo'yicha
@@ -3560,7 +3580,7 @@ class ReportController extends Controller
             ->get();
 
         // C) Barcha approved arizalar (HEMIS da topilmaganlarni aniqlash uchun)
-        // C1: Fanga bog'langan arizalar (makeups orqali)
+        // C1: Fanga bog'langan arizalar (makeups orqali, to'g'ri subject_id bilan)
         $allApprovedWithSubject = DB::table('absence_excuses as ae')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
@@ -3580,7 +3600,20 @@ class ReportController extends Controller
                 'ae.start_date',
                 'ae.end_date',
                 'g2.id as group_pk',
-                'aem.subject_id',
+                DB::raw("COALESCE(
+                    (SELECT ss.subject_id FROM student_subjects ss
+                     WHERE ss.student_hemis_id = ae.student_hemis_id
+                     AND ss.subject_name = aem.subject_name LIMIT 1),
+                    (SELECT cs.subject_id FROM curriculum_subjects cs
+                     WHERE cs.curricula_hemis_id = s.curriculum_id
+                     AND cs.semester_code = s.semester_code
+                     AND cs.subject_name = aem.subject_name LIMIT 1),
+                    (SELECT cs2.subject_id FROM curriculum_subjects cs2
+                     WHERE cs2.curricula_hemis_id = s.curriculum_id
+                     AND cs2.semester_code = s.semester_code
+                     AND cs2.subject_name LIKE CONCAT('%', LEFT(aem.subject_name, 15), '%') LIMIT 1),
+                    aem.subject_id
+                ) as subject_id"),
                 'aem.subject_name'
             )
             ->get();

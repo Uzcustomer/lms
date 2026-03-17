@@ -270,8 +270,11 @@
                 $('#search-count').hide();
             }
 
-            // Client-side saralash
+            // Client-side saralash: match larni birinchi, keyin tanlangan ustun
             var sorted = filtered.slice().sort(function(a, b) {
+                var aMatch = a.match === 'match' ? 0 : 1;
+                var bMatch = b.match === 'match' ? 0 : 1;
+                if (aMatch !== bMatch) return aMatch - bMatch;
                 var valA = a[currentSort] || '';
                 var valB = b[currentSort] || '';
                 var cmp;

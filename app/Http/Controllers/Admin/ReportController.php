@@ -3487,6 +3487,16 @@ class ReportController extends Controller
         if ($request->filled('group')) {
             $attQuery->where('s.group_id', $request->group);
         }
+        if ($request->filled('search')) {
+            $search = '%' . mb_strtolower($request->search) . '%';
+            $attQuery->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(s.full_name) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(s.group_name) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(a.subject_name) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(s.department_name) LIKE ?', [$search])
+                  ->orWhereRaw('LOWER(s.hemis_id) LIKE ?', [$search]);
+            });
+        }
         if ($currentSemesterFilter) {
             $attQuery->whereColumn('a.semester_code', 's.semester_code')
                      ->where('a.education_year_current', true);
@@ -3659,11 +3669,17 @@ class ReportController extends Controller
             $results = array_values(array_filter($results, fn($r) => $r['match'] === 'match'));
         }
 
-        // Saralash
+        // Saralash: default — ariza borlar birinchi (match), keyin ism bo'yicha
         $sortColumn = $request->get('sort', 'full_name');
         $sortDirection = $request->get('direction', 'asc');
 
         usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
+            // Avval match larni yuqoriga chiqarish
+            $aMatch = ($a['match'] === 'match') ? 0 : 1;
+            $bMatch = ($b['match'] === 'match') ? 0 : 1;
+            if ($aMatch !== $bMatch) {
+                return $aMatch - $bMatch;
+            }
             $valA = $a[$sortColumn] ?? '';
             $valB = $b[$sortColumn] ?? '';
             $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);

@@ -3904,13 +3904,14 @@ class ReportController extends Controller
         }
         unset($item);
 
-        // DEBUG LOG: Topilmagan subject_id larni aniqlash
+        // DEBUG LOG: Topilmagan subject_id larni aniqlash (faqat 10-semestr)
         $debugLog = [];
         $allMakeupRows = DB::table('absence_excuse_makeups as aem')
             ->join('absence_excuses as ae', 'ae.id', '=', 'aem.absence_excuse_id')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->where('ae.status', 'approved')
             ->whereNotNull('aem.subject_id')
+            ->where('s.semester_code', '10')
             ->select(
                 'aem.id as makeup_id',
                 'aem.subject_name',

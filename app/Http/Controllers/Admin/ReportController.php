@@ -3510,7 +3510,22 @@ class ReportController extends Controller
             $attendanceMap[$key] = $att;
         }
 
-        // 3-QADAM: LMS sababli → HEMIS tekshiruvi
+        // 2.5-QADAM: Tasdiqlangan sababli arizalarni olish (mark_status uchun)
+        $approvedExcuses = DB::table('absence_excuses as ae')
+            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+            ->where('ae.status', 'approved')
+            ->whereIn('ae.student_hemis_id', $studentHemisIds)
+            ->select('ae.student_hemis_id', 'aem.subject_id', 'ae.start_date', 'ae.end_date')
+            ->get();
+
+        // Indekslash: student_hemis_id|subject_id => [start_date, end_date] listi
+        $excuseMap = [];
+        foreach ($approvedExcuses as $exc) {
+            $excKey = $exc->student_hemis_id . '|' . $exc->subject_id;
+            $excuseMap[$excKey][] = $exc;
+        }
+
+        // 3-QADAM: LMS sababli ariza → HEMIS tekshiruvi
         $results = [];
         $gradeKeys = [];
         foreach ($gradesRows as $gr) {
@@ -3520,6 +3535,7 @@ class ReportController extends Controller
 
             $att = $attendanceMap[$key] ?? null;
 
+            // HEMIS holati
             $hemisSababli = false;
             $hemisStatus = 'Davomat topilmadi';
 
@@ -3537,7 +3553,22 @@ class ReportController extends Controller
                 }
             }
 
-            $match = $hemisSababli ? 'match' : 'mismatch';
+            // Mark holati: faqat tasdiqlangan sababli ariza asosida
+            $excKey = $gr->student_hemis_id . '|' . $gr->subject_id;
+            $hasApprovedExcuse = false;
+            if (isset($excuseMap[$excKey])) {
+                foreach ($excuseMap[$excKey] as $exc) {
+                    $excStart = substr($exc->start_date, 0, 10);
+                    $excEnd = substr($exc->end_date, 0, 10);
+                    if ($dateStr >= $excStart && $dateStr <= $excEnd) {
+                        $hasApprovedExcuse = true;
+                        break;
+                    }
+                }
+            }
+
+            $markStatus = $hasApprovedExcuse ? 'Sababli' : 'Sababsiz (ariza yo\'q)';
+            $match = ($hasApprovedExcuse && $hemisSababli) ? 'match' : 'mismatch';
 
             $results[] = [
                 'student_hemis_id' => $gr->student_hemis_id,
@@ -3550,7 +3581,7 @@ class ReportController extends Controller
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
                 'lesson_pair' => ($gr->lesson_pair_start_time && $gr->lesson_pair_end_time)
                     ? $gr->lesson_pair_start_time . '-' . $gr->lesson_pair_end_time : '-',
-                'mark_status' => 'Sababli',
+                'mark_status' => $markStatus,
                 'hemis_status' => $hemisStatus,
                 'match' => $match,
                 'journal_url' => route('admin.journal.show', [

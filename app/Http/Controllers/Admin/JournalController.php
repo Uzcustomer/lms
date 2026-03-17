@@ -1625,19 +1625,8 @@ class JournalController extends Controller
                         }
                     }
 
-                    // Agar sababli holat o'zgargan bo'lsa — retake bahosini qayta hisoblash
-                    if ($oldAbsentOn !== null && $oldAbsentOn !== $newAbsentOn) {
-                        $recalculated = $this->recalculateRetakeGrade(
-                            $item['student']['id'],
-                            $subjectId,
-                            $lessonDate->format('Y-m-d'),
-                            $item['lessonPair']['code'],
-                            $newAbsentOn > 0
-                        );
-                        if ($recalculated) {
-                            $retakeRecalculated++;
-                        }
-                    }
+                    // Sababli holat endi faqat tasdiqlangan sababli arizalar asosida aniqlanadi,
+                    // HEMIS absent_on o'zgarishi retake bahosiga ta'sir qilmaydi
                 }
 
                 $page++;
@@ -2638,22 +2627,26 @@ class JournalController extends Controller
                 ], 403);
             }
 
-            // Check if there's an attendance record to determine if absence was excused
-            $attendance = DB::table('attendances')
-                ->where('student_hemis_id', $studentGrade->student_hemis_id)
-                ->where('subject_id', $studentGrade->subject_id)
-                ->where('semester_code', $studentGrade->semester_code)
-                ->whereDate('lesson_date', $studentGrade->lesson_date)
-                ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
-                ->first();
+            // Check if there's an approved absence excuse for this student+subject+date
+            // Faqat tasdiqlangan sababli arizalar asosida sababli deb hisoblanadi
+            $isExcused = false;
+            if ($studentGrade->reason === 'absent') {
+                $isExcused = DB::table('absence_excuses as ae')
+                    ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+                    ->where('ae.student_hemis_id', $studentGrade->student_hemis_id)
+                    ->where('ae.status', 'approved')
+                    ->whereDate('ae.start_date', '<=', $studentGrade->lesson_date)
+                    ->whereDate('ae.end_date', '>=', $studentGrade->lesson_date)
+                    ->where('aem.subject_id', $studentGrade->subject_id)
+                    ->exists();
+            }
 
             // Determine the percentage to apply based on reason:
-            // - absent + excused (sababli): 100%
-            // - absent + unexcused (sababsiz): 80%
+            // - absent + excused (tasdiqlangan sababli ariza): 100%
+            // - absent + unexcused (sababli ariza yo'q): 80%
             // - low_grade (60 dan past, otrabotka): 80%
             // - no reason (baho qo'yilmagan, talaba kelgan): 100%
             if ($studentGrade->reason === 'absent') {
-                $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
                 $percentage = $isExcused ? 1.0 : 0.8;
             } elseif ($studentGrade->reason === 'low_grade') {
                 $percentage = 0.8;
@@ -2683,7 +2676,7 @@ class JournalController extends Controller
             // Determine display info for frontend diagonal cell
             $isAbsentReason = $studentGrade->reason === 'absent';
             $originalGrade = $studentGrade->grade;
-            $isExcusedForDisplay = $isAbsentReason && $attendance && ((int) $attendance->absent_on) > 0;
+            $isExcusedForDisplay = $isAbsentReason && $isExcused;
 
             return response()->json([
                 'success' => true,
@@ -2740,17 +2733,17 @@ class JournalController extends Controller
                 ], 403);
             }
 
-            // Sababli/sababsiz tekshirish (NB uchun)
+            // Sababli/sababsiz tekshirish (NB uchun) — faqat tasdiqlangan sababli ariza asosida
             $isExcused = false;
             if ($studentGrade->reason === 'absent') {
-                $attendance = DB::table('attendances')
-                    ->where('student_hemis_id', $studentGrade->student_hemis_id)
-                    ->where('subject_id', $studentGrade->subject_id)
-                    ->where('semester_code', $studentGrade->semester_code)
-                    ->whereDate('lesson_date', $studentGrade->lesson_date)
-                    ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
-                    ->first();
-                $isExcused = $attendance && ((int) $attendance->absent_on) > 0;
+                $isExcused = DB::table('absence_excuses as ae')
+                    ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+                    ->where('ae.student_hemis_id', $studentGrade->student_hemis_id)
+                    ->where('ae.status', 'approved')
+                    ->whereDate('ae.start_date', '<=', $studentGrade->lesson_date)
+                    ->whereDate('ae.end_date', '>=', $studentGrade->lesson_date)
+                    ->where('aem.subject_id', $studentGrade->subject_id)
+                    ->exists();
             }
 
             // Retake bahoni o'chirish va oldingi holatni tiklash

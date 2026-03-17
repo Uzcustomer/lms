@@ -108,8 +108,8 @@ class TableImageGenerator
             foreach ($row as $i => $cell) {
                 $cellStr = $this->displayValue($cell);
                 $width = $this->getTextWidth($cellStr, $this->fontSize) + $this->cellPadding * 2;
-                // Ha/Yo'q uchun badge padding qo'shish
-                if ($cell === true || $cell === false) {
+                // Ha/Yo'q va badge: uchun badge padding qo'shish
+                if ($cell === true || $cell === false || (is_string($cell) && str_starts_with($cell, 'badge:'))) {
                     $width += $this->compactMode ? 8 : 12;
                 }
                 if ($width > ($colWidths[$i] ?? 0)) {
@@ -259,15 +259,25 @@ class TableImageGenerator
             foreach ($row as $i => $cell) {
                 $cellStr = $this->displayValue($cell);
 
-                // Ha/Yo'q uchun badge chizish
-                if ($cell === true || $cell === false) {
+                // Ha/Yo'q va badge: uchun badge chizish
+                $isBadge = $cell === true || $cell === false || (is_string($cell) && str_starts_with($cell, 'badge:'));
+                if ($isBadge) {
+                    // badge:green:Matn yoki badge:red:Matn formatini qo'llab-quvvatlash
+                    if (is_string($cell) && str_starts_with($cell, 'badge:')) {
+                        $parts = explode(':', $cell, 3);
+                        $badgeColor = $parts[1] ?? 'red';
+                        $cellStr = $parts[2] ?? '';
+                        $isGreen = $badgeColor === 'green';
+                    } else {
+                        $isGreen = $cell === true;
+                    }
                     $this->drawBadge(
                         $image, $cellStr,
                         $x + $this->cellPadding,
                         $y,
                         $this->rowHeight,
-                        $cell === true ? $greenBadgeBg : $redBadgeBg,
-                        $cell === true ? $greenBadgeText : $redBadgeText
+                        $isGreen ? $greenBadgeBg : $redBadgeBg,
+                        $isGreen ? $greenBadgeText : $redBadgeText
                     );
                 } else {
                     // Oddiy matn
@@ -339,6 +349,11 @@ class TableImageGenerator
         }
         if ($cell === null) {
             return '-';
+        }
+        // badge:green:Matn → Matn
+        if (is_string($cell) && str_starts_with($cell, 'badge:')) {
+            $parts = explode(':', $cell, 3);
+            return $parts[2] ?? '';
         }
         return (string) $cell;
     }

@@ -757,20 +757,35 @@ class JournalController extends Controller
         }
 
         // Get students basic info
-        // Chetlashgan talabalar: joriy semestrda bo'lsa — ko'rsatiladi (qizil), oldingi semestrlarda — chiqariladi
-        // NULL student_status_code ham faol deb hisoblanadi (chiqarilmaydi)
-        // Chetlashgan (60) talaba bahosi yoki davomati bo'lsa — ko'rsatiladi
-        $students = DB::table('students')
-            ->where('group_id', $group->group_hemis_id)
-            ->where(function ($query) use ($semesterCode, $subjectId) {
+        // Agar student_subjects jadvalida shu fan uchun biriktirishlar bo'lsa — faqat biriktirilganlarni ko'rsatish
+        // Aks holda (import qilinmagan) — guruhdagi barcha talabalarni ko'rsatish (eski logika)
+        // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
+        $hasSubjectAssignments = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->where('st.group_id', $group->group_hemis_id)
+            ->where('ss.subject_id', $subjectId)
+            ->exists();
+
+        $studentsQuery = DB::table('students')
+            ->where('group_id', $group->group_hemis_id);
+
+        if ($hasSubjectAssignments) {
+            // student_subjects da ma'lumot bor — faqat fanga biriktirilgan talabalarni ko'rsatish
+            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
-                    // Faol talabalar (status != 60, shu jumladan NULL): doimo ko'rsatiladi
-                    ->where(function ($q) {
-                        $q->where('student_status_code', '!=', '60')
-                          ->orWhereNull('student_status_code');
+                    // Fanga biriktirilgan faol talabalar
+                    ->where(function ($q) use ($subjectId) {
+                        $q->where(function ($q2) {
+                            $q2->where('student_status_code', '!=', '60')
+                               ->orWhereNull('student_status_code');
+                        })
+                        ->whereExists(function ($sub) use ($subjectId) {
+                            $sub->select(DB::raw(1))
+                                ->from('student_subjects')
+                                ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
+                                ->where('student_subjects.subject_id', $subjectId);
+                        });
                     })
-                    // Chetlashgan talabalar: semester mos kelsa ko'rsatiladi
-                    ->orWhere('semester_code', $semesterCode)
                     // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
                     ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
                         $sub->select(DB::raw(1))
@@ -780,7 +795,28 @@ class JournalController extends Controller
                             ->where('student_grades.semester_code', $semesterCode)
                             ->whereNull('student_grades.deleted_at');
                     });
-            })
+            });
+        } else {
+            // student_subjects da ma'lumot yo'q — eski logika (guruhdagi barcha talabalar)
+            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
+                $query
+                    ->where(function ($q) {
+                        $q->where('student_status_code', '!=', '60')
+                          ->orWhereNull('student_status_code');
+                    })
+                    ->orWhere('semester_code', $semesterCode)
+                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
+                        $sub->select(DB::raw(1))
+                            ->from('student_grades')
+                            ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
+                            ->where('student_grades.subject_id', $subjectId)
+                            ->where('student_grades.semester_code', $semesterCode)
+                            ->whereNull('student_grades.deleted_at');
+                    });
+            });
+        }
+
+        $students = $studentsQuery
             ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
             ->orderBy('full_name')
             ->get();

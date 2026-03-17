@@ -846,6 +846,7 @@ class HemisService
         foreach ($students as $index => $studentHemisId) {
             $page = 1;
             $hasMore = true;
+            $allCsIds = []; // HEMIS dagi barcha curriculum_subject_hemis_id lar
 
             while ($hasMore) {
                 try {
@@ -882,6 +883,7 @@ class HemisService
                         $csId = $cs['id'] ?? null;
                         if (!$csId) continue;
 
+                        $allCsIds[] = $csId;
                         $records[] = [
                             'student_hemis_id'            => $studentHemisId,
                             'curriculum_subject_hemis_id' => $csId,
@@ -913,6 +915,13 @@ class HemisService
                     ]);
                     break;
                 }
+            }
+
+            // HEMIS da olib tashlangan biriktirishlarni bazadan o'chirish
+            if (!empty($allCsIds)) {
+                StudentSubject::where('student_hemis_id', $studentHemisId)
+                    ->whereNotIn('curriculum_subject_hemis_id', $allCsIds)
+                    ->delete();
             }
 
             if ($onProgress) {

@@ -910,14 +910,17 @@ class ReportController extends Controller
             ->unique()
             ->flip();
 
-        // Baho (2-usul): group + subject + date + training_type + lesson_pair
+        // Baho (2-usul): group + subject + date + lesson_pair
         // employee_id tekshirilmaydi, chunki bahoni boshqa o'qituvchi qo'ygan bo'lishi mumkin
         // (HEMIS da employee_id farq qilishi yoki o'rinbosar o'qituvchi)
+        // training_type_code tekshirilmaydi, chunki HEMIS API schedule va grade endpointlari
+        // bitta dars uchun turli training_type qaytarishi mumkin (JournalController:468 izoh)
         $gradeByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
             ->where(function ($q) {
                 $q->where(function ($q2) {
                     $q2->whereNotNull('sg.grade')->where('sg.grade', '>', 0);
@@ -925,7 +928,7 @@ class ReportController extends Controller
                     $q2->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '>', 0);
                 });
             })
-            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
+            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -952,7 +955,7 @@ class ReportController extends Controller
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
             $gradeKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
-                      . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+                      . '|' . $sch->lesson_pair_code;
 
             // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])

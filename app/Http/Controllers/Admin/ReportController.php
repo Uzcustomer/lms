@@ -3495,29 +3495,15 @@ class ReportController extends Controller
         )->get();
 
         // 2-QADAM: Barcha tasdiqlangan arizalarni olish
-        // A) Subject bilan bog'langan arizalar (to'g'ri subject_id ni aniqlash)
+        // A) Subject bilan bog'langan arizalar (to'g'ridan-to'g'ri aem.subject_id ishlatiladi)
         $subjectExcuses = DB::table('absence_excuses as ae')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
-            ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->where('ae.status', 'approved')
             ->whereNotNull('aem.subject_id')
             ->select(
                 'ae.id as excuse_id',
                 'ae.student_hemis_id',
-                DB::raw("COALESCE(
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND ss.subject_name = aem.subject_name LIMIT 1),
-                    (SELECT cs.subject_id FROM curriculum_subjects cs
-                     WHERE cs.curricula_hemis_id = s.curriculum_id
-                     AND cs.semester_code = s.semester_code
-                     AND cs.subject_name = aem.subject_name LIMIT 1),
-                    (SELECT cs2.subject_id FROM curriculum_subjects cs2
-                     WHERE cs2.curricula_hemis_id = s.curriculum_id
-                     AND cs2.semester_code = s.semester_code
-                     AND cs2.subject_name LIKE CONCAT('%', LEFT(aem.subject_name, 15), '%') LIMIT 1),
-                    aem.subject_id
-                ) as subject_id"),
+                'aem.subject_id',
                 'ae.start_date',
                 'ae.end_date'
             )
@@ -3538,7 +3524,7 @@ class ReportController extends Controller
             ->get();
 
         // C) Barcha approved arizalar (HEMIS da topilmaganlarni aniqlash uchun)
-        // C1: Fanga bog'langan arizalar (makeups orqali, to'g'ri subject_id bilan)
+        // C1: Fanga bog'langan arizalar (makeups orqali, to'g'ridan-to'g'ri aem.subject_id)
         $allApprovedWithSubject = DB::table('absence_excuses as ae')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
@@ -3558,20 +3544,7 @@ class ReportController extends Controller
                 'ae.start_date',
                 'ae.end_date',
                 'g2.id as group_pk',
-                DB::raw("COALESCE(
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND ss.subject_name = aem.subject_name LIMIT 1),
-                    (SELECT cs.subject_id FROM curriculum_subjects cs
-                     WHERE cs.curricula_hemis_id = s.curriculum_id
-                     AND cs.semester_code = s.semester_code
-                     AND cs.subject_name = aem.subject_name LIMIT 1),
-                    (SELECT cs2.subject_id FROM curriculum_subjects cs2
-                     WHERE cs2.curricula_hemis_id = s.curriculum_id
-                     AND cs2.semester_code = s.semester_code
-                     AND cs2.subject_name LIKE CONCAT('%', LEFT(aem.subject_name, 15), '%') LIMIT 1),
-                    aem.subject_id
-                ) as subject_id"),
+                'aem.subject_id',
                 'aem.subject_name'
             )
             ->get();
@@ -3904,7 +3877,7 @@ class ReportController extends Controller
         }
         unset($item);
 
-        // DEBUG LOG: Topilmagan subject_id larni aniqlash (faqat 10-semestr)
+        // DEBUG LOG: aem.subject_id bilan attendance da topilmaganlarni aniqlash (faqat 10-semestr)
         $debugLog = [];
         $allMakeupRows = DB::table('absence_excuse_makeups as aem')
             ->join('absence_excuses as ae', 'ae.id', '=', 'aem.absence_excuse_id')
@@ -3915,69 +3888,39 @@ class ReportController extends Controller
             ->select(
                 'aem.id as makeup_id',
                 'aem.subject_name',
-                'aem.subject_id as original_subject_id',
+                'aem.subject_id',
                 'ae.student_hemis_id',
+                'ae.start_date',
+                'ae.end_date',
                 's.full_name',
-                's.group_name',
-                's.curriculum_id',
-                's.semester_code'
+                's.group_name'
             )
             ->get();
 
         foreach ($allMakeupRows as $m) {
-            // 1) student_subjects dan qidirish
-            $ssResult = DB::table('student_subjects')
-                ->where('student_hemis_id', $m->student_hemis_id)
-                ->where('subject_name', $m->subject_name)
-                ->select('subject_id', 'subject_name')
-                ->first();
-
-            // 2) curriculum_subjects dan aniq qidirish
-            $csExact = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $m->curriculum_id)
-                ->where('semester_code', $m->semester_code)
-                ->where('subject_name', $m->subject_name)
-                ->select('subject_id', 'subject_name')
-                ->first();
-
-            // 3) curriculum_subjects dan LIKE qidirish
-            $csLike = null;
-            if (!$ssResult && !$csExact) {
-                $csLike = DB::table('curriculum_subjects')
-                    ->where('curricula_hemis_id', $m->curriculum_id)
-                    ->where('semester_code', $m->semester_code)
-                    ->where('subject_name', 'LIKE', '%' . mb_substr($m->subject_name, 0, 15) . '%')
-                    ->select('subject_id', 'subject_name')
-                    ->first();
-            }
-
-            $resolvedId = $ssResult->subject_id ?? $csExact->subject_id ?? $csLike->subject_id ?? $m->original_subject_id;
-            $resolvedVia = $ssResult ? 'student_subjects' : ($csExact ? 'curriculum_subjects (aniq)' : ($csLike ? 'curriculum_subjects (LIKE)' : 'original (o\'zgartirilmadi)'));
-
-            // attendance da bor-yo'qligini tekshirish
+            // attendance da shu subject_id bilan nb yozuvi bor-yo'qligini tekshirish
             $attExists = DB::table('attendances')
                 ->where('student_hemis_id', $m->student_hemis_id)
-                ->where('subject_id', $resolvedId)
+                ->where('subject_id', $m->subject_id)
                 ->where(function ($q) {
                     $q->where('absent_on', '>', 0)->orWhere('absent_off', '>', 0);
                 })
                 ->exists();
 
-            // Faqat muammoli yozuvlarni log ga qo'shish
-            if (!$attExists || $resolvedVia === 'original (o\'zgartirilmadi)') {
-                $reason = [];
-                if (!$ssResult) {
-                    $reason[] = 'student_subjects da "' . $m->subject_name . '" topilmadi';
-                }
-                if (!$csExact) {
-                    $reason[] = 'curriculum_subjects da aniq mos topilmadi (curriculum_id=' . $m->curriculum_id . ', semester=' . $m->semester_code . ')';
-                }
-                if (!$csLike && !$ssResult && !$csExact) {
-                    $reason[] = 'curriculum_subjects da LIKE bilan ham topilmadi';
-                }
-                if (!$attExists) {
-                    $reason[] = 'attendance da nb yozuvi yo\'q (resolved_id=' . $resolvedId . ')';
-                }
+            // Faqat topilmaganlarni log ga qo'shish
+            if (!$attExists) {
+                // attendance da shu talaba uchun qanday subject_id lar bor ekanligini tekshirish
+                $existingSubjects = DB::table('attendances')
+                    ->where('student_hemis_id', $m->student_hemis_id)
+                    ->where(function ($q) {
+                        $q->where('absent_on', '>', 0)->orWhere('absent_off', '>', 0);
+                    })
+                    ->select('subject_id', 'subject_name')
+                    ->distinct()
+                    ->limit(10)
+                    ->get()
+                    ->map(fn($r) => $r->subject_id . ' (' . $r->subject_name . ')')
+                    ->implode(', ');
 
                 $debugLog[] = [
                     'makeup_id' => $m->makeup_id,
@@ -3985,11 +3928,11 @@ class ReportController extends Controller
                     'full_name' => $m->full_name,
                     'group_name' => $m->group_name,
                     'subject_name' => $m->subject_name,
-                    'original_id' => $m->original_subject_id,
-                    'resolved_id' => $resolvedId,
-                    'resolved_via' => $resolvedVia,
-                    'att_exists' => $attExists,
-                    'reason' => implode(' | ', $reason),
+                    'original_id' => $m->subject_id,
+                    'resolved_id' => $m->subject_id,
+                    'resolved_via' => 'aem.subject_id (to\'g\'ridan-to\'g\'ri)',
+                    'att_exists' => false,
+                    'reason' => 'attendance da nb topilmadi. Talabaning mavjud fanlari: ' . ($existingSubjects ?: 'hech qaysi'),
                 ];
             }
         }

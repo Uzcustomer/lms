@@ -3521,7 +3521,7 @@ class ReportController extends Controller
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
             ->where('ae.status', 'approved')
             ->whereNotNull('aem.subject_id')
-            ->select('ae.student_hemis_id', 'aem.subject_id', 'ae.start_date', 'ae.end_date')
+            ->select('ae.id as excuse_id', 'ae.student_hemis_id', 'aem.subject_id', 'ae.start_date', 'ae.end_date')
             ->get();
 
         // B) Subject siz arizalar (subject_id NULL yoki makeups yo'q) — faqat sana bo'yicha
@@ -3535,7 +3535,28 @@ class ReportController extends Controller
                         ->whereNotNull('aem2.subject_id');
                 });
             })
-            ->select('ae.student_hemis_id', 'ae.start_date', 'ae.end_date')
+            ->select('ae.id as excuse_id', 'ae.student_hemis_id', 'ae.start_date', 'ae.end_date')
+            ->get();
+
+        // C) Barcha approved arizalar (HEMIS da topilmaganlarni aniqlash uchun)
+        $allApprovedExcuses = DB::table('absence_excuses as ae')
+            ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
+            ->leftJoin('groups as g2', 'g2.group_hemis_id', '=', 's.group_id')
+            ->where('ae.status', 'approved')
+            ->select(
+                'ae.id as excuse_id',
+                'ae.student_hemis_id',
+                's.full_name',
+                's.department_name',
+                's.specialty_name',
+                's.level_name',
+                's.group_name',
+                's.semester_name',
+                's.group_id',
+                'ae.start_date',
+                'ae.end_date',
+                'g2.id as group_pk'
+            )
             ->get();
 
         // Indekslash: student_hemis_id|subject_id => [{start_date, end_date}]
@@ -3673,6 +3694,54 @@ class ReportController extends Controller
             usort($row['pairs'], fn($a, $b) => strcmp($a['lesson_date'], $b['lesson_date']));
 
             $results[] = $row;
+        }
+
+        // 4-QADAM: HEMIS da davomat yo'q bo'lgan approved arizalarni ham qo'shish
+        // Attendance da topilgan excuse_id larni yig'ish
+        $matchedExcuseStudents = [];
+        foreach ($results as $r) {
+            if (str_contains($r['mark_status'], 'Sababli')) {
+                $matchedExcuseStudents[$r['student_hemis_id']] = true;
+            }
+        }
+
+        foreach ($allApprovedExcuses as $exc) {
+            // Bu talaba allaqachon attendance da topilgan bo'lsa — o'tkazib yuborish
+            if (isset($matchedExcuseStudents[$exc->student_hemis_id])) {
+                continue;
+            }
+
+            $startDate = substr($exc->start_date, 0, 10);
+            $endDate = substr($exc->end_date, 0, 10);
+
+            $results[] = [
+                'student_hemis_id' => $exc->student_hemis_id,
+                'full_name' => $exc->full_name ?? '-',
+                'department_name' => $exc->department_name ?? '-',
+                'specialty_name' => $exc->specialty_name ?? '-',
+                'level_name' => $exc->level_name ?? '-',
+                'group_name' => $exc->group_name ?? '-',
+                'semester_name' => $exc->semester_name ?? '-',
+                'subject_name' => 'Ariza: ' . ($startDate ? date('d.m.Y', strtotime($startDate)) : '') . ' - ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : ''),
+                'subject_id' => null,
+                'total_absent_on' => 0,
+                'total_absent_off' => 0,
+                'total_hours' => 0,
+                'hemis_status' => 'Davomat topilmadi',
+                'mark_status' => 'Sababli (ariza)',
+                'match' => 'mismatch',
+                'pairs' => [[
+                    'lesson_date' => $startDate ? date('d.m.Y', strtotime($startDate)) : '-',
+                    'lesson_pair' => $endDate ? date('d.m.Y', strtotime($endDate)) : '-',
+                    'hemis_status' => 'Davomat topilmadi',
+                    'mark_status' => 'Sababli (ariza)',
+                    'absent_on' => 0,
+                    'absent_off' => 0,
+                ]],
+                'journal_url' => '#',
+            ];
+            // Bir marta qo'shilgandan keyin belgilash
+            $matchedExcuseStudents[$exc->student_hemis_id] = true;
         }
 
         // Qidirish filtri

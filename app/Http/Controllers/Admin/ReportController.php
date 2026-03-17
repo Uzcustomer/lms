@@ -3518,10 +3518,44 @@ class ReportController extends Controller
             ->get();
 
         // C) Barcha approved arizalar (HEMIS da topilmaganlarni aniqlash uchun)
-        $allApprovedExcuses = DB::table('absence_excuses as ae')
+        // C1: Fanga bog'langan arizalar (makeups orqali)
+        $allApprovedWithSubject = DB::table('absence_excuses as ae')
+            ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
+            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+            ->leftJoin('groups as g2', 'g2.group_hemis_id', '=', 's.group_id')
+            ->where('ae.status', 'approved')
+            ->whereNotNull('aem.subject_id')
+            ->select(
+                'ae.id as excuse_id',
+                'ae.student_hemis_id',
+                's.full_name',
+                's.department_name',
+                's.specialty_name',
+                's.level_name',
+                's.group_name',
+                's.semester_name',
+                's.group_id',
+                'ae.start_date',
+                'ae.end_date',
+                'g2.id as group_pk',
+                'aem.subject_id',
+                'aem.subject_name'
+            )
+            ->get();
+
+        // C2: Umumiy arizalar (fan ko'rsatilmagan)
+        $allApprovedGeneral = DB::table('absence_excuses as ae')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->leftJoin('groups as g2', 'g2.group_hemis_id', '=', 's.group_id')
             ->where('ae.status', 'approved')
+            ->where(function ($q) {
+                $q->whereNotExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('absence_excuse_makeups as aem2')
+                        ->whereColumn('aem2.absence_excuse_id', 'ae.id')
+                        ->whereNotNull('aem2.subject_id');
+                });
+            })
             ->select(
                 'ae.id as excuse_id',
                 'ae.student_hemis_id',
@@ -3676,17 +3710,34 @@ class ReportController extends Controller
         }
 
         // 4-QADAM: HEMIS da davomat yo'q bo'lgan approved arizalarni ham qo'shish
-        // Attendance da topilgan talabalarni yig'ish (mark_status ga qaramay)
-        $studentsInAttendance = [];
+        // Attendance da topilgan student+subject juftliklarni yig'ish
+        $pairsInResults = [];
+        $studentsInResults = [];
         foreach ($results as $r) {
-            $studentsInAttendance[$r['student_hemis_id']] = true;
+            if ($r['subject_id']) {
+                $pairsInResults[$r['student_hemis_id'] . '|' . $r['subject_id']] = true;
+            }
+            $studentsInResults[$r['student_hemis_id']] = true;
         }
 
-        foreach ($allApprovedExcuses as $exc) {
-            // Bu talaba allaqachon attendance da topilgan bo'lsa — o'tkazib yuborish
-            if (isset($studentsInAttendance[$exc->student_hemis_id])) {
+        // Takrorlanishni oldini olish uchun qo'shilgan excuse_id larni track qilish
+        $addedExcuseKeys = [];
+
+        // 4A: Fanga bog'langan arizalar — student+subject bo'yicha tekshirish
+        foreach ($allApprovedWithSubject as $exc) {
+            $compoundKey = $exc->student_hemis_id . '|' . $exc->subject_id;
+
+            // Bu student+subject juftligi allaqachon natijada bor — o'tkazish
+            if (isset($pairsInResults[$compoundKey])) {
                 continue;
             }
+
+            // Takrorlanishni oldini olish (bir ariza bir necha makeups ga ega bo'lishi mumkin)
+            $excUniqueKey = $exc->excuse_id . '|' . $exc->subject_id;
+            if (isset($addedExcuseKeys[$excUniqueKey])) {
+                continue;
+            }
+            $addedExcuseKeys[$excUniqueKey] = true;
 
             $startDate = substr($exc->start_date, 0, 10);
             $endDate = substr($exc->end_date, 0, 10);
@@ -3699,7 +3750,58 @@ class ReportController extends Controller
                 'level_name' => $exc->level_name ?? '-',
                 'group_name' => $exc->group_name ?? '-',
                 'semester_name' => $exc->semester_name ?? '-',
-                'subject_name' => 'Ariza: ' . ($startDate ? date('d.m.Y', strtotime($startDate)) : '') . ' - ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : ''),
+                'subject_name' => ($exc->subject_name ?? '-') . ' (ariza)',
+                'subject_id' => $exc->subject_id,
+                'total_absent_on' => 0,
+                'total_absent_off' => 0,
+                'total_hours' => 0,
+                'hemis_status' => 'Davomat topilmadi',
+                'mark_status' => 'Sababli (ariza)',
+                'match' => 'mismatch',
+                'pairs' => [[
+                    'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
+                    'lesson_pair' => '-',
+                    'hemis_status' => 'Davomat topilmadi',
+                    'mark_status' => 'Sababli (ariza)',
+                    'absent_on' => 0,
+                    'absent_off' => 0,
+                ]],
+                'journal_url' => $exc->group_pk ? route('admin.journal.show', [
+                    'groupId' => $exc->group_pk,
+                    'subjectId' => $exc->subject_id,
+                    'semesterCode' => '',
+                ]) : '#',
+            ];
+        }
+
+        // 4B: Umumiy arizalar (fansiz) — faqat talaba umuman natijada yo'q bo'lsa qo'shish
+        foreach ($allApprovedGeneral as $exc) {
+            // Takrorlanishni oldini olish
+            $excUniqueKey = 'general|' . $exc->excuse_id;
+            if (isset($addedExcuseKeys[$excUniqueKey])) {
+                continue;
+            }
+
+            // Talaba umuman results da yo'q bo'lsa — qo'shish
+            // Yoki talaba results da bor, lekin umumiy ariza alohida ko'rsatilishi kerak
+            if (isset($studentsInResults[$exc->student_hemis_id])) {
+                continue;
+            }
+
+            $addedExcuseKeys[$excUniqueKey] = true;
+
+            $startDate = substr($exc->start_date, 0, 10);
+            $endDate = substr($exc->end_date, 0, 10);
+
+            $results[] = [
+                'student_hemis_id' => $exc->student_hemis_id,
+                'full_name' => $exc->full_name ?? '-',
+                'department_name' => $exc->department_name ?? '-',
+                'specialty_name' => $exc->specialty_name ?? '-',
+                'level_name' => $exc->level_name ?? '-',
+                'group_name' => $exc->group_name ?? '-',
+                'semester_name' => $exc->semester_name ?? '-',
+                'subject_name' => 'Umumiy ariza: ' . ($startDate ? date('d.m.Y', strtotime($startDate)) : '') . ' - ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : ''),
                 'subject_id' => null,
                 'total_absent_on' => 0,
                 'total_absent_off' => 0,
@@ -3717,8 +3819,7 @@ class ReportController extends Controller
                 ]],
                 'journal_url' => '#',
             ];
-            // Bir marta qo'shilgandan keyin belgilash
-            $studentsInAttendance[$exc->student_hemis_id] = true;
+            $studentsInResults[$exc->student_hemis_id] = true;
         }
 
         // Qidirish filtri

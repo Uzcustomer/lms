@@ -653,11 +653,17 @@ class ReportController extends Controller
             ->get()
             ->keyBy('subject_schedule_id');
 
-        // 3. student_grades da bor schedule IDlar
+        // 3. student_grades da bor schedule IDlar (grade yoki retake_grade > 0)
         $gradeRecords = DB::table('student_grades')
             ->whereIn('subject_schedule_id', $scheduleIds)
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
+            ->whereNull('deleted_at')
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('grade')->where('grade', '>', 0);
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('retake_grade')->where('retake_grade', '>', 0);
+                });
+            })
             ->select('subject_schedule_id')
             ->distinct()
             ->pluck('subject_schedule_id')
@@ -889,25 +895,37 @@ class ReportController extends Controller
             ->flip();
 
         // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
+        // retake_grade ham tekshiriladi (absent bo'lgan talabalar uchun)
         $gradeByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('grade')->where('grade', '>', 0);
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('retake_grade')->where('retake_grade', '>', 0);
+                });
+            })
             ->pluck('subject_schedule_id')
             ->unique()
             ->flip();
 
-        // Baho (2-usul): employee + group (student orqali) + subject + date + training_type + lesson_pair
+        // Baho (2-usul): group + subject + date + training_type + lesson_pair
+        // employee_id tekshirilmaydi, chunki bahoni boshqa o'qituvchi qo'ygan bo'lishi mumkin
+        // (HEMIS da employee_id farq qilishi yoki o'rinbosar o'qituvchi)
         $gradeByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
-            ->whereIn('sg.employee_id', $employeeIds)
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
-            ->whereNotNull('sg.grade')
-            ->where('sg.grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('sg.grade')->where('sg.grade', '>', 0);
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '>', 0);
+                });
+            })
+            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
             ->pluck('gk')
             ->flip();
 
@@ -933,7 +951,7 @@ class ReportController extends Controller
             // Davomat va baho tekshirish uchun kalitlar
             $attKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                     . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
-            $gradeKey = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+            $gradeKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
                       . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
 
             // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish

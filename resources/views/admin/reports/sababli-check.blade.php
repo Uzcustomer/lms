@@ -120,7 +120,7 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="total_hours">Nb soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="mark_status">Mark <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="mark-filter-link" id="mark-filter-btn" title="Bosing: faqat sabablilar / hammasi">Mark <span class="sort-icon" id="mark-filter-icon">&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="hemis_status">HEMIS holati <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="match">Natija <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;width:50px;">Info</th>
@@ -173,6 +173,7 @@
         let currentPage = 1;
         let allData = [];  // barcha yuklangan ma'lumotlar
         let lastResponse = null;  // oxirgi server javobi
+        let markFilterActive = false; // MARK ustuni filtri: faqat sabablilar
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -208,6 +209,7 @@
             currentPage = 1;
             var params = getFilters();
             params.per_page = 999999;
+            delete params.search; // search faqat client-side ishlaydi
 
             $('#empty-state').hide();
             $('#table-area').hide();
@@ -270,11 +272,15 @@
                 $('#search-count').hide();
             }
 
-            // Client-side saralash: match larni birinchi, keyin tanlangan ustun
+            // MARK filtri: faqat sababli (ariza bor) larni ko'rsatish
+            if (markFilterActive) {
+                filtered = filtered.filter(function(r) {
+                    return (r.mark_status || '').indexOf('Sababli') === 0;
+                });
+            }
+
+            // Client-side saralash
             var sorted = filtered.slice().sort(function(a, b) {
-                var aMatch = a.match === 'match' ? 0 : 1;
-                var bMatch = b.match === 'match' ? 0 : 1;
-                if (aMatch !== bMatch) return aMatch - bMatch;
                 var valA = a[currentSort] || '';
                 var valB = b[currentSort] || '';
                 var cmp;
@@ -428,6 +434,22 @@
                 }
             });
 
+            $(document).on('click', '.mark-filter-link', function(e) {
+                e.preventDefault();
+                markFilterActive = !markFilterActive;
+                var btn = $('#mark-filter-btn');
+                var icon = $('#mark-filter-icon');
+                if (markFilterActive) {
+                    btn.css({'background': '#dbeafe', 'padding': '2px 8px', 'border-radius': '6px', 'color': '#1e40af'});
+                    icon.html('&#9650;').addClass('active');
+                } else {
+                    btn.css({'background': 'transparent', 'padding': '', 'border-radius': '', 'color': ''});
+                    icon.html('&#9660;').removeClass('active');
+                }
+                currentPage = 1;
+                renderPage();
+            });
+
             $(document).on('click', '.sort-link', function(e) {
                 e.preventDefault();
                 var col = $(this).data('sort');
@@ -506,8 +528,8 @@
         .journal-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
         .journal-table th { padding: 14px 10px; text-align: left; font-weight: 600; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
         .journal-table th.th-num { padding: 14px 10px 14px 16px; width: 44px; }
-        .sort-link { display: inline-flex; align-items: center; gap: 4px; color: #334155; text-decoration: none; cursor: pointer; }
-        .sort-link:hover { opacity: 0.75; }
+        .sort-link, .mark-filter-link { display: inline-flex; align-items: center; gap: 4px; color: #334155; text-decoration: none; cursor: pointer; transition: all 0.15s; }
+        .sort-link:hover, .mark-filter-link:hover { opacity: 0.75; }
         .sort-icon { font-size: 8px; opacity: 0.4; }
         .sort-icon.active { font-size: 11px; opacity: 1; color: #2b5ea7; }
 

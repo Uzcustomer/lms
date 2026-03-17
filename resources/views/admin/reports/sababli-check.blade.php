@@ -133,13 +133,18 @@
 
                         <!-- Debug Log -->
                         <div id="debug-log-area" style="display:none;">
-                            <div style="border-top:2px solid #fbbf24;background:#fffbeb;padding:12px 20px;cursor:pointer;" onclick="$('#debug-log-table').toggle();$(this).find('.debug-arrow').toggleClass('open');">
-                                <span style="font-size:13px;font-weight:700;color:#92400e;">
+                            <div style="border-top:2px solid #fbbf24;background:#fffbeb;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                <span style="font-size:13px;font-weight:700;color:#92400e;cursor:pointer;" onclick="$('#debug-log-table').toggle();$(this).find('.debug-arrow').toggleClass('open');">
                                     <span class="debug-arrow" style="display:inline-block;transition:transform 0.2s;">&#9654;</span>
                                     DEBUG LOG — Topilmagan / Muammoli arizalar
                                     (<span id="debug-log-count">0</span> ta)
+                                    <span style="font-size:11px;color:#b45309;margin-left:8px;">(bosing ochish/yopish)</span>
                                 </span>
-                                <span style="font-size:11px;color:#b45309;margin-left:8px;">(bosing ochish/yopish uchun)</span>
+                                <div style="position:relative;">
+                                    <input type="text" id="debug-search" placeholder="hemis_id, ism, fan..." style="padding:5px 10px 5px 28px;border:1px solid #fbbf24;border-radius:6px;font-size:11.5px;width:220px;outline:none;background:#fff;" oninput="filterDebugLog()">
+                                    <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:#b45309;pointer-events:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    <span id="debug-search-count" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:#92400e;display:none;"></span>
+                                </div>
                             </div>
                             <div id="debug-log-table" style="display:none;max-height:400px;overflow:auto;">
                                 <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
@@ -419,12 +424,45 @@
             $('#pairs-modal-overlay').fadeOut(150);
         }
 
+        var allDebugLogs = [];
+
         function renderDebugLog(logs) {
-            if (!logs || logs.length === 0) {
+            allDebugLogs = logs || [];
+            if (allDebugLogs.length === 0) {
                 $('#debug-log-area').hide();
                 return;
             }
-            $('#debug-log-count').text(logs.length);
+            $('#debug-log-count').text(allDebugLogs.length);
+            $('#debug-search').val('');
+            $('#debug-search-count').hide();
+            renderDebugRows(allDebugLogs);
+            $('#debug-log-area').show();
+            $('#debug-log-table').show();
+        }
+
+        function filterDebugLog() {
+            var term = ($('#debug-search').val() || '').trim().toLowerCase();
+            if (!term) {
+                renderDebugRows(allDebugLogs);
+                $('#debug-search-count').hide();
+                $('#debug-log-count').text(allDebugLogs.length);
+                return;
+            }
+            var filtered = allDebugLogs.filter(function(l) {
+                return (l.student_hemis_id || '').toString().toLowerCase().indexOf(term) > -1
+                    || (l.full_name || '').toLowerCase().indexOf(term) > -1
+                    || (l.group_name || '').toLowerCase().indexOf(term) > -1
+                    || (l.subject_name || '').toLowerCase().indexOf(term) > -1
+                    || (l.original_id || '').toString().indexOf(term) > -1
+                    || (l.resolved_id || '').toString().indexOf(term) > -1
+                    || (l.reason || '').toLowerCase().indexOf(term) > -1;
+            });
+            renderDebugRows(filtered);
+            $('#debug-search-count').text(filtered.length + ' / ' + allDebugLogs.length).show();
+            $('#debug-log-count').text(filtered.length);
+        }
+
+        function renderDebugRows(logs) {
             var html = '';
             for (var i = 0; i < logs.length; i++) {
                 var l = logs[i];
@@ -445,7 +483,6 @@
                 html += '</tr>';
             }
             $('#debug-log-body').html(html);
-            $('#debug-log-area').show();
         }
 
         function downloadExcel() {

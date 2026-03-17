@@ -114,7 +114,6 @@ class SendUnratedRegistrationsReport extends Command
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereIn('ss.subject_id', $subjectIds)
-            ->whereNull('st.deleted_at')
             ->where(function ($q) {
                 $q->where('st.student_status_code', '!=', '60')
                   ->orWhereNull('st.student_status_code');
@@ -126,7 +125,6 @@ class SendUnratedRegistrationsReport extends Command
         // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
         $groupStudentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
-            ->whereNull('deleted_at')
             ->where(function ($q) {
                 $q->where('student_status_code', '!=', '60')
                   ->orWhereNull('student_status_code');

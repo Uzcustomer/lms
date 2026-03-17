@@ -90,7 +90,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Tekshirish" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">LMS da sababli (retake) qilinganlar bilan HEMIS davomatini solishtiradi</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">HEMIS dagi sababli/sababsiz davomatlarni tasdiqlangan arizalar bilan solishtiradi</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -112,6 +112,7 @@
                                         <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon active">&#9650;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Sana <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_pair">Juftlik <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -266,8 +267,8 @@
         }
 
         function markBadge(val) {
-            if (val === 'Sababli') return '<span class="badge badge-lms">Sababli</span>';
-            return '<span class="badge badge-hemis-bad">Sababli emas</span>';
+            if (val === 'Sababli (ariza)') return '<span class="badge badge-lms">Sababli (ariza)</span>';
+            return '<span class="badge badge-hemis-bad">Ariza yo\'q</span>';
         }
 
         function hemisBadge(val) {
@@ -287,6 +288,7 @@
                 html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.semester_name) + '</td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_date) + '</td>';
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.lesson_pair) + '</td>';

@@ -172,7 +172,7 @@ class SendUnratedRegistrationsReport extends Command
                   ->orWhere('sg.status', 'recorded')
                   ->orWhere('sg.reason', 'absent');
             })
-            ->groupBy('st.group_id', 'sg.subject_id', DB::raw('DATE(sg.lesson_date)'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date))"))
             ->select(
                 DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date)) as gk"),
                 DB::raw('COUNT(DISTINCT sg.student_hemis_id) as graded_count')

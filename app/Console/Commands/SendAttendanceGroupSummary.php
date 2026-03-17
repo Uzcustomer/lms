@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Log;
 
 class SendAttendanceGroupSummary extends Command
 {
-    protected $signature = 'teachers:send-group-summary {--chat-id= : Test uchun shaxsiy Telegram chat_id}';
+    protected $signature = 'teachers:send-group-summary {--chat-id= : Test uchun shaxsiy Telegram chat_id} {--detail : O\'qituvchilar kesimi batafsil jadvalini ham yuborish}';
 
     protected $description = 'Davomat olmagan yoki baho qo\'ymagan o\'qituvchilar haqida Telegram guruhga jadval ko\'rinishida hisobot yuborish';
 
@@ -511,14 +511,17 @@ class SendAttendanceGroupSummary extends Command
         $compactGenerator = (new TableImageGenerator())->compact();
         $deptImages = $compactGenerator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kafedralar: {$deptNum})");
 
-        // O'qituvchilar kesimi batafsil jadval rasmi (doim yuboriladi)
-        $headers = [
-            '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
-            'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
-            'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
-        ];
+        // Batafsil jadval rasmi (faqat --detail flag bilan)
+        $detailImages = [];
+        if ($this->option('detail')) {
+            $headers = [
+                '#', 'XODIM FISH', 'FAKULTET', "YO'NALISH", 'KURS', 'SEM',
+                'KAFEDRA', 'FAN', 'GURUH', "MASHG'ULOT TURI",
+                'VAQT', 'T.SONI', 'DAVOMAT', 'BAHO', 'SANA',
+            ];
 
-        $detailImages = $generator->generate($headers, $tableRows, "O'QITUVCHILAR KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kamida biri yo'q: " . count($results) . ")");
+            $detailImages = $generator->generate($headers, $tableRows, "O'QITUVCHILAR KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kamida biri yo'q: " . count($results) . ")");
+        }
 
         $tempFiles = [];
 
@@ -536,10 +539,10 @@ class SendAttendanceGroupSummary extends Command
                 $telegram->sendPhoto($groupChatId, $imagePath, $caption);
             }
 
-            // 3. O'qituvchilar kesimi rasmlari
+            // 3. Batafsil jadval rasmlari
             foreach ($detailImages as $index => $imagePath) {
                 $tempFiles[] = $imagePath;
-                $caption = 'O\'qituvchilar kesimi';
+                $caption = 'Batafsil hisobot';
                 if (count($detailImages) > 1) {
                     $caption .= ' ' . ($index + 1) . '/' . count($detailImages) . '-sahifa';
                 }

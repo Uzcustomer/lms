@@ -3495,18 +3495,39 @@ class ReportController extends Controller
         )->get();
 
         // 2-QADAM: Barcha tasdiqlangan arizalarni olish
-        $allExcuses = DB::table('absence_excuses as ae')
+        // A) Subject bilan bog'langan arizalar
+        $subjectExcuses = DB::table('absence_excuses as ae')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
             ->where('ae.status', 'approved')
             ->whereNotNull('aem.subject_id')
             ->select('ae.student_hemis_id', 'aem.subject_id', 'ae.start_date', 'ae.end_date')
             ->get();
 
+        // B) Subject siz arizalar (subject_id NULL yoki makeups yo'q) — faqat sana bo'yicha
+        $generalExcuses = DB::table('absence_excuses as ae')
+            ->where('ae.status', 'approved')
+            ->where(function ($q) {
+                $q->whereNotExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('absence_excuse_makeups as aem2')
+                        ->whereColumn('aem2.absence_excuse_id', 'ae.id')
+                        ->whereNotNull('aem2.subject_id');
+                });
+            })
+            ->select('ae.student_hemis_id', 'ae.start_date', 'ae.end_date')
+            ->get();
+
         // Indekslash: student_hemis_id|subject_id => [{start_date, end_date}]
         $excuseMap = [];
-        foreach ($allExcuses as $exc) {
+        foreach ($subjectExcuses as $exc) {
             $excKey = $exc->student_hemis_id . '|' . $exc->subject_id;
             $excuseMap[$excKey][] = $exc;
+        }
+
+        // Umumiy arizalar indeksi: student_hemis_id => [{start_date, end_date}]
+        $generalExcuseMap = [];
+        foreach ($generalExcuses as $exc) {
+            $generalExcuseMap[$exc->student_hemis_id][] = $exc;
         }
 
         // Semester nomlarini olish
@@ -3531,8 +3552,20 @@ class ReportController extends Controller
             // Mark holati: approved ariza bor-yo'qligini tekshirish
             $excKey = $att->student_hemis_id . '|' . $att->subject_id;
             $hasExcuse = false;
+            // 1) Subject bo'yicha aniq moslik
             if (isset($excuseMap[$excKey])) {
                 foreach ($excuseMap[$excKey] as $exc) {
+                    $excStart = substr($exc->start_date, 0, 10);
+                    $excEnd = substr($exc->end_date, 0, 10);
+                    if ($dateStr >= $excStart && $dateStr <= $excEnd) {
+                        $hasExcuse = true;
+                        break;
+                    }
+                }
+            }
+            // 2) Umumiy ariza (subject_id yo'q) — faqat sana bo'yicha
+            if (!$hasExcuse && isset($generalExcuseMap[$att->student_hemis_id])) {
+                foreach ($generalExcuseMap[$att->student_hemis_id] as $exc) {
                     $excStart = substr($exc->start_date, 0, 10);
                     $excEnd = substr($exc->end_date, 0, 10);
                     if ($dateStr >= $excStart && $dateStr <= $excEnd) {

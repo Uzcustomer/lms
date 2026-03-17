@@ -3830,11 +3830,7 @@ class ReportController extends Controller
                     'absent_on' => 0,
                     'absent_off' => 0,
                 ]],
-                'journal_url' => $exc->group_pk ? route('admin.journal.show', [
-                    'groupId' => $exc->group_pk,
-                    'subjectId' => $exc->subject_id,
-                    'semesterCode' => '',
-                ]) : '#',
+                'journal_url' => '#',
             ];
         }
 

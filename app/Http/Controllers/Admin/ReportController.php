@@ -3440,16 +3440,13 @@ class ReportController extends Controller
         }
         $currentSemesterFilter = $request->get('current_semester', '1') == '1';
 
-        // 1-QADAM: HEMIS dagi barcha sababli va sababsiz davomatlarni olish
+        // 1-QADAM: HEMIS dagi faqat sababli davomatlarni olish (absent_on > 0)
         $attQuery = DB::table('attendances as a')
             ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
             ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
-            ->where(function ($q) {
-                $q->where('a.absent_on', '>', 0)
-                    ->orWhere('a.absent_off', '>', 0);
-            });
+            ->where('a.absent_on', '>', 0);
 
         if ($request->filled('education_type')) {
             $attQuery->whereIn('s.group_id', $groupIds);
@@ -3489,8 +3486,6 @@ class ReportController extends Controller
             'a.lesson_pair_code',
             'a.lesson_pair_start_time',
             'a.lesson_pair_end_time',
-            'a.absent_on',
-            'a.absent_off',
             'a.semester_code'
         )->get();
 
@@ -3520,16 +3515,8 @@ class ReportController extends Controller
         foreach ($attRows as $att) {
             $dateStr = substr($att->lesson_date, 0, 10);
 
-            // HEMIS holati
-            if ((int) $att->absent_on > 0 && (int) $att->absent_off == 0) {
-                $hemisStatus = 'Sababli';
-            } elseif ((int) $att->absent_off > 0 && (int) $att->absent_on == 0) {
-                $hemisStatus = 'Sababsiz';
-            } elseif ((int) $att->absent_on > 0 && (int) $att->absent_off > 0) {
-                $hemisStatus = 'Aralash';
-            } else {
-                $hemisStatus = 'Noaniq';
-            }
+            // HEMIS holati — barchasi absent_on > 0, ya'ni sababli
+            $hemisStatus = 'Sababli';
 
             // Mark holati: approved ariza bor-yo'qligini tekshirish
             $excKey = $att->student_hemis_id . '|' . $att->subject_id;
@@ -3546,16 +3533,7 @@ class ReportController extends Controller
             }
 
             $markStatus = $hasExcuse ? 'Sababli (ariza)' : 'Ariza yo\'q';
-
-            // Moslik: HEMIS sababli + Ariza bor = match, qolgan hammasi = mismatch
-            $hemisIsSababli = in_array($hemisStatus, ['Sababli', 'Aralash']);
-            if ($hemisIsSababli && $hasExcuse) {
-                $match = 'match';
-            } elseif (!$hemisIsSababli && !$hasExcuse) {
-                $match = 'match';
-            } else {
-                $match = 'mismatch';
-            }
+            $match = $hasExcuse ? 'match' : 'mismatch';
 
             $results[] = [
                 'student_hemis_id' => $att->student_hemis_id,

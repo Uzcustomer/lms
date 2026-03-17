@@ -3470,14 +3470,8 @@ class ReportController extends Controller
             $attQuery->where('s.group_id', $request->group);
         }
         if ($currentSemesterFilter) {
-            $attQuery->whereExists(function ($q) {
-                $q->select(DB::raw(1))
-                    ->from('semesters as sem')
-                    ->whereColumn('sem.curriculum_hemis_id', 'g.curriculum_hemis_id')
-                    ->whereColumn('sem.code', 'a.semester_code')
-                    ->whereColumn('sem.education_year', 'a.education_year_code')
-                    ->where('sem.current', true);
-            });
+            $attQuery->whereColumn('a.semester_code', 's.semester_code')
+                     ->where('a.education_year_current', true);
         }
 
         $attRows = $attQuery->select(

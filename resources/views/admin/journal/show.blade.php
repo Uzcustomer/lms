@@ -1141,16 +1141,9 @@
                                                         @endif
                                                     @elseif($hasAbsenceNoGrade)
                                                         @php
-                                                            $dayAttData = $jbAttendance[$student->hemis_id][$date] ?? [];
-                                                            $daySababli = false;
-                                                            foreach ($dayAbsences as $pairCode => $absData) {
-                                                                $attForPair = $dayAttData[$pairCode] ?? null;
-                                                                if ($attForPair && ((int) ($attForPair['absent_on'] ?? 0)) > 0) {
-                                                                    $daySababli = true;
-                                                                    break;
-                                                                }
-                                                            }
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
+                                                            $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
+                                                            $daySababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $date && $excuseData->end_date >= $date;
                                                         @endphp
                                                         @if($hasApprovedExcuse)
                                                             <span class="excuse-nb-cell font-medium" title="Sababli (tasdiqlangan hujjat)">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
@@ -1400,10 +1393,10 @@
                                                         @elseif($hasRetake && $retakeType === 'absent' && $canRateAdmin)
                                                             {{-- NB + retake baho — admin o'zgartira oladi --}}
                                                             @php
-                                                                $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
-                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
-                                                                $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
+                                                                $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
+                                                                $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell cursor-pointer hover:bg-blue-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'zgartirish"
                                                                 onclick="makeEditable(this, {{ $gradeRecordId }})">
@@ -1414,10 +1407,10 @@
                                                         @elseif($hasRetake && $retakeType === 'absent')
                                                             {{-- NB + retake baho — admin emas, faqat ko'rish --}}
                                                             @php
-                                                                $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
-                                                                $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
-                                                                $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
+                                                                $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
+                                                                $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
@@ -1439,10 +1432,10 @@
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
-                                                            $absAttData = $jbAttendance[$student->hemis_id][$col['date']][$col['pair']] ?? null;
-                                                            $isSababli = $absAttData && ((int) ($absAttData['absent_on'] ?? 0)) > 0;
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
-                                                            $nbColorClass = ($isSababli || $hasApprovedExcuse) ? 'text-green-600' : 'text-red-600';
+                                                            $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
+                                                            $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                            $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
                                                         @endphp
                                                         @if($isExcuseOpenedForStudent && !$hasRetake && $isOqituvchi)

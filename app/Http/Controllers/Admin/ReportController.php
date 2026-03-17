@@ -3440,13 +3440,16 @@ class ReportController extends Controller
         }
         $currentSemesterFilter = $request->get('current_semester', '1') == '1';
 
-        // 1-QADAM: HEMIS dagi faqat sababli davomatlarni olish (absent_on > 0)
+        // 1-QADAM: HEMIS dagi sababli va sababsiz davomatlarni olish
         $attQuery = DB::table('attendances as a')
             ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
             ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
-            ->where('a.absent_on', '>', 0);
+            ->where(function ($q) {
+                $q->where('a.absent_on', '>', 0)
+                    ->orWhere('a.absent_off', '>', 0);
+            });
 
         if ($request->filled('education_type')) {
             $attQuery->whereIn('s.group_id', $groupIds);
@@ -3486,6 +3489,8 @@ class ReportController extends Controller
             'a.lesson_pair_code',
             'a.lesson_pair_start_time',
             'a.lesson_pair_end_time',
+            'a.absent_on',
+            'a.absent_off',
             'a.semester_code'
         )->get();
 
@@ -3509,14 +3514,19 @@ class ReportController extends Controller
             ->pluck('name', 'code')
             ->toArray();
 
-        // 3-QADAM: Har bir HEMIS davomat yozuvini ariza bilan solishtirish
-        $results = [];
+        // 3-QADAM: Natijalarni student+fan bo'yicha guruhlash
+        $grouped = [];
 
         foreach ($attRows as $att) {
             $dateStr = substr($att->lesson_date, 0, 10);
+            $groupKey = $att->student_hemis_id . '|' . $att->subject_id;
 
-            // HEMIS holati — barchasi absent_on > 0, ya'ni sababli
-            $hemisStatus = 'Sababli';
+            // HEMIS holati
+            if ((int) $att->absent_on > 0) {
+                $hemisStatus = 'Sababli';
+            } else {
+                $hemisStatus = 'Sababsiz';
+            }
 
             // Mark holati: approved ariza bor-yo'qligini tekshirish
             $excKey = $att->student_hemis_id . '|' . $att->subject_id;
@@ -3533,29 +3543,82 @@ class ReportController extends Controller
             }
 
             $markStatus = $hasExcuse ? 'Sababli (ariza)' : 'Ariza yo\'q';
-            $match = $hasExcuse ? 'match' : 'mismatch';
 
-            $results[] = [
-                'student_hemis_id' => $att->student_hemis_id,
-                'full_name' => $att->full_name,
-                'department_name' => $att->department_name ?? '-',
-                'specialty_name' => $att->specialty_name ?? '-',
-                'level_name' => $att->level_name ?? '-',
-                'group_name' => $att->group_name ?? '-',
-                'semester_name' => $att->semester_name ?? ($semesterNames[$att->semester_code] ?? $att->semester_code ?? '-'),
-                'subject_name' => $att->subject_name ?? '-',
+            // Juftlik detali
+            $pair = [
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
                 'lesson_pair' => ($att->lesson_pair_start_time && $att->lesson_pair_end_time)
                     ? $att->lesson_pair_start_time . '-' . $att->lesson_pair_end_time : '-',
-                'mark_status' => $markStatus,
                 'hemis_status' => $hemisStatus,
-                'match' => $match,
-                'journal_url' => route('admin.journal.show', [
-                    'groupId' => $att->group_pk,
-                    'subjectId' => $att->subject_id,
-                    'semesterCode' => $att->semester_code,
-                ]),
+                'mark_status' => $markStatus,
+                'absent_on' => (int) $att->absent_on,
+                'absent_off' => (int) $att->absent_off,
             ];
+
+            if (!isset($grouped[$groupKey])) {
+                $grouped[$groupKey] = [
+                    'student_hemis_id' => $att->student_hemis_id,
+                    'full_name' => $att->full_name,
+                    'department_name' => $att->department_name ?? '-',
+                    'specialty_name' => $att->specialty_name ?? '-',
+                    'level_name' => $att->level_name ?? '-',
+                    'group_name' => $att->group_name ?? '-',
+                    'semester_name' => $att->semester_name ?? ($semesterNames[$att->semester_code] ?? $att->semester_code ?? '-'),
+                    'subject_name' => $att->subject_name ?? '-',
+                    'subject_id' => $att->subject_id,
+                    'total_absent_on' => 0,
+                    'total_absent_off' => 0,
+                    'pairs' => [],
+                    'journal_url' => route('admin.journal.show', [
+                        'groupId' => $att->group_pk,
+                        'subjectId' => $att->subject_id,
+                        'semesterCode' => $att->semester_code,
+                    ]),
+                ];
+            }
+
+            $grouped[$groupKey]['total_absent_on'] += (int) $att->absent_on;
+            $grouped[$groupKey]['total_absent_off'] += (int) $att->absent_off;
+            $grouped[$groupKey]['pairs'][] = $pair;
+        }
+
+        // Har bir guruh uchun yakuniy holat hisoblash
+        $results = [];
+        foreach ($grouped as $row) {
+            $totalOn = $row['total_absent_on'];
+            $totalOff = $row['total_absent_off'];
+            $row['total_hours'] = $totalOn + $totalOff;
+
+            if ($totalOn > 0 && $totalOff > 0) {
+                $row['hemis_status'] = 'Aralash';
+            } elseif ($totalOn > 0) {
+                $row['hemis_status'] = 'Sababli';
+            } else {
+                $row['hemis_status'] = 'Sababsiz';
+            }
+
+            // Ariza bor bo'lgan juftliklar soni
+            $excusedPairs = count(array_filter($row['pairs'], fn($p) => $p['mark_status'] === 'Sababli (ariza)'));
+            $totalPairs = count($row['pairs']);
+            $row['mark_status'] = $excusedPairs > 0
+                ? "Sababli ($excusedPairs/$totalPairs)"
+                : 'Ariza yo\'q';
+
+            // Match: HEMIS sababli + ariza bor = match, sababsiz + ariza yo'q = match
+            $hemisIsSababli = in_array($row['hemis_status'], ['Sababli', 'Aralash']);
+            $hasAnyExcuse = $excusedPairs > 0;
+            if ($hemisIsSababli && $hasAnyExcuse) {
+                $row['match'] = 'match';
+            } elseif (!$hemisIsSababli && !$hasAnyExcuse) {
+                $row['match'] = 'match';
+            } else {
+                $row['match'] = 'mismatch';
+            }
+
+            // pairs ni sana bo'yicha saralash
+            usort($row['pairs'], fn($a, $b) => strcmp($a['lesson_date'], $b['lesson_date']));
+
+            $results[] = $row;
         }
 
         // Filtrlash: faqat nomuvofiqlarni ko'rsatish

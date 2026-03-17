@@ -103,6 +103,11 @@
                             <span id="match-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="mismatch-badge" class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                            <div style="margin-left:auto;position:relative;">
+                                <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:#94a3b8;pointer-events:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                <input type="text" id="table-search" placeholder="Qidirish (ism, guruh, fan...)" style="padding:6px 12px 6px 30px;border:1px solid #cbd5e1;border-radius:8px;font-size:12.5px;width:260px;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#2b5ea7'" onblur="this.style.borderColor='#cbd5e1'">
+                                <span id="search-count" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:#94a3b8;display:none;"></span>
+                            </div>
                         </div>
                         <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table">
@@ -247,8 +252,25 @@
         }
 
         function renderPage() {
+            // Client-side qidirish
+            var searchTerm = ($('#table-search').val() || '').trim().toLowerCase();
+            var filtered = allData;
+            if (searchTerm) {
+                filtered = allData.filter(function(r) {
+                    return (r.full_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.group_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.subject_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.department_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.student_hemis_id || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.specialty_name || '').toLowerCase().indexOf(searchTerm) > -1;
+                });
+                $('#search-count').text(filtered.length + ' / ' + allData.length).show();
+            } else {
+                $('#search-count').hide();
+            }
+
             // Client-side saralash
-            var sorted = allData.slice().sort(function(a, b) {
+            var sorted = filtered.slice().sort(function(a, b) {
                 var valA = a[currentSort] || '';
                 var valB = b[currentSort] || '';
                 var cmp;
@@ -380,6 +402,15 @@
         }
 
         $(document).ready(function() {
+            var searchTimer = null;
+            $('#table-search').on('input', function() {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function() {
+                    currentPage = 1;
+                    renderPage();
+                }, 250);
+            });
+
             $(document).on('click', '.sort-link', function(e) {
                 e.preventDefault();
                 var col = $(this).data('sort');

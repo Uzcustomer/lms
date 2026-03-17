@@ -380,6 +380,8 @@ class SendAttendanceGroupSummary extends Command
         $facultyStats = [];
         // Kafedra kesimi statistikasi
         $departmentStats = [];
+        // O'qituvchilar kesimi statistikasi
+        $teacherStats = [];
 
         foreach ($results as $r) {
             $facultyName = $r['faculty_name'] ?? 'Noma\'lum';
@@ -408,6 +410,17 @@ class SendAttendanceGroupSummary extends Command
             $facultyStats[$facultyName]['total'] += $hours;
             $departmentStats[$deptKey]['subjects'][$normalizedSubject]['total'] += $hours;
 
+            // O'qituvchilar kesimi uchun kalit
+            $teacherKey = $r['employee_id'];
+            if (!isset($teacherStats[$teacherKey])) {
+                $teacherStats[$teacherKey] = [
+                    'employee_name' => $r['employee_name'],
+                    'department_name' => $deptName,
+                    'no_attendance' => 0,
+                    'no_grades' => 0,
+                ];
+            }
+
             if (!$r['has_attendance']) {
                 $totalMissingAttendance += $hours;
                 $teachersWithIssues[$r['employee_id']] = true;
@@ -416,6 +429,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_att'][$r['employee_id']] = true;
                 $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_attendance'] += $hours;
+                $teacherStats[$teacherKey]['no_attendance'] += $hours;
             }
             if ($r['has_grades'] === false) {
                 $totalMissingGrades += $hours;
@@ -425,6 +439,7 @@ class SendAttendanceGroupSummary extends Command
                 $facultyStats[$facultyName]['teachers'][$r['employee_id']] = true;
                 $facultyStats[$facultyName]['teachers_grade'][$r['employee_id']] = true;
                 $departmentStats[$deptKey]['subjects'][$normalizedSubject]['no_grades'] += $hours;
+                $teacherStats[$teacherKey]['no_grades'] += $hours;
             }
         }
 
@@ -511,6 +526,31 @@ class SendAttendanceGroupSummary extends Command
         $compactGenerator = (new TableImageGenerator())->compact();
         $deptImages = $compactGenerator->generate($deptHeaders, $deptTableRows, "KAFEDRA KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (Kafedralar: {$deptNum})");
 
+        // O'qituvchilar kesimi rasmi
+        $teacherTableRows = [];
+        $sortedTeachers = $teacherStats;
+        uasort($sortedTeachers, function ($a, $b) {
+            $totalA = $a['no_attendance'] + $a['no_grades'];
+            $totalB = $b['no_attendance'] + $b['no_grades'];
+            return $totalB <=> $totalA;
+        });
+
+        $teacherNum = 0;
+        foreach ($sortedTeachers as $t) {
+            $teacherNum++;
+            $teacherTableRows[] = [
+                $teacherNum,
+                TableImageGenerator::truncate($t['employee_name'], 28),
+                TableImageGenerator::truncate($t['department_name'], 24),
+                $t['no_attendance'],
+                $t['no_grades'],
+                $t['no_attendance'] + $t['no_grades'],
+            ];
+        }
+
+        $teacherHeaders = ['#', 'O\'QITUVCHI', 'KAFEDRA', 'DAV. YO\'Q', 'BAHO YO\'Q', 'JAMI SOAT'];
+        $teacherImages = $compactGenerator->generate($teacherHeaders, $teacherTableRows, "O'QITUVCHILAR KESIMI - {$formattedDate} yil {$now->format('H:i')} soat (O'qituvchilar: {$teacherNum})");
+
         // Batafsil jadval rasmi (faqat --detail flag bilan)
         $detailImages = [];
         if ($this->option('detail')) {
@@ -539,7 +579,17 @@ class SendAttendanceGroupSummary extends Command
                 $telegram->sendPhoto($groupChatId, $imagePath, $caption);
             }
 
-            // 3. Batafsil jadval rasmlari
+            // 3. O'qituvchilar kesimi rasmlari
+            foreach ($teacherImages as $index => $imagePath) {
+                $tempFiles[] = $imagePath;
+                $caption = 'O\'qituvchilar kesimi';
+                if (count($teacherImages) > 1) {
+                    $caption .= ' ' . ($index + 1) . '/' . count($teacherImages) . '-sahifa';
+                }
+                $telegram->sendPhoto($groupChatId, $imagePath, $caption);
+            }
+
+            // 4. Batafsil jadval rasmlari
             foreach ($detailImages as $index => $imagePath) {
                 $tempFiles[] = $imagePath;
                 $caption = 'Batafsil hisobot';
@@ -549,7 +599,7 @@ class SendAttendanceGroupSummary extends Command
                 $telegram->sendPhoto($groupChatId, $imagePath, $caption);
             }
 
-            $totalImages = count($deptImages) + count($detailImages);
+            $totalImages = count($deptImages) + count($teacherImages) + count($detailImages);
             $this->info("Hisobot yuborildi. Jami: {$totalSchedules}, Muammoli: " . count($results) . ", Rasmlar: {$totalImages}");
         } catch (\Throwable $e) {
             Log::error('Telegram guruhga hisobot yuborishda xato: ' . $e->getMessage());

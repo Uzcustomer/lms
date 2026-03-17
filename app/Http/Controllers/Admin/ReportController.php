@@ -887,60 +887,26 @@ class ReportController extends Controller
             ->pluck('ck')
             ->flip();
 
-        // Baho (1-usul): subject_schedule_id bo'yicha haqiqiy baho qo'yilgan talabalar soni
-        // Faqat grade > 0 yoki retake_grade > 0 — haqiqiy baho hisoblanadi
-        // NB (reason='absent', grade=NULL) — baho emas, faqat davomat
-        $gradedCountByScheduleId = DB::table('student_grades')
+        // Baho (1-usul): subject_schedule_id bo'yicha yozuvi bor talabalar soni
+        // Baho HAM, NB HAM hisobga olinadi — o'qituvchi shu talaba uchun ish qilgan
+        // Faqat hech qanday yozuv yo'q talaba = "baho qo'yilmagan"
+        $processedCountByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereNotNull('grade')->where('grade', '>', 0);
-                })->orWhere(function ($q2) {
-                    $q2->whereNotNull('retake_grade')->where('retake_grade', '>', 0);
-                });
-            })
             ->select('subject_schedule_id', DB::raw('COUNT(DISTINCT student_hemis_id) as cnt'))
             ->groupBy('subject_schedule_id')
             ->pluck('cnt', 'subject_schedule_id');
 
-        // Baho (1-usul-b): subject_schedule_id bo'yicha BIRORTA yozuv mavjudmi (NB ham)
-        // Agar hech qanday yozuv yo'q bo'lsa — o'qituvchi umuman ishlamagan
-        $anyRecordByScheduleId = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->pluck('subject_schedule_id')
-            ->unique()
-            ->flip();
-
-        // Baho (2-usul): group + subject + date + lesson_pair bo'yicha haqiqiy baho soni
-        $gradedCountByKey = DB::table('student_grades as sg')
+        // Baho (2-usul): group + subject + date + lesson_pair bo'yicha yozuvi bor talabalar soni
+        $processedCountByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
-            ->where(function ($q) {
-                $q->where(function ($q2) {
-                    $q2->whereNotNull('sg.grade')->where('sg.grade', '>', 0);
-                })->orWhere(function ($q2) {
-                    $q2->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '>', 0);
-                });
-            })
             ->select(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code)"))
             ->pluck('cnt', 'gk');
-
-        // Baho (2-usul-b): birorta yozuv mavjudmi (NB ham)
-        $anyRecordByKey = DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->whereNull('sg.deleted_at')
-            ->whereIn('st.group_id', $groupHemisIds)
-            ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
-            ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
-            ->select(DB::raw("DISTINCT CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"))
-            ->pluck('gk')
-            ->flip();
 
         // 3-QADAM: Talaba sonini guruh bo'yicha hisoblash (faqat faol talabalar, chetlashtirilganlar hisobga olinmaydi)
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
@@ -979,30 +945,26 @@ class ReportController extends Controller
                 $hasGrade = null;
                 $missingGradeCount = 0;
             } else {
+                // Yozuvi bor talabalar soni (baho HAM, NB HAM — barchasi "o'qituvchi ishini bajargan")
                 // 1-usul: schedule_hemis_id orqali
-                $gradedBySchedule = $gradedCountByScheduleId[$sch->schedule_hemis_id] ?? 0;
-                $hasAnyBySchedule = isset($anyRecordByScheduleId[$sch->schedule_hemis_id]);
-
+                $processedBySchedule = $processedCountByScheduleId[$sch->schedule_hemis_id] ?? 0;
                 // 2-usul: kalit orqali
-                $gradedByComposite = $gradedCountByKey[$gradeKey] ?? 0;
-                $hasAnyByComposite = isset($anyRecordByKey[$gradeKey]);
+                $processedByComposite = $processedCountByKey[$gradeKey] ?? 0;
+                // Eng ko'p topilgan usulni tanlash
+                $processedCount = max($processedBySchedule, $processedByComposite);
 
-                // Eng ko'p baho topilgan usulni tanlash
-                $gradedCount = max($gradedBySchedule, $gradedByComposite);
-                $hasAnyRecord = $hasAnyBySchedule || $hasAnyByComposite;
-
-                if (!$hasAnyRecord) {
+                if ($processedCount >= $totalStudents) {
+                    // Barcha faol talabalar uchun yozuv bor (baho yoki NB)
+                    $hasGrade = true;
+                    $missingGradeCount = 0;
+                } elseif ($processedCount > 0) {
+                    // Ba'zi talabalar uchun yozuv yo'q
+                    $hasGrade = false;
+                    $missingGradeCount = $totalStudents - $processedCount;
+                } else {
                     // Hech qanday yozuv yo'q — o'qituvchi umuman ishlamagan
                     $hasGrade = false;
                     $missingGradeCount = $totalStudents;
-                } elseif ($gradedCount >= $totalStudents) {
-                    // Barcha faol talabalarga baho qo'yilgan
-                    $hasGrade = true;
-                    $missingGradeCount = 0;
-                } else {
-                    // Ba'zi talabalarga baho qo'yilmagan
-                    $hasGrade = false;
-                    $missingGradeCount = $totalStudents - $gradedCount;
                 }
             }
 

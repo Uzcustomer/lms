@@ -196,6 +196,7 @@
                 level_code: $('#level_code').val() || '',
                 group: $('#group').val() || '',
                 filter_status: $('#filter_status').val() || '',
+                search: ($('#table-search').val() || '').trim(),
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -404,11 +405,24 @@
         $(document).ready(function() {
             var searchTimer = null;
             $('#table-search').on('input', function() {
-                clearTimeout(searchTimer);
-                searchTimer = setTimeout(function() {
+                if (allData.length > 0) {
+                    clearTimeout(searchTimer);
+                    searchTimer = setTimeout(function() {
+                        currentPage = 1;
+                        renderPage();
+                    }, 250);
+                }
+            }).on('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    clearTimeout(searchTimer);
                     currentPage = 1;
-                    renderPage();
-                }, 250);
+                    if (allData.length > 0) {
+                        renderPage();
+                    } else {
+                        loadReport();
+                    }
+                }
             });
 
             $(document).on('click', '.sort-link', function(e) {

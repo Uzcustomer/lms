@@ -228,6 +228,8 @@ class SendUnratedRegistrationsReport extends Command
             $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
             $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '';
 
+            $missingCount = max(0, $subjectTotal - $gradedCount);
+
             $entry = [
                 'employee_name' => $sch->employee_name,
                 'department_name' => $sch->department_name,
@@ -237,6 +239,8 @@ class SendUnratedRegistrationsReport extends Command
                 'lesson_pair_time' => $pairTime,
                 'lesson_date' => $sch->lesson_date_str,
                 'has_opening' => $sch->has_opening ?? false,
+                'missing_grade_count' => $missingCount,
+                'total_students' => $subjectTotal,
             ];
 
             if ($managerId) {
@@ -336,10 +340,11 @@ class SendUnratedRegistrationsReport extends Command
                         $entry['lesson_pair_time'] ?? '',
                         $lessonDate,
                         $entry['has_opening'] ? 'Ha' : 'Yo\'q',
+                        'badge:red:Yo\'q (' . ($entry['missing_grade_count'] ?? 0) . ')',
                     ];
                 }
 
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN'];
+                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN', 'BAHO'];
                 $title = "{$managerName} — " . count($entries) . " ta baho qo'yilmagan";
 
                 $images = $generator->generate($headers, $tableRows, $title);
@@ -368,10 +373,11 @@ class SendUnratedRegistrationsReport extends Command
                         $entry['lesson_pair_time'] ?? '',
                         $lessonDate,
                         $entry['has_opening'] ? 'Ha' : 'Yo\'q',
+                        'badge:red:Yo\'q (' . ($entry['missing_grade_count'] ?? 0) . ')',
                     ];
                 }
 
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN'];
+                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN', 'BAHO'];
                 $title = "MENEJER BIRIKTIRILMAGAN — " . count($unassigned) . " ta";
 
                 $images = $generator->generate($headers, $tableRows, $title);

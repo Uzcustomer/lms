@@ -508,16 +508,14 @@ class StudentController extends Controller
 
         // Helper: effective grade (aynan jurnal mantiqidan)
         $getEffectiveGrade = function ($row) {
-            if ($row->status === 'pending') return null;
             if ($row->reason === 'absent' && $row->grade === null) {
                 return $row->retake_grade !== null ? $row->retake_grade : null;
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
             }
-            if ($row->status === 'recorded') return $row->grade;
-            if ($row->status === 'closed') return $row->grade;
             if ($row->retake_grade !== null) return $row->retake_grade;
+            if ($row->grade !== null) return $row->grade;
             return null;
         };
 

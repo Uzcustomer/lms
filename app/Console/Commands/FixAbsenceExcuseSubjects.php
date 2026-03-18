@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\Student;
+use App\Models\StudentSubject;
+use App\Models\CurriculumSubject;
 use App\Services\SubjectMatcherService;
 use Illuminate\Console\Command;
 
@@ -11,14 +13,16 @@ class FixAbsenceExcuseSubjects extends Command
 {
     protected $signature = 'absence:fix-subjects
         {--dry-run : Faqat ko\'rsatish, o\'zgartirmaslik}
-        {--min-similarity=50 : Minimal o\'xshashlik foizi (default: 50)}';
+        {--min-similarity=50 : Minimal o\'xshashlik foizi (default: 50)}
+        {--debug : Diagnostika ma\'lumotlarini ko\'rsatish}';
 
-    protected $description = 'Ariza makeuplarida subject_id ni student_subjects orqali fuzzy match bilan tuzatish';
+    protected $description = 'Ariza makeuplarida subject_id ni student_subjects/curriculum_subjects orqali fuzzy match bilan tuzatish';
 
     public function handle()
     {
         $dryRun = $this->option('dry-run');
         $minSimilarity = (float) $this->option('min-similarity');
+        $debug = $this->option('debug');
 
         $this->info($dryRun ? '=== DRY RUN rejimi ===' : '=== TUZATISH rejimi ===');
         $this->newLine();
@@ -42,6 +46,7 @@ class FixAbsenceExcuseSubjects extends Command
         // Studentlarni cache qilish
         $studentCache = [];
         $subjectCache = [];
+        $debugShown = [];
 
         foreach ($makeups as $makeup) {
             $excuse = $makeup->absenceExcuse;
@@ -67,6 +72,35 @@ class FixAbsenceExcuseSubjects extends Command
                 $subjectCache[$hemisId] = SubjectMatcherService::getStudentSubjects($student);
             }
             $studentSubjects = $subjectCache[$hemisId];
+
+            if ($debug && !isset($debugShown[$hemisId])) {
+                $debugShown[$hemisId] = true;
+                $ssCount = StudentSubject::where('student_hemis_id', $hemisId)->count();
+                $ssSemCount = $student->semester_id
+                    ? StudentSubject::where('student_hemis_id', $hemisId)->where('semester_id', $student->semester_id)->count()
+                    : 0;
+                $csCount = $student->curriculum_id
+                    ? CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)->active()->count()
+                    : 0;
+                $csSemCount = ($student->curriculum_id && $student->semester_code)
+                    ? CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)->active()->where('semester_code', $student->semester_code)->count()
+                    : 0;
+
+                $this->info("  [{$hemisId}] {$excuse->student_full_name}");
+                $this->info("    semester_id={$student->semester_id}, semester_code={$student->semester_code}, curriculum_id={$student->curriculum_id}");
+                $this->info("    student_subjects: {$ssCount} (semestr bilan: {$ssSemCount})");
+                $this->info("    curriculum_subjects: {$csCount} (semestr bilan: {$csSemCount})");
+                $this->info("    getStudentSubjects natijasi: {$studentSubjects->count()} ta");
+                if ($studentSubjects->isNotEmpty()) {
+                    foreach ($studentSubjects->take(5) as $ss) {
+                        $this->info("      - [{$ss->subject_id}] {$ss->subject_name}");
+                    }
+                    if ($studentSubjects->count() > 5) {
+                        $this->info("      ... va yana " . ($studentSubjects->count() - 5) . " ta");
+                    }
+                }
+                $this->newLine();
+            }
 
             if ($studentSubjects->isEmpty()) {
                 $rows[] = [

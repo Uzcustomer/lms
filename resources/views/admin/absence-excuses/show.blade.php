@@ -294,6 +294,7 @@
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Fan nomi</th>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Nazorat turi</th>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Qayta topshirish sanasi</th>
+                                    <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Tasdiqlagan</th>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Holat</th>
                                 </tr>
                             </thead>
@@ -328,6 +329,16 @@
                                                 @endif
                                             @else
                                                 <span class="text-gray-400 italic">Belgilanmagan</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                            @if($excuse->reviewed_by_name)
+                                                <span class="font-semibold">{{ $excuse->reviewed_by_name }}</span>
+                                                @if($excuse->reviewed_at)
+                                                    <div class="text-xs text-gray-400 mt-0.5">{{ $excuse->reviewed_at->format('d.m.Y H:i') }}</div>
+                                                @endif
+                                            @else
+                                                <span class="text-gray-400 italic">—</span>
                                             @endif
                                         </td>
                                         <td class="px-6 py-4">

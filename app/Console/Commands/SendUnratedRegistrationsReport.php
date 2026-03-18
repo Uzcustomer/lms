@@ -317,13 +317,26 @@ class SendUnratedRegistrationsReport extends Command
         // 7-QADAM: Har bir menejer uchun jadval rasmi
         $generator = (new TableImageGenerator())->compact();
         $tempFiles = [];
+        $sentCount = 0;
+        $failedCount = 0;
 
-        try {
-            foreach ($unratedByManager as $teacherId => $entries) {
-                $manager = $backOfficeManagers->firstWhere('teacher_id', $teacherId);
-                $managerName = $manager?->teacher?->short_name ?? $manager?->teacher?->full_name ?? "Menejer #{$teacherId}";
+        $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN', 'BAHO'];
 
-                // Darslarni sana bo'yicha saralash
+        $allSections = [];
+        foreach ($unratedByManager as $teacherId => $entries) {
+            $manager = $backOfficeManagers->firstWhere('teacher_id', $teacherId);
+            $managerName = $manager?->teacher?->short_name ?? $manager?->teacher?->full_name ?? "Menejer #{$teacherId}";
+            $allSections[] = ['name' => $managerName, 'entries' => $entries];
+        }
+        if (!empty($unassigned)) {
+            $allSections[] = ['name' => 'Menejer biriktirilmagan', 'entries' => $unassigned];
+        }
+
+        foreach ($allSections as $section) {
+            $sectionName = $section['name'];
+            $entries = $section['entries'];
+
+            try {
                 usort($entries, fn($a, $b) => strcmp($a['lesson_date'], $b['lesson_date']));
 
                 $tableRows = [];
@@ -342,66 +355,52 @@ class SendUnratedRegistrationsReport extends Command
                     ];
                 }
 
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN', 'BAHO'];
-                $title = "{$managerName} — " . count($entries) . " ta baho qo'yilmagan";
+                $title = "{$sectionName} — " . count($entries) . " ta baho qo'yilmagan";
+
+                Log::info("Registrator hisobot: {$sectionName} uchun rasm generatsiya qilinmoqda ({$title}, {$totalUnrated} qator)");
 
                 $images = $generator->generate($headers, $tableRows, $title);
 
-                foreach ($images as $index => $imagePath) {
-                    $tempFiles[] = $imagePath;
-                    $caption = $managerName;
-                    if (count($images) > 1) {
-                        $caption .= ' ' . ($index + 1) . '/' . count($images) . '-sahifa';
-                    }
-                    $telegram->sendPhoto($chatId, $imagePath, $caption);
-                }
-            }
-
-            // Menejer biriktirilmaganlar (agar bor bo'lsa)
-            if (!empty($unassigned)) {
-                $tableRows = [];
-                foreach ($unassigned as $i => $entry) {
-                    $lessonDate = Carbon::parse($entry['lesson_date'])->format('d.m');
-                    $tableRows[] = [
-                        $i + 1,
-                        TableImageGenerator::truncate($entry['employee_name'] ?? '-', 24),
-                        TableImageGenerator::truncate($entry['subject_name'] ?? '-', 24),
-                        $entry['group_name'] ?? '-',
-                        TableImageGenerator::truncate($entry['training_type_name'] ?? '-', 14),
-                        $entry['lesson_pair_time'] ?? '',
-                        $lessonDate,
-                        $entry['has_opening'] ? 'Ha' : 'Yo\'q',
-                        'badge:red:Yo\'q (' . ($entry['missing_grade_count'] ?? 0) . ')',
-                    ];
-                }
-
-                $headers = ['#', "O'QITUVCHI", 'FAN', 'GURUH', "MASHG'ULOT TURI", 'JUFTLIK', 'SANA', 'OCHILGAN', 'BAHO'];
-                $title = "MENEJER BIRIKTIRILMAGAN — " . count($unassigned) . " ta";
-
-                $images = $generator->generate($headers, $tableRows, $title);
+                Log::info("Registrator hisobot: {$sectionName} — " . count($images) . " ta rasm yaratildi");
 
                 foreach ($images as $index => $imagePath) {
                     $tempFiles[] = $imagePath;
-                    $caption = 'Menejer biriktirilmagan';
+                    $fileSize = file_exists($imagePath) ? filesize($imagePath) : 0;
+                    Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — hajmi: " . round($fileSize / 1024) . " KB");
+
+                    $caption = $sectionName;
                     if (count($images) > 1) {
                         $caption .= ' ' . ($index + 1) . '/' . count($images) . '-sahifa';
                     }
-                    $telegram->sendPhoto($chatId, $imagePath, $caption);
-                }
-            }
 
-            $this->info("Hisobot yuborildi. Jami baho qo'yilmagan: {$totalUnrated}");
-        } catch (\Throwable $e) {
-            Log::error('Registrator hisobot yuborishda xato: ' . $e->getMessage());
-            $this->error('Xato: ' . $e->getMessage());
-            return 1;
-        } finally {
-            foreach ($tempFiles as $file) {
-                if (file_exists($file)) {
-                    @unlink($file);
+                    $sent = $telegram->sendPhoto($chatId, $imagePath, $caption);
+                    if ($sent) {
+                        $sentCount++;
+                        Log::info("Registrator hisobot: {$sectionName} rasm #{$index} — yuborildi");
+                    } else {
+                        $failedCount++;
+                        Log::error("Registrator hisobot: {$sectionName} rasm #{$index} — YUBORILMADI (sendPhoto false qaytardi)");
+                    }
                 }
+            } catch (\Throwable $e) {
+                $failedCount++;
+                Log::error("Registrator hisobot: {$sectionName} uchun xato: " . $e->getMessage(), [
+                    'exception' => $e::class,
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]);
+                $this->error("Xato ({$sectionName}): " . $e->getMessage());
             }
         }
+
+        // Temp fayllarni tozalash
+        foreach ($tempFiles as $file) {
+            if (file_exists($file)) {
+                @unlink($file);
+            }
+        }
+
+        $this->info("Hisobot yuborildi. Jami: {$totalUnrated}, rasmlar: {$sentCount} yuborildi, {$failedCount} xato");
 
         return 0;
     }

@@ -3548,11 +3548,14 @@ class ReportController extends Controller
                 DB::raw("COALESCE(
                     (SELECT ss.subject_id FROM student_subjects ss
                      WHERE ss.student_hemis_id = ae.student_hemis_id
+                     AND ss.subject_id = aem.subject_id LIMIT 1),
+                    (SELECT ss.subject_id FROM student_subjects ss
+                     WHERE ss.student_hemis_id = ae.student_hemis_id
                      AND TRIM(ss.subject_name) = TRIM(aem.subject_name) LIMIT 1),
                     (SELECT ss.subject_id FROM student_subjects ss
                      WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND TRIM(REGEXP_REPLACE(ss.subject_name, '\\\\s*\\\\([a-zA-Zа-яА-Я]\\\\)\\\\s*$', ''))
-                       = TRIM(REGEXP_REPLACE(aem.subject_name, '\\\\s*\\\\([a-zA-Zа-яА-Я]\\\\)\\\\s*$', ''))
+                     AND (TRIM(ss.subject_name) LIKE CONCAT('%', TRIM(aem.subject_name), '%')
+                          OR TRIM(aem.subject_name) LIKE CONCAT('%', TRIM(ss.subject_name), '%'))
                      LIMIT 1),
                     aem.subject_id
                 ) as subject_id"),
@@ -3599,11 +3602,14 @@ class ReportController extends Controller
                 DB::raw("COALESCE(
                     (SELECT ss.subject_id FROM student_subjects ss
                      WHERE ss.student_hemis_id = ae.student_hemis_id
+                     AND ss.subject_id = aem.subject_id LIMIT 1),
+                    (SELECT ss.subject_id FROM student_subjects ss
+                     WHERE ss.student_hemis_id = ae.student_hemis_id
                      AND TRIM(ss.subject_name) = TRIM(aem.subject_name) LIMIT 1),
                     (SELECT ss.subject_id FROM student_subjects ss
                      WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND TRIM(REGEXP_REPLACE(ss.subject_name, '\\\\s*\\\\([a-zA-Zа-яА-Я]\\\\)\\\\s*$', ''))
-                       = TRIM(REGEXP_REPLACE(aem.subject_name, '\\\\s*\\\\([a-zA-Zа-яА-Я]\\\\)\\\\s*$', ''))
+                     AND (TRIM(ss.subject_name) LIKE CONCAT('%', TRIM(aem.subject_name), '%')
+                          OR TRIM(aem.subject_name) LIKE CONCAT('%', TRIM(ss.subject_name), '%'))
                      LIMIT 1),
                     aem.subject_id
                 ) as subject_id"),

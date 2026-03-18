@@ -10,6 +10,7 @@ use App\Models\OraliqNazorat;
 use App\Models\Oski;
 use App\Models\Schedule;
 use App\Models\Student;
+use App\Services\SubjectMatcherService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
@@ -200,11 +201,22 @@ class SeedAbsenceExcuses extends Command
             );
 
             foreach ($missedAssessments as $assessment) {
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $assessment['subject_id'];
+                $match = SubjectMatcherService::resolveSubjectId(
+                    $assessment['subject_name'],
+                    $assessment['subject_id'],
+                    $student
+                );
+                if ($match) {
+                    $resolvedSubjectId = $match['subject_id'];
+                }
+
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
                     'subject_name' => $assessment['subject_name'],
-                    'subject_id' => $assessment['subject_id'],
+                    'subject_id' => $resolvedSubjectId,
                     'assessment_type' => $assessment['assessment_type'],
                     'assessment_type_code' => $assessment['assessment_type_code'],
                     'original_date' => $assessment['original_date'],

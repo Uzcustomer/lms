@@ -14,6 +14,7 @@ use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Services\SubjectMatcherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -212,11 +213,22 @@ class AbsenceExcuseController extends Controller
                     $makeupEndDate = $makeup['makeup_end'];
                 }
 
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $makeup['subject_id'] ?? null;
+                $matchResult = SubjectMatcherService::resolveSubjectId(
+                    $makeup['subject_name'],
+                    $resolvedSubjectId,
+                    $student
+                );
+                if ($matchResult) {
+                    $resolvedSubjectId = $matchResult['subject_id'];
+                }
+
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
                     'subject_name' => $makeup['subject_name'],
-                    'subject_id' => $makeup['subject_id'] ?? null,
+                    'subject_id' => $resolvedSubjectId,
                     'assessment_type' => $makeup['assessment_type'],
                     'assessment_type_code' => $makeup['assessment_type_code'],
                     'original_date' => $makeup['original_date'],
@@ -255,11 +267,22 @@ class AbsenceExcuseController extends Controller
 
         if ($existingMakeups->isEmpty() && $missedAssessments->isNotEmpty()) {
             foreach ($missedAssessments as $assessment) {
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $assessment['subject_id'];
+                $match = SubjectMatcherService::resolveSubjectId(
+                    $assessment['subject_name'],
+                    $assessment['subject_id'],
+                    $student
+                );
+                if ($match) {
+                    $resolvedSubjectId = $match['subject_id'];
+                }
+
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
                     'subject_name' => $assessment['subject_name'],
-                    'subject_id' => $assessment['subject_id'],
+                    'subject_id' => $resolvedSubjectId,
                     'assessment_type' => $assessment['assessment_type'],
                     'assessment_type_code' => $assessment['assessment_type_code'],
                     'original_date' => $assessment['original_date'],

@@ -3150,15 +3150,10 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Kurs bo'yicha filtrlash
+        // Kurs bo'yicha filtrlash (joriy semestr orqali guruh kursini aniqlash)
         if ($request->filled('level_code')) {
-            $currentSemesterHemisIds = DB::table('curriculum_weeks')
-                ->select('semester_hemis_id')
-                ->groupBy('semester_hemis_id')
-                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
-                ->pluck('semester_hemis_id');
             $curriculaIds = Semester::where('level_code', $request->level_code)
-                ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
+                ->where('current', true)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }

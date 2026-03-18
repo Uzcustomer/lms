@@ -171,22 +171,7 @@ class QuizResultController extends Controller
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             $fanIds = $results->pluck('fan_id')->unique()->values()->toArray();
 
-            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
-            $jnGrades = [];
-            if (!empty($studentHemisIds) && !empty($fanIds)) {
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $jnRows = StudentGrade::whereIn('student_hemis_id', $chunk)
-                        ->whereIn('subject_id', $fanIds)
-                        ->whereNotIn('training_type_code', $excludedCodes)
-                        ->whereNotNull('grade')
-                        ->get(['student_hemis_id', 'subject_id', 'grade', 'lesson_date']);
-                    foreach ($jnRows as $row) {
-                        $k = $row->student_hemis_id . '|' . $row->subject_id;
-                        $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
-                    }
-                    unset($jnRows);
-                }
-            }
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
             // 4) CurriculumSubject va Groups
             $groupIds = $students->pluck('group_id')->unique()->toArray();
@@ -205,7 +190,7 @@ class QuizResultController extends Controller
                 }
             }
 
-            // Student->group mapping va semester aniqlash (MT va OSKI uchun)
+            // Student->group mapping va semester aniqlash (JN, MT va OSKI uchun)
             $studentGroupMap = [];
             $studentSubjectSemester = [];
 
@@ -220,6 +205,130 @@ class QuizResultController extends Controller
                         if (!$semC) continue;
                         $studentSubjectSemester[$s->hemis_id . '|' . $fId] = $semC;
                     }
+                }
+            }
+
+            // JN baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
+            $jnGrades = []; // student_hemis_id|subject_id => computed JN average (pre-computed)
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($studentGroupMap)) {
+                // JB jadval sanalarini batch olish (schedules jadvalidan)
+                $jbScheduleData = [];
+                $uniqueGroupIds = array_unique(array_values($studentGroupMap));
+                $allSemCodes = array_unique(array_values($studentSubjectSemester));
+
+                if (!empty($uniqueGroupIds) && !empty($allSemCodes)) {
+                    $jbSchedRows = DB::table('schedules')
+                        ->whereNull('deleted_at')
+                        ->whereIn('group_id', $uniqueGroupIds)
+                        ->whereIn('subject_id', $fanIds)
+                        ->whereIn('semester_code', $allSemCodes)
+                        ->whereNotIn('training_type_code', $excludedCodes)
+                        ->whereNotIn('training_type_name', ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"])
+                        ->whereNotNull('lesson_date')
+                        ->select('group_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code')
+                        ->orderBy('lesson_date')
+                        ->orderBy('lesson_pair_code')
+                        ->get();
+
+                    foreach ($jbSchedRows as $sr) {
+                        $schedKey = $sr->group_id . '|' . $sr->subject_id . '|' . $sr->semester_code;
+                        $dateStr = \Carbon\Carbon::parse($sr->lesson_date)->format('Y-m-d');
+                        $pairKey = $dateStr . '_' . $sr->lesson_pair_code;
+
+                        if (!isset($jbScheduleData[$schedKey])) {
+                            $jbScheduleData[$schedKey] = ['dates' => [], 'pairsPerDay' => [], 'datePairSet' => []];
+                        }
+                        if (!isset($jbScheduleData[$schedKey]['datePairSet'][$pairKey])) {
+                            $jbScheduleData[$schedKey]['datePairSet'][$pairKey] = true;
+                            $jbScheduleData[$schedKey]['pairsPerDay'][$dateStr] = ($jbScheduleData[$schedKey]['pairsPerDay'][$dateStr] ?? 0) + 1;
+                        }
+                        if (!in_array($dateStr, $jbScheduleData[$schedKey]['dates'])) {
+                            $jbScheduleData[$schedKey]['dates'][] = $dateStr;
+                        }
+                    }
+                    foreach ($jbScheduleData as &$sd) {
+                        sort($sd['dates']);
+                    }
+                    unset($sd, $jbSchedRows);
+                }
+
+                // JN baholarini olish (semester filtri, status/retake filtri — jurnal logikasi)
+                $jnGradesGrouped = [];
+
+                if (!empty($allSemCodes)) {
+                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                        $gradeRows = DB::table('student_grades')
+                            ->whereNull('deleted_at')
+                            ->whereIn('student_hemis_id', $chunk)
+                            ->whereIn('subject_id', $fanIds)
+                            ->whereIn('semester_code', $allSemCodes)
+                            ->whereNotIn('training_type_code', $excludedCodes)
+                            ->whereNotNull('lesson_date')
+                            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                            ->get();
+
+                        foreach ($gradeRows as $gr) {
+                            // Effective grade filtri (jurnal logikasi bilan bir xil)
+                            if ($gr->status === 'pending') continue;
+                            $effGrade = null;
+                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                                $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
+                            } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
+                                continue;
+                            } elseif ($gr->status === 'recorded') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'closed') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->retake_grade !== null) {
+                                $effGrade = $gr->retake_grade;
+                            }
+                            if ($effGrade === null) continue;
+
+                            $gHemisId = $studentGroupMap[$gr->student_hemis_id] ?? null;
+                            if (!$gHemisId) continue;
+
+                            $schedKey = $gHemisId . '|' . $gr->subject_id . '|' . $gr->semester_code;
+                            if (!isset($jbScheduleData[$schedKey])) continue;
+
+                            $dateStr = \Carbon\Carbon::parse($gr->lesson_date)->format('Y-m-d');
+                            $pairKey = $dateStr . '_' . $gr->lesson_pair_code;
+                            if (!isset($jbScheduleData[$schedKey]['datePairSet'][$pairKey])) continue;
+
+                            $gKey = $gr->student_hemis_id . '|' . $gr->subject_id;
+                            $jnGradesGrouped[$gKey][$dateStr][$gr->lesson_pair_code] = (float) $effGrade;
+                        }
+                        unset($gradeRows);
+                    }
+                }
+
+                // JN o'rtachasini hisoblash (jurnal logikasi: kunlik o'rtacha -> umumiy o'rtacha)
+                $cutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+                foreach ($studentSubjectSemester as $gKey => $semCode) {
+                    [$hId, $fId] = explode('|', $gKey);
+                    $gHemisId = $studentGroupMap[$hId] ?? null;
+                    if (!$gHemisId) continue;
+
+                    $schedKey = $gHemisId . '|' . $fId . '|' . $semCode;
+                    $schedData = $jbScheduleData[$schedKey] ?? null;
+
+                    if (!$schedData || empty($schedData['dates'])) continue;
+
+                    $jnDailySum = 0;
+                    $studentJnG = $jnGradesGrouped[$gKey] ?? [];
+                    $datesForAvg = array_filter($schedData['dates'], fn($d) => $d <= $cutoffDate);
+                    $totalJnDays = count($datesForAvg);
+
+                    foreach ($datesForAvg as $date) {
+                        $dayG = $studentJnG[$date] ?? [];
+                        $pairsInDay = $schedData['pairsPerDay'][$date] ?? 1;
+                        $gradeSum = array_sum($dayG);
+                        $jnDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $jnGrades[$gKey] = $totalJnDays > 0
+                        ? round($jnDailySum / $totalJnDays, 0, PHP_ROUND_HALF_UP)
+                        : 0;
                 }
             }
 
@@ -629,27 +738,7 @@ class QuizResultController extends Controller
                 }
             }
 
-            // JN baholar (training_type_code NOT IN config list)
-            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
-            $jnGrades = [];
-            if (!empty($studentHemisIds) && !empty($fanIds)) {
-                foreach (array_chunk($studentHemisIds, 500) as $chunk) {
-                    $jnRows = StudentGrade::whereIn('student_hemis_id', $chunk)
-                        ->whereIn('subject_id', $fanIds)
-                        ->whereNotIn('training_type_code', $excludedCodes)
-                        ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', 'grade', 'lesson_date')
-                        ->get();
-
-                    foreach ($jnRows as $row) {
-                        $k = $row->student_hemis_id . '|' . $row->subject_id;
-                        $jnGrades[$k][] = ['grade' => $row->grade, 'date' => $row->lesson_date];
-                    }
-                    unset($jnRows);
-                }
-            }
-
-            // Student->group mapping va semester aniqlash (MT va OSKI uchun umumiy)
+            // Student->group mapping va semester aniqlash (JN, MT va OSKI uchun umumiy)
             $studentGroupMap = [];
             $studentSubjectSemester = [];
 
@@ -664,6 +753,132 @@ class QuizResultController extends Controller
                         if (!$semC) continue;
                         $studentSubjectSemester[$s->hemis_id . '|' . $fId] = $semC;
                     }
+                }
+            }
+
+            // JN baholar — jurnal logikasi bilan bir xil hisoblash (schedule-based daily average)
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+            $jnGrades = []; // student_hemis_id|subject_id => computed JN average (pre-computed)
+
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($studentGroupMap)) {
+                // 1) JB jadval sanalarini batch olish (schedules jadvalidan)
+                $jbScheduleData = [];
+                $uniqueGroupIds = array_unique(array_values($studentGroupMap));
+                $allSemCodes = array_unique(array_values($studentSubjectSemester));
+
+                if (!empty($uniqueGroupIds) && !empty($allSemCodes)) {
+                    $jbSchedRows = DB::table('schedules')
+                        ->whereNull('deleted_at')
+                        ->whereIn('group_id', $uniqueGroupIds)
+                        ->whereIn('subject_id', $fanIds)
+                        ->whereIn('semester_code', $allSemCodes)
+                        ->whereNotIn('training_type_code', $excludedCodes)
+                        ->whereNotIn('training_type_name', ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"])
+                        ->whereNotNull('lesson_date')
+                        ->select('group_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code')
+                        ->orderBy('lesson_date')
+                        ->orderBy('lesson_pair_code')
+                        ->get();
+
+                    foreach ($jbSchedRows as $sr) {
+                        $schedKey = $sr->group_id . '|' . $sr->subject_id . '|' . $sr->semester_code;
+                        $dateStr = \Carbon\Carbon::parse($sr->lesson_date)->format('Y-m-d');
+                        $pairKey = $dateStr . '_' . $sr->lesson_pair_code;
+
+                        if (!isset($jbScheduleData[$schedKey])) {
+                            $jbScheduleData[$schedKey] = ['dates' => [], 'pairsPerDay' => [], 'datePairSet' => []];
+                        }
+                        if (!isset($jbScheduleData[$schedKey]['datePairSet'][$pairKey])) {
+                            $jbScheduleData[$schedKey]['datePairSet'][$pairKey] = true;
+                            $jbScheduleData[$schedKey]['pairsPerDay'][$dateStr] = ($jbScheduleData[$schedKey]['pairsPerDay'][$dateStr] ?? 0) + 1;
+                        }
+                        if (!in_array($dateStr, $jbScheduleData[$schedKey]['dates'])) {
+                            $jbScheduleData[$schedKey]['dates'][] = $dateStr;
+                        }
+                    }
+                    foreach ($jbScheduleData as &$sd) {
+                        sort($sd['dates']);
+                    }
+                    unset($sd, $jbSchedRows);
+                }
+
+                // 2) JN baholarini olish (semester filtri, status/retake filtri — jurnal logikasi)
+                $jnGradesGrouped = [];
+
+                if (!empty($allSemCodes)) {
+                    foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                        $gradeRows = DB::table('student_grades')
+                            ->whereNull('deleted_at')
+                            ->whereIn('student_hemis_id', $chunk)
+                            ->whereIn('subject_id', $fanIds)
+                            ->whereIn('semester_code', $allSemCodes)
+                            ->whereNotIn('training_type_code', $excludedCodes)
+                            ->whereNotNull('lesson_date')
+                            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                            ->get();
+
+                        foreach ($gradeRows as $gr) {
+                            // Effective grade filtri (jurnal logikasi bilan bir xil)
+                            if ($gr->status === 'pending') continue;
+                            $effGrade = null;
+                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                                $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
+                            } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
+                                continue;
+                            } elseif ($gr->status === 'recorded') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'closed') {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->retake_grade !== null) {
+                                $effGrade = $gr->retake_grade;
+                            }
+                            if ($effGrade === null) continue;
+
+                            $gHemisId = $studentGroupMap[$gr->student_hemis_id] ?? null;
+                            if (!$gHemisId) continue;
+
+                            $schedKey = $gHemisId . '|' . $gr->subject_id . '|' . $gr->semester_code;
+                            if (!isset($jbScheduleData[$schedKey])) continue;
+
+                            $dateStr = \Carbon\Carbon::parse($gr->lesson_date)->format('Y-m-d');
+                            $pairKey = $dateStr . '_' . $gr->lesson_pair_code;
+                            if (!isset($jbScheduleData[$schedKey]['datePairSet'][$pairKey])) continue;
+
+                            $gKey = $gr->student_hemis_id . '|' . $gr->subject_id;
+                            $jnGradesGrouped[$gKey][$dateStr][$gr->lesson_pair_code] = (float) $effGrade;
+                        }
+                        unset($gradeRows);
+                    }
+                }
+
+                // 3) JN o'rtachasini hisoblash (jurnal logikasi: kunlik o'rtacha -> umumiy o'rtacha)
+                $cutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+                foreach ($studentSubjectSemester as $gKey => $semCode) {
+                    [$hId, $fId] = explode('|', $gKey);
+                    $gHemisId = $studentGroupMap[$hId] ?? null;
+                    if (!$gHemisId) continue;
+
+                    $schedKey = $gHemisId . '|' . $fId . '|' . $semCode;
+                    $schedData = $jbScheduleData[$schedKey] ?? null;
+
+                    if (!$schedData || empty($schedData['dates'])) continue;
+
+                    $jnDailySum = 0;
+                    $studentJnG = $jnGradesGrouped[$gKey] ?? [];
+                    // Faqat cutoff sanagacha bo'lgan kunlarni hisoblash
+                    $datesForAvg = array_filter($schedData['dates'], fn($d) => $d <= $cutoffDate);
+                    $totalJnDays = count($datesForAvg);
+
+                    foreach ($datesForAvg as $date) {
+                        $dayG = $studentJnG[$date] ?? [];
+                        $pairsInDay = $schedData['pairsPerDay'][$date] ?? 1;
+                        $gradeSum = array_sum($dayG);
+                        $jnDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $jnGrades[$gKey] = $totalJnDays > 0
+                        ? round($jnDailySum / $totalJnDays, 0, PHP_ROUND_HALF_UP)
+                        : 0;
                 }
             }
 
@@ -1008,18 +1223,9 @@ class QuizResultController extends Controller
         // 8) JN va MT o'rtachalarini hisoblash
         $gradeKey = $student->hemis_id . '|' . $result->fan_id;
 
-        // JN o'rtachasi — lesson_date bo'yicha guruhlab, har bir kun uchun o'rtacha, keyin kunlar o'rtachasi
+        // JN o'rtachasi (jurnal logikasi bilan oldindan hisoblangan — schedule-based daily average)
         if (isset($jnGrades[$gradeKey])) {
-            $byDate = [];
-            foreach ($jnGrades[$gradeKey] as $g) {
-                $d = $g['date'] ? (is_string($g['date']) ? $g['date'] : $g['date']->format('Y-m-d')) : 'null';
-                $byDate[$d][] = $g['grade'];
-            }
-            $dateAvgs = [];
-            foreach ($byDate as $grades) {
-                $dateAvgs[] = array_sum($grades) / count($grades);
-            }
-            $jnAvg = count($dateAvgs) > 0 ? round(array_sum($dateAvgs) / count($dateAvgs), 1) : null;
+            $jnAvg = $jnGrades[$gradeKey];
         }
 
         // MT o'rtachasi (jurnal logikasi bilan oldindan hisoblangan)

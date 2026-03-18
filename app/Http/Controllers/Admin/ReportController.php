@@ -3766,7 +3766,7 @@ class ReportController extends Controller
                 'level_name' => $exc->level_name ?? '-',
                 'group_name' => $exc->group_name ?? '-',
                 'semester_name' => $exc->semester_name ?? '-',
-                'subject_name' => ($exc->subject_name ?? '-') . ' (ariza)',
+                'subject_name' => $exc->subject_name ?? '-',
                 'subject_id' => $exc->subject_id,
                 'total_absent_on' => 0,
                 'total_absent_off' => 0,

@@ -3546,16 +3546,13 @@ class ReportController extends Controller
                 'ae.id as excuse_id',
                 'ae.student_hemis_id',
                 DB::raw("COALESCE(
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND ss.subject_id = aem.subject_id LIMIT 1),
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND TRIM(ss.subject_name) = TRIM(aem.subject_name) LIMIT 1),
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND (TRIM(ss.subject_name) LIKE CONCAT('%', TRIM(aem.subject_name), '%')
-                          OR TRIM(aem.subject_name) LIKE CONCAT('%', TRIM(ss.subject_name), '%'))
+                    (SELECT att.subject_id FROM attendances att
+                     WHERE att.student_hemis_id = ae.student_hemis_id
+                     AND TRIM(att.subject_name) = TRIM(aem.subject_name) LIMIT 1),
+                    (SELECT att.subject_id FROM attendances att
+                     WHERE att.student_hemis_id = ae.student_hemis_id
+                     AND (TRIM(att.subject_name) LIKE CONCAT('%', TRIM(aem.subject_name), '%')
+                          OR TRIM(aem.subject_name) LIKE CONCAT('%', TRIM(att.subject_name), '%'))
                      LIMIT 1),
                     aem.subject_id
                 ) as subject_id"),
@@ -3600,16 +3597,13 @@ class ReportController extends Controller
                 'ae.end_date',
                 'g2.id as group_pk',
                 DB::raw("COALESCE(
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND ss.subject_id = aem.subject_id LIMIT 1),
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND TRIM(ss.subject_name) = TRIM(aem.subject_name) LIMIT 1),
-                    (SELECT ss.subject_id FROM student_subjects ss
-                     WHERE ss.student_hemis_id = ae.student_hemis_id
-                     AND (TRIM(ss.subject_name) LIKE CONCAT('%', TRIM(aem.subject_name), '%')
-                          OR TRIM(aem.subject_name) LIKE CONCAT('%', TRIM(ss.subject_name), '%'))
+                    (SELECT att.subject_id FROM attendances att
+                     WHERE att.student_hemis_id = ae.student_hemis_id
+                     AND TRIM(att.subject_name) = TRIM(aem.subject_name) LIMIT 1),
+                    (SELECT att.subject_id FROM attendances att
+                     WHERE att.student_hemis_id = ae.student_hemis_id
+                     AND (TRIM(att.subject_name) LIKE CONCAT('%', TRIM(aem.subject_name), '%')
+                          OR TRIM(aem.subject_name) LIKE CONCAT('%', TRIM(att.subject_name), '%'))
                      LIMIT 1),
                     aem.subject_id
                 ) as subject_id"),

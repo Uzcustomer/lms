@@ -2,23 +2,77 @@
 
 namespace App\Services;
 
+use App\Models\CurriculumSubject;
 use App\Models\Student;
 use App\Models\StudentSubject;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 
 class SubjectMatcherService
 {
     /**
      * Talabaning hozirgi semestri uchun fanlarini olish
+     * 1-bosqich: student_subjects + semester filter
+     * 2-bosqich: student_subjects semestersiz
+     * 3-bosqich: curriculum_subjects orqali (curriculum_id + semester_code)
      */
     public static function getStudentSubjects(Student $student): Collection
     {
-        return StudentSubject::where('student_hemis_id', $student->hemis_id)
-            ->when($student->semester_id, function ($q) use ($student) {
-                $q->where('semester_id', $student->semester_id);
-            })
-            ->get();
+        // 1. student_subjects + semester filter
+        if ($student->semester_id) {
+            $subjects = StudentSubject::where('student_hemis_id', $student->hemis_id)
+                ->where('semester_id', $student->semester_id)
+                ->get();
+            if ($subjects->isNotEmpty()) {
+                return $subjects;
+            }
+        }
+
+        // 2. student_subjects semestersiz (barcha semestrlardagi fanlar)
+        $subjects = StudentSubject::where('student_hemis_id', $student->hemis_id)->get();
+        if ($subjects->isNotEmpty()) {
+            return $subjects;
+        }
+
+        // 3. Fallback: curriculum_subjects orqali
+        if ($student->curriculum_id) {
+            $query = CurriculumSubject::where('curricula_hemis_id', $student->curriculum_id)
+                ->active();
+
+            // Semester code bo'yicha filter
+            if ($student->semester_code) {
+                $withSemester = (clone $query)->where('semester_code', $student->semester_code)->get();
+                if ($withSemester->isNotEmpty()) {
+                    // CurriculumSubject ni StudentSubject formatiga o'tkazish
+                    return $withSemester->map(fn($cs) => (object) [
+                        'subject_id' => $cs->subject_id,
+                        'subject_name' => $cs->subject_name,
+                        'semester_id' => $cs->semester_code,
+                    ]);
+                }
+            }
+
+            // at_semester = true bo'lganlarini olish
+            $atSemester = (clone $query)->where('at_semester', true)->get();
+            if ($atSemester->isNotEmpty()) {
+                return $atSemester->map(fn($cs) => (object) [
+                    'subject_id' => $cs->subject_id,
+                    'subject_name' => $cs->subject_name,
+                    'semester_id' => $cs->semester_code,
+                ]);
+            }
+
+            // Barcha curriculum fanlarini olish
+            $all = $query->get();
+            if ($all->isNotEmpty()) {
+                return $all->map(fn($cs) => (object) [
+                    'subject_id' => $cs->subject_id,
+                    'subject_name' => $cs->subject_name,
+                    'semester_id' => $cs->semester_code,
+                ]);
+            }
+        }
+
+        return collect();
     }
 
     /**

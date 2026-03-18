@@ -200,6 +200,7 @@
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
@@ -486,10 +487,71 @@
         }
 
         function downloadExcel() {
-            var params = getFilters();
-            params.export = 'excel';
-            var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.sababli-check.data") }}?' + query;
+            if (!allData || allData.length === 0) return;
+
+            // Client-side filterlarni qo'llash (qidirish + mark filter)
+            var searchTerm = ($('#table-search').val() || '').trim().toLowerCase();
+            var filtered = allData;
+            if (searchTerm) {
+                filtered = allData.filter(function(r) {
+                    return (r.full_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.group_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.subject_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.department_name || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.student_hemis_id || '').toLowerCase().indexOf(searchTerm) > -1
+                        || (r.specialty_name || '').toLowerCase().indexOf(searchTerm) > -1;
+                });
+            }
+            if (markFilterActive) {
+                filtered = filtered.filter(function(r) {
+                    return (r.mark_status || '').indexOf('Sababli') === 0;
+                });
+            }
+
+            // Saralash
+            var sorted = filtered.slice().sort(function(a, b) {
+                var valA = a[currentSort] || '';
+                var valB = b[currentSort] || '';
+                var cmp;
+                if (currentSort === 'total_hours') {
+                    cmp = (parseInt(valA) || 0) - (parseInt(valB) || 0);
+                } else {
+                    cmp = valA.toString().localeCompare(valB.toString(), 'uz', {numeric: true});
+                }
+                return currentDirection === 'desc' ? -cmp : cmp;
+            });
+
+            // Excel uchun ma'lumotlar
+            var rows = [['#', 'Talaba FISH', 'HEMIS ID', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Semestr', 'Fan', 'Nb soati', 'Mark', 'HEMIS holati', 'Natija']];
+            sorted.forEach(function(r, i) {
+                rows.push([
+                    i + 1,
+                    r.full_name || '',
+                    r.student_hemis_id || '',
+                    r.department_name || '',
+                    r.specialty_name || '',
+                    r.level_name || '',
+                    r.group_name || '',
+                    r.semester_name || '',
+                    r.subject_name || '',
+                    r.total_hours || 0,
+                    r.mark_status || '',
+                    r.hemis_status || '',
+                    r.match === 'match' ? 'Mos' : 'Mos emas'
+                ]);
+            });
+
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(rows);
+
+            // Ustun kengliklarini sozlash
+            ws['!cols'] = [
+                {wch: 5}, {wch: 30}, {wch: 10}, {wch: 25}, {wch: 30}, {wch: 8},
+                {wch: 15}, {wch: 15}, {wch: 35}, {wch: 10}, {wch: 18}, {wch: 18}, {wch: 12}
+            ];
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Sababli check');
+            XLSX.writeFile(wb, 'Sababli_check_' + new Date().toISOString().slice(0,10) + '.xlsx');
         }
 
         function renderPagination(res) {

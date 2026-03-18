@@ -3495,7 +3495,7 @@ class ReportController extends Controller
         )->get();
 
         // 2-QADAM: Barcha tasdiqlangan arizalarni olish
-        // A) Subject bilan bog'langan arizalar (to'g'ridan-to'g'ri aem.subject_id ishlatiladi)
+        // A) Subject bilan bog'langan arizalar (student_subjects dan subject_id ni resolve qilish)
         $subjectExcuses = DB::table('absence_excuses as ae')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
             ->where('ae.status', 'approved')
@@ -3503,7 +3503,12 @@ class ReportController extends Controller
             ->select(
                 'ae.id as excuse_id',
                 'ae.student_hemis_id',
-                'aem.subject_id',
+                DB::raw("COALESCE(
+                    (SELECT ss.subject_id FROM student_subjects ss
+                     WHERE ss.student_hemis_id = ae.student_hemis_id
+                     AND ss.subject_name = aem.subject_name LIMIT 1),
+                    aem.subject_id
+                ) as subject_id"),
                 'ae.start_date',
                 'ae.end_date'
             )
@@ -3524,7 +3529,7 @@ class ReportController extends Controller
             ->get();
 
         // C) Barcha approved arizalar (HEMIS da topilmaganlarni aniqlash uchun)
-        // C1: Fanga bog'langan arizalar (makeups orqali, to'g'ridan-to'g'ri aem.subject_id)
+        // C1: Fanga bog'langan arizalar (makeups orqali, student_subjects dan resolve)
         $allApprovedWithSubject = DB::table('absence_excuses as ae')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
@@ -3544,7 +3549,12 @@ class ReportController extends Controller
                 'ae.start_date',
                 'ae.end_date',
                 'g2.id as group_pk',
-                'aem.subject_id',
+                DB::raw("COALESCE(
+                    (SELECT ss.subject_id FROM student_subjects ss
+                     WHERE ss.student_hemis_id = ae.student_hemis_id
+                     AND ss.subject_name = aem.subject_name LIMIT 1),
+                    aem.subject_id
+                ) as subject_id"),
                 'aem.subject_name'
             )
             ->get();
@@ -3877,7 +3887,7 @@ class ReportController extends Controller
         }
         unset($item);
 
-        // DEBUG LOG: aem.subject_id bilan attendance da topilmaganlarni aniqlash (faqat 10-semestr)
+        // DEBUG LOG: student_subjects dan resolve qilib, attendance da topilmaganlarni aniqlash (faqat 10-semestr)
         $debugLog = [];
         $allMakeupRows = DB::table('absence_excuse_makeups as aem')
             ->join('absence_excuses as ae', 'ae.id', '=', 'aem.absence_excuse_id')
@@ -3898,10 +3908,20 @@ class ReportController extends Controller
             ->get();
 
         foreach ($allMakeupRows as $m) {
-            // attendance da shu subject_id bilan nb yozuvi bor-yo'qligini tekshirish
+            // student_subjects dan subject_id ni resolve qilish
+            $ssResult = DB::table('student_subjects')
+                ->where('student_hemis_id', $m->student_hemis_id)
+                ->where('subject_name', $m->subject_name)
+                ->select('subject_id')
+                ->first();
+
+            $resolvedId = $ssResult->subject_id ?? $m->subject_id;
+            $resolvedVia = $ssResult ? 'student_subjects' : 'aem.subject_id (original)';
+
+            // attendance da resolved_id bilan nb yozuvi bor-yo'qligini tekshirish
             $attExists = DB::table('attendances')
                 ->where('student_hemis_id', $m->student_hemis_id)
-                ->where('subject_id', $m->subject_id)
+                ->where('subject_id', $resolvedId)
                 ->where(function ($q) {
                     $q->where('absent_on', '>', 0)->orWhere('absent_off', '>', 0);
                 })
@@ -3929,10 +3949,10 @@ class ReportController extends Controller
                     'group_name' => $m->group_name,
                     'subject_name' => $m->subject_name,
                     'original_id' => $m->subject_id,
-                    'resolved_id' => $m->subject_id,
-                    'resolved_via' => 'aem.subject_id (to\'g\'ridan-to\'g\'ri)',
+                    'resolved_id' => $resolvedId,
+                    'resolved_via' => $resolvedVia,
                     'att_exists' => false,
-                    'reason' => 'attendance da nb topilmadi. Talabaning mavjud fanlari: ' . ($existingSubjects ?: 'hech qaysi'),
+                    'reason' => 'attendance da nb topilmadi. Mavjud fanlar: ' . ($existingSubjects ?: 'hech qaysi'),
                 ];
             }
         }

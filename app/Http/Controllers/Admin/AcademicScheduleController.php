@@ -432,16 +432,29 @@ class AcademicScheduleController extends Controller
         $currentSemesterToggle, $includeCarbon = false,
         $dateFrom = null, $dateTo = null, $filterByYnDate = false
     ) {
+        $currentSemesterOnly = $currentSemesterToggle === '1';
+        $currentEducationYear = $currentSemesters->first()?->education_year;
+
+        // Semester filter closure
+        $semesterFilter = function ($query) use ($currentSemesterOnly, $currentEducationYear) {
+            if ($currentSemesterOnly) {
+                $query->where('current', true);
+            } else {
+                $query->where('education_year', $currentEducationYear);
+            }
+            return $query;
+        };
+
         // Semestr kodlarini aniqlash
         $semesterCodes = collect();
         if ($selectedSemester) {
             $semesterCodes = collect([$selectedSemester]);
-        } elseif ($currentSemesterToggle === '1') {
+        } elseif ($currentSemesterOnly) {
             $semesterCodes = $currentSemesters->pluck('code')->unique();
         }
 
         if ($selectedLevelCode) {
-            $levelSemCodes = Semester::where('current', true)
+            $levelSemCodes = $semesterFilter(Semester::query())
                 ->where('level_code', $selectedLevelCode)
                 ->pluck('code')->unique();
             $semesterCodes = $semesterCodes->isEmpty()
@@ -449,10 +462,14 @@ class AcademicScheduleController extends Controller
                 : $semesterCodes->intersect($levelSemCodes);
         }
 
-        // O'quv rejalarini olish (current=1 yoki joriy semestri bor)
-        $curriculumQuery = Curriculum::where(function($q) {
-            $q->where('current', true)
-              ->orWhereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
+        // O'quv rejalarini olish
+        $curriculumQuery = Curriculum::where(function($q) use ($currentSemesterOnly, $currentEducationYear) {
+            if ($currentSemesterOnly) {
+                $q->where('current', true)
+                  ->orWhereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
+            } else {
+                $q->whereIn('curricula_hemis_id', Semester::where('education_year', $currentEducationYear)->select('curriculum_hemis_id'));
+            }
         });
         if ($selectedDepartment) $curriculumQuery->where('department_hemis_id', $selectedDepartment);
         if ($selectedSpecialty) $curriculumQuery->where('specialty_hemis_id', $selectedSpecialty);
@@ -464,10 +481,9 @@ class AcademicScheduleController extends Controller
         // Fanlar
         $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
             ->where('is_active', true);
-        if ($currentSemesterToggle === '1' && !$selectedSemester) {
+        if ($currentSemesterOnly && !$selectedSemester) {
             // Har bir curriculum uchun alohida joriy semestr kodi bo'yicha aniq filtr
-            // (global semesterCodes o'rniga, chunki har xil curriculum-lar har xil joriy semestrda bo'lishi mumkin)
-            $semQuery = Semester::where('current', true)->whereIn('curriculum_hemis_id', $curriculumIds);
+            $semQuery = $semesterFilter(Semester::query())->whereIn('curriculum_hemis_id', $curriculumIds);
             if ($selectedLevelCode) {
                 $semQuery->where('level_code', $selectedLevelCode);
             }

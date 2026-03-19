@@ -805,16 +805,27 @@ class AcademicScheduleController extends Controller
         $specialtyId = $request->specialty_id ?: null;
         $levelCode = $request->level_code ?: null;
         $semesterCode = $request->semester_code ?: null;
+        $currentSemesterOnly = $request->get('current_semester', '1') === '1';
 
-        $currentSemSubquery = Semester::where('current', true)->select('curriculum_hemis_id');
+        // Joriy o'quv yili
+        $currentEducationYear = Semester::where('current', true)->value('education_year');
+
+        $currentSemSubquery = $currentSemesterOnly
+            ? Semester::where('current', true)->select('curriculum_hemis_id')
+            : Semester::where('education_year', $currentEducationYear)->select('curriculum_hemis_id');
 
         // Curriculum query builder: barcha filtrlarni qo'llaydi, $exclude ni tashlab
         $buildQuery = function (?string $exclude = null) use (
-            $currentSemSubquery, $educationType, $departmentId, $specialtyId, $levelCode, $semesterCode
+            $currentSemSubquery, $currentSemesterOnly, $currentEducationYear,
+            $educationType, $departmentId, $specialtyId, $levelCode, $semesterCode
         ) {
-            $q = Curriculum::where(function ($sub) use ($currentSemSubquery) {
-                $sub->where('current', true)
-                    ->orWhereIn('curricula_hemis_id', $currentSemSubquery);
+            $q = Curriculum::where(function ($sub) use ($currentSemSubquery, $currentSemesterOnly) {
+                if ($currentSemesterOnly) {
+                    $sub->where('current', true)
+                        ->orWhereIn('curricula_hemis_id', $currentSemSubquery);
+                } else {
+                    $sub->whereIn('curricula_hemis_id', $currentSemSubquery);
+                }
             });
 
             if ($exclude !== 'education_type' && $educationType) {
@@ -831,8 +842,13 @@ class AcademicScheduleController extends Controller
             $applySemester = ($exclude !== 'semester_code' && $semesterCode);
 
             if ($applyLevel || $applySemester) {
-                $q->whereIn('curricula_hemis_id', function ($sub) use ($applyLevel, $applySemester, $levelCode, $semesterCode) {
-                    $sub->select('curriculum_hemis_id')->from('semesters')->where('current', true);
+                $q->whereIn('curricula_hemis_id', function ($sub) use ($applyLevel, $applySemester, $levelCode, $semesterCode, $currentSemesterOnly, $currentEducationYear) {
+                    $sub->select('curriculum_hemis_id')->from('semesters');
+                    if ($currentSemesterOnly) {
+                        $sub->where('current', true);
+                    } else {
+                        $sub->where('education_year', $currentEducationYear);
+                    }
                     if ($applyLevel) $sub->where('level_code', $levelCode);
                     if ($applySemester) $sub->where('code', $semesterCode);
                 });
@@ -864,7 +880,7 @@ class AcademicScheduleController extends Controller
 
         // 4. Kurslar (level filtrini tashlab)
         $levelCurrIds = $buildQuery('level_code')->pluck('curricula_hemis_id');
-        $levelQuery = Semester::where('current', true)
+        $levelQuery = Semester::where($currentSemesterOnly ? 'current' : 'education_year', $currentSemesterOnly ? true : $currentEducationYear)
             ->whereIn('curriculum_hemis_id', $levelCurrIds);
         if ($semesterCode) $levelQuery->where('code', $semesterCode);
         $levels = $levelQuery->select('level_code', 'level_name')
@@ -872,7 +888,7 @@ class AcademicScheduleController extends Controller
 
         // 5. Semestrlar (semester filtrini tashlab)
         $semCurrIds = $buildQuery('semester_code')->pluck('curricula_hemis_id');
-        $semQuery = Semester::where('current', true)
+        $semQuery = Semester::where($currentSemesterOnly ? 'current' : 'education_year', $currentSemesterOnly ? true : $currentEducationYear)
             ->whereIn('curriculum_hemis_id', $semCurrIds);
         if ($levelCode) $semQuery->where('level_code', $levelCode);
         $semesters = $semQuery->select('code', 'name')
@@ -891,7 +907,7 @@ class AcademicScheduleController extends Controller
         if ($semesterCode) {
             $subjectQuery->where('semester_code', $semesterCode);
         } elseif ($levelCode) {
-            $levelSemCodes = Semester::where('current', true)
+            $levelSemCodes = Semester::where($currentSemesterOnly ? 'current' : 'education_year', $currentSemesterOnly ? true : $currentEducationYear)
                 ->where('level_code', $levelCode)->pluck('code')->unique();
             $subjectQuery->whereIn('semester_code', $levelSemCodes);
         }

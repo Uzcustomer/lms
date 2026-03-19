@@ -579,16 +579,20 @@ class AbsenceExcuseController extends Controller
         $examSchedules = ExamSchedule::where('group_hemis_id', $groupId)
             ->where(function ($q) use ($startDate, $endDate) {
                 $q->where(function ($q2) use ($startDate, $endDate) {
-                    $q2->whereDate('oski_date', '>=', $startDate)
+                    $q2->where('oski_na', false)
+                        ->whereNotNull('oski_date')
+                        ->whereDate('oski_date', '>=', $startDate)
                         ->whereDate('oski_date', '<=', $endDate);
                 })->orWhere(function ($q2) use ($startDate, $endDate) {
-                    $q2->whereDate('test_date', '>=', $startDate)
+                    $q2->where('test_na', false)
+                        ->whereNotNull('test_date')
+                        ->whereDate('test_date', '>=', $startDate)
                         ->whereDate('test_date', '<=', $endDate);
                 });
             })->get();
 
         foreach ($examSchedules as $es) {
-            if ($es->oski_date && $es->oski_date->between($startDate, $endDate)) {
+            if (!$es->oski_na && $es->oski_date && $es->oski_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
                     'subject_id' => $es->subject_id,
@@ -597,7 +601,7 @@ class AbsenceExcuseController extends Controller
                     'original_date' => $es->oski_date->format('Y-m-d'),
                 ]);
             }
-            if ($es->test_date && $es->test_date->between($startDate, $endDate)) {
+            if (!$es->test_na && $es->test_date && $es->test_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
                     'subject_id' => $es->subject_id,

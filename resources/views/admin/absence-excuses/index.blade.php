@@ -340,6 +340,7 @@
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">#</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Talaba FISH</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fakultet</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Yo'nalish</th>
@@ -356,6 +357,7 @@
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @foreach($excuses as $excuse)
                                     <tr class="{{ $excuse->isPending() ? 'bg-yellow-50 dark:bg-yellow-900/10' : '' }}">
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-medium">{{ $excuses->firstItem() + $loop->index }}</td>
                                         <td class="px-3 py-3 whitespace-nowrap">
                                             <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $excuse->student_full_name }}</div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400">{{ $excuse->student_hemis_id }}</div>
@@ -415,8 +417,18 @@
                                             <div class="text-xs text-gray-400">{{ $excuse->created_at?->format('H:i') }}</div>
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
-                                            <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
-                                               class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
+                                            <div class="flex items-center gap-2">
+                                                <form action="{{ route('admin.absence-excuses.destroy', $excuse->id) }}" method="POST"
+                                                      onsubmit="return confirm('{{ $excuse->student_full_name }} — bu arizani o\'chirmoqchimisiz?')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-red-500 hover:text-red-700 transition" title="O'chirish">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                                    </button>
+                                                </form>
+                                                <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
+                                                   class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach

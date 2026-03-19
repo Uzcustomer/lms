@@ -368,6 +368,8 @@
         function toggleSemester() {
             var btn = document.getElementById('current-semester-toggle');
             btn.classList.toggle('active');
+            // Toggle o'zgarganda filtrlarni qayta yuklash
+            if (!isUpdatingFilters) loadAllFilters();
         }
 
         function toggleNa(checkbox, wrapId) {

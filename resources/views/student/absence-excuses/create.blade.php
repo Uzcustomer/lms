@@ -497,7 +497,7 @@
                                 <p class="text-sm text-gray-500 mt-0.5">Har bir nazorat uchun qayta topshirish sanasini tanlang</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.assessment_type === 'jn' ? (a.makeup_start && a.makeup_end) : !!a.makeup_date).length + '/' + assessments.length"></span>
+                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.assessment_type === 'jn' ? (a.jn_submitted || (a.makeup_start && a.makeup_end)) : !!a.makeup_date).length + '/' + assessments.length"></span>
                                 <span class="text-gray-400 text-sm">tanlangan</span>
                             </div>
                         </div>
@@ -643,7 +643,7 @@
             },
             get allDatesSelected() {
                 return this.assessments.length > 0 && this.assessments.every(a => {
-                    if (a.assessment_type === 'jn') return a.makeup_start && a.makeup_end;
+                    if (a.assessment_type === 'jn') return a.jn_submitted || (a.makeup_start && a.makeup_end);
                     return !!a.makeup_date;
                 });
             },
@@ -840,7 +840,8 @@
                         this.assessments = (data.assessments || []).map(a => ({
                             ...a, makeup_date: '', makeup_start: '', makeup_end: '',
                             jn_selecting: 'start', cal_month: cm, cal_year: cy, show_cal: false,
-                            is_makeup_period: a.is_makeup_period || false
+                            is_makeup_period: a.is_makeup_period || false,
+                            jn_submitted: false
                         }));
                         // Serverdan JN topilmagan fanlar uchun JN card qo'shish
                         const jnSubjects = data.jn_subjects || [];
@@ -854,7 +855,8 @@
                                     assessment_type: 'jn', assessment_type_code: '100',
                                     original_date: this.startDate, makeup_date: '',
                                     makeup_start: '', makeup_end: '', jn_selecting: 'start',
-                                    cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true
+                                    cal_month: cm, cal_year: cy, show_cal: false, is_default_jn: true,
+                                    jn_submitted: false
                                 });
                             }
                         });

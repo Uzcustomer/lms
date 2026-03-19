@@ -23,6 +23,7 @@ class AbsenceExcuseMakeup extends Model
         'original_date',
         'makeup_date',
         'makeup_end_date',
+        'jn_submitted',
         'status',
     ];
 
@@ -30,6 +31,7 @@ class AbsenceExcuseMakeup extends Model
         'original_date' => 'date',
         'makeup_date' => 'date',
         'makeup_end_date' => 'date',
+        'jn_submitted' => 'boolean',
     ];
 
     public function absenceExcuse()

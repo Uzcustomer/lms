@@ -57,23 +57,26 @@ class AbsenceExcuseController extends Controller
         // 1. Sababli kunlar oralig'idagi nazoratlar
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
 
-        // 2. Qayta topshirish muddati ichidagi nazoratlar
+        // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan nazoratlar
+        // (sababli kunlar bilan qayta topshirish orasidagi "bo'shliq"dagi nazoratlar ham topiladi)
         $totalDays = $this->countNonSundays($startDate, $endDate);
         if ($totalDays > 0) {
-            $makeupStart = Carbon::today();
-            $makeupEnd = $this->addNonSundayDays($makeupStart->copy(), $totalDays);
+            $makeupEnd = $this->addNonSundayDays(Carbon::today()->copy(), $totalDays);
 
-            $makeupAssessments = $this->findMissedAssessments($groupId, $makeupStart, $makeupEnd);
+            // endDate dan keyingi kundan makeupEnd gacha qidirish
+            $searchStart = $endDate->copy()->addDay();
+            if ($searchStart->lte($makeupEnd)) {
+                $makeupAssessments = $this->findMissedAssessments($groupId, $searchStart, $makeupEnd);
 
-            // Duplikatlarni olib tashlab, qayta topshirish muddatidagilarni qo'shish
-            $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+                $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
 
-            foreach ($makeupAssessments as $ma) {
-                $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
-                if (!in_array($key, $existingKeys)) {
-                    $ma['is_makeup_period'] = true;
-                    $missedAssessments->push($ma);
-                    $existingKeys[] = $key;
+                foreach ($makeupAssessments as $ma) {
+                    $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
+                    if (!in_array($key, $existingKeys)) {
+                        $ma['is_makeup_period'] = true;
+                        $missedAssessments->push($ma);
+                        $existingKeys[] = $key;
+                    }
                 }
             }
         }

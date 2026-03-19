@@ -353,7 +353,8 @@
             level_code: '{{ $selectedLevelCode ?? '' }}',
             semester_code: '{{ $selectedSemester ?? '' }}',
             group_id: '{{ $selectedGroup ?? '' }}',
-            subject_id: '{{ $selectedSubject ?? '' }}'
+            subject_id: '{{ $selectedSubject ?? '' }}',
+            current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0'
         };
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }

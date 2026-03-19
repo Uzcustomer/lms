@@ -54,7 +54,29 @@ class AbsenceExcuseController extends Controller
         $endDate = Carbon::parse($request->end_date);
         $groupId = $student->group_id;
 
+        // 1. Sababli kunlar oralig'idagi nazoratlar
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+
+        // 2. Qayta topshirish muddati ichidagi nazoratlar
+        $totalDays = $this->countNonSundays($startDate, $endDate);
+        if ($totalDays > 0) {
+            $makeupStart = Carbon::today();
+            $makeupEnd = $this->addNonSundayDays($makeupStart->copy(), $totalDays);
+
+            $makeupAssessments = $this->findMissedAssessments($groupId, $makeupStart, $makeupEnd);
+
+            // Duplikatlarni olib tashlab, qayta topshirish muddatidagilarni qo'shish
+            $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+
+            foreach ($makeupAssessments as $ma) {
+                $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
+                if (!in_array($key, $existingKeys)) {
+                    $ma['is_makeup_period'] = true;
+                    $missedAssessments->push($ma);
+                    $existingKeys[] = $key;
+                }
+            }
+        }
 
         // Shu muddat ichidagi barcha darslardan unique fanlarni olish (JN uchun)
         $jnSubjects = Schedule::where('group_id', $groupId)
@@ -452,6 +474,24 @@ class AbsenceExcuseController extends Controller
             $current->addDay();
         }
         return $days;
+    }
+
+    /**
+     * Bugundan boshlab N ta yakshanba bo'lmagan kun qo'shish
+     */
+    private function addNonSundayDays(Carbon $start, int $days): Carbon
+    {
+        $count = 0;
+        $d = $start->copy();
+        while ($count < $days) {
+            if ($d->dayOfWeek !== Carbon::SUNDAY) {
+                $count++;
+            }
+            if ($count < $days) {
+                $d->addDay();
+            }
+        }
+        return $d;
     }
 
     /**

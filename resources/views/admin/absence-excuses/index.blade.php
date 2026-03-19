@@ -417,18 +417,8 @@
                                             <div class="text-xs text-gray-400">{{ $excuse->created_at?->format('H:i') }}</div>
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
-                                            <div class="flex items-center gap-2">
-                                                <form action="{{ route('admin.absence-excuses.destroy', $excuse->id) }}" method="POST"
-                                                      onsubmit="return confirm('{{ $excuse->student_full_name }} — bu arizani o\'chirmoqchimisiz?')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="text-red-500 hover:text-red-700 transition" title="O'chirish">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                                    </button>
-                                                </form>
-                                                <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
-                                                   class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
-                                            </div>
+                                            <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
+                                               class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
                                         </td>
                                     </tr>
                                 @endforeach

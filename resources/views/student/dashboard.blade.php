@@ -24,7 +24,7 @@
                             </svg>
                             <h4 class="text-lg font-semibold text-gray-800">Pasport ma'lumotlarim</h4>
                         </div>
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-3" style="margin-bottom: 10px;">
                             @if($studentPassport)
                                 <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -47,7 +47,7 @@
                             </button>
                         </div>
 
-                        <div x-show="showPassportForm" x-transition class="mt-5 border-t border-gray-200 pt-5">
+                        <div x-show="showPassportForm" x-transition class="border-t border-gray-200 pt-5">
                             <form method="POST" action="{{ route('student.passport.store') }}" enctype="multipart/form-data">
                                 @csrf
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -66,35 +66,41 @@
                                         <div class="flex gap-2">
                                             <input type="text" name="passport_series" value="{{ $studentPassport->passport_series ?? '' }}" required
                                                    class="w-24 rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase tracking-widest font-semibold text-center"
-                                                   maxlength="2"
+                                                   placeholder="AA" maxlength="2"
                                                    oninput="this.value = this.value.replace(/[^A-Za-z]/g, '').toUpperCase()">
                                             <input type="text" name="passport_number" value="{{ $studentPassport->passport_number ?? '' }}" required
                                                    class="flex-1 rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 tracking-wide"
-                                                   maxlength="7"
+                                                   placeholder="1234567" maxlength="7"
                                                    oninput="this.value = this.value.replace(/\D/g, '')">
                                         </div>
                                     </div>
                                     <div></div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pasport oldi tarafi <span class="text-red-500">*</span></label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pasport oldi tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                                         <input type="file" name="passport_front" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                                               onchange="checkFileSize(this)"
                                                class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                        <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                                         @if($studentPassport?->passport_front_path)
                                             <p class="text-xs text-green-600 mt-1">Yuklangan (qayta yuklash ixtiyoriy)</p>
                                         @endif
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pasport orqa tarafi <span class="text-red-500">*</span></label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pasport orqa tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                                         <input type="file" name="passport_back" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                                               onchange="checkFileSize(this)"
                                                class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                        <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                                         @if($studentPassport?->passport_back_path)
                                             <p class="text-xs text-green-600 mt-1">Yuklangan (qayta yuklash ixtiyoriy)</p>
                                         @endif
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Xorijga chiqish pasporti <span class="text-red-500">*</span></label>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Xorijga chiqish pasporti <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                                         <input type="file" name="foreign_passport" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                                               onchange="checkFileSize(this)"
                                                class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                        <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                                         @if($studentPassport?->foreign_passport_path)
                                             <p class="text-xs text-green-600 mt-1">Yuklangan (qayta yuklash ixtiyoriy)</p>
                                         @endif
@@ -204,4 +210,17 @@
             </div>
         </div>
     </div>
+<script>
+function checkFileSize(input) {
+    var errorEl = input.parentElement.querySelector('[data-file-error]');
+    if (input.files.length > 0 && input.files[0].size > 1024 * 1024) {
+        errorEl.textContent = 'Fayl hajmi 1MB dan oshmasligi kerak!';
+        errorEl.classList.remove('hidden');
+        input.value = '';
+    } else {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+}
+</script>
 </x-student-app-layout>

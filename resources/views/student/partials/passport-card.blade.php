@@ -70,7 +70,6 @@
                             @endif
                             <form method="POST" action="{{ route('student.passport.file.delete', 'passport_front_path') }}" class="absolute top-1 right-1" onsubmit="return confirm('Faylni o\'chirmoqchimisiz?')">
                                 @csrf
-                                @method('DELETE')
                                 <button type="submit" class="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow transition" title="O'chirish">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
@@ -95,7 +94,6 @@
                             @endif
                             <form method="POST" action="{{ route('student.passport.file.delete', 'passport_back_path') }}" class="absolute top-1 right-1" onsubmit="return confirm('Faylni o\'chirmoqchimisiz?')">
                                 @csrf
-                                @method('DELETE')
                                 <button type="submit" class="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow transition" title="O'chirish">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>
@@ -120,7 +118,6 @@
                             @endif
                             <form method="POST" action="{{ route('student.passport.file.delete', 'foreign_passport_path') }}" class="absolute top-1 right-1" onsubmit="return confirm('Faylni o\'chirmoqchimisiz?')">
                                 @csrf
-                                @method('DELETE')
                                 <button type="submit" class="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow transition" title="O'chirish">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                                 </button>

@@ -1443,7 +1443,9 @@ class StudentController extends Controller
             'district' => ['name' => $student->district_name ?? ''],
         ];
 
-        return view('student.profile', compact('profileData'));
+        $studentPassport = \App\Models\StudentPassport::where('student_id', $student->id)->first();
+
+        return view('student.profile', compact('profileData', 'studentPassport'));
     }
 
     public function examSchedule()

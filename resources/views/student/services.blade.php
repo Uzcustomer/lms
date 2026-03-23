@@ -34,7 +34,8 @@
                 <span class="text-[11px] text-gray-400 mt-1 text-center">Imtihon natijalari bo'yicha</span>
             </a>
 
-            {{-- 3. Shartnoma --}}
+            {{-- 3. Shartnoma (faqat bitiruvchilar uchun) --}}
+            @if(Auth::guard('student')->user()->is_graduate)
             <a href="{{ route('student.contracts.index') }}"
                class="flex flex-col items-center bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden active:scale-[0.98] transition-all duration-150"
                style="padding:16px 10px;">
@@ -47,6 +48,7 @@
                 <span class="text-sm font-bold text-gray-800 text-center leading-tight">Shartnoma</span>
                 <span class="text-[11px] text-gray-400 mt-1 text-center">3 va 4 tomonlama</span>
             </a>
+            @endif
 
         </div>
     </div>

@@ -101,4 +101,21 @@ class StudentPassportController extends Controller
 
         return Storage::disk('public')->response($passport->$field);
     }
+
+    public function deleteFile(string $field)
+    {
+        $student = Auth::guard('student')->user();
+        $passport = StudentPassport::where('student_id', $student->id)->firstOrFail();
+
+        $allowed = ['passport_front_path', 'passport_back_path', 'foreign_passport_path'];
+        if (!in_array($field, $allowed) || !$passport->$field) {
+            abort(404);
+        }
+
+        Storage::disk('public')->delete($passport->$field);
+        $passport->update([$field => null]);
+
+        return redirect()->route('student.dashboard')
+            ->with('success', 'Fayl o\'chirildi.');
+    }
 }

@@ -1,4 +1,4 @@
-<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: false, previewImage: null }">
+<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: false }">
     {{-- Header: title left, status badge top-right --}}
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
@@ -23,69 +23,6 @@
             </span>
         @endif
     </div>
-
-    {{-- Uploaded files viewer (shown when passport exists and form is open) --}}
-    @if($studentPassport)
-        <div x-show="showPassportForm" x-transition class="mb-5">
-            <p class="text-sm font-medium text-gray-600 mb-3">Yuklangan hujjatlar:</p>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                @if($studentPassport->passport_front_path)
-                    <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                        <p class="text-xs font-medium text-gray-500 mb-2">Pasport oldi tarafi</p>
-                        @if(Str::endsWith($studentPassport->passport_front_path, ['.jpg', '.jpeg', '.png']))
-                            <img src="{{ asset('storage/' . $studentPassport->passport_front_path) }}" alt="Pasport oldi"
-                                 class="w-full h-32 object-cover rounded cursor-pointer hover:opacity-80 transition"
-                                 @click="previewImage = '{{ asset('storage/' . $studentPassport->passport_front_path) }}'">
-                        @else
-                            <a href="{{ asset('storage/' . $studentPassport->passport_front_path) }}" target="_blank"
-                               class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-                                </svg>
-                                PDF faylni ko'rish
-                            </a>
-                        @endif
-                    </div>
-                @endif
-                @if($studentPassport->passport_back_path)
-                    <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                        <p class="text-xs font-medium text-gray-500 mb-2">Pasport orqa tarafi</p>
-                        @if(Str::endsWith($studentPassport->passport_back_path, ['.jpg', '.jpeg', '.png']))
-                            <img src="{{ asset('storage/' . $studentPassport->passport_back_path) }}" alt="Pasport orqa"
-                                 class="w-full h-32 object-cover rounded cursor-pointer hover:opacity-80 transition"
-                                 @click="previewImage = '{{ asset('storage/' . $studentPassport->passport_back_path) }}'">
-                        @else
-                            <a href="{{ asset('storage/' . $studentPassport->passport_back_path) }}" target="_blank"
-                               class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-                                </svg>
-                                PDF faylni ko'rish
-                            </a>
-                        @endif
-                    </div>
-                @endif
-                @if($studentPassport->foreign_passport_path)
-                    <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                        <p class="text-xs font-medium text-gray-500 mb-2">Xorijga chiqish pasporti</p>
-                        @if(Str::endsWith($studentPassport->foreign_passport_path, ['.jpg', '.jpeg', '.png']))
-                            <img src="{{ asset('storage/' . $studentPassport->foreign_passport_path) }}" alt="Xorijga chiqish pasporti"
-                                 class="w-full h-32 object-cover rounded cursor-pointer hover:opacity-80 transition"
-                                 @click="previewImage = '{{ asset('storage/' . $studentPassport->foreign_passport_path) }}'">
-                        @else
-                            <a href="{{ asset('storage/' . $studentPassport->foreign_passport_path) }}" target="_blank"
-                               class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
-                                </svg>
-                                PDF faylni ko'rish
-                            </a>
-                        @endif
-                    </div>
-                @endif
-            </div>
-        </div>
-    @endif
 
     {{-- Form (shown when toggled) --}}
     <div x-show="showPassportForm" x-transition class="border-t border-gray-200 pt-5">
@@ -116,26 +53,59 @@
                     </div>
                 </div>
                 <div></div>
+
+                {{-- Pasport oldi tarafi --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Pasport oldi tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                     <input type="file" name="passport_front" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
                            onchange="checkFileSize(this)"
                            class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
+                    @if($studentPassport?->passport_front_path)
+                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                            @if(Str::endsWith($studentPassport->passport_front_path, ['.jpg', '.jpeg', '.png']))
+                                <img src="{{ route('student.passport.file', 'passport_front_path') }}" alt="Pasport oldi" class="w-full max-h-64 object-contain">
+                            @else
+                                <iframe src="{{ route('student.passport.file', 'passport_front_path') }}" class="w-full h-64 border-0"></iframe>
+                            @endif
+                        </div>
+                    @endif
                 </div>
+
+                {{-- Pasport orqa tarafi --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Pasport orqa tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                     <input type="file" name="passport_back" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
                            onchange="checkFileSize(this)"
                            class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
+                    @if($studentPassport?->passport_back_path)
+                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                            @if(Str::endsWith($studentPassport->passport_back_path, ['.jpg', '.jpeg', '.png']))
+                                <img src="{{ route('student.passport.file', 'passport_back_path') }}" alt="Pasport orqa" class="w-full max-h-64 object-contain">
+                            @else
+                                <iframe src="{{ route('student.passport.file', 'passport_back_path') }}" class="w-full h-64 border-0"></iframe>
+                            @endif
+                        </div>
+                    @endif
                 </div>
+
+                {{-- Xorijga chiqish pasporti --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Xorijga chiqish pasporti <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                     <input type="file" name="foreign_passport" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
                            onchange="checkFileSize(this)"
                            class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
+                    @if($studentPassport?->foreign_passport_path)
+                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                            @if(Str::endsWith($studentPassport->foreign_passport_path, ['.jpg', '.jpeg', '.png']))
+                                <img src="{{ route('student.passport.file', 'foreign_passport_path') }}" alt="Xorijga chiqish pasporti" class="w-full max-h-64 object-contain">
+                            @else
+                                <iframe src="{{ route('student.passport.file', 'foreign_passport_path') }}" class="w-full h-64 border-0"></iframe>
+                            @endif
+                        </div>
+                    @endif
                 </div>
             </div>
             <div class="text-right mt-4">
@@ -162,19 +132,5 @@
                 class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg transition bg-gray-200 text-gray-700 hover:bg-gray-300">
             Yopish
         </button>
-    </div>
-
-    {{-- Image preview modal --}}
-    <div x-show="previewImage" x-transition.opacity
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-         @click.self="previewImage = null" @keydown.escape.window="previewImage = null">
-        <div class="relative max-w-3xl w-full">
-            <button @click="previewImage = null" class="absolute -top-3 -right-3 bg-white rounded-full p-1.5 shadow-lg hover:bg-gray-100 z-10">
-                <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-            <img :src="previewImage" class="w-full rounded-lg shadow-2xl" alt="Preview">
-        </div>
     </div>
 </div>

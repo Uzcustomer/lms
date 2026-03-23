@@ -88,4 +88,17 @@ class StudentPassportController extends Controller
         return redirect()->route('student.dashboard')
             ->with('success', 'Pasport ma\'lumotlari saqlandi.');
     }
+
+    public function showFile(string $field)
+    {
+        $student = Auth::guard('student')->user();
+        $passport = StudentPassport::where('student_id', $student->id)->firstOrFail();
+
+        $allowed = ['passport_front_path', 'passport_back_path', 'foreign_passport_path'];
+        if (!in_array($field, $allowed) || !$passport->$field) {
+            abort(404);
+        }
+
+        return Storage::disk('public')->response($passport->$field);
+    }
 }

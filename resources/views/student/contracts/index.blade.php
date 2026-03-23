@@ -93,7 +93,7 @@
                         <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash boshqarmasi</label>
                         <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}"
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                               placeholder="Tashkilot nomi">
+                               placeholder="Viloyatni kiriting, masalan: Surxondaryo viloyati">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash boshqarmasi boshlig'i</label>

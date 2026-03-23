@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class StudentPassport extends Model
 {
+    protected $table = 'graduate_student_passports';
+
     protected $fillable = [
         'student_id',
         'full_name_uz',

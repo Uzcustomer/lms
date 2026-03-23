@@ -29,6 +29,8 @@ class StudentContractController extends Controller
             'student_phone' => $lastContract->student_phone ?? ($student->phone ?? ''),
             'student_passport' => $lastContract->student_passport ?? '',
             'student_inn' => $lastContract->student_inn ?? '',
+            'employer_name' => $lastContract->employer_name ?? '',
+            'employer_director_name' => $lastContract->employer_director_name ?? '',
         ];
 
         return view('student.contracts.index', compact('contracts', 'student', 'placeholderData'));

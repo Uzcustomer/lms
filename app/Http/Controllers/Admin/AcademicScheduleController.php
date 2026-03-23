@@ -647,7 +647,12 @@ class AcademicScheduleController extends Controller
         })->get()->keyBy(fn($r) => $r->group_hemis_id . '_' . $r->subject_id . '_' . $r->semester_code);
 
         // Cheklov 2: Faqat YANGI sanalar kamida ertadan bo'lishi kerak (allaqachon saqlangan sanalar tekshirilmaydi)
-        $tomorrow = $today->copy()->addDay();
+        // Admin roli uchun bugungi kunni ham belgilash mumkin
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $isAdmin = $user && in_array($activeRole, ['superadmin', 'admin', 'kichik_admin']);
+        $minDate = $isAdmin ? $today : $today->copy()->addDay();
+
         foreach ($validSchedules as $schedule) {
             $existingRec = $existingForValidation->get(
                 $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
@@ -658,8 +663,10 @@ class AcademicScheduleController extends Controller
                     && $existingRec->oski_date->format('Y-m-d') === $schedule['oski_date'];
                 if (!$alreadySaved) {
                     $oskiDate = \Carbon\Carbon::parse($schedule['oski_date']);
-                    if ($oskiDate->lt($tomorrow)) {
-                        return redirect()->back()->with('error', 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                    if ($oskiDate->lt($minDate)) {
+                        return redirect()->back()->with('error', $isAdmin
+                            ? 'OSKI sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
+                            : 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
                     }
                 }
             }
@@ -668,8 +675,10 @@ class AcademicScheduleController extends Controller
                     && $existingRec->test_date->format('Y-m-d') === $schedule['test_date'];
                 if (!$alreadySaved) {
                     $testDate = \Carbon\Carbon::parse($schedule['test_date']);
-                    if ($testDate->lt($tomorrow)) {
-                        return redirect()->back()->with('error', 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                    if ($testDate->lt($minDate)) {
+                        return redirect()->back()->with('error', $isAdmin
+                            ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
+                            : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
                     }
                 }
             }

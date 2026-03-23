@@ -115,6 +115,10 @@ class StudentPassportController extends Controller
         Storage::disk('public')->delete($passport->$field);
         $passport->update([$field => null]);
 
+        if (request()->expectsJson()) {
+            return response()->json(['success' => true]);
+        }
+
         return redirect()->back()
             ->with('success', 'Fayl o\'chirildi.');
     }

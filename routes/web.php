@@ -13,6 +13,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaytnomaController;
 use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Student\HemisOAuthController;
 use App\Http\Controllers\Student\StudentAuthController;
@@ -49,6 +50,17 @@ use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
+    // Agar foydalanuvchi allaqachon login bo'lgan bo'lsa — o'z dashboardiga yo'naltirish
+    if (Auth::guard('web')->check()) {
+        return redirect()->route('admin.dashboard');
+    }
+    if (Auth::guard('teacher')->check()) {
+        return redirect()->route('teacher.dashboard');
+    }
+    if (Auth::guard('student')->check()) {
+        return redirect()->route('student.dashboard');
+    }
+
     return response()
         ->view('welcome')
         ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -78,15 +90,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::get('/login', function () {
-        if (auth()->check()) {
+        if (Auth::guard('web')->check() || Auth::guard('teacher')->check()) {
             return redirect()->route('admin.dashboard');
-        } else {
-            return response()
-                ->view('auth.login')
-                ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
-                ->header('Pragma', 'no-cache')
-                ->header('Expires', '0');
         }
+        return response()
+            ->view('auth.login')
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     })->name('login');
 
 

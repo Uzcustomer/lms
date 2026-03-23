@@ -17,7 +17,21 @@ class StudentContractController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        return view('student.contracts.index', compact('contracts', 'student'));
+        // Oxirgi shartnomadan ma'lumotlarni olish (agar mavjud bo'lsa)
+        $lastContract = $contracts->first();
+
+        // Placeholder ma'lumotlari
+        $placeholderData = [
+            'student_name' => mb_strtoupper($student->full_name),
+            'student_address' => $lastContract->student_address ?? ($student->province_name . ', ' . $student->district_name),
+            'specialty_name' => $student->specialty_name,
+            'contract_year' => date('Y'),
+            'student_phone' => $lastContract->student_phone ?? ($student->phone ?? ''),
+            'student_passport' => $lastContract->student_passport ?? '',
+            'student_inn' => $lastContract->student_inn ?? '',
+        ];
+
+        return view('student.contracts.index', compact('contracts', 'student', 'placeholderData'));
     }
 
     public function create()

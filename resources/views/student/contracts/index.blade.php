@@ -5,7 +5,7 @@
         </h2>
     </x-slot>
 
-    <div class="max-w-4xl mx-auto sm:px-6 lg:px-8 px-3 py-6" x-data="{ contractType: '3_tomonlama' }">
+    <div class="max-w-4xl mx-auto sm:px-6 lg:px-8 px-3 pb-6" x-data="{ contractType: '3_tomonlama' }">
 
         {{-- Shartnoma turi tanlash --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
@@ -16,37 +16,45 @@
             </select>
         </div>
 
-        {{-- Talaba ma'lumotlari (placeholderlar) --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
-            <h3 class="text-sm font-semibold text-gray-500 uppercase mb-4">Shartnomadagi ma'lumotlaringiz</h3>
+        {{-- Talaba ma'lumotlari --}}
+        <div class="bg-green-50 rounded-xl shadow-sm border border-green-200 p-5 mb-4">
+            <h3 class="text-sm font-semibold text-green-700 uppercase mb-4">Shartnomadagi ma'lumotlaringiz</h3>
             <div class="space-y-3">
-                <div class="flex items-start border-b border-gray-100 pb-3">
-                    <span class="text-xs font-medium text-gray-400 w-36 flex-shrink-0 pt-0.5">student_name</span>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">F.I.SH</span>
                     <span class="text-sm font-semibold text-gray-800">{{ $placeholderData['student_name'] }}</span>
                 </div>
-                <div class="flex items-start border-b border-gray-100 pb-3">
-                    <span class="text-xs font-medium text-gray-400 w-36 flex-shrink-0 pt-0.5">student_address</span>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">Manzil</span>
                     <span class="text-sm text-gray-800">{{ $placeholderData['student_address'] ?: '—' }}</span>
                 </div>
-                <div class="flex items-start border-b border-gray-100 pb-3">
-                    <span class="text-xs font-medium text-gray-400 w-36 flex-shrink-0 pt-0.5">specialty_name</span>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">Yo'nalish</span>
                     <span class="text-sm text-gray-800">{{ $placeholderData['specialty_name'] }}</span>
                 </div>
-                <div class="flex items-start border-b border-gray-100 pb-3">
-                    <span class="text-xs font-medium text-gray-400 w-36 flex-shrink-0 pt-0.5">contract_year</span>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">Bitirish yili</span>
                     <span class="text-sm text-gray-800">{{ $placeholderData['contract_year'] }}</span>
                 </div>
-                <div class="flex items-start border-b border-gray-100 pb-3">
-                    <span class="text-xs font-medium text-gray-400 w-36 flex-shrink-0 pt-0.5">student_phone</span>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">Telefon</span>
                     <span class="text-sm text-gray-800">{{ $placeholderData['student_phone'] ?: '—' }}</span>
                 </div>
-                <div class="flex items-start border-b border-gray-100 pb-3">
-                    <span class="text-xs font-medium text-gray-400 w-36 flex-shrink-0 pt-0.5">student_passport</span>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">Passport</span>
                     <span class="text-sm text-gray-800">{{ $placeholderData['student_passport'] ?: '—' }}</span>
                 </div>
-                <div class="flex items-start">
-                    <span class="text-xs font-medium text-gray-400 w-36 flex-shrink-0 pt-0.5">student_inn</span>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">INN</span>
                     <span class="text-sm text-gray-800">{{ $placeholderData['student_inn'] ?: '—' }}</span>
+                </div>
+                <div class="flex items-center border-b border-green-100 pb-3">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">Ish beruvchi F.I.SH</span>
+                    <span class="text-sm text-gray-800">{{ $placeholderData['employer_name'] ?: '—' }}</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm font-medium text-green-600 w-40 flex-shrink-0">Direktor F.I.SH</span>
+                    <span class="text-sm text-gray-800">{{ $placeholderData['employer_director_name'] ?: '—' }}</span>
                 </div>
             </div>
         </div>
@@ -74,18 +82,18 @@
             </div>
         </div>
 
-        {{-- Ariza yuborish tugmasi --}}
-        @if($student->is_graduate)
-            <div class="text-center mb-6">
-                <a href="{{ route('student.contracts.create') }}"
-                   class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition shadow-sm">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    Shartnoma arizasi yuborish
-                </a>
-            </div>
-        @endif
+        {{-- Saqlash va eslatma --}}
+        <div class="bg-yellow-50 rounded-xl border border-yellow-200 p-4 mb-4">
+            <p class="text-sm text-yellow-700">Ma'lumotlaringizni tekshiring, xatolik bo'lsa tuzating va bo'sh joylarni to'ldiring.</p>
+        </div>
+        <div class="text-center mb-6">
+            <button type="button" class="inline-flex items-center gap-2 px-8 py-3 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition shadow-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                </svg>
+                Saqlash
+            </button>
+        </div>
 
         {{-- Mavjud shartnomalar ro'yxati --}}
         @if(session('success'))

@@ -115,7 +115,7 @@ class StudentPassportController extends Controller
         Storage::disk('public')->delete($passport->$field);
         $passport->update([$field => null]);
 
-        return redirect()->route('student.dashboard')
+        return redirect()->back()
             ->with('success', 'Fayl o\'chirildi.');
     }
 }

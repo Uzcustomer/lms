@@ -1,4 +1,4 @@
-<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: false }">
+<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: {{ session('success') && str_contains(session('success'), 'Fayl') ? 'true' : 'false' }} }">
     {{-- Header: title left, status badge top-right --}}
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">

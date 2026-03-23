@@ -16,10 +16,6 @@
                     </div>
 
 
-                    @if(Auth::guard('student')->user()->is_graduate)
-                    @include('student.partials.passport-card')
-                    @endif
-
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div class="bg-blue-100 p-4 rounded-lg text-center">
                             <h4 class="text-lg font-semibold mb-2">Talaba GPA si</h4>

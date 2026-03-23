@@ -148,12 +148,7 @@ class StudentController extends Controller
             ->get()
             ->groupBy('subject_name');
 
-        $studentPassport = null;
-        if ($student->is_graduate) {
-            $studentPassport = \App\Models\StudentPassport::where('student_id', $student->id)->first();
-        }
-
-        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'debtBySemester', 'recentGrades', 'gradesBySubject', 'studentPassport'));
+        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'debtBySemester', 'recentGrades', 'gradesBySubject'));
     }
 
     public function getSchedule(Request $request)

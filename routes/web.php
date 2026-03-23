@@ -737,6 +737,9 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::delete('/{contract}', [StudentContractCtrl::class, 'destroy'])->name('destroy');
         });
 
+        // Pasport ma'lumotlari
+        Route::post('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'store'])->name('passport.store');
+
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\AbsenceExcuseController::class, 'index'])->name('index');

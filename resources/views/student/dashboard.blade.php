@@ -16,6 +16,108 @@
                     </div>
 
 
+                    @if(Auth::guard('student')->user()->is_graduate)
+                    <div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: false }">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                                </svg>
+                                <h4 class="text-lg font-semibold text-gray-800">Pasport ma'lumotlarim</h4>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                @if($studentPassport)
+                                    <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                                        </svg>
+                                        To'ldirilgan
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+                                        </svg>
+                                        To'ldirilmagan
+                                    </span>
+                                @endif
+                                <button @click="showPassportForm = !showPassportForm" type="button"
+                                        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition"
+                                        :class="showPassportForm ? 'bg-gray-200 text-gray-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'">
+                                    <span x-text="showPassportForm ? 'Yopish' : 'To\'ldirish'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div x-show="showPassportForm" x-transition class="mt-5 border-t border-gray-200 pt-5">
+                            <form method="POST" action="{{ route('student.passport.store') }}" enctype="multipart/form-data">
+                                @csrf
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">To'liq ism familiyangiz (pasport bilan bir xil) <span class="text-red-500">*</span></label>
+                                        <input type="text" name="full_name_uz" value="{{ $studentPassport->full_name_uz ?? '' }}" required
+                                               class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                               placeholder="FAMILIYA ISM OTASINING ISMI">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha to'liq ism familiyangiz (pasport bilan bir xil) <span class="text-red-500">*</span></label>
+                                        <input type="text" name="full_name_en" value="{{ $studentPassport->full_name_en ?? '' }}" required
+                                               class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                                               placeholder="SURNAME NAME PATRONYMIC">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Passport seriya va raqamingiz <span class="text-red-500">*</span></label>
+                                        <div class="flex gap-2">
+                                            <input type="text" name="passport_series" value="{{ $studentPassport->passport_series ?? '' }}" required
+                                                   class="w-24 rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase tracking-widest font-semibold text-center"
+                                                   placeholder="AA" maxlength="2"
+                                                   oninput="this.value = this.value.replace(/[^A-Za-z]/g, '').toUpperCase()">
+                                            <input type="text" name="passport_number" value="{{ $studentPassport->passport_number ?? '' }}" required
+                                                   class="flex-1 rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 tracking-wide"
+                                                   placeholder="1234567" maxlength="7"
+                                                   oninput="this.value = this.value.replace(/\D/g, '')">
+                                        </div>
+                                    </div>
+                                    <div></div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pasport oldi tarafi <span class="text-red-500">*</span></label>
+                                        <input type="file" name="passport_front" accept="image/*" {{ $studentPassport ? '' : 'required' }}
+                                               class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                        @if($studentPassport?->passport_front_path)
+                                            <p class="text-xs text-green-600 mt-1">Yuklangan (qayta yuklash ixtiyoriy)</p>
+                                        @endif
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pasport orqa tarafi <span class="text-red-500">*</span></label>
+                                        <input type="file" name="passport_back" accept="image/*" {{ $studentPassport ? '' : 'required' }}
+                                               class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                        @if($studentPassport?->passport_back_path)
+                                            <p class="text-xs text-green-600 mt-1">Yuklangan (qayta yuklash ixtiyoriy)</p>
+                                        @endif
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Xorijga chiqish pasporti <span class="text-red-500">*</span></label>
+                                        <input type="file" name="foreign_passport" accept="image/*,.pdf" {{ $studentPassport ? '' : 'required' }}
+                                               class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                                        @if($studentPassport?->foreign_passport_path)
+                                            <p class="text-xs text-green-600 mt-1">Yuklangan (qayta yuklash ixtiyoriy)</p>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="mt-5 text-right">
+                                    <button type="submit"
+                                            class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                                        </svg>
+                                        Saqlash
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    @endif
+
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div class="bg-blue-100 p-4 rounded-lg text-center">
                             <h4 class="text-lg font-semibold mb-2">Talaba GPA si</h4>

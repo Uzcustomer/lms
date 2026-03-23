@@ -7,6 +7,9 @@
 
     <div class="pb-6">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            @if(Auth::guard('student')->user()->is_graduate)
+                @include('student.partials.passport-card')
+            @endif
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 bg-white border-b border-gray-200">
                     <div class="flex flex-col md:flex-row">
@@ -65,4 +68,17 @@
             </div>
         </div>
     </div>
+<script>
+function checkFileSize(input) {
+    var errorEl = input.parentElement.querySelector('[data-file-error]');
+    if (input.files.length > 0 && input.files[0].size > 1024 * 1024) {
+        errorEl.textContent = 'Fayl hajmi 1MB dan oshmasligi kerak!';
+        errorEl.classList.remove('hidden');
+        input.value = '';
+    } else {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+}
+</script>
 </x-student-app-layout>

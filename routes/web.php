@@ -739,6 +739,7 @@ Route::prefix('student')->name('student.')->group(function () {
 
         // Pasport ma'lumotlari
         Route::post('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'store'])->name('passport.store');
+        Route::get('/passport/file/{field}', [\App\Http\Controllers\Student\StudentPassportController::class, 'showFile'])->name('passport.file');
 
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {

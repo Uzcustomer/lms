@@ -19,13 +19,23 @@
             </div>
         @endif
 
+        @if($errors->any())
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
+                <ul class="list-disc list-inside text-sm">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <form method="POST" action="{{ route('student.contracts.generate') }}">
             @csrf
 
             {{-- Shartnoma turi tanlash --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
-                <label class="block text-sm font-semibold text-gray-700 mb-3">Shartnoma turini tanlang</label>
-                <select name="contract_type" x-model="contractType" class="w-full rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500">
+                <label class="block text-sm font-semibold text-gray-700 mb-3">Shartnoma turini tanlang <span class="text-red-500">*</span></label>
+                <select name="contract_type" x-model="contractType" required class="w-full rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500">
                     <option value="3_tomonlama">3 tomonlama shartnoma</option>
                     <option value="4_tomonlama">4 tomonlama shartnoma</option>
                 </select>
@@ -36,48 +46,48 @@
                 <h3 class="text-sm font-semibold text-green-700 uppercase mb-4">Shartnomadagi ma'lumotlaringiz</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">F.I.SH</label>
-                        <input type="text" name="student_name" value="{{ $placeholderData['student_name'] }}"
+                        <label class="block text-sm font-medium text-green-600 mb-1">F.I.SH <span class="text-red-500">*</span></label>
+                        <input type="text" name="student_name" value="{{ $placeholderData['student_name'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Manzil</label>
-                        <input type="text" name="student_address" value="{{ $placeholderData['student_address'] }}"
+                        <label class="block text-sm font-medium text-green-600 mb-1">Manzil <span class="text-red-500">*</span></label>
+                        <input type="text" name="student_address" value="{{ $placeholderData['student_address'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white"
                                placeholder="Tuman, MFY, ko'cha, uy">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Yo'nalish</label>
-                        <input type="text" name="specialty_name" value="{{ $placeholderData['specialty_name'] }}"
+                        <label class="block text-sm font-medium text-green-600 mb-1">Yo'nalish <span class="text-red-500">*</span></label>
+                        <input type="text" name="specialty_name" value="{{ $placeholderData['specialty_name'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Bitirish yili</label>
-                        <input type="text" name="contract_year" value="{{ $placeholderData['contract_year'] }}"
+                        <label class="block text-sm font-medium text-green-600 mb-1">Bitirish yili <span class="text-red-500">*</span></label>
+                        <input type="text" name="contract_year" value="{{ $placeholderData['contract_year'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Telefon</label>
-                        <input type="text" name="student_phone" value="{{ $placeholderData['student_phone'] }}"
+                        <label class="block text-sm font-medium text-green-600 mb-1">Telefon <span class="text-red-500">*</span></label>
+                        <input type="text" name="student_phone" value="{{ $placeholderData['student_phone'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white"
                                placeholder="+998901234567">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Passport seriya va raqami</label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">Passport seriya va raqami <span class="text-red-500">*</span></label>
                         <div class="flex gap-2">
-                            <input type="text" name="student_passport_series" value="{{ $placeholderData['student_passport_series'] }}"
+                            <input type="text" name="student_passport_series" value="{{ $placeholderData['student_passport_series'] }}" required
                                    class="w-24 rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white uppercase tracking-widest font-semibold text-center"
                                    placeholder="AA" maxlength="2"
                                    oninput="this.value = this.value.replace(/[^A-Za-z]/g, '').toUpperCase()">
-                            <input type="text" name="student_passport_number" value="{{ $placeholderData['student_passport_number'] }}"
+                            <input type="text" name="student_passport_number" value="{{ $placeholderData['student_passport_number'] }}" required
                                    class="flex-1 rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white tracking-wide"
                                    placeholder="1234567" maxlength="7"
                                    oninput="this.value = this.value.replace(/\D/g, '')">
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Passport JSHSHIR</label>
-                        <input type="text" name="student_inn" value="{{ $placeholderData['student_inn'] }}"
+                        <label class="block text-sm font-medium text-green-600 mb-1">Passport JSHSHIR <span class="text-red-500">*</span></label>
+                        <input type="text" name="student_inn" value="{{ $placeholderData['student_inn'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white tracking-wide"
                                placeholder="12345678901234" maxlength="14"
                                oninput="this.value = this.value.replace(/\D/g, '')">
@@ -90,14 +100,14 @@
                 <h3 class="text-sm font-semibold text-blue-700 uppercase mb-4">3-tomon ma'lumotlari</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi</label>
-                        <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}"
+                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi <span class="text-red-500">*</span></label>
+                        <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}" required
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                                placeholder="Surxondaryo viloyati">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi boshlig'i</label>
-                        <input type="text" name="employer_director_name" value="{{ $placeholderData['employer_director_name'] }}"
+                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi boshlig'i <span class="text-red-500">*</span></label>
+                        <input type="text" name="employer_director_name" value="{{ $placeholderData['employer_director_name'] }}" required
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                                placeholder="Rahbar to'liq ismi">
                     </div>
@@ -109,23 +119,25 @@
                 <h3 class="text-sm font-semibold text-purple-600 uppercase mb-4">4-tomon ma'lumotlari</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi</label>
+                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi <span class="text-red-500">*</span></label>
                         <input type="text" name="fourth_party_name" value=""
                                class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
-                               placeholder="Tuman nomini kiriting">
+                               placeholder="Tuman nomini kiriting"
+                               x-bind:required="contractType === '4_tomonlama'">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi boshlig'i</label>
+                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi boshlig'i <span class="text-red-500">*</span></label>
                         <input type="text" name="fourth_party_director_name" value=""
                                class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
-                               placeholder="Rahbar to'liq ismi">
+                               placeholder="Rahbar to'liq ismi"
+                               x-bind:required="contractType === '4_tomonlama'">
                     </div>
                 </div>
             </div>
 
             {{-- Saqlash --}}
             <div class="bg-yellow-50 rounded-xl border border-yellow-200 p-4 mb-4">
-                <p class="text-sm text-yellow-700">Ma'lumotlaringizni tekshiring, xatolik bo'lsa tuzating va bo'sh joylarni to'ldiring.</p>
+                <p class="text-sm text-yellow-700">Ma'lumotlaringizni tekshiring, xatolik bo'lsa tuzating va bo'sh joylarni to'ldiring. <span class="text-red-500">*</span> bilan belgilangan maydonlar majburiy.</p>
             </div>
             <div class="text-center mb-6">
                 <button type="submit" style="padding: 10px 50px;" class="inline-flex items-center gap-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition shadow-sm">
@@ -146,7 +158,7 @@
                         <div class="p-5">
                             <div class="mb-3">
                                 <h3 class="text-base font-semibold text-gray-800">{{ $contract->type_label }}</h3>
-                                <p class="text-sm text-gray-500">Ariza #{{ $contract->id }} | {{ $contract->created_at->format('d.m.Y H:i') }}</p>
+                                <p class="text-sm text-gray-500">Ariza #{{ str_pad($contract->id, 4, '0', STR_PAD_LEFT) }} | {{ $contract->created_at->format('d.m.Y H:i') }}</p>
                             </div>
 
                             @if($contract->status === 'rejected' && $contract->reject_reason)

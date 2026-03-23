@@ -105,8 +105,10 @@ class StudentContractController extends Controller
         if ($request->contract_type === '4_tomonlama') {
             $request->validate([
                 'fourth_party_name' => 'required|string|max:255',
+                'fourth_party_director_name' => 'required|string|max:255',
             ], [
-                'fourth_party_name.required' => '4-tomonlama shartnoma uchun MFY/tuman nomini kiritish majburiy.',
+                'fourth_party_name.required' => 'Tuman sog\'liqni saqlash bosh boshqarmasi nomini kiritish majburiy.',
+                'fourth_party_director_name.required' => 'Tuman sog\'liqni saqlash bosh boshqarmasi boshlig\'ini kiritish majburiy.',
             ]);
         }
 
@@ -163,19 +165,31 @@ class StudentContractController extends Controller
         $request->validate([
             'contract_type' => 'required|in:3_tomonlama,4_tomonlama',
             'student_name' => 'required|string|max:255',
-            'student_address' => 'nullable|string|max:255',
-            'specialty_name' => 'nullable|string|max:255',
-            'contract_year' => 'nullable|string|max:10',
-            'student_phone' => 'nullable|string|max:50',
-            'student_passport_series' => 'nullable|string|max:2|regex:/^[A-Z]{0,2}$/',
-            'student_passport_number' => 'nullable|string|max:7|regex:/^\d{0,7}$/',
-            'student_inn' => 'nullable|string|max:14|regex:/^\d{0,14}$/',
-            'employer_name' => 'nullable|string|max:255',
-            'employer_director_name' => 'nullable|string|max:255',
+            'student_address' => 'required|string|max:255',
+            'specialty_name' => 'required|string|max:255',
+            'contract_year' => 'required|string|max:10',
+            'student_phone' => 'required|string|max:50',
+            'student_passport_series' => 'required|string|max:2|regex:/^[A-Z]{2}$/',
+            'student_passport_number' => 'required|string|max:7|regex:/^\d{7}$/',
+            'student_inn' => 'required|string|max:14|regex:/^\d{14}$/',
+            'employer_name' => 'required|string|max:255',
+            'employer_director_name' => 'required|string|max:255',
             'fourth_party_name' => 'nullable|string|max:255',
-            'fourth_party_address' => 'nullable|string|max:255',
-            'fourth_party_phone' => 'nullable|string|max:50',
             'fourth_party_director_name' => 'nullable|string|max:255',
+        ], [
+            'student_name.required' => 'F.I.SH kiritish majburiy.',
+            'student_address.required' => 'Manzilni kiritish majburiy.',
+            'specialty_name.required' => 'Yo\'nalishni kiritish majburiy.',
+            'contract_year.required' => 'Bitirish yilini kiritish majburiy.',
+            'student_phone.required' => 'Telefon raqamni kiritish majburiy.',
+            'student_passport_series.required' => 'Passport seriyasini kiritish majburiy.',
+            'student_passport_series.regex' => 'Passport seriyasi 2 ta harfdan iborat bo\'lishi kerak.',
+            'student_passport_number.required' => 'Passport raqamini kiritish majburiy.',
+            'student_passport_number.regex' => 'Passport raqami 7 ta raqamdan iborat bo\'lishi kerak.',
+            'student_inn.required' => 'JSHSHIR kiritish majburiy.',
+            'student_inn.regex' => 'JSHSHIR 14 ta raqamdan iborat bo\'lishi kerak.',
+            'employer_name.required' => 'Viloyat sog\'liqni saqlash bosh boshqarmasi nomini kiritish majburiy.',
+            'employer_director_name.required' => 'Viloyat sog\'liqni saqlash bosh boshqarmasi boshlig\'ini kiritish majburiy.',
         ]);
 
         // StudentContract yaratish yoki mavjudini yangilash

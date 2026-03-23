@@ -720,6 +720,7 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/', [StudentContractCtrl::class, 'index'])->name('index');
             Route::get('/create', [StudentContractCtrl::class, 'create'])->name('create');
             Route::post('/store', [StudentContractCtrl::class, 'store'])->name('store');
+            Route::post('/generate', [StudentContractCtrl::class, 'generate'])->name('generate');
             Route::get('/{contract}', [StudentContractCtrl::class, 'show'])->name('show');
             Route::get('/{contract}/download', [StudentContractCtrl::class, 'download'])->name('download');
         });

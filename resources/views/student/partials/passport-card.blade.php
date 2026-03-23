@@ -62,12 +62,19 @@
                            class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     @if($studentPassport?->passport_front_path)
-                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50 relative">
                             @if(Str::endsWith($studentPassport->passport_front_path, ['.jpg', '.jpeg', '.png']))
                                 <img src="{{ route('student.passport.file', 'passport_front_path') }}" alt="Pasport oldi" class="w-full max-h-64 object-contain">
                             @else
                                 <iframe src="{{ route('student.passport.file', 'passport_front_path') }}" class="w-full h-64 border-0"></iframe>
                             @endif
+                            <form method="POST" action="{{ route('student.passport.file.delete', 'passport_front_path') }}" class="absolute top-1 right-1" onsubmit="return confirm('Faylni o\'chirmoqchimisiz?')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow transition" title="O'chirish">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </form>
                         </div>
                     @endif
                 </div>
@@ -80,12 +87,19 @@
                            class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     @if($studentPassport?->passport_back_path)
-                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50 relative">
                             @if(Str::endsWith($studentPassport->passport_back_path, ['.jpg', '.jpeg', '.png']))
                                 <img src="{{ route('student.passport.file', 'passport_back_path') }}" alt="Pasport orqa" class="w-full max-h-64 object-contain">
                             @else
                                 <iframe src="{{ route('student.passport.file', 'passport_back_path') }}" class="w-full h-64 border-0"></iframe>
                             @endif
+                            <form method="POST" action="{{ route('student.passport.file.delete', 'passport_back_path') }}" class="absolute top-1 right-1" onsubmit="return confirm('Faylni o\'chirmoqchimisiz?')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow transition" title="O'chirish">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </form>
                         </div>
                     @endif
                 </div>
@@ -98,12 +112,19 @@
                            class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     @if($studentPassport?->foreign_passport_path)
-                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                        <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden bg-gray-50 relative">
                             @if(Str::endsWith($studentPassport->foreign_passport_path, ['.jpg', '.jpeg', '.png']))
                                 <img src="{{ route('student.passport.file', 'foreign_passport_path') }}" alt="Xorijga chiqish pasporti" class="w-full max-h-64 object-contain">
                             @else
                                 <iframe src="{{ route('student.passport.file', 'foreign_passport_path') }}" class="w-full h-64 border-0"></iframe>
                             @endif
+                            <form method="POST" action="{{ route('student.passport.file.delete', 'foreign_passport_path') }}" class="absolute top-1 right-1" onsubmit="return confirm('Faylni o\'chirmoqchimisiz?')">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow transition" title="O'chirish">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                </button>
+                            </form>
                         </div>
                     @endif
                 </div>

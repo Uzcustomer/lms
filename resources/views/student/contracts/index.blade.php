@@ -156,22 +156,9 @@
                 @foreach($contracts as $contract)
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div class="p-5">
-                            <div class="flex items-start justify-between mb-3">
-                                <div>
-                                    <h3 class="text-base font-semibold text-gray-800">{{ $contract->type_label }}</h3>
-                                    <p class="text-sm text-gray-500">Ariza #{{ $contract->id }} | {{ $contract->created_at->format('d.m.Y H:i') }}</p>
-                                </div>
-                                @php
-                                    $statusColors = [
-                                        'pending' => 'bg-yellow-100 text-yellow-700 border-yellow-200',
-                                        'registrar_review' => 'bg-blue-100 text-blue-700 border-blue-200',
-                                        'approved' => 'bg-green-100 text-green-700 border-green-200',
-                                        'rejected' => 'bg-red-100 text-red-700 border-red-200',
-                                    ];
-                                @endphp
-                                <span class="inline-flex px-3 py-1 text-xs font-semibold rounded-full border {{ $statusColors[$contract->status] ?? '' }}">
-                                    {{ $contract->status_label }}
-                                </span>
+                            <div class="mb-3">
+                                <h3 class="text-base font-semibold text-gray-800">{{ $contract->type_label }}</h3>
+                                <p class="text-sm text-gray-500">Ariza #{{ $contract->id }} | {{ $contract->created_at->format('d.m.Y H:i') }}</p>
                             </div>
 
                             @if($contract->status === 'rejected' && $contract->reject_reason)
@@ -181,10 +168,6 @@
                             @endif
 
                             <div class="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100">
-                                <a href="{{ route('student.contracts.show', $contract) }}"
-                                   class="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition">
-                                    Batafsil
-                                </a>
                                 @if($contract->document_path)
                                     <a href="{{ route('student.contracts.download', $contract) }}"
                                        class="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition">

@@ -14,6 +14,10 @@ class StudentContractController extends Controller
     {
         $student = Auth::guard('student')->user();
 
+        if (!$student->is_graduate) {
+            abort(403, 'Bu xizmat faqat bitiruvchi kurs talabalari uchun mavjud.');
+        }
+
         $contracts = StudentContract::where('student_id', $student->id)
             ->orderByDesc('created_at')
             ->get();

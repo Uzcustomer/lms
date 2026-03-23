@@ -63,16 +63,24 @@
                                placeholder="+998901234567">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Passport</label>
-                        <input type="text" name="student_passport" value="{{ $placeholderData['student_passport'] }}"
-                               class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white"
-                               placeholder="AA1234567">
+                        <label class="block text-sm font-medium text-green-600 mb-1">Passport seriya va raqami</label>
+                        <div class="flex gap-2">
+                            <input type="text" name="student_passport_series" value="{{ $placeholderData['student_passport_series'] }}"
+                                   class="w-24 rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white uppercase tracking-widest font-semibold text-center"
+                                   placeholder="AA" maxlength="2"
+                                   oninput="this.value = this.value.replace(/[^A-Za-z]/g, '').toUpperCase()">
+                            <input type="text" name="student_passport_number" value="{{ $placeholderData['student_passport_number'] }}"
+                                   class="flex-1 rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white tracking-wide"
+                                   placeholder="1234567" maxlength="7"
+                                   oninput="this.value = this.value.replace(/\D/g, '')">
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">INN</label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">Passport JSHSHIR</label>
                         <input type="text" name="student_inn" value="{{ $placeholderData['student_inn'] }}"
-                               class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white"
-                               placeholder="123456789">
+                               class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white tracking-wide"
+                               placeholder="12345678901234" maxlength="14"
+                               oninput="this.value = this.value.replace(/\D/g, '')">
                     </div>
                 </div>
             </div>

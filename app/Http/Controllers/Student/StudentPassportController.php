@@ -21,8 +21,8 @@ class StudentPassportController extends Controller
         $existing = StudentPassport::where('student_id', $student->id)->first();
 
         $fileRules = $existing
-            ? ['nullable|image|max:5120', 'nullable|image|max:5120', 'nullable|file|max:5120']
-            : ['required|image|max:5120', 'required|image|max:5120', 'required|file|max:5120'];
+            ? ['nullable|file|mimes:jpg,jpeg,pdf|max:1024', 'nullable|file|mimes:jpg,jpeg,pdf|max:1024', 'nullable|file|mimes:jpg,jpeg,pdf|max:1024']
+            : ['required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024'];
 
         $request->validate([
             'full_name_uz' => 'required|string|max:255',
@@ -40,13 +40,14 @@ class StudentPassportController extends Controller
             'passport_number.required' => 'Passport raqamini kiriting.',
             'passport_number.regex' => 'Passport raqami 7 ta raqamdan iborat bo\'lishi kerak.',
             'passport_front.required' => 'Pasport oldi tarafini yuklang.',
-            'passport_front.image' => 'Pasport oldi tarafi rasm formatida bo\'lishi kerak.',
-            'passport_front.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
+            'passport_front.mimes' => 'Pasport oldi tarafi faqat JPG yoki PDF formatida bo\'lishi kerak.',
+            'passport_front.max' => 'Fayl hajmi 1MB dan oshmasligi kerak.',
             'passport_back.required' => 'Pasport orqa tarafini yuklang.',
-            'passport_back.image' => 'Pasport orqa tarafi rasm formatida bo\'lishi kerak.',
-            'passport_back.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
+            'passport_back.mimes' => 'Pasport orqa tarafi faqat JPG yoki PDF formatida bo\'lishi kerak.',
+            'passport_back.max' => 'Fayl hajmi 1MB dan oshmasligi kerak.',
             'foreign_passport.required' => 'Xorijga chiqish pasportini yuklang.',
-            'foreign_passport.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
+            'foreign_passport.mimes' => 'Xorijga chiqish pasporti faqat JPG yoki PDF formatida bo\'lishi kerak.',
+            'foreign_passport.max' => 'Fayl hajmi 1MB dan oshmasligi kerak.',
         ]);
 
         $data = [

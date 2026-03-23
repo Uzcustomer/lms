@@ -100,10 +100,10 @@ class DocumentTemplate extends Model
                 '${employer_bank_account}' => 'Ish beruvchi bank hisob raqami',
                 '${employer_bank_mfo}' => 'Ish beruvchi MFO',
                 '${employer_inn}' => 'Ish beruvchi INN',
-                '${fourth_party_name}' => '4-tomon nomi (MFY/tuman)',
+                '${fourth_party_name}' => 'Tuman sog\'liqni saqlash bosh boshqarmasi nomi',
                 '${fourth_party_address}' => '4-tomon manzili',
                 '${fourth_party_phone}' => '4-tomon telefon',
-                '${fourth_party_director_name}' => '4-tomon rahbar FIO',
+                '${fourth_party_director_name}' => 'Tuman sog\'liqni saqlash bosh boshqarmasi boshlig\'i FIO',
             ],
         ],
     ];

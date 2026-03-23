@@ -90,13 +90,13 @@
                 <h3 class="text-sm font-semibold text-blue-700 uppercase mb-4">3-tomon ma'lumotlari</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash boshqarmasi</label>
+                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi</label>
                         <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}"
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                               placeholder="Viloyatni kiriting, masalan: Surxondaryo viloyati">
+                               placeholder="Surxondaryo viloyati">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash boshqarmasi boshlig'i</label>
+                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi boshlig'i</label>
                         <input type="text" name="employer_director_name" value="{{ $placeholderData['employer_director_name'] }}"
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                                placeholder="Rahbar to'liq ismi">
@@ -109,25 +109,13 @@
                 <h3 class="text-sm font-semibold text-purple-600 uppercase mb-4">4-tomon ma'lumotlari</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">MFY/tuman nomi</label>
+                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi</label>
                         <input type="text" name="fourth_party_name" value=""
                                class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
-                               placeholder="MFY yoki tuman nomi">
+                               placeholder="Tuman nomini kiriting">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">4-tomon manzili</label>
-                        <input type="text" name="fourth_party_address" value=""
-                               class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
-                               placeholder="Manzil">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">4-tomon telefon</label>
-                        <input type="text" name="fourth_party_phone" value=""
-                               class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
-                               placeholder="+998...">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">4-tomon rahbar F.I.SH</label>
+                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi boshlig'i</label>
                         <input type="text" name="fourth_party_director_name" value=""
                                class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
                                placeholder="Rahbar to'liq ismi">

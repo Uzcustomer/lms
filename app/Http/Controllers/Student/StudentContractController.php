@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\StudentContract;
+use App\Services\StudentContractService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -150,6 +151,68 @@ class StudentContractController extends Controller
         return view('student.contracts.show', compact('contract', 'student'));
     }
 
+    public function generate(Request $request)
+    {
+        $student = Auth::guard('student')->user();
+
+        $request->validate([
+            'contract_type' => 'required|in:3_tomonlama,4_tomonlama',
+            'student_name' => 'required|string|max:255',
+            'student_address' => 'nullable|string|max:255',
+            'specialty_name' => 'nullable|string|max:255',
+            'contract_year' => 'nullable|string|max:10',
+            'student_phone' => 'nullable|string|max:50',
+            'student_passport' => 'nullable|string|max:20',
+            'student_inn' => 'nullable|string|max:20',
+            'employer_name' => 'nullable|string|max:255',
+            'employer_director_name' => 'nullable|string|max:255',
+            'fourth_party_name' => 'nullable|string|max:255',
+            'fourth_party_address' => 'nullable|string|max:255',
+            'fourth_party_phone' => 'nullable|string|max:50',
+            'fourth_party_director_name' => 'nullable|string|max:255',
+        ]);
+
+        // StudentContract yaratish yoki mavjudini yangilash
+        $contract = StudentContract::updateOrCreate(
+            [
+                'student_id' => $student->id,
+                'contract_type' => $request->contract_type,
+                'status' => StudentContract::STATUS_PENDING,
+            ],
+            [
+                'student_hemis_id' => $student->hemis_id,
+                'student_full_name' => $request->student_name,
+                'group_name' => $student->group_name,
+                'department_name' => $student->department_name,
+                'specialty_name' => $request->specialty_name ?? $student->specialty_name,
+                'level_name' => $student->level_name,
+                'student_address' => $request->student_address,
+                'student_phone' => $request->student_phone,
+                'student_passport' => $request->student_passport,
+                'student_inn' => $request->student_inn,
+                'employer_name' => $request->employer_name,
+                'employer_director_name' => $request->employer_director_name,
+                'fourth_party_name' => $request->fourth_party_name,
+                'fourth_party_address' => $request->fourth_party_address,
+                'fourth_party_phone' => $request->fourth_party_phone,
+                'fourth_party_director_name' => $request->fourth_party_director_name,
+            ]
+        );
+
+        // Word hujjat generatsiya qilish
+        try {
+            $service = new StudentContractService();
+            $documentPath = $service->generateContractDocument($contract);
+            $contract->update(['document_path' => $documentPath]);
+
+            return redirect()->route('student.contracts.index')
+                ->with('success', 'Shartnoma tayyor! Pastdan yuklab olishingiz mumkin.');
+        } catch (\Throwable $e) {
+            return redirect()->route('student.contracts.index')
+                ->with('error', 'Shartnoma yaratishda xatolik: ' . $e->getMessage());
+        }
+    }
+
     public function download(StudentContract $contract)
     {
         $student = Auth::guard('student')->user();
@@ -158,7 +221,7 @@ class StudentContractController extends Controller
             abort(403);
         }
 
-        if (!$contract->document_path || $contract->status !== StudentContract::STATUS_APPROVED) {
+        if (!$contract->document_path) {
             return back()->with('error', 'Hujjat hali tayyor emas.');
         }
 

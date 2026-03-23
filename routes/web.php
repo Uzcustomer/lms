@@ -723,6 +723,7 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/generate', [StudentContractCtrl::class, 'generate'])->name('generate');
             Route::get('/{contract}', [StudentContractCtrl::class, 'show'])->name('show');
             Route::get('/{contract}/download', [StudentContractCtrl::class, 'download'])->name('download');
+            Route::delete('/{contract}', [StudentContractCtrl::class, 'destroy'])->name('destroy');
         });
 
         // Sababli dars qoldirish arizasi

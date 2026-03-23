@@ -85,18 +85,18 @@
                 </div>
             </div>
 
-            {{-- Ish beruvchi ma'lumotlari --}}
+            {{-- 3-tomon ma'lumotlari --}}
             <div class="bg-blue-50 rounded-xl shadow-sm border border-blue-200 p-5 mb-4">
-                <h3 class="text-sm font-semibold text-blue-700 uppercase mb-4">Ish beruvchi ma'lumotlari</h3>
+                <h3 class="text-sm font-semibold text-blue-700 uppercase mb-4">3-tomon ma'lumotlari</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Ish beruvchi F.I.SH</label>
+                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash boshqarmasi</label>
                         <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}"
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                                placeholder="Tashkilot nomi">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Direktor F.I.SH</label>
+                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash boshqarmasi boshlig'i</label>
                         <input type="text" name="employer_director_name" value="{{ $placeholderData['employer_director_name'] }}"
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                                placeholder="Rahbar to'liq ismi">

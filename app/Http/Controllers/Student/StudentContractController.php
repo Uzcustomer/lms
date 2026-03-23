@@ -236,4 +236,26 @@ class StudentContractController extends Controller
         $filename = 'Shartnoma_' . str_replace(' ', '_', $contract->student_full_name) . '.docx';
         return response()->download($path, $filename);
     }
+
+    public function destroy(StudentContract $contract)
+    {
+        $student = Auth::guard('student')->user();
+
+        if ($contract->student_id !== $student->id) {
+            abort(403);
+        }
+
+        // Fayl borsa o'chirish
+        if ($contract->document_path) {
+            $path = storage_path('app/public/' . $contract->document_path);
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+
+        $contract->delete();
+
+        return redirect()->route('student.contracts.index')
+            ->with('success', 'Shartnoma o\'chirildi.');
+    }
 }

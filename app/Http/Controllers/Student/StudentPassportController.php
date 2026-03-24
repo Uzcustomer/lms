@@ -87,6 +87,8 @@ class StudentPassportController extends Controller
             'father_name' => $request->father_name,
             'first_name_en' => $request->first_name_en,
             'last_name_en' => $request->last_name_en,
+            'full_name_uz' => $request->last_name . ' ' . $request->first_name . ' ' . $request->father_name,
+            'full_name_en' => $request->last_name_en . ' ' . $request->first_name_en,
             'passport_series' => $request->passport_series,
             'passport_number' => $request->passport_number,
             'jshshir' => $request->jshshir,

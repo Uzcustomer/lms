@@ -248,6 +248,11 @@ function deletePassportFile(field) {
         if (response.ok) {
             var preview = document.getElementById('preview-' + field);
             if (preview) preview.remove();
+
+            // Fayl o'chirildi — inputni required qilish
+            var inputName = field.replace('_path', '');
+            var fileInput = document.getElementById('file_' + inputName);
+            if (fileInput) fileInput.setAttribute('required', 'required');
         } else {
             alert("Xatolik yuz berdi!");
         }

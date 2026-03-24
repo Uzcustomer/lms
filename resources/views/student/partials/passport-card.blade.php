@@ -106,14 +106,14 @@
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     <div id="preview-new-passport_front" class="mt-2 hidden"></div>
                     @if($studentPassport?->passport_front_path)
-                        <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative" id="preview-passport_front_path">
+                        <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative overflow-auto" id="preview-passport_front_path" style="height:170px">
                             <button type="button" onclick="deletePassportFile('passport_front_path')" class="absolute top-2 right-2 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition" title="O'chirish">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                             @if(Str::endsWith($studentPassport->passport_front_path, ['.jpg', '.jpeg', '.png']))
-                                <img src="{{ route('student.passport.file', 'passport_front_path') }}" alt="Pasport oldi" class="w-full max-h-64 object-contain rounded-lg">
+                                <img src="{{ route('student.passport.file', 'passport_front_path') }}" alt="Pasport oldi" style="width:100%;height:100%;object-fit:contain" class="rounded-lg">
                             @else
-                                <iframe src="{{ route('student.passport.file', 'passport_front_path') }}" class="w-full border-0 rounded-lg relative z-0" style="height:170px;overflow:auto"></iframe>
+                                <iframe src="{{ route('student.passport.file', 'passport_front_path') }}" style="width:100%;height:100%" class="border-0 rounded-lg"></iframe>
                             @endif
                         </div>
                     @endif
@@ -134,14 +134,14 @@
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     <div id="preview-new-passport_back" class="mt-2 hidden"></div>
                     @if($studentPassport?->passport_back_path)
-                        <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative" id="preview-passport_back_path">
+                        <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative overflow-auto" id="preview-passport_back_path" style="height:170px">
                             <button type="button" onclick="deletePassportFile('passport_back_path')" class="absolute top-2 right-2 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition" title="O'chirish">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                             @if(Str::endsWith($studentPassport->passport_back_path, ['.jpg', '.jpeg', '.png']))
-                                <img src="{{ route('student.passport.file', 'passport_back_path') }}" alt="Pasport orqa" class="w-full max-h-64 object-contain rounded-lg">
+                                <img src="{{ route('student.passport.file', 'passport_back_path') }}" alt="Pasport orqa" style="width:100%;height:100%;object-fit:contain" class="rounded-lg">
                             @else
-                                <iframe src="{{ route('student.passport.file', 'passport_back_path') }}" class="w-full border-0 rounded-lg relative z-0" style="height:170px;overflow:auto"></iframe>
+                                <iframe src="{{ route('student.passport.file', 'passport_back_path') }}" style="width:100%;height:100%" class="border-0 rounded-lg"></iframe>
                             @endif
                         </div>
                     @endif
@@ -162,14 +162,14 @@
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     <div id="preview-new-foreign_passport" class="mt-2 hidden"></div>
                     @if($studentPassport?->foreign_passport_path)
-                        <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative" id="preview-foreign_passport_path">
+                        <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative overflow-auto" id="preview-foreign_passport_path" style="height:170px">
                             <button type="button" onclick="deletePassportFile('foreign_passport_path')" class="absolute top-2 right-2 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition" title="O'chirish">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                             @if(Str::endsWith($studentPassport->foreign_passport_path, ['.jpg', '.jpeg', '.png']))
-                                <img src="{{ route('student.passport.file', 'foreign_passport_path') }}" alt="Xorijga chiqish pasporti" class="w-full max-h-64 object-contain rounded-lg">
+                                <img src="{{ route('student.passport.file', 'foreign_passport_path') }}" alt="Xorijga chiqish pasporti" style="width:100%;height:100%;object-fit:contain" class="rounded-lg">
                             @else
-                                <iframe src="{{ route('student.passport.file', 'foreign_passport_path') }}" class="w-full border-0 rounded-lg relative z-0" style="height:170px;overflow:auto"></iframe>
+                                <iframe src="{{ route('student.passport.file', 'foreign_passport_path') }}" style="width:100%;height:100%" class="border-0 rounded-lg"></iframe>
                             @endif
                         </div>
                     @endif
@@ -240,21 +240,26 @@ function previewFile(input, previewId) {
     var url = URL.createObjectURL(file);
     previewContainer.innerHTML = '';
 
+    previewContainer.style.height = '170px';
+    previewContainer.style.overflow = 'auto';
+    previewContainer.className = 'mt-2 border border-gray-200 rounded-lg bg-gray-50';
+
     if (file.type.startsWith('image/')) {
         var img = document.createElement('img');
         img.src = url;
         img.alt = 'Tanlangan fayl';
-        img.className = 'w-full max-h-64 object-contain rounded-lg border border-gray-200';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
+        img.className = 'rounded-lg';
         previewContainer.appendChild(img);
     } else {
         var iframe = document.createElement('iframe');
         iframe.src = url;
-        iframe.className = 'w-full border border-gray-200 rounded-lg';
-        iframe.style.height = '170px';
-        iframe.style.overflow = 'auto';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.className = 'border-0 rounded-lg';
         previewContainer.appendChild(iframe);
     }
-
-    previewContainer.classList.remove('hidden');
 }
 </script>

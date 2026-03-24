@@ -41,17 +41,20 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Familiya <span class="text-red-500">*</span></label>
                     <input type="text" name="last_name" value="{{ $studentPassport->last_name ?? $student->second_name ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                           oninput="this.value = this.value.toUpperCase()">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Ism <span class="text-red-500">*</span></label>
                     <input type="text" name="first_name" value="{{ $studentPassport->first_name ?? $student->first_name ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                           oninput="this.value = this.value.toUpperCase()">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
                     <input type="text" name="father_name" value="{{ $studentPassport->father_name ?? $student->third_name ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                           oninput="this.value = this.value.toUpperCase()">
                 </div>
             </div>
 
@@ -60,12 +63,14 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha familiya <span class="text-red-500">*</span></label>
                     <input type="text" name="last_name_en" value="{{ $studentPassport->last_name_en ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase">
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                           oninput="this.value = this.value.toUpperCase()">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha ism <span class="text-red-500">*</span></label>
                     <input type="text" name="first_name_en" value="{{ $studentPassport->first_name_en ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase">
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                           oninput="this.value = this.value.toUpperCase()">
                 </div>
             </div>
 

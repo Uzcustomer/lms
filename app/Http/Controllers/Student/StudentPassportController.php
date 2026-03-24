@@ -42,6 +42,7 @@ class StudentPassportController extends Controller
             'full_name_en' => 'required|string|max:255',
             'passport_series' => 'required|string|max:2|regex:/^[A-Z]{2}$/',
             'passport_number' => 'required|string|max:7|regex:/^\d{7}$/',
+            'jshshir' => 'required|string|max:14|regex:/^\d{14}$/',
             'passport_front' => $fileRules[0],
             'passport_back' => $fileRules[1],
             'foreign_passport' => $fileRules[2],
@@ -52,6 +53,8 @@ class StudentPassportController extends Controller
             'passport_series.regex' => 'Passport seriyasi 2 ta harfdan iborat bo\'lishi kerak.',
             'passport_number.required' => 'Passport raqamini kiriting.',
             'passport_number.regex' => 'Passport raqami 7 ta raqamdan iborat bo\'lishi kerak.',
+            'jshshir.required' => 'JSHSHIR ni kiriting.',
+            'jshshir.regex' => 'JSHSHIR 14 ta raqamdan iborat bo\'lishi kerak.',
             'passport_front.required' => 'Pasport oldi tarafini yuklang.',
             'passport_front.mimes' => 'Pasport oldi tarafi faqat JPG yoki PDF formatida bo\'lishi kerak.',
             'passport_front.max' => 'Fayl hajmi 1MB dan oshmasligi kerak.',
@@ -68,6 +71,7 @@ class StudentPassportController extends Controller
             'full_name_en' => $request->full_name_en,
             'passport_series' => strtoupper($request->passport_series),
             'passport_number' => $request->passport_number,
+            'jshshir' => $request->jshshir,
         ];
 
         $storagePath = 'student-passports/' . $student->id;

@@ -52,7 +52,13 @@
                                oninput="this.value = this.value.replace(/\D/g, '')">
                     </div>
                 </div>
-                <div></div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">JSHSHIR (JShShIR) <span class="text-red-500">*</span></label>
+                    <input type="text" name="jshshir" value="{{ $studentPassport->jshshir ?? '' }}" required
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 tracking-wide"
+                           placeholder="12345678901234" maxlength="14"
+                           oninput="this.value = this.value.replace(/\D/g, '')">
+                </div>
 
                 {{-- Pasport oldi tarafi --}}
                 <div>

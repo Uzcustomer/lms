@@ -14,6 +14,7 @@ class StudentPassport extends Model
         'full_name_en',
         'passport_series',
         'passport_number',
+        'jshshir',
         'passport_front_path',
         'passport_back_path',
         'foreign_passport_path',

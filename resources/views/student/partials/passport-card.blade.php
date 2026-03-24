@@ -113,7 +113,7 @@
                             @if(Str::endsWith($studentPassport->passport_front_path, ['.jpg', '.jpeg', '.png']))
                                 <img src="{{ route('student.passport.file', 'passport_front_path') }}" alt="Pasport oldi" class="w-full max-h-64 object-contain rounded-lg">
                             @else
-                                <iframe src="{{ route('student.passport.file', 'passport_front_path') }}" class="w-full h-64 border-0 rounded-lg relative z-0"></iframe>
+                                <iframe src="{{ route('student.passport.file', 'passport_front_path') }}" class="w-full border-0 rounded-lg relative z-0" style="height:170px;overflow:auto"></iframe>
                             @endif
                         </div>
                     @endif
@@ -141,7 +141,7 @@
                             @if(Str::endsWith($studentPassport->passport_back_path, ['.jpg', '.jpeg', '.png']))
                                 <img src="{{ route('student.passport.file', 'passport_back_path') }}" alt="Pasport orqa" class="w-full max-h-64 object-contain rounded-lg">
                             @else
-                                <iframe src="{{ route('student.passport.file', 'passport_back_path') }}" class="w-full h-64 border-0 rounded-lg relative z-0"></iframe>
+                                <iframe src="{{ route('student.passport.file', 'passport_back_path') }}" class="w-full border-0 rounded-lg relative z-0" style="height:170px;overflow:auto"></iframe>
                             @endif
                         </div>
                     @endif
@@ -169,7 +169,7 @@
                             @if(Str::endsWith($studentPassport->foreign_passport_path, ['.jpg', '.jpeg', '.png']))
                                 <img src="{{ route('student.passport.file', 'foreign_passport_path') }}" alt="Xorijga chiqish pasporti" class="w-full max-h-64 object-contain rounded-lg">
                             @else
-                                <iframe src="{{ route('student.passport.file', 'foreign_passport_path') }}" class="w-full h-64 border-0 rounded-lg relative z-0"></iframe>
+                                <iframe src="{{ route('student.passport.file', 'foreign_passport_path') }}" class="w-full border-0 rounded-lg relative z-0" style="height:170px;overflow:auto"></iframe>
                             @endif
                         </div>
                     @endif
@@ -249,7 +249,8 @@ function previewFile(input, previewId) {
     } else {
         var iframe = document.createElement('iframe');
         iframe.src = url;
-        iframe.className = 'w-full h-64 border border-gray-200 rounded-lg';
+        iframe.className = 'w-full border border-gray-200 rounded-lg';
+        iframe.style.height = '170px';
         iframe.style.overflow = 'auto';
         previewContainer.appendChild(iframe);
     }

@@ -37,6 +37,15 @@ class StudentPassportController extends Controller
             ? ['nullable|file|mimes:jpg,jpeg,pdf|max:1024', 'nullable|file|mimes:jpg,jpeg,pdf|max:1024', 'nullable|file|mimes:jpg,jpeg,pdf|max:1024']
             : ['required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024'];
 
+        $request->merge([
+            'first_name' => mb_strtoupper($request->first_name),
+            'last_name' => mb_strtoupper($request->last_name),
+            'father_name' => mb_strtoupper($request->father_name),
+            'first_name_en' => mb_strtoupper($request->first_name_en),
+            'last_name_en' => mb_strtoupper($request->last_name_en),
+            'passport_series' => mb_strtoupper($request->passport_series),
+        ]);
+
         $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
@@ -78,7 +87,7 @@ class StudentPassportController extends Controller
             'father_name' => $request->father_name,
             'first_name_en' => $request->first_name_en,
             'last_name_en' => $request->last_name_en,
-            'passport_series' => strtoupper($request->passport_series),
+            'passport_series' => $request->passport_series,
             'passport_number' => $request->passport_number,
             'jshshir' => $request->jshshir,
         ];

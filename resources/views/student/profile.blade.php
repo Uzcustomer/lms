@@ -37,6 +37,14 @@
                                         <li><span class="font-medium">Guruh:</span> {{ $profileData['group']['name'] }}</li>
                                         <li><span class="font-medium">Kurs:</span> {{ $profileData['level']['name'] }}</li>
                                         <li><span class="font-medium">Ta'lim turi:</span> {{ $profileData['educationType']['name'] }}</li>
+                                        <li>
+                                            <span class="font-medium">Talaba holati:</span>
+                                            @if($profileData['is_graduate'])
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Bitiruvchi</span>
+                                            @else
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Talaba</span>
+                                            @endif
+                                        </li>
                                     </ul>
                                 </div>
                             </div>

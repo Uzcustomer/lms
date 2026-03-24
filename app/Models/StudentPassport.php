@@ -13,6 +13,8 @@ class StudentPassport extends Model
         'first_name',
         'last_name',
         'father_name',
+        'first_name_en',
+        'last_name_en',
         'full_name_uz',
         'full_name_en',
         'passport_series',

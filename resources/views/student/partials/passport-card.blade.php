@@ -36,6 +36,7 @@
 
         <form method="POST" action="{{ route('student.passport.store') }}" enctype="multipart/form-data">
             @csrf
+            {{-- O'zbekcha ism, familiya, otasining ismi --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Familiya <span class="text-red-500">*</span></label>
@@ -53,17 +54,24 @@
                            class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
             </div>
+
+            {{-- Inglizcha familiya va ism --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha familiya <span class="text-red-500">*</span></label>
+                    <input type="text" name="last_name_en" value="{{ $studentPassport->last_name_en ?? '' }}" required
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                           placeholder="DOE">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha ism <span class="text-red-500">*</span></label>
+                    <input type="text" name="first_name_en" value="{{ $studentPassport->first_name_en ?? '' }}" required
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                           placeholder="JOHN">
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">To'liq ism familiyangiz (pasport bilan bir xil) <span class="text-red-500">*</span></label>
-                    <input type="text" name="full_name_uz" value="{{ $studentPassport->full_name_uz ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha to'liq ism familiyangiz (pasport bilan bir xil) <span class="text-red-500">*</span></label>
-                    <input type="text" name="full_name_en" value="{{ $studentPassport->full_name_en ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Passport seriya va raqamingiz <span class="text-red-500">*</span></label>
                     <div class="flex gap-2">
@@ -88,10 +96,17 @@
                 {{-- Pasport oldi tarafi --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Pasport oldi tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
-                    <input type="file" name="passport_front" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
-                           onchange="checkFileSize(this)"
-                           class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    <div class="relative">
+                        <input type="file" name="passport_front" id="file_passport_front" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                               onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_front')"
+                               class="hidden">
+                        <label for="file_passport_front" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-500 hover:bg-gray-50">
+                            <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
+                            <span id="label_passport_front" class="truncate">Fayl yuklanmagan</span>
+                        </label>
+                    </div>
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
+                    <div id="preview-new-passport_front" class="mt-2 hidden"></div>
                     @if($studentPassport?->passport_front_path)
                         <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative" id="preview-passport_front_path">
                             <button type="button" onclick="deletePassportFile('passport_front_path')" class="absolute top-2 right-2 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition" title="O'chirish">
@@ -109,10 +124,17 @@
                 {{-- Pasport orqa tarafi --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Pasport orqa tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
-                    <input type="file" name="passport_back" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
-                           onchange="checkFileSize(this)"
-                           class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    <div class="relative">
+                        <input type="file" name="passport_back" id="file_passport_back" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                               onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_back')"
+                               class="hidden">
+                        <label for="file_passport_back" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-500 hover:bg-gray-50">
+                            <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
+                            <span id="label_passport_back" class="truncate">Fayl yuklanmagan</span>
+                        </label>
+                    </div>
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
+                    <div id="preview-new-passport_back" class="mt-2 hidden"></div>
                     @if($studentPassport?->passport_back_path)
                         <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative" id="preview-passport_back_path">
                             <button type="button" onclick="deletePassportFile('passport_back_path')" class="absolute top-2 right-2 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition" title="O'chirish">
@@ -130,10 +152,17 @@
                 {{-- Xorijga chiqish pasporti --}}
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Xorijga chiqish pasporti <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
-                    <input type="file" name="foreign_passport" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
-                           onchange="checkFileSize(this)"
-                           class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                    <div class="relative">
+                        <input type="file" name="foreign_passport" id="file_foreign_passport" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                               onchange="checkFileSize(this); previewFile(this, 'preview-new-foreign_passport')"
+                               class="hidden">
+                        <label for="file_foreign_passport" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-500 hover:bg-gray-50">
+                            <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
+                            <span id="label_foreign_passport" class="truncate">Fayl yuklanmagan</span>
+                        </label>
+                    </div>
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
+                    <div id="preview-new-foreign_passport" class="mt-2 hidden"></div>
                     @if($studentPassport?->foreign_passport_path)
                         <div class="mt-2 border border-gray-200 rounded-lg bg-gray-50 relative" id="preview-foreign_passport_path">
                             <button type="button" onclick="deletePassportFile('foreign_passport_path')" class="absolute top-2 right-2 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg transition" title="O'chirish">
@@ -193,5 +222,40 @@ function deletePassportFile(field) {
             alert("Xatolik yuz berdi!");
         }
     });
+}
+
+function previewFile(input, previewId) {
+    var previewContainer = document.getElementById(previewId);
+    var fieldName = input.name;
+    var labelEl = document.getElementById('label_' + fieldName);
+
+    if (input.files.length === 0) {
+        previewContainer.classList.add('hidden');
+        previewContainer.innerHTML = '';
+        if (labelEl) labelEl.textContent = 'Fayl yuklanmagan';
+        return;
+    }
+
+    var file = input.files[0];
+    if (labelEl) labelEl.textContent = file.name;
+
+    var url = URL.createObjectURL(file);
+    previewContainer.innerHTML = '';
+
+    if (file.type.startsWith('image/')) {
+        var img = document.createElement('img');
+        img.src = url;
+        img.alt = 'Tanlangan fayl';
+        img.className = 'w-full max-h-64 object-contain rounded-lg border border-gray-200';
+        previewContainer.appendChild(img);
+    } else {
+        var iframe = document.createElement('iframe');
+        iframe.src = url;
+        iframe.className = 'w-full h-64 border border-gray-200 rounded-lg';
+        iframe.style.overflow = 'auto';
+        previewContainer.appendChild(iframe);
+    }
+
+    previewContainer.classList.remove('hidden');
 }
 </script>

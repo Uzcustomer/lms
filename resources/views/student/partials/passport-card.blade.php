@@ -242,6 +242,10 @@ function previewFile(input, previewId) {
     var file = input.files[0];
     if (labelEl) labelEl.textContent = file.name;
 
+    // Yangi fayl tanlaganda eski previewni yashirish
+    var oldPreview = document.getElementById('preview-' + fieldName + '_path');
+    if (oldPreview) oldPreview.style.display = 'none';
+
     var url = URL.createObjectURL(file);
     previewContainer.innerHTML = '';
 

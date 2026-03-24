@@ -150,7 +150,8 @@ class StudentPassportController extends Controller
         }
 
         Storage::disk('public')->delete($passport->$field);
-        $passport->update([$field => null]);
+        $passport->$field = '';
+        $passport->save();
 
         if (request()->expectsJson()) {
             return response()->json(['success' => true]);

@@ -222,7 +222,7 @@
     {{-- Button at the bottom --}}
     <div class="mt-4" x-show="!showPassportForm">
         <button @click="showPassportForm = true" type="button"
-                class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg transition {{ $studentPassport ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-indigo-600 text-white hover:bg-indigo-700' }}">
+                class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg transition {{ $studentPassport ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-indigo-600 text-white hover:bg-indigo-700' }}">
             {{ $studentPassport ? 'Tahrirlash' : "To'ldirish" }}
         </button>
     </div>

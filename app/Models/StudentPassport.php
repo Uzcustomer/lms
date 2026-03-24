@@ -10,6 +10,9 @@ class StudentPassport extends Model
 
     protected $fillable = [
         'student_id',
+        'first_name',
+        'last_name',
+        'father_name',
         'full_name_uz',
         'full_name_en',
         'passport_series',

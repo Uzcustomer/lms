@@ -20,7 +20,7 @@ class StudentPassportController extends Controller
 
         $studentPassport = StudentPassport::where('student_id', $student->id)->first();
 
-        return view('student.passport', compact('studentPassport'));
+        return view('student.passport', compact('studentPassport', 'student'));
     }
 
     public function store(Request $request)
@@ -38,6 +38,9 @@ class StudentPassportController extends Controller
             : ['required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024'];
 
         $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'father_name' => 'required|string|max:255',
             'full_name_uz' => 'required|string|max:255',
             'full_name_en' => 'required|string|max:255',
             'passport_series' => 'required|string|max:2|regex:/^[A-Z]{2}$/',
@@ -47,6 +50,9 @@ class StudentPassportController extends Controller
             'passport_back' => $fileRules[1],
             'foreign_passport' => $fileRules[2],
         ], [
+            'first_name.required' => 'Ismingizni kiriting.',
+            'last_name.required' => 'Familiyangizni kiriting.',
+            'father_name.required' => 'Otangizning ismini kiriting.',
             'full_name_uz.required' => 'To\'liq ism familiyangizni kiriting.',
             'full_name_en.required' => 'Inglizcha ism familiyangizni kiriting.',
             'passport_series.required' => 'Passport seriyasini kiriting.',
@@ -67,6 +73,9 @@ class StudentPassportController extends Controller
         ]);
 
         $data = [
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
+            'father_name' => $request->father_name,
             'full_name_uz' => $request->full_name_uz,
             'full_name_en' => $request->full_name_en,
             'passport_series' => strtoupper($request->passport_series),

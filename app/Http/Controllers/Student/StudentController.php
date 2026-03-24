@@ -1436,6 +1436,7 @@ class StudentController extends Controller
             'address' => $student->other['address'] ?? '',
             'province' => ['name' => $student->province_name ?? ''],
             'district' => ['name' => $student->district_name ?? ''],
+            'is_graduate' => $student->is_graduate,
         ];
 
         $studentPassport = \App\Models\StudentPassport::where('student_id', $student->id)->first();

@@ -188,6 +188,7 @@ class StudentApiController extends Controller
                 'total_credit' => $student->total_credit ?? null,
                 'payment_form_code' => $student->payment_form_code,
                 'payment_form_name' => $student->payment_form_name,
+                'is_graduate' => $student->is_graduate,
             ],
         ]);
     }

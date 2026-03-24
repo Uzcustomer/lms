@@ -26,8 +26,33 @@
 
     {{-- Form (shown when toggled) --}}
     <div x-show="showPassportForm" x-transition class="border-t border-gray-200 pt-5">
+        {{-- Warning card --}}
+        <div class="mb-5 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-start gap-3">
+            <svg class="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <p class="text-sm text-yellow-800 font-medium">Ma'lumotlaringizni pasport ma'lumotlaringiz bilan solishtiring, agar noto'g'ri bo'lsa o'zgartiring!</p>
+        </div>
+
         <form method="POST" action="{{ route('student.passport.store') }}" enctype="multipart/form-data">
             @csrf
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Familiya <span class="text-red-500">*</span></label>
+                    <input type="text" name="last_name" value="{{ $studentPassport->last_name ?? $student->second_name ?? '' }}" required
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ism <span class="text-red-500">*</span></label>
+                    <input type="text" name="first_name" value="{{ $studentPassport->first_name ?? $student->first_name ?? '' }}" required
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
+                    <input type="text" name="father_name" value="{{ $studentPassport->father_name ?? $student->third_name ?? '' }}" required
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">To'liq ism familiyangiz (pasport bilan bir xil) <span class="text-red-500">*</span></label>

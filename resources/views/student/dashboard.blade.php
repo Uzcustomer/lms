@@ -36,7 +36,7 @@
                         <h4 class="text-lg font-semibold mb-4">Tezkor havolalar</h4>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <a href="{{ route('student.schedule') }}"
-                               class="flex items-center justify-center p-4 bg-indigo-100 rounded-lg hover:bg-indigo-200 transition">
+                               class="flex items-center justify-center p-4 bg-indigo-100 rounded-lg hover:bg-indigo-200 transition" style="box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
                                 <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor"
                                      viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -45,7 +45,7 @@
                                 Dars jadvali
                             </a>
                             <a href="{{ route('student.attendance') }}"
-                               class="flex items-center justify-center p-4 bg-green-100 rounded-lg hover:bg-green-200 transition">
+                               class="flex items-center justify-center p-4 bg-green-100 rounded-lg hover:bg-green-200 transition" style="box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
                                 <svg class="w-6 h-6 mr-2 text-green-600" fill="none" stroke="currentColor"
                                      viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -54,7 +54,7 @@
                                 Davomat
                             </a>
                             <a href="{{ route('student.subjects') }}"
-                               class="flex items-center justify-center p-4 bg-yellow-100 rounded-lg hover:bg-yellow-200 transition">
+                               class="flex items-center justify-center p-4 bg-yellow-100 rounded-lg hover:bg-yellow-200 transition" style="box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
                                 <svg class="w-6 h-6 mr-2 text-yellow-600" fill="none" stroke="currentColor"
                                      viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -63,7 +63,7 @@
                                 Joriy fanlar
                             </a>
                             <a href="{{ route('student.pending-lessons') }}"
-                               class="flex items-center justify-center p-4 bg-red-100 rounded-lg hover:bg-red-200 transition">
+                               class="flex items-center justify-center p-4 bg-red-100 rounded-lg hover:bg-red-200 transition" style="box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
                                 <svg class="w-6 h-6 mr-2 text-red-600" fill="none" stroke="currentColor"
                                      viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -72,7 +72,7 @@
                                 Qayta topshirish
                             </a>
                             <a href="{{ route('student.exam-schedule') }}"
-                               class="flex items-center justify-center p-4 bg-purple-100 rounded-lg hover:bg-purple-200 transition">
+                               class="flex items-center justify-center p-4 bg-purple-100 rounded-lg hover:bg-purple-200 transition" style="box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
                                 <svg class="w-6 h-6 mr-2 text-purple-600" fill="none" stroke="currentColor"
                                      viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

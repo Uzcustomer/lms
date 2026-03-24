@@ -50,7 +50,7 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('student.passport.store') }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ route('student.passport.store') }}" enctype="multipart/form-data" id="passportForm">
             @csrf
             {{-- O'zbekcha ism, familiya, otasining ismi --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -124,7 +124,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Pasport oldi tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                     <div class="relative">
-                        <input type="file" name="passport_front" id="file_passport_front" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                        <input type="file" name="passport_front" id="file_passport_front" accept=".jpg,.jpeg,.pdf"
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_front')"
                                class="hidden">
                         <label for="file_passport_front" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('passport_front') ? 'border-red-500' : 'border-gray-300' }}">
@@ -153,7 +153,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Pasport orqa tarafi <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                     <div class="relative">
-                        <input type="file" name="passport_back" id="file_passport_back" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                        <input type="file" name="passport_back" id="file_passport_back" accept=".jpg,.jpeg,.pdf"
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_back')"
                                class="hidden">
                         <label for="file_passport_back" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('passport_back') ? 'border-red-500' : 'border-gray-300' }}">
@@ -182,7 +182,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Xorijga chiqish pasporti <span class="text-gray-400">(max 1MB)</span> <span class="text-red-500">*</span></label>
                     <div class="relative">
-                        <input type="file" name="foreign_passport" id="file_foreign_passport" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
+                        <input type="file" name="foreign_passport" id="file_foreign_passport" accept=".jpg,.jpeg,.pdf"
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-foreign_passport')"
                                class="hidden">
                         <label for="file_foreign_passport" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('foreign_passport') ? 'border-red-500' : 'border-gray-300' }}">
@@ -235,6 +235,14 @@
 </div>
 
 <script>
+var deletedFields = {};
+
+var fileErrorMessages = {
+    passport_front: 'Pasport oldi tarafini yuklang.',
+    passport_back: 'Pasport orqa tarafini yuklang.',
+    foreign_passport: 'Xorijga chiqish pasportini yuklang.'
+};
+
 function deletePassportFile(field) {
     if (!confirm("Faylni o'chirmoqchimisiz?")) return;
 
@@ -249,14 +257,43 @@ function deletePassportFile(field) {
             var preview = document.getElementById('preview-' + field);
             if (preview) preview.remove();
 
-            // Fayl o'chirildi — inputni required qilish
             var inputName = field.replace('_path', '');
-            var fileInput = document.getElementById('file_' + inputName);
-            if (fileInput) fileInput.setAttribute('required', 'required');
+            deletedFields[inputName] = true;
         } else {
             alert("Xatolik yuz berdi!");
         }
     });
+}
+
+function getFileLabelEl(inputName) {
+    return document.querySelector('label[for="file_' + inputName + '"]');
+}
+
+function showFileError(inputName, message) {
+    var labelEl = getFileLabelEl(inputName);
+    if (labelEl) {
+        labelEl.classList.remove('border-gray-300');
+        labelEl.classList.add('border-red-500');
+    }
+    var errorEl = document.getElementById('error_' + inputName);
+    if (!errorEl) {
+        errorEl = document.createElement('p');
+        errorEl.id = 'error_' + inputName;
+        errorEl.className = 'text-xs text-red-600 mt-1';
+        var container = document.getElementById('file_' + inputName).closest('.relative');
+        container.parentNode.insertBefore(errorEl, container.nextSibling);
+    }
+    errorEl.textContent = message;
+}
+
+function clearFileError(inputName) {
+    var labelEl = getFileLabelEl(inputName);
+    if (labelEl) {
+        labelEl.classList.remove('border-red-500');
+        labelEl.classList.add('border-gray-300');
+    }
+    var errorEl = document.getElementById('error_' + inputName);
+    if (errorEl) errorEl.remove();
 }
 
 function previewFile(input, previewId) {
@@ -273,6 +310,8 @@ function previewFile(input, previewId) {
 
     var file = input.files[0];
     if (labelEl) labelEl.textContent = file.name;
+
+    clearFileError(fieldName);
 
     // Yangi fayl tanlaganda eski previewni yashirish
     var oldPreview = document.getElementById('preview-' + fieldName + '_path');
@@ -303,4 +342,37 @@ function previewFile(input, previewId) {
         previewContainer.appendChild(iframe);
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    var form = document.getElementById('passportForm');
+    if (!form) return;
+
+    form.addEventListener('submit', function(e) {
+        var hasError = false;
+        var fileFields = ['passport_front', 'passport_back', 'foreign_passport'];
+
+        fileFields.forEach(function(fieldName) {
+            var input = document.getElementById('file_' + fieldName);
+            if (!input) return;
+
+            var existingPreview = document.getElementById('preview-' + fieldName + '_path');
+            var hasExistingFile = existingPreview && existingPreview.style.display !== 'none';
+            var hasNewFile = input.files && input.files.length > 0;
+
+            if (deletedFields[fieldName] && !hasNewFile) {
+                showFileError(fieldName, fileErrorMessages[fieldName]);
+                hasError = true;
+            } else if (!hasExistingFile && !hasNewFile && input.hasAttribute('required')) {
+                showFileError(fieldName, fileErrorMessages[fieldName]);
+                hasError = true;
+            } else {
+                clearFileError(fieldName);
+            }
+        });
+
+        if (hasError) {
+            e.preventDefault();
+        }
+    });
+});
 </script>

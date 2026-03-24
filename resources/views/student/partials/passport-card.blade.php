@@ -1,4 +1,4 @@
-<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: {{ session('success') && str_contains(session('success'), 'Fayl') ? 'true' : 'false' }} }">
+<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: {{ ($errors->any() || (session('success') && str_contains(session('success'), 'Fayl'))) ? 'true' : 'false' }} }">
     {{-- Header: title left, status badge top-right --}}
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
@@ -34,27 +34,46 @@
             <p class="text-sm text-yellow-800 font-medium">Ma'lumotlaringizni pasport ma'lumotlaringiz bilan solishtiring, agar noto'g'ri bo'lsa o'zgartiring!</p>
         </div>
 
+        @if($errors->any())
+            <div class="mb-5 p-4 bg-red-50 border border-red-300 rounded-lg">
+                <div class="flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+                    </svg>
+                    <span class="text-sm font-semibold text-red-700">Iltimos, quyidagi xatoliklarni tuzating:</span>
+                </div>
+                <ul class="list-disc list-inside text-sm text-red-600 space-y-1">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <form method="POST" action="{{ route('student.passport.store') }}" enctype="multipart/form-data">
             @csrf
             {{-- O'zbekcha ism, familiya, otasining ismi --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Familiya <span class="text-red-500">*</span></label>
-                    <input type="text" name="last_name" value="{{ $studentPassport->last_name ?? $student->second_name ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                    <input type="text" name="last_name" value="{{ old('last_name', $studentPassport->last_name ?? $student->second_name ?? '') }}" required
+                           class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('last_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
+                    @error('last_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Ism <span class="text-red-500">*</span></label>
-                    <input type="text" name="first_name" value="{{ $studentPassport->first_name ?? $student->first_name ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                    <input type="text" name="first_name" value="{{ old('first_name', $studentPassport->first_name ?? $student->first_name ?? '') }}" required
+                           class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('first_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
+                    @error('first_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
-                    <input type="text" name="father_name" value="{{ $studentPassport->father_name ?? $student->third_name ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                    <input type="text" name="father_name" value="{{ old('father_name', $studentPassport->father_name ?? $student->third_name ?? '') }}" required
+                           class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('father_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
+                    @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
 
@@ -62,15 +81,17 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha familiya <span class="text-red-500">*</span></label>
-                    <input type="text" name="last_name_en" value="{{ $studentPassport->last_name_en ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                    <input type="text" name="last_name_en" value="{{ old('last_name_en', $studentPassport->last_name_en ?? '') }}" required
+                           class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('last_name_en') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
+                    @error('last_name_en') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha ism <span class="text-red-500">*</span></label>
-                    <input type="text" name="first_name_en" value="{{ $studentPassport->first_name_en ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
+                    <input type="text" name="first_name_en" value="{{ old('first_name_en', $studentPassport->first_name_en ?? '') }}" required
+                           class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('first_name_en') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
+                    @error('first_name_en') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
             </div>
 
@@ -78,22 +99,25 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Passport seriya va raqamingiz <span class="text-red-500">*</span></label>
                     <div class="flex gap-2">
-                        <input type="text" name="passport_series" value="{{ $studentPassport->passport_series ?? '' }}" required
-                               class="w-24 rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase tracking-widest font-semibold text-center"
+                        <input type="text" name="passport_series" value="{{ old('passport_series', $studentPassport->passport_series ?? '') }}" required
+                               class="w-24 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase tracking-widest font-semibold text-center {{ $errors->has('passport_series') ? 'border-red-500' : 'border-gray-300' }}"
                                placeholder="AA" maxlength="2"
                                oninput="this.value = this.value.replace(/[^A-Za-z]/g, '').toUpperCase()">
-                        <input type="text" name="passport_number" value="{{ $studentPassport->passport_number ?? '' }}" required
-                               class="flex-1 rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 tracking-wide"
+                        <input type="text" name="passport_number" value="{{ old('passport_number', $studentPassport->passport_number ?? '') }}" required
+                               class="flex-1 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 tracking-wide {{ $errors->has('passport_number') ? 'border-red-500' : 'border-gray-300' }}"
                                placeholder="1234567" maxlength="7"
                                oninput="this.value = this.value.replace(/\D/g, '')">
                     </div>
+                    @error('passport_series') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    @error('passport_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">JSHSHIR (JShShIR) <span class="text-red-500">*</span></label>
-                    <input type="text" name="jshshir" value="{{ $studentPassport->jshshir ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 tracking-wide"
+                    <input type="text" name="jshshir" value="{{ old('jshshir', $studentPassport->jshshir ?? '') }}" required
+                           class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 tracking-wide {{ $errors->has('jshshir') ? 'border-red-500' : 'border-gray-300' }}"
                            placeholder="12345678901234" maxlength="14"
                            oninput="this.value = this.value.replace(/\D/g, '')">
+                    @error('jshshir') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
 
                 {{-- Pasport oldi tarafi --}}
@@ -103,11 +127,12 @@
                         <input type="file" name="passport_front" id="file_passport_front" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_front')"
                                class="hidden">
-                        <label for="file_passport_front" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-500 hover:bg-gray-50">
+                        <label for="file_passport_front" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('passport_front') ? 'border-red-500' : 'border-gray-300' }}">
                             <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
                             <span id="label_passport_front" class="truncate">Fayl yuklanmagan</span>
                         </label>
                     </div>
+                    @error('passport_front') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     <div id="preview-new-passport_front" class="mt-2 hidden"></div>
                     @if($studentPassport?->passport_front_path)
@@ -131,11 +156,12 @@
                         <input type="file" name="passport_back" id="file_passport_back" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_back')"
                                class="hidden">
-                        <label for="file_passport_back" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-500 hover:bg-gray-50">
+                        <label for="file_passport_back" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('passport_back') ? 'border-red-500' : 'border-gray-300' }}">
                             <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
                             <span id="label_passport_back" class="truncate">Fayl yuklanmagan</span>
                         </label>
                     </div>
+                    @error('passport_back') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     <div id="preview-new-passport_back" class="mt-2 hidden"></div>
                     @if($studentPassport?->passport_back_path)
@@ -159,11 +185,12 @@
                         <input type="file" name="foreign_passport" id="file_foreign_passport" accept=".jpg,.jpeg,.pdf" {{ $studentPassport ? '' : 'required' }}
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-foreign_passport')"
                                class="hidden">
-                        <label for="file_foreign_passport" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-500 hover:bg-gray-50">
+                        <label for="file_foreign_passport" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('foreign_passport') ? 'border-red-500' : 'border-gray-300' }}">
                             <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
                             <span id="label_foreign_passport" class="truncate">Fayl yuklanmagan</span>
                         </label>
                     </div>
+                    @error('foreign_passport') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <p class="text-xs text-red-600 mt-1 hidden" data-file-error></p>
                     <div id="preview-new-foreign_passport" class="mt-2 hidden"></div>
                     @if($studentPassport?->foreign_passport_path)

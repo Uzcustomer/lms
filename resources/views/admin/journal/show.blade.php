@@ -1554,19 +1554,10 @@
                         </div>
                         <div>
                             @if(isset($ynSubmission) && $ynSubmission)
-                                <div class="flex items-center gap-3">
-                                    <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
-                                        YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
-                                        @if($ynSubmission->submittedBy)
-                                            <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
-                                        @endif
-                                    </div>
-                                    @if(auth()->user()?->hasAnyRole(['superadmin', 'admin']))
-                                        <button type="button" id="btn-undo-yn"
-                                            class="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition shadow-sm"
-                                            onclick="undoYnSubmission()">
-                                            Bekor qilish
-                                        </button>
+                                <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
+                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
+                                    @if($ynSubmission->submittedBy)
+                                        <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
                                     @endif
                                 </div>
                             @elseif($canSubmitYn ?? false)
@@ -4185,65 +4176,6 @@
                 btn.style.opacity = '1';
             });
         }
-        function undoYnSubmission() {
-            const warn = confirm(
-                'DIQQAT!\n\n' +
-                'YN ga yuborishni bekor qilmoqchimisiz?\n\n' +
-                '1. Barcha YN baholar snapshoti o\'chiriladi\n' +
-                '2. JN va MT baholari qulfi ochiladi\n' +
-                '3. Talabalar qaytadan baho olishi mumkin bo\'ladi\n\n' +
-                'Davom etasizmi?'
-            );
-            if (!warn) return;
-
-            const finalConfirm = confirm(
-                'YAKUNIY TASDIQLASH\n\n' +
-                'YN ga yuborish bekor qilinadi.\n' +
-                'Rozimisiz?'
-            );
-            if (!finalConfirm) return;
-
-            const btn = document.getElementById('btn-undo-yn');
-            btn.disabled = true;
-            btn.textContent = 'Bekor qilinmoqda...';
-            btn.style.opacity = '0.6';
-
-            fetch('{{ route("admin.journal.undo-yn-submission") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({
-                    subject_id: '{{ $subjectId }}',
-                    semester_code: '{{ $semesterCode }}',
-                    group_hemis_id: '{{ $group->group_hemis_id }}',
-                })
-            })
-            .then(r => r.json().then(data => ({ok: r.ok, data})))
-            .then(({ok, data}) => {
-                if (ok && data.success) {
-                    const notif = document.createElement('div');
-                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#f59e0b; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
-                    notif.textContent = data.message;
-                    document.body.appendChild(notif);
-                    setTimeout(() => location.reload(), 2000);
-                } else {
-                    alert(data.message || 'Xatolik yuz berdi');
-                    btn.disabled = false;
-                    btn.textContent = 'Bekor qilish';
-                    btn.style.opacity = '1';
-                }
-            })
-            .catch(err => {
-                alert('Xatolik: ' + err.message);
-                btn.disabled = false;
-                btn.textContent = 'Bekor qilish';
-                btn.style.opacity = '1';
-            });
-        }
-
         // === SABABLI BAHO MODAL ===
         function openExcuseModal(studentHemisId, studentName, gradeId, excuseId) {
             document.getElementById('excuse-modal-student-name').textContent = studentName;

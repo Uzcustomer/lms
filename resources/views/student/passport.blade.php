@@ -27,7 +27,8 @@
 
 <script>
 function checkFileSize(input) {
-    var errorEl = input.parentElement.querySelector('[data-file-error]');
+    var errorEl = input.closest('div').parentElement.querySelector('[data-file-error]');
+    if (!errorEl) return;
     if (input.files.length > 0 && input.files[0].size > 1024 * 1024) {
         errorEl.textContent = 'Fayl hajmi 1MB dan oshmasligi kerak!';
         errorEl.classList.remove('hidden');

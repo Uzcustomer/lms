@@ -126,7 +126,7 @@
                     <div class="relative">
                         <input type="file" name="passport_front" id="file_passport_front" accept=".jpg,.jpeg,.pdf"
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_front')"
-                               class="hidden">
+                               class="hidden" {{ !$studentPassport?->passport_front_path ? 'data-file-required' : '' }}>
                         <label for="file_passport_front" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('passport_front') ? 'border-red-500' : 'border-gray-300' }}">
                             <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
                             <span id="label_passport_front" class="truncate">Fayl yuklanmagan</span>
@@ -155,7 +155,7 @@
                     <div class="relative">
                         <input type="file" name="passport_back" id="file_passport_back" accept=".jpg,.jpeg,.pdf"
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-passport_back')"
-                               class="hidden">
+                               class="hidden" {{ !$studentPassport?->passport_back_path ? 'data-file-required' : '' }}>
                         <label for="file_passport_back" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('passport_back') ? 'border-red-500' : 'border-gray-300' }}">
                             <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
                             <span id="label_passport_back" class="truncate">Fayl yuklanmagan</span>
@@ -184,7 +184,7 @@
                     <div class="relative">
                         <input type="file" name="foreign_passport" id="file_foreign_passport" accept=".jpg,.jpeg,.pdf"
                                onchange="checkFileSize(this); previewFile(this, 'preview-new-foreign_passport')"
-                               class="hidden">
+                               class="hidden" {{ !$studentPassport?->foreign_passport_path ? 'data-file-required' : '' }}>
                         <label for="file_foreign_passport" class="flex items-center gap-2 cursor-pointer w-full px-4 py-2 rounded-lg border text-sm text-gray-500 hover:bg-gray-50 {{ $errors->has('foreign_passport') ? 'border-red-500' : 'border-gray-300' }}">
                             <span class="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 font-semibold rounded-lg text-sm">Fayl tanlang</span>
                             <span id="label_foreign_passport" class="truncate">Fayl yuklanmagan</span>
@@ -358,11 +358,9 @@ document.addEventListener('DOMContentLoaded', function() {
             var existingPreview = document.getElementById('preview-' + fieldName + '_path');
             var hasExistingFile = existingPreview && existingPreview.style.display !== 'none';
             var hasNewFile = input.files && input.files.length > 0;
+            var isRequired = input.hasAttribute('data-file-required') || deletedFields[fieldName];
 
-            if (deletedFields[fieldName] && !hasNewFile) {
-                showFileError(fieldName, fileErrorMessages[fieldName]);
-                hasError = true;
-            } else if (!hasExistingFile && !hasNewFile && input.hasAttribute('required')) {
+            if (isRequired && !hasExistingFile && !hasNewFile) {
                 showFileError(fieldName, fileErrorMessages[fieldName]);
                 hasError = true;
             } else {

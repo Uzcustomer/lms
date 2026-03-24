@@ -272,6 +272,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
+            Route::post('/undo-yn-submission', [JournalController::class, 'undoYnSubmission'])->name('undo-yn-submission');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
             Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade');
             Route::post('/submit-excuse-to-yn', [JournalController::class, 'submitExcuseToYn'])->name('submit-excuse-to-yn');

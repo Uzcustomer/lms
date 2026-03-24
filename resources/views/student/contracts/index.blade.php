@@ -135,7 +135,7 @@
                 </div>
             </div>
 
-            {{-- Saqlash --}}
+            {{-- Shartnoma olish --}}
             <div class="bg-yellow-50 rounded-xl border border-yellow-200 p-4 mb-4">
                 <p class="text-sm text-yellow-700">Ma'lumotlaringizni tekshiring, xatolik bo'lsa tuzating va bo'sh joylarni to'ldiring. <span class="text-red-500">*</span> bilan belgilangan maydonlar majburiy.</p>
             </div>
@@ -144,7 +144,7 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                     </svg>
-                    Saqlash
+                    Shartnoma olish
                 </button>
             </div>
         </form>

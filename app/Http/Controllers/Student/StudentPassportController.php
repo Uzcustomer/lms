@@ -33,9 +33,13 @@ class StudentPassportController extends Controller
 
         $existing = StudentPassport::where('student_id', $student->id)->first();
 
-        $fileRules = $existing
-            ? ['nullable|file|mimes:jpg,jpeg,pdf|max:1024', 'nullable|file|mimes:jpg,jpeg,pdf|max:1024', 'nullable|file|mimes:jpg,jpeg,pdf|max:1024']
-            : ['required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024', 'required|file|mimes:jpg,jpeg,pdf|max:1024'];
+        $fileRule = function (string $pathField) use ($existing) {
+            $base = 'file|mimes:jpg,jpeg,pdf|max:1024';
+            if (!$existing || !$existing->$pathField) {
+                return 'required|' . $base;
+            }
+            return 'nullable|' . $base;
+        };
 
         $request->merge([
             'first_name' => mb_strtoupper($request->first_name),
@@ -55,9 +59,9 @@ class StudentPassportController extends Controller
             'passport_series' => 'required|string|max:2|regex:/^[A-Z]{2}$/',
             'passport_number' => 'required|string|max:7|regex:/^\d{7}$/',
             'jshshir' => 'required|string|max:14|regex:/^\d{14}$/',
-            'passport_front' => $fileRules[0],
-            'passport_back' => $fileRules[1],
-            'foreign_passport' => $fileRules[2],
+            'passport_front' => $fileRule('passport_front_path'),
+            'passport_back' => $fileRule('passport_back_path'),
+            'foreign_passport' => $fileRule('foreign_passport_path'),
         ], [
             'first_name.required' => 'Ismingizni kiriting.',
             'last_name.required' => 'Familiyangizni kiriting.',

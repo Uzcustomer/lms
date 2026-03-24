@@ -60,14 +60,12 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha familiya <span class="text-red-500">*</span></label>
                     <input type="text" name="last_name_en" value="{{ $studentPassport->last_name_en ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
-                           placeholder="DOE">
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha ism <span class="text-red-500">*</span></label>
                     <input type="text" name="first_name_en" value="{{ $studentPassport->first_name_en ?? '' }}" required
-                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase"
-                           placeholder="JOHN">
+                           class="w-full rounded-lg border-gray-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase">
                 </div>
             </div>
 

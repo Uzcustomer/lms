@@ -34,7 +34,22 @@
                 <span class="text-[11px] text-gray-400 mt-1 text-center">Imtihon natijalari bo'yicha</span>
             </a>
 
-            {{-- 3. Shartnoma (faqat bitiruvchilar uchun) --}}
+            {{-- 3. Pasport ma'lumotlari (faqat bitiruvchilar uchun) --}}
+            @if(Auth::guard('student')->user()->is_graduate)
+            <a href="{{ route('student.passport.index') }}"
+               class="flex flex-col items-center bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden active:scale-[0.98] transition-all duration-150"
+               style="padding:16px 10px;">
+                <div class="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center mb-3">
+                    <svg class="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                    </svg>
+                </div>
+                <span class="text-sm font-bold text-gray-800 text-center leading-tight">Pasport ma'lumotlari</span>
+                <span class="text-[11px] text-gray-400 mt-1 text-center">Shaxsiy hujjatlar</span>
+            </a>
+            @endif
+
+            {{-- 4. Shartnoma (faqat bitiruvchilar uchun) --}}
             @if(Auth::guard('student')->user()->is_graduate)
             <a href="{{ route('student.contracts.index') }}"
                class="flex flex-col items-center bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden active:scale-[0.98] transition-all duration-150"

@@ -1439,9 +1439,7 @@ class StudentController extends Controller
             'is_graduate' => $student->is_graduate,
         ];
 
-        $studentPassport = \App\Models\StudentPassport::where('student_id', $student->id)->first();
-
-        return view('student.profile', compact('profileData', 'studentPassport'));
+        return view('student.profile', compact('profileData'));
     }
 
     public function examSchedule()

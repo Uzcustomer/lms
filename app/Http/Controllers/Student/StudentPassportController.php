@@ -10,6 +10,19 @@ use Illuminate\Support\Facades\Storage;
 
 class StudentPassportController extends Controller
 {
+    public function index()
+    {
+        $student = Auth::guard('student')->user();
+
+        if (!$student->is_graduate) {
+            abort(403);
+        }
+
+        $studentPassport = StudentPassport::where('student_id', $student->id)->first();
+
+        return view('student.passport', compact('studentPassport'));
+    }
+
     public function store(Request $request)
     {
         $student = Auth::guard('student')->user();
@@ -85,7 +98,7 @@ class StudentPassportController extends Controller
             $data
         );
 
-        return redirect()->route('student.dashboard')
+        return redirect()->route('student.passport.index')
             ->with('success', 'Pasport ma\'lumotlari saqlandi.');
     }
 

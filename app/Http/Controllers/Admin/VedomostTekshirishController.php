@@ -604,6 +604,7 @@ class VedomostTekshirishController extends Controller
             $practiceTeacher  = $this->getTopTeacher($groupHemisId, $subjectId, $semesterCode, [12, 13, 14, 18]);
 
             // --- Davomat (attendances jadvalidan, jurnal bilan bir xil hisoblash) ---
+            $totalHours = (int) ($subject->total_acload ?? 0);
             $excludedAttendanceCodes = [99, 100, 101, 102];
             $attendanceByStudent = DB::table('attendances')
                 ->whereIn('student_hemis_id', $studentHemisIds)

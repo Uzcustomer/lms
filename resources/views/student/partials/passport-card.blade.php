@@ -1,4 +1,4 @@
-<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: {{ ($errors->any() || (session('success') && str_contains(session('success'), 'Fayl'))) ? 'true' : 'false' }} }">
+<div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{ showPassportForm: {{ ($errors->any() || (session('success') && str_contains(session('success'), 'Fayl'))) ? 'true' : 'false' }}, showMatchModal: {{ session('student_db_data') ? 'true' : 'false' }} }">
     {{-- Header: title left, status badge top-right --}}
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
@@ -56,21 +56,21 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Familiya <span class="text-red-500">*</span></label>
-                    <input type="text" name="last_name" value="{{ old('last_name', $studentPassport->last_name ?? $student->second_name ?? '') }}" required
+                    <input type="text" name="last_name" value="{{ old('last_name', $studentPassport->last_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('last_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('last_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Ism <span class="text-red-500">*</span></label>
-                    <input type="text" name="first_name" value="{{ old('first_name', $studentPassport->first_name ?? $student->first_name ?? '') }}" required
+                    <input type="text" name="first_name" value="{{ old('first_name', $studentPassport->first_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('first_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('first_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
-                    <input type="text" name="father_name" value="{{ old('father_name', $studentPassport->father_name ?? $student->third_name ?? '') }}" required
+                    <input type="text" name="father_name" value="{{ old('father_name', $studentPassport->father_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('father_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
@@ -232,6 +232,54 @@
             Yopish
         </button>
     </div>
+
+    {{-- Match modal --}}
+    @if(session('student_db_data'))
+        <div x-show="showMatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showMatchModal = false">
+            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+                @if(session('match'))
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-green-700">Ma'lumotlar mos keldi!</h3>
+                    </div>
+                @else
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-yellow-700">Ma'lumotlar mos kelmadi!</h3>
+                    </div>
+                @endif
+
+                <p class="text-sm text-gray-600 mb-3">Sizning talabalar bazasidagi ma'lumotlaringiz:</p>
+                <div class="bg-gray-50 rounded-lg p-4 space-y-2 mb-5">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Familiya:</span>
+                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['last_name'] }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Ism:</span>
+                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['first_name'] }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Otasining ismi:</span>
+                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['father_name'] }}</span>
+                    </div>
+                </div>
+
+                <button @click="showMatchModal = false" type="button"
+                        class="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition">
+                    Tushunarli
+                </button>
+            </div>
+        </div>
+    @endif
 </div>
 
 <script>

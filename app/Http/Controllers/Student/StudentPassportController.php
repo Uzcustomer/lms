@@ -85,6 +85,10 @@ class StudentPassportController extends Controller
             'foreign_passport.max' => 'Fayl hajmi 1MB dan oshmasligi kerak.',
         ]);
 
+        $isMatch = mb_strtoupper($student->second_name ?? '') === $request->last_name
+            && mb_strtoupper($student->first_name ?? '') === $request->first_name
+            && mb_strtoupper($student->third_name ?? '') === $request->father_name;
+
         $data = [
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
@@ -96,6 +100,7 @@ class StudentPassportController extends Controller
             'passport_series' => $request->passport_series,
             'passport_number' => $request->passport_number,
             'jshshir' => $request->jshshir,
+            'match' => $isMatch,
         ];
 
         $storagePath = 'student-passports/' . $student->id;
@@ -127,7 +132,13 @@ class StudentPassportController extends Controller
         );
 
         return redirect()->route('student.passport.index')
-            ->with('success', 'Pasport ma\'lumotlari saqlandi.');
+            ->with('success', 'Pasport ma\'lumotlari saqlandi.')
+            ->with('match', $isMatch)
+            ->with('student_db_data', [
+                'last_name' => $student->second_name ?? '',
+                'first_name' => $student->first_name ?? '',
+                'father_name' => $student->third_name ?? '',
+            ]);
     }
 
     public function showFile(string $field)

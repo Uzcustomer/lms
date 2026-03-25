@@ -54,29 +54,59 @@
             @csrf
             {{-- O'zbekcha ism, familiya, otasining ismi --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
+                <div x-data="{ showSymbols: false }">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Familiya <span class="text-red-500">*</span></label>
-                    <input type="text" name="last_name" value="{{ old('last_name', $studentPassport->last_name ?? '') }}" required
+                    <input type="text" name="last_name" id="input_last_name" value="{{ old('last_name', $studentPassport->last_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('last_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('last_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-                    <p class="text-xs text-gray-400 mt-1">O' = O', G' = G', SH, CH — bazadagi bilan moslang</p>
+                    <div class="mt-1">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                            Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
+                        </button>
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1 mt-1">
+                            <template x-for="s in [`'`, '`', 'O`', 'G`', 'SH', 'CH']" :key="s">
+                                <button type="button" @click="let el = document.getElementById('input_last_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
+                                        class="px-2 py-0.5 bg-gray-100 hover:bg-indigo-100 text-xs font-mono rounded border border-gray-300 hover:border-indigo-400 transition" x-text="s"></button>
+                            </template>
+                        </div>
+                    </div>
                 </div>
-                <div>
+                <div x-data="{ showSymbols: false }">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Ism <span class="text-red-500">*</span></label>
-                    <input type="text" name="first_name" value="{{ old('first_name', $studentPassport->first_name ?? '') }}" required
+                    <input type="text" name="first_name" id="input_first_name" value="{{ old('first_name', $studentPassport->first_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('first_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('first_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-                    <p class="text-xs text-gray-400 mt-1">O' = O', G' = G', SH, CH — bazadagi bilan moslang</p>
+                    <div class="mt-1">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                            Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
+                        </button>
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1 mt-1">
+                            <template x-for="s in [`'`, '`', 'O`', 'G`', 'SH', 'CH']" :key="s">
+                                <button type="button" @click="let el = document.getElementById('input_first_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
+                                        class="px-2 py-0.5 bg-gray-100 hover:bg-indigo-100 text-xs font-mono rounded border border-gray-300 hover:border-indigo-400 transition" x-text="s"></button>
+                            </template>
+                        </div>
+                    </div>
                 </div>
-                <div>
+                <div x-data="{ showSymbols: false }">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
-                    <input type="text" name="father_name" value="{{ old('father_name', $studentPassport->father_name ?? '') }}" required
+                    <input type="text" name="father_name" id="input_father_name" value="{{ old('father_name', $studentPassport->father_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('father_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-                    <p class="text-xs text-gray-400 mt-1">O' = O', G' = G', SH, CH — bazadagi bilan moslang</p>
+                    <div class="mt-1">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                            Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
+                        </button>
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1 mt-1">
+                            <template x-for="s in [`'`, '`', 'O`', 'G`', 'SH', 'CH']" :key="s">
+                                <button type="button" @click="let el = document.getElementById('input_father_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
+                                        class="px-2 py-0.5 bg-gray-100 hover:bg-indigo-100 text-xs font-mono rounded border border-gray-300 hover:border-indigo-400 transition" x-text="s"></button>
+                            </template>
+                        </div>
+                    </div>
                 </div>
             </div>
 

@@ -60,6 +60,7 @@
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('last_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('last_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    <p class="text-xs text-gray-400 mt-1">O' = O', G' = G', SH, CH — bazadagi bilan moslang</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Ism <span class="text-red-500">*</span></label>
@@ -67,6 +68,7 @@
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('first_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('first_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    <p class="text-xs text-gray-400 mt-1">O' = O', G' = G', SH, CH — bazadagi bilan moslang</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
@@ -74,6 +76,7 @@
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('father_name') ? 'border-red-500' : 'border-gray-300' }}"
                            oninput="this.value = this.value.toUpperCase()">
                     @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    <p class="text-xs text-gray-400 mt-1">O' = O', G' = G', SH, CH — bazadagi bilan moslang</p>
                 </div>
             </div>
 
@@ -257,8 +260,8 @@
                     </div>
                 @endif
 
-                <p class="text-sm text-gray-600 mb-3">Sizning talabalar bazasidagi ma'lumotlaringiz:</p>
-                <div class="bg-gray-50 rounded-lg p-4 space-y-2 mb-5">
+                <p class="text-sm font-medium text-gray-700 mb-2">Talabalar bazasidagi ma'lumotlaringiz:</p>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5 mb-4">
                     <div class="flex justify-between text-sm">
                         <span class="text-gray-500">Familiya:</span>
                         <span class="font-semibold text-gray-800">{{ session('student_db_data')['last_name'] }}</span>
@@ -273,9 +276,25 @@
                     </div>
                 </div>
 
-                <button @click="showMatchModal = false" type="button"
-                        class="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition">
-                    Tushunarli
+                <p class="text-sm font-medium text-gray-700 mb-2">Siz kiritgan ma'lumotlar:</p>
+                <div class="{{ session('match') ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200' }} border rounded-lg p-3 space-y-1.5 mb-5">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Familiya:</span>
+                        <span class="font-semibold {{ mb_strtoupper(session('student_db_data')['last_name']) !== session('passport_filled_data')['last_name'] ? 'text-red-600' : 'text-gray-800' }}">{{ session('passport_filled_data')['last_name'] }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Ism:</span>
+                        <span class="font-semibold {{ mb_strtoupper(session('student_db_data')['first_name']) !== session('passport_filled_data')['first_name'] ? 'text-red-600' : 'text-gray-800' }}">{{ session('passport_filled_data')['first_name'] }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-500">Otasining ismi:</span>
+                        <span class="font-semibold {{ mb_strtoupper(session('student_db_data')['father_name']) !== session('passport_filled_data')['father_name'] ? 'text-red-600' : 'text-gray-800' }}">{{ session('passport_filled_data')['father_name'] }}</span>
+                    </div>
+                </div>
+
+                <button @click="showMatchModal = false; showPassportForm = true" type="button"
+                        class="w-full px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold rounded-lg transition">
+                    Tahrirlash
                 </button>
             </div>
         </div>

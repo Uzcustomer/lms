@@ -121,13 +121,13 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
                     <input type="text" name="father_name" id="input_father_name" value="{{ old('father_name', $studentPassport->father_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('father_name') ? 'border-red-500' : 'border-gray-300' }}"
-                           oninput="this.value = this.value.toUpperCase()" @blur="if (!$event.relatedTarget || !$event.relatedTarget.closest('.father-name-symbols')) checkNameMismatch()"
+                           oninput="this.value = this.value.toUpperCase()" @blur="checkNameMismatch()">
                     @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
-                        <button type="button" @click="showSymbols = !showSymbols" class="father-name-symbols text-xs text-green-600 hover:text-green-800 font-medium">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
-                        <div x-show="showSymbols" x-transition class="father-name-symbols flex flex-wrap gap-1.5 mt-1">
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
                             <template x-for="s in [`'`, '`', 'O`', 'G`', '\u2018', '\u2019']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_father_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
                                         class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>

@@ -179,6 +179,11 @@
                             Sistemaga yuklash
                         </button>
 
+                        <button type="button" id="btn-reupload" class="btn-upload" style="background:#f59e0b;border-color:#d97706;" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Qayta yuklash
+                        </button>
+
                         <div class="import-group">
                             <input type="file" id="file-upload" accept=".xlsx,.xls,.csv" style="display:none;">
                             <button type="button" class="btn-file" onclick="document.getElementById('file-upload').click()">
@@ -321,6 +326,7 @@
         var dataUrl = '{{ route($routePrefix . ".diagnostika.data") }}';
         var tartibgaSolUrl = '{{ route($routePrefix . ".diagnostika.tartibga-sol") }}';
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
+        var reuploadUrl = '{{ route($routePrefix . ".quiz-results.reupload") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var triggerCronUrl = '{{ route($routePrefix . ".quiz-results.trigger-cron") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
@@ -581,7 +587,7 @@
                 var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
 
                 html += '<tr class="' + rowClass + '" id="row-' + r.id + '">';
-                html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '"' + (r.xulosa_code === 'uploaded' ? ' disabled' : '') + '></td>';
+                html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '" data-xulosa="' + r.xulosa_code + '"></td>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
                 html += '<td>' + nameCell + '</td>';
@@ -611,9 +617,18 @@
         }
 
         function updateButtons() {
-            var count = getSelectedIds().length;
+            var ids = getSelectedIds();
+            var count = ids.length;
             $('#selected-count').text(count);
             $('#btn-upload').prop('disabled', count === 0);
+
+            // Qayta yuklash button — tanlangan ichida "uploaded" bor-yo'qligini tekshirish
+            var hasUploaded = false;
+            ids.forEach(function(id) {
+                var row = allData.find(function(r) { return r.id === id; });
+                if (row && row.xulosa_code === 'uploaded') hasUploaded = true;
+            });
+            $('#btn-reupload').prop('disabled', !hasUploaded);
         }
 
         // ========== EXCEL (Quiz natijalar) ==========
@@ -827,6 +842,58 @@
                             });
                             updateButtons();
                         }
+                    },
+                    error: function(xhr) {
+                        var msg = xhr.responseJSON?.message || 'Server xatosi';
+                        $('#upload-result').html('<div class="diag-msg diag-error"><strong>Xato!</strong> ' + msg + '</div>').show();
+                    },
+                    complete: function() { btn.prop('disabled', false).html(origHtml); }
+                });
+            });
+
+            // Qayta yuklash handler
+            $('#btn-reupload').on('click', function() {
+                var ids = getSelectedIds();
+                if (ids.length === 0) return;
+
+                // Faqat "uploaded" tanlanganlarnigina qayta yuklash
+                var uploadedIds = [];
+                ids.forEach(function(id) {
+                    var row = allData.find(function(r) { return r.id === id; });
+                    if (row && row.xulosa_code === 'uploaded') {
+                        uploadedIds.push(id);
+                    }
+                });
+
+                if (uploadedIds.length === 0) {
+                    alert('Tanlangan natijalar orasida qayta yuklanishi mumkin bo\'lgani yo\'q.');
+                    return;
+                }
+
+                if (!confirm(uploadedIds.length + ' ta natijani qayta yuklashni tasdiqlaysizmi?\nEski baholar o\'chiriladi va yangidan yuklanadi.')) return;
+
+                var btn = $(this);
+                btn.prop('disabled', true);
+                var origHtml = btn.html();
+                btn.html('<span class="spinner-sm"></span> Yuklanmoqda...');
+
+                $.ajax({
+                    url: reuploadUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ids: uploadedIds }),
+                    success: function(data) {
+                        var html = '';
+                        if (data.success_count > 0) {
+                            html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija qayta yuklandi.</div>';
+                        }
+                        if (data.error_count > 0) {
+                            html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                            data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
+                            html += '</ul></div>';
+                        }
+                        $('#upload-result').html(html).show();
+                        updateButtons();
                     },
                     error: function(xhr) {
                         var msg = xhr.responseJSON?.message || 'Server xatosi';

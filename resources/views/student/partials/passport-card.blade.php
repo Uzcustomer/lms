@@ -2,7 +2,7 @@
     showPassportForm: {{ ($errors->any() || (session('success') && str_contains(session('success'), 'Fayl'))) ? 'true' : 'false' }},
     showMatchModal: false,
     isMatch: false,
-    mismatchChecked: {{ $studentPassport ? 'true' : 'false' }},
+    mismatchChecked: false,
     dbLastName: {{ json_encode(mb_strtoupper($student->second_name ?? '')) }},
     dbFirstName: {{ json_encode(mb_strtoupper($student->first_name ?? '')) }},
     dbFatherName: {{ json_encode(mb_strtoupper($student->third_name ?? '')) }},
@@ -121,13 +121,13 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
                     <input type="text" name="father_name" id="input_father_name" value="{{ old('father_name', $studentPassport->father_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('father_name') ? 'border-red-500' : 'border-gray-300' }}"
-                           oninput="this.value = this.value.toUpperCase()" @blur="if (!$event.relatedTarget || !$event.relatedTarget.closest('.father-name-symbols')) checkNameMismatch()"
+                           oninput="this.value = this.value.toUpperCase()" @blur="checkNameMismatch()">
                     @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
-                        <button type="button" @click="showSymbols = !showSymbols" class="father-name-symbols text-xs text-green-600 hover:text-green-800 font-medium">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
-                        <div x-show="showSymbols" x-transition class="father-name-symbols flex flex-wrap gap-1.5 mt-1">
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
                             <template x-for="s in [`'`, '`', 'O`', 'G`', '\u2018', '\u2019']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_father_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
                                         class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>
@@ -300,10 +300,10 @@
     </div>
 
     {{-- Match/Mismatch modal --}}
-    <template x-teleport="body">
-        <div x-show="showMatchModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center" style="background-color: #3b3b3bb8;" @click.self="showMatchModal = false">
-            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
-                <div x-show="isMatch" class="bg-green-50 px-6 pt-5 pb-4">
+    <div x-show="showMatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center" style="background-color: #3b3b3bb8;" @click.self="showMatchModal = false">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            <template x-if="isMatch">
+                <div class="bg-green-50 px-6 pt-5 pb-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
                             <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -313,7 +313,9 @@
                         <h3 class="text-lg font-bold text-green-700">Pasport ma'lumotlaringiz bazadagi bilan mos keldi</h3>
                     </div>
                 </div>
-                <div x-show="!isMatch" class="bg-yellow-50 px-6 pt-5 pb-4">
+            </template>
+            <template x-if="!isMatch">
+                <div class="bg-yellow-50 px-6 pt-5 pb-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
                             <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -323,15 +325,15 @@
                         <h3 class="text-lg font-bold text-yellow-700">Pasport ma'lumotlaringiz bazadagi bilan mos kelmadi</h3>
                     </div>
                 </div>
-                <div class="px-6 py-5">
-                    <button @click="showMatchModal = false" type="button"
-                            class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">
-                        Davom etish
-                    </button>
-                </div>
+            </template>
+            <div class="px-6 py-5">
+                <button @click="showMatchModal = false" type="button"
+                        class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">
+                    Davom etish
+                </button>
             </div>
         </div>
-    </template>
+    </div>
 </div>
 
 <script>var deletedFields = {};

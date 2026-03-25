@@ -448,9 +448,11 @@ class VedomostController extends Controller
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
                     $oskiLimit = $markingScore->oski_active ? $markingScore->oski_limit : 0;
                     $testLimit = $markingScore->test_active ? $markingScore->test_limit : 0;
-                    $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
-                        ->where('subject_id', $subject->subject_id)
+                    $qoldirgan = (int) DB::table('attendances')
                         ->where('student_hemis_id', $student->hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $vedomost->semester_code)
+                        ->whereNotIn('training_type_code', [99, 100, 101, 102])
                         ->sum('absent_off');
                     $ozlashtirish = 0;
                     $student->qoldiq = round($qoldirgan * 100 / ($subject->total_acload ?: 1), 2);
@@ -856,9 +858,11 @@ class VedomostController extends Controller
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
                     $oskiLimit = $markingScore->oski_active ? $markingScore->oski_limit : 0;
                     $testLimit = $markingScore->test_active ? $markingScore->test_limit : 0;
-                    $qoldirgan = (int) Attendance::where('group_id', $group->group_hemis_id)
-                        ->where('subject_id', $subject->subject_id)
+                    $qoldirgan = (int) DB::table('attendances')
                         ->where('student_hemis_id', $student->hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $vedomost->semester_code)
+                        ->whereNotIn('training_type_code', [99, 100, 101, 102])
                         ->sum('absent_off');
                     $ozlashtirish = 0;
                     $student->qoldiq = round($qoldirgan * 100 / ($subject->total_acload ?: 1), 2);

@@ -23,6 +23,7 @@ class StudentPassport extends Model
         'passport_front_path',
         'passport_back_path',
         'foreign_passport_path',
+        'match',
     ];
 
     public function student()

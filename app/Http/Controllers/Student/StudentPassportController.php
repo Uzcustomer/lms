@@ -100,7 +100,7 @@ class StudentPassportController extends Controller
             'passport_series' => $request->passport_series,
             'passport_number' => $request->passport_number,
             'jshshir' => $request->jshshir,
-            'match' => $isMatch,
+            'is_match' => $isMatch,
         ];
 
         $storagePath = 'student-passports/' . $student->id;

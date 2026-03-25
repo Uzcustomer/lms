@@ -1425,8 +1425,8 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Semester — fan o'quv rejadagi semester bo'yicha (talabaning hozirgi semestri emas)
-            $semesterCode = $subject->semester_code ?? $student->semester_code;
+            // Semester — talabaning hozirgi semestri bo'yicha (jurnal shu semestrni ko'rsatadi)
+            $semesterCode = $student->semester_code;
             $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
                 ->where('code', $semesterCode)
                 ->first();

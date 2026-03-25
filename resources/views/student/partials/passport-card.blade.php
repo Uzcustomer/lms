@@ -300,10 +300,10 @@
     </div>
 
     {{-- Match/Mismatch modal --}}
-    <template x-teleport="body">
-        <div x-show="showMatchModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center" style="background-color: #3b3b3bb8;" @click.self="showMatchModal = false">
-            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
-                <div x-show="isMatch" class="bg-green-50 px-6 pt-5 pb-4">
+    <div x-show="showMatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center" style="background-color: #3b3b3bb8;" @click.self="showMatchModal = false">
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            <template x-if="isMatch">
+                <div class="bg-green-50 px-6 pt-5 pb-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
                             <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -313,7 +313,9 @@
                         <h3 class="text-lg font-bold text-green-700">Pasport ma'lumotlaringiz bazadagi bilan mos keldi</h3>
                     </div>
                 </div>
-                <div x-show="!isMatch" class="bg-yellow-50 px-6 pt-5 pb-4">
+            </template>
+            <template x-if="!isMatch">
+                <div class="bg-yellow-50 px-6 pt-5 pb-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
                             <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -323,15 +325,15 @@
                         <h3 class="text-lg font-bold text-yellow-700">Pasport ma'lumotlaringiz bazadagi bilan mos kelmadi</h3>
                     </div>
                 </div>
-                <div class="px-6 py-5">
-                    <button @click="showMatchModal = false" type="button"
-                            class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">
-                        Davom etish
-                    </button>
-                </div>
+            </template>
+            <div class="px-6 py-5">
+                <button @click="showMatchModal = false" type="button"
+                        class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">
+                    Davom etish
+                </button>
             </div>
         </div>
-    </template>
+    </div>
 </div>
 
 <script>var deletedFields = {};

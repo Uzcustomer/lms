@@ -138,6 +138,11 @@ class StudentPassportController extends Controller
                 'last_name' => $student->second_name ?? '',
                 'first_name' => $student->first_name ?? '',
                 'father_name' => $student->third_name ?? '',
+            ])
+            ->with('passport_filled_data', [
+                'last_name' => $request->last_name,
+                'first_name' => $request->first_name,
+                'father_name' => $request->father_name,
             ]);
     }
 

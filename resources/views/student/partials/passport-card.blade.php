@@ -257,25 +257,55 @@
                     </div>
                 @endif
 
-                <p class="text-sm text-gray-600 mb-3">Sizning talabalar bazasidagi ma'lumotlaringiz:</p>
-                <div class="bg-gray-50 rounded-lg p-4 space-y-2 mb-5">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">Familiya:</span>
-                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['last_name'] }}</span>
+                @if(session('match'))
+                    <p class="text-sm text-gray-600 mb-3">Sizning talabalar bazasidagi ma'lumotlaringiz:</p>
+                    <div class="bg-gray-50 rounded-lg p-4 space-y-2 mb-5">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Familiya:</span>
+                            <span class="font-semibold text-gray-800">{{ session('student_db_data')['last_name'] }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Ism:</span>
+                            <span class="font-semibold text-gray-800">{{ session('student_db_data')['first_name'] }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Otasining ismi:</span>
+                            <span class="font-semibold text-gray-800">{{ session('student_db_data')['father_name'] }}</span>
+                        </div>
                     </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">Ism:</span>
-                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['first_name'] }}</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">Otasining ismi:</span>
-                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['father_name'] }}</span>
-                    </div>
-                </div>
+                @else
+                    <p class="text-sm text-gray-600 mb-3">Farqni ko'ring va tahrirlang:</p>
+                    <table class="w-full text-sm mb-5">
+                        <thead>
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-2 text-gray-500 font-medium"></th>
+                                <th class="text-left py-2 text-gray-500 font-medium">Bazadagi</th>
+                                <th class="text-left py-2 text-gray-500 font-medium">Siz kiritgan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-gray-100 {{ mb_strtoupper(session('student_db_data')['last_name']) !== session('passport_filled_data')['last_name'] ? 'bg-red-50' : '' }}">
+                                <td class="py-2 text-gray-500">Familiya</td>
+                                <td class="py-2 font-semibold">{{ session('student_db_data')['last_name'] }}</td>
+                                <td class="py-2 font-semibold">{{ session('passport_filled_data')['last_name'] }}</td>
+                            </tr>
+                            <tr class="border-b border-gray-100 {{ mb_strtoupper(session('student_db_data')['first_name']) !== session('passport_filled_data')['first_name'] ? 'bg-red-50' : '' }}">
+                                <td class="py-2 text-gray-500">Ism</td>
+                                <td class="py-2 font-semibold">{{ session('student_db_data')['first_name'] }}</td>
+                                <td class="py-2 font-semibold">{{ session('passport_filled_data')['first_name'] }}</td>
+                            </tr>
+                            <tr class="{{ mb_strtoupper(session('student_db_data')['father_name']) !== session('passport_filled_data')['father_name'] ? 'bg-red-50' : '' }}">
+                                <td class="py-2 text-gray-500">Otasining ismi</td>
+                                <td class="py-2 font-semibold">{{ session('student_db_data')['father_name'] }}</td>
+                                <td class="py-2 font-semibold">{{ session('passport_filled_data')['father_name'] }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                @endif
 
-                <button @click="showMatchModal = false" type="button"
-                        class="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition">
-                    Tushunarli
+                <button @click="showMatchModal = false; showPassportForm = {{ session('match') ? 'false' : 'true' }}" type="button"
+                        class="w-full px-4 py-2.5 {{ session('match') ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-yellow-500 hover:bg-yellow-600' }} text-white text-sm font-semibold rounded-lg transition">
+                    {{ session('match') ? 'Tushunarli' : 'Tahrirlash' }}
                 </button>
             </div>
         </div>

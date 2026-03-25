@@ -269,45 +269,50 @@
     {{-- Match modal --}}
     @if(session('student_db_data'))
         <div x-show="showMatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showMatchModal = false">
-            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+            <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
                 @if(session('match'))
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
-                            </svg>
+                    <div class="bg-green-50 px-6 pt-5 pb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-bold text-green-700">Ma'lumotlar mos keldi!</h3>
                         </div>
-                        <h3 class="text-lg font-bold text-green-700">Ma'lumotlar mos keldi!</h3>
                     </div>
                 @else
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-                            </svg>
+                    <div class="bg-yellow-50 px-6 pt-5 pb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-bold text-yellow-700">Ma'lumotlar mos kelmadi!</h3>
                         </div>
-                        <h3 class="text-lg font-bold text-yellow-700">Ma'lumotlar mos kelmadi!</h3>
                     </div>
                 @endif
 
-                <p class="text-sm font-medium text-gray-700 mb-2">Talabalar bazasidagi ma'lumotlaringiz:</p>
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5 mb-4">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">Familiya:</span>
-                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['last_name'] }}</span>
+                <div class="px-6 py-5">
+                    <p class="text-sm font-medium text-gray-700 mb-2">Talabalar bazasidagi ma'lumotlaringiz:</p>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1.5 mb-4">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Familiya:</span>
+                            <span class="font-semibold text-gray-800">{{ session('student_db_data')['last_name'] }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Ism:</span>
+                            <span class="font-semibold text-gray-800">{{ session('student_db_data')['first_name'] }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">Otasining ismi:</span>
+                            <span class="font-semibold text-gray-800">{{ session('student_db_data')['father_name'] }}</span>
+                        </div>
                     </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">Ism:</span>
-                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['first_name'] }}</span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-gray-500">Otasining ismi:</span>
-                        <span class="font-semibold text-gray-800">{{ session('student_db_data')['father_name'] }}</span>
-                    </div>
-                </div>
 
-                <p class="text-sm font-medium text-gray-700 mb-2">Siz kiritgan ma'lumotlar:</p>
-                <div class="{{ session('match') ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200' }} border rounded-lg p-3 space-y-1.5 mb-5">
+                    <p class="text-sm font-medium text-gray-700 mb-2">Siz kiritgan passport ma'lumotlaringiz:</p>
+                    <div class="{{ session('match') ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200' }} border rounded-lg p-3 space-y-1.5 mb-5">
                     <div class="flex justify-between text-sm">
                         <span class="text-gray-500">Familiya:</span>
                         <span class="font-semibold {{ mb_strtoupper(session('student_db_data')['last_name']) !== session('passport_filled_data')['last_name'] ? 'text-red-600' : 'text-gray-800' }}">{{ session('passport_filled_data')['last_name'] }}</span>
@@ -322,10 +327,11 @@
                     </div>
                 </div>
 
-                <button @click="showMatchModal = false; showPassportForm = true" type="button"
-                        class="w-full px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold rounded-lg transition">
-                    Tahrirlash
-                </button>
+                    <button @click="showMatchModal = false; showPassportForm = true" type="button"
+                            class="w-full px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-semibold rounded-lg transition">
+                        Tahrirlash
+                    </button>
+                </div>
             </div>
         </div>
     @endif

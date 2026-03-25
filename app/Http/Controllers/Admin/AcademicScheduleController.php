@@ -1405,6 +1405,8 @@ class AcademicScheduleController extends Controller
                     $qoldirgan = (int) Attendance::where('group_id', $entryGroup->group_hemis_id)
                         ->where('subject_id', $entrySubject->subject_id)
                         ->where('student_hemis_id', $student->hemis_id)
+                        ->where('semester_code', $semesterCode)
+                        ->whereNotIn('training_type_code', [99, 100, 101, 102])
                         ->sum('absent_off');
 
                     $totalAcload = $entrySubject->total_acload ?: 1;

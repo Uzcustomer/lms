@@ -65,7 +65,7 @@
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
                         <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
-                            <template x-for="s in [`'`, '`', 'O`', 'G`', ' ']" :key="s">
+                            <template x-for="s in [`'`, '`', 'O`', 'G`', '\u2018', '\u2019']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_last_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
                                         class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>
                             </template>
@@ -83,7 +83,7 @@
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
                         <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
-                            <template x-for="s in [`'`, '`', 'O`', 'G`', ' ']" :key="s">
+                            <template x-for="s in [`'`, '`', 'O`', 'G`', '\u2018', '\u2019']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_first_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
                                         class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>
                             </template>
@@ -101,7 +101,7 @@
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
                         <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
-                            <template x-for="s in [`'`, '`', 'O`', 'G`', ' ']" :key="s">
+                            <template x-for="s in [`'`, '`', 'O`', 'G`', '\u2018', '\u2019']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_father_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
                                         class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>
                             </template>

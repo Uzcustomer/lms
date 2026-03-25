@@ -1721,6 +1721,26 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Oldin yuklangan natijalarni qayta yuklash.
+     * Eski student_grades yozuvlarini o'chirib, yangidan yaratadi (to'g'ri semester_code bilan).
+     */
+    public function reUploadToGrades(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+        ]);
+
+        // Eski student_grades yozuvlarini o'chirish
+        StudentGrade::whereIn('quiz_result_id', $request->ids)
+            ->where('reason', 'quiz_result')
+            ->delete();
+
+        // uploadToGrades ni chaqirish (endi eski yozuvlar yo'q — dublikat tekshiruv o'tmaydi)
+        return $this->uploadToGrades($request);
+    }
+
+    /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
     public function triggerCron()

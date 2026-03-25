@@ -2,7 +2,7 @@
     showPassportForm: {{ ($errors->any() || (session('success') && str_contains(session('success'), 'Fayl'))) ? 'true' : 'false' }},
     showMatchModal: false,
     isMatch: false,
-    mismatchChecked: false,
+    mismatchChecked: {{ $studentPassport ? 'true' : 'false' }},
     dbLastName: {{ json_encode(mb_strtoupper($student->second_name ?? '')) }},
     dbFirstName: {{ json_encode(mb_strtoupper($student->first_name ?? '')) }},
     dbFatherName: {{ json_encode(mb_strtoupper($student->third_name ?? '')) }},

@@ -9,14 +9,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('graduate_student_passports', function (Blueprint $table) {
-            $table->boolean('match')->default(false)->after('foreign_passport_path');
+            $table->boolean('is_match')->default(false)->after('foreign_passport_path');
         });
     }
 
     public function down(): void
     {
         Schema::table('graduate_student_passports', function (Blueprint $table) {
-            $table->dropColumn('match');
+            $table->dropColumn('is_match');
         });
     }
 };

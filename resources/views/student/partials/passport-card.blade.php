@@ -36,11 +36,11 @@
     {{-- Form (shown when toggled) --}}
     <div x-show="showPassportForm" x-transition class="border-t border-gray-200 pt-5">
         {{-- Warning card --}}
-        <div class="mb-5 p-4 bg-yellow-50 border border-yellow-300 rounded-lg flex items-start gap-3">
-            <svg class="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <div class="mb-5 p-4 bg-red-50 border border-red-300 rounded-lg flex items-start gap-3">
+            <svg class="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
             </svg>
-            <p class="text-sm text-yellow-800 font-medium">Passportingizdagi shaxsiy ma'lumotlaringizni aniqlik bilan kiriting, bu ma'lumotlar diplom va boshqa muhim hujjatlarda foydalaniladi!</p>
+            <p class="text-sm text-red-800 font-medium">Passportingizdagi shaxsiy ma'lumotlaringizni aniqlik bilan kiriting, bu ma'lumotlar diplom va boshqa muhim hujjatlarda foydalaniladi!</p>
         </div>
 
         @if($errors->any())
@@ -120,6 +120,12 @@
             </div>
 
             {{-- Inglizcha familiya va ism --}}
+            <div class="mb-4 p-4 bg-red-50 border border-red-300 rounded-lg flex items-start gap-3">
+                <svg class="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                </svg>
+                <p class="text-sm text-red-800 font-medium">Inglizcha ma'lumotlaringizni Xorijga chiqish pasportingizdan olib yozing.</p>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Inglizcha familiya <span class="text-red-500">*</span></label>

@@ -268,7 +268,7 @@
 
     {{-- Match modal --}}
     @if(session('student_db_data'))
-        <div x-show="showMatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showMatchModal = false">
+        <div x-show="showMatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center" style="background-color: #3b3b3bb8;" @click.self="showMatchModal = false">
             <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
                 @if(session('match'))
                     <div class="bg-green-50 px-6 pt-5 pb-4">

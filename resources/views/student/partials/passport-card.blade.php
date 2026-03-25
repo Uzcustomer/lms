@@ -61,13 +61,13 @@
                            oninput="this.value = this.value.toUpperCase()">
                     @error('last_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
-                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
-                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1 mt-1">
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
                             <template x-for="s in [`'`, '`', 'O`', 'G`', 'SH', 'CH']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_last_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
-                                        class="px-2 py-0.5 bg-gray-100 hover:bg-indigo-100 text-xs font-mono rounded border border-gray-300 hover:border-indigo-400 transition" x-text="s"></button>
+                                        class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>
                             </template>
                         </div>
                     </div>
@@ -79,13 +79,13 @@
                            oninput="this.value = this.value.toUpperCase()">
                     @error('first_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
-                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
-                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1 mt-1">
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
                             <template x-for="s in [`'`, '`', 'O`', 'G`', 'SH', 'CH']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_first_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
-                                        class="px-2 py-0.5 bg-gray-100 hover:bg-indigo-100 text-xs font-mono rounded border border-gray-300 hover:border-indigo-400 transition" x-text="s"></button>
+                                        class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>
                             </template>
                         </div>
                     </div>
@@ -97,13 +97,13 @@
                            oninput="this.value = this.value.toUpperCase()">
                     @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
-                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+                        <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
                             Belgi qo'shish <span x-text="showSymbols ? '▲' : '▼'" class="text-[10px]"></span>
                         </button>
-                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1 mt-1">
+                        <div x-show="showSymbols" x-transition class="flex flex-wrap gap-1.5 mt-1">
                             <template x-for="s in [`'`, '`', 'O`', 'G`', 'SH', 'CH']" :key="s">
                                 <button type="button" @click="let el = document.getElementById('input_father_name'); let pos = el.selectionStart; let val = el.value; el.value = (val.slice(0, pos) + s + val.slice(pos)).toUpperCase(); el.focus(); el.selectionStart = el.selectionEnd = pos + s.length; el.dispatchEvent(new Event('input'))"
-                                        class="px-2 py-0.5 bg-gray-100 hover:bg-indigo-100 text-xs font-mono rounded border border-gray-300 hover:border-indigo-400 transition" x-text="s"></button>
+                                        class="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-sm font-mono font-semibold rounded border border-gray-300 hover:border-green-400 transition" x-text="s"></button>
                             </template>
                         </div>
                     </div>

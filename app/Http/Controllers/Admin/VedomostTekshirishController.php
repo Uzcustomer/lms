@@ -606,7 +606,6 @@ class VedomostTekshirishController extends Controller
             // --- Davomat (attendances jadvalidan, jurnal bilan bir xil hisoblash) ---
             $excludedAttendanceCodes = [99, 100, 101, 102];
             $attendanceByStudent = DB::table('attendances')
-                ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $studentHemisIds)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)

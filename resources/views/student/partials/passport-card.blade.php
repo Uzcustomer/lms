@@ -1,6 +1,7 @@
 <div class="bg-white shadow rounded-lg p-5 mb-6 border border-gray-200" x-data="{
     showPassportForm: {{ ($errors->any() || (session('success') && str_contains(session('success'), 'Fayl'))) ? 'true' : 'false' }},
-    showMismatchModal: false,
+    showMatchModal: false,
+    isMatch: false,
     mismatchChecked: false,
     dbLastName: {{ json_encode(mb_strtoupper($student->second_name ?? '')) }},
     dbFirstName: {{ json_encode(mb_strtoupper($student->first_name ?? '')) }},
@@ -12,9 +13,8 @@
         let fa = (document.getElementById('input_father_name').value || '').trim().toUpperCase();
         if (!ln || !fn || !fa) return;
         this.mismatchChecked = true;
-        if (ln !== this.dbLastName || fn !== this.dbFirstName || fa !== this.dbFatherName) {
-            this.showMismatchModal = true;
-        }
+        this.isMatch = (ln === this.dbLastName && fn === this.dbFirstName && fa === this.dbFatherName);
+        this.showMatchModal = true;
     }
 }">
     {{-- Header: title left, status badge top-right --}}
@@ -85,7 +85,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Familiya <span class="text-red-500">*</span></label>
                     <input type="text" name="last_name" id="input_last_name" value="{{ old('last_name', $studentPassport->last_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('last_name') ? 'border-red-500' : 'border-gray-300' }}"
-                           oninput="this.value = this.value.toUpperCase()" @input="checkNameMismatch()">
+                           oninput="this.value = this.value.toUpperCase()">
                     @error('last_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
                         <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
@@ -103,7 +103,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Ism <span class="text-red-500">*</span></label>
                     <input type="text" name="first_name" id="input_first_name" value="{{ old('first_name', $studentPassport->first_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('first_name') ? 'border-red-500' : 'border-gray-300' }}"
-                           oninput="this.value = this.value.toUpperCase()" @input="checkNameMismatch()">
+                           oninput="this.value = this.value.toUpperCase()">
                     @error('first_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
                         <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
@@ -121,7 +121,7 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Otasining ismi <span class="text-red-500">*</span></label>
                     <input type="text" name="father_name" id="input_father_name" value="{{ old('father_name', $studentPassport->father_name ?? '') }}" required
                            class="w-full rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase {{ $errors->has('father_name') ? 'border-red-500' : 'border-gray-300' }}"
-                           oninput="this.value = this.value.toUpperCase()" @input="checkNameMismatch()">
+                           oninput="this.value = this.value.toUpperCase()" @blur="checkNameMismatch()">
                     @error('father_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     <div class="mt-1">
                         <button type="button" @click="showSymbols = !showSymbols" class="text-xs text-green-600 hover:text-green-800 font-medium">
@@ -299,21 +299,35 @@
         </button>
     </div>
 
-    {{-- Mismatch modal --}}
-    <div x-show="showMismatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center" style="background-color: #3b3b3bb8;" @click.self="showMismatchModal = false">
+    {{-- Match/Mismatch modal --}}
+    <div x-show="showMatchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center" style="background-color: #3b3b3bb8;" @click.self="showMatchModal = false">
         <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
-            <div class="bg-yellow-50 px-6 pt-5 pb-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-                        </svg>
+            <template x-if="isMatch">
+                <div class="bg-green-50 px-6 pt-5 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-green-700">Pasport ma'lumotlaringiz bazadagi bilan mos keldi</h3>
                     </div>
-                    <h3 class="text-lg font-bold text-yellow-700">Bazadagi ma'lumotlaringiz pasport ma'lumotlaringizga mos kelmadi</h3>
                 </div>
-            </div>
+            </template>
+            <template x-if="!isMatch">
+                <div class="bg-yellow-50 px-6 pt-5 pb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold text-yellow-700">Pasport ma'lumotlaringiz bazadagi bilan mos kelmadi</h3>
+                    </div>
+                </div>
+            </template>
             <div class="px-6 py-5">
-                <button @click="showMismatchModal = false" type="button"
+                <button @click="showMatchModal = false" type="button"
                         class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">
                     Davom etish
                 </button>

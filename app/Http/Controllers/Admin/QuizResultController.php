@@ -1731,10 +1731,8 @@ class QuizResultController extends Controller
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
         ]);
 
-        // Eski student_grades yozuvlarini o'chirish
-        StudentGrade::whereIn('quiz_result_id', $request->ids)
-            ->where('reason', 'quiz_result')
-            ->delete();
+        // Eski student_grades yozuvlarini o'chirish (quiz_result_id bo'yicha)
+        StudentGrade::whereIn('quiz_result_id', $request->ids)->delete();
 
         // uploadToGrades ni chaqirish (endi eski yozuvlar yo'q — dublikat tekshiruv o'tmaydi)
         return $this->uploadToGrades($request);

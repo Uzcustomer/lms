@@ -1409,12 +1409,14 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
-                ->where('code', $student->semester_code)
-                ->first();
-
+            // Fan uchun CurriculumSubject topish (curriculum bo'yicha aniq qidirish)
             $subject = null;
-            if ($result->fan_id) {
+            if ($result->fan_id && $group) {
+                $subject = CurriculumSubject::where('subject_id', $result->fan_id)
+                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                    ->first();
+            }
+            if (!$subject && $result->fan_id) {
                 $subject = CurriculumSubject::where('subject_id', $result->fan_id)->first();
             }
             if (!$subject) {
@@ -1422,6 +1424,12 @@ class QuizResultController extends Controller
                 $errors[] = $rowInfo;
                 continue;
             }
+
+            // Semester — fan o'quv rejadagi semester bo'yicha (talabaning hozirgi semestri emas)
+            $semesterCode = $subject->semester_code ?? $student->semester_code;
+            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('code', $semesterCode)
+                ->first();
 
             $existing = StudentGrade::where('quiz_result_id', $result->id)->first();
             if ($existing) {

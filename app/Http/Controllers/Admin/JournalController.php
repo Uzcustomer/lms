@@ -787,11 +787,15 @@ class JournalController extends Controller
 
         // Get other averages (ON, OSKI, Test, Quiz) with status-based grade calculation
         // Filter by education_year_code to exclude old education year data
+        // OSKI/Test (101,102) uchun semester_code filtrini yumshatish — diagnostika boshqa semester bilan saqlagan bo'lishi mumkin
         $otherGradesRaw = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
+            ->where(function ($q) use ($semesterCode) {
+                $q->where('semester_code', $semesterCode)
+                    ->orWhereIn('training_type_code', [101, 102]);
+            })
             ->whereIn('training_type_code', [100, 101, 102, 103])
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                 $q2->where('education_year_code', $educationYearCode)
@@ -5026,12 +5030,22 @@ class JournalController extends Controller
 
         if ($quizResults->isEmpty()) {
             // Natijalar yo'q — ammo allaqachon yuklanganlarni tekshirish
+            // Avval aniq semester_code bilan, keyin semester_code siz (diagnostika boshqa semester bilan saqlagan bo'lishi mumkin)
             $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereIn('training_type_code', [101, 102])
                 ->where('reason', 'quiz_result')
                 ->count();
+
+            if ($existingCount === 0) {
+                // semester_code mos kelmagan bo'lishi mumkin — semester_code siz tekshirish
+                $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('reason', 'quiz_result')
+                    ->count();
+            }
 
             if ($existingCount > 0) {
                 $ynSubmission->update(['results_fetched' => true]);

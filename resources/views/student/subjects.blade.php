@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="text-sm font-semibold leading-tight text-gray-800 dark:text-gray-200">
-            Joriy fanlar <span class="text-base font-normal text-gray-500">({{ $semester }})</span>
+            {{ __('Joriy fanlar') }} <span class="text-base font-normal text-gray-500">({{ $semester }})</span>
         </h2>
     </x-slot>
 
@@ -341,22 +341,22 @@
             <div class="summary-bar">
                 <div class="s-item">
                     <span class="s-dot" style="background: #6366f1;"></span>
-                    <span class="s-text"><b>{{ $subjectCount }}</b> ta fan</span>
+                    <span class="s-text"><b>{{ $subjectCount }}</b> {{ __('ta fan') }}</span>
                 </div>
                 <span class="s-sep"></span>
                 <div class="s-item">
                     <span class="s-dot" style="background: #8b5cf6;"></span>
-                    <span class="s-text"><b>{{ $totalCredit }}</b> kredit</span>
+                    <span class="s-text"><b>{{ $totalCredit }}</b> {{ __('kredit') }}</span>
                 </div>
                 <span class="s-sep"></span>
                 <div class="s-item">
                     <span class="s-dot" style="background: #10b981;"></span>
-                    <span class="s-text">O'rt JN: <b>{{ $avgJn }}%</b></span>
+                    <span class="s-text">{{ __("O'rt JN") }}: <b>{{ $avgJn }}%</b></span>
                 </div>
                 <span class="s-sep"></span>
                 <div class="s-item">
                     <span class="s-dot" style="background: {{ $totalAbsent > 0 ? '#f59e0b' : '#10b981' }};"></span>
-                    <span class="s-text">Qoldirgan: <b>{{ $totalAbsent }}</b> / {{ $totalAuditorium }} soat</span>
+                    <span class="s-text">{{ __('Qoldirgan') }}: <b>{{ $totalAbsent }}</b> / {{ $totalAuditorium }} {{ __('soat') }}</span>
                 </div>
             </div>
 
@@ -438,7 +438,7 @@
                                 </div>
 
                                 <div class="dav-section">
-                                    <span class="dav-label">Davomat</span>
+                                    <span class="dav-label">{{ __('Davomat') }}</span>
                                     <div class="dav-track">
                                         <div class="dav-fill" style="width: {{ $davWidth }}%; background: {{ $davColor }};"></div>
                                     </div>
@@ -446,7 +446,7 @@
                                 </div>
 
                                 <div class="card-footer">
-                                    <span class="card-hours"><b>{{ $subject['absent_hours'] }}</b> / {{ $subject['auditorium_hours'] }} soat</span>
+                                    <span class="card-hours"><b>{{ $subject['absent_hours'] }}</b> / {{ $subject['auditorium_hours'] }} {{ __('soat') }}</span>
                                     <div style="display: flex; gap: 8px; align-items: center;">
                                         {{-- MT yuklash button --}}
                                         @if($subject['mt'])
@@ -454,27 +454,27 @@
                                             @if($mt['grade_locked'])
                                                 {{-- Baho >= minimumLimit: Baholangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-green">
-                                                    Baholangan <b>{{ $mt['grade'] }}</b>
+                                                    {{ __('Baholangan') }} <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['can_resubmit'])
                                                 {{-- Baho < minimumLimit, deadline ichida, urinish bor: Qayta yuklash --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
-                                                    Qayta yuklash
+                                                    {{ __('Qayta yuklash') }}
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60) && $mt['remaining_attempts'] <= 0)
                                                 {{-- Baho < minimumLimit, urinish limiti tugagan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Limit tugagan <b>{{ $mt['grade'] }}</b>
+                                                    {{ __('Limit tugagan') }} <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60))
                                                 {{-- Baho < minimumLimit, deadline o'tgan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Muddat tugagan <b>{{ $mt['grade'] }}</b>
+                                                    {{ __('Muddat tugagan') }} <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['submission'] && $mt['is_viewed'])
                                                 {{-- Yuklangan + o'qituvchi ko'rgan: Tekshirilmoqda --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-yellow">
-                                                    Tekshirilmoqda
+                                                    {{ __('Tekshirilmoqda') }}
                                                 </button>
                                             @elseif($mt['submission'])
                                                 {{-- Yuklangan, o'qituvchi hali ko'rmagan: Yuklangan --}}

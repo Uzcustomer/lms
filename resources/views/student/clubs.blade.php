@@ -5,13 +5,165 @@
         </h2>
     </x-slot>
 
-    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3">
-        <div class="text-center py-16">
-            <svg class="mx-auto h-20 w-20 text-teal-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-            </svg>
-            <h3 class="mt-5 text-2xl font-bold text-gray-800">To'garaklar</h3>
-            <p class="mt-3 text-base text-gray-600">Tez kunda...</p>
+    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 py-4">
+        {{-- Main Title --}}
+        <div class="text-center mb-6">
+            <h1 class="text-lg font-bold text-gray-800 uppercase leading-snug">
+                Toshkent Davlat Tibbiyot Universiteti Termiz Filialida<br>
+                2025-2026 o'quv yilida tashkil etilgan to'garaklar to'g'risida ma'lumot
+            </h1>
         </div>
+
+        {{-- 1-jadval: O'zbek va xorijiy tillar kafedrasi --}}
+        <div class="mb-6">
+            <h2 class="text-sm font-bold text-center text-gray-800 mb-3 px-2">
+                O'zbek va xorijiy tillar kafedrasi faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali
+            </h2>
+            <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-indigo-50">
+                            <th class="border border-gray-200 px-2 py-2 text-center font-semibold text-gray-700 w-10">T/r</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">To'garak nomi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Mashg'ulot joyi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">O'tkaziladigan kuni</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Soati</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="bg-white hover:bg-gray-50">
+                            <td class="border border-gray-200 px-2 py-2 text-center">1.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">"Yosh tilshunoslar"</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">1-o'quv bino<br>412-xona</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Payshanba</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">15:00-16:00</td>
+                        </tr>
+                        <tr class="bg-gray-50 hover:bg-gray-100">
+                            <td class="border border-gray-200 px-2 py-2 text-center">2.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">"Русское слово"</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">1-o'quv bino<br>332-xona</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Payshanba</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">15:00-16:00</td>
+                        </tr>
+                        <tr class="bg-white hover:bg-gray-50">
+                            <td class="border border-gray-200 px-2 py-2 text-center">3.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">"We learn English"</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">1-o'quv bino<br>411-xona</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Juma</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">15:00-16:00</td>
+                        </tr>
+                        <tr class="bg-gray-50 hover:bg-gray-100">
+                            <td class="border border-gray-200 px-2 py-2 text-center">4.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">"English atmosphere"</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">1-o'quv bino<br>406-xona</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Chorshanba</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">15:00-16:00</td>
+                        </tr>
+                        <tr class="bg-white hover:bg-gray-50">
+                            <td class="border border-gray-200 px-2 py-2 text-center">5.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">"Medicus"</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">1-o'quv bino<br>334-xona</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Juma</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">15:00-16:00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- 2-jadval: Travmatologiya-ortopediya... --}}
+        <div class="mb-6">
+            <h2 class="text-sm font-bold text-center text-gray-800 mb-3 px-2">
+                Travmatologiya-ortopediya, harbiy dala jarrohligi, neyrojarrohllik, anesteziologiya va tex tibbiy yordam kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali
+            </h2>
+            <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-indigo-50">
+                            <th class="border border-gray-200 px-2 py-2 text-center font-semibold text-gray-700 w-10">T/r</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">To'garak nomi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Mashg'ulot joyi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">O'tkaziladigan kuni</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Soati</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="bg-white hover:bg-gray-50">
+                            <td class="border border-gray-200 px-2 py-2 text-center">1.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Yosh Travmatolog-ortoped</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Viloyat ko'p tarmoqli tibbiyot markazi</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Shanba</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">14:30-16:30</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- 3-jadval: Otorinolaringologiya... --}}
+        <div class="mb-6">
+            <h2 class="text-sm font-bold text-center text-gray-800 mb-3 px-2">
+                Otorinolaringologiya, oftasmologiya, onkologiya va tibbiy radiologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali
+            </h2>
+            <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-indigo-50">
+                            <th class="border border-gray-200 px-2 py-2 text-center font-semibold text-gray-700 w-10">T/r</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">To'garak nomi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Mashg'ulot joyi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">O'tkaziladigan kuni</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Soati</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="bg-white hover:bg-gray-50">
+                            <td class="border border-gray-200 px-2 py-2 text-center">1.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Yosh onkologlar</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Viloyat Onkologiya shifoxonasi</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Chorshanba<br>Shanba</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">15:00-17:00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- 4-jadval: Normal va patologik fiziologiya --}}
+        <div class="mb-6">
+            <h2 class="text-sm font-bold text-center text-gray-800 mb-3 px-2">
+                Normal va patologik fiziologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali
+            </h2>
+            <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-indigo-50">
+                            <th class="border border-gray-200 px-2 py-2 text-center font-semibold text-gray-700 w-10">T/r</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">To'garak nomi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Mashg'ulot joyi</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">O'tkaziladigan kuni</th>
+                            <th class="border border-gray-200 px-3 py-2 text-center font-semibold text-gray-700">Soati</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="bg-white hover:bg-gray-50">
+                            <td class="border border-gray-200 px-2 py-2 text-center">1.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Tibbiyot falsafasi</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Asosiy o'quv bino<br>5-qavat</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Chorshanba<br>Juma</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">16:30-17:30</td>
+                        </tr>
+                        <tr class="bg-gray-50 hover:bg-gray-100">
+                            <td class="border border-gray-200 px-2 py-2 text-center">2.</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Yosh fiziologlar</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Asosiy o'quv bino<br>5-qavat</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">Chorshanba<br>Shanba</td>
+                            <td class="border border-gray-200 px-3 py-2 text-center">16:30-17:30</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div>
 </x-student-app-layout>

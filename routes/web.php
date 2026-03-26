@@ -353,6 +353,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return view('admin.job-listings');
         })->name('job-listings.index');
 
+        // Ma'lumotlar eksporti
+        Route::get('/export/curriculum-subjects', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculumSubjectsExport, 'curriculum_subjects.xlsx');
+        })->name('export.curriculum-subjects');
+        Route::get('/export/semesters', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\SemestersExport, 'semesters.xlsx');
+        })->name('export.semesters');
+        Route::get('/export/curricula', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculaExport, 'curricula.xlsx');
+        })->name('export.curricula');
+
         // Xabarnomalar (Notifications)
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');

@@ -140,6 +140,48 @@
                         ['name' => 'Yosh biokimyogarlar', 'place' => 'Asosiy o\'quv bino, 313-xona', 'day' => 'Payshanba', 'time' => '15:00-16:00'],
                     ]
                 ],
+                [
+                    'title' => "Patologik anatomiya, sud tibbiyoti huquqi kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'stone',
+                    'clubs' => [
+                        ['name' => 'Buyuk patologoanatomlar', 'place' => 'Asosiy o\'quv bino, 2-qavat', 'day' => 'Seshanba, Payshanba', 'time' => '16:30-17:30'],
+                        ['name' => 'Adolatli sud-tibbiy ekspertlar', 'place' => 'RSTYIAM Surxondaryo viloyati filiali binosi', 'day' => 'Chorshanba, Juma', 'time' => '16:30-17:30'],
+                    ]
+                ],
+                [
+                    'title' => "Tibbiy psixologiya nevrologiya va psixiatriya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'sky',
+                    'clubs' => [
+                        ['name' => 'Yosh nevrologlar', 'place' => 'Ko\'p tarmoqli markaziy poliklinika, 403-xona', 'day' => 'Seshanba, Payshanba, Shanba', 'time' => '16:00-18:00'],
+                        ['name' => 'Yosh Psixiatrlar', 'place' => 'Viloyat Ruhiy asab kasalliklar shifoxonasi, 3-xona', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '16:00-18:00'],
+                    ]
+                ],
+                [
+                    'title' => "Yuqumli kasalliklar, dermatovenerologiya, ftiziatriya va pulmonologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'yellow',
+                    'clubs' => [
+                        ['name' => 'Dermatovenerologlar', 'place' => 'Surxondaryo viloyati Teri tanosil kasalliklari dispanseri', 'day' => 'Shanba', 'time' => '16:00-18:00'],
+                        ['name' => 'Infeksionistlar', 'place' => 'Viloyat yuqumli kasalliklar shifoxonasi', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '16:00-18:00'],
+                        ['name' => 'Ftiziatrlar', 'place' => 'Viloyat Ftiziatriyava Pulmonologiya shifoxonasi', 'day' => 'Seshanba, Payshanba', 'time' => '16:00-18:00'],
+                    ]
+                ],
+                [
+                    'title' => "Ichki kasalliklar, propedevtikasi, reabitologiya, xalq tabobati va endokrinologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'slate',
+                    'clubs' => [
+                        ['name' => 'Yosh endokrinologlar', 'place' => 'Mashxura klinikasi', 'day' => 'Dushanba, Juma', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Xirurgik kasalliklar va oilaviy shifokorlikda xirurgiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'zinc',
+                    'clubs' => [
+                        ['name' => 'Torakal va yurak-qon tomir xirurgiyasi', 'place' => 'O\'tan polvon DDM, Kafedra xonasi', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Kardioxirurgiyada zamonaviy tekshirish usullari', 'place' => 'O\'tan polvon DDM, Kafedra xonasi', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Kardioxirurgiyada anesteziologiya, reanimatsiya va perfuziologiya masalalari', 'place' => 'O\'tan polvon DDM, Kafedra xonasi', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Tibbiyotda nemis tili', 'place' => 'O\'tan polvon DDM, Kafedra xonasi', 'day' => 'Seshanba, Payshanba, Shanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
             ];
         @endphp
 

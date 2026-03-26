@@ -48,6 +48,30 @@
                         ['name' => 'Yosh fiziologlar', 'place' => 'Asosiy o\'quv bino, 5-qavat', 'day' => 'Chorshanba, Shanba', 'time' => '16:30-17:30'],
                     ]
                 ],
+                [
+                    'title' => "Mikrobiologiya jamoat salomatligi gigiyena va menejment kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'amber',
+                    'clubs' => [
+                        ['name' => '"Yosh mikrobiologlar"', 'place' => 'Asosiy o\'quv bino, 4-qavat 408-xona', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh gigiyenistlar', 'place' => '1-o\'quv bino, 308-xona', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Ichki kasalliklar, HDT, gematologiya va oilaviy shifokorlikda terapiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'blue',
+                    'clubs' => [
+                        ['name' => 'Oilaviy hifokorlikda terapiya', 'place' => 'RIKIATM Surxondaryo mintaqaviy filiali', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh allergologlar', 'place' => 'Viloyat ko\'p tarmoqli tibbiyot markazi', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh revmatologlar', 'place' => 'Viloyat ko\'p tarmoqli tibbiyot markazi', 'day' => 'Juma', 'time' => '15:00-17:00'],
+                        ['name' => 'Harbiy terapevtlar', 'place' => '4-oilaviy poliklinika', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh terapevtlar', 'place' => '4-oilaviy poliklinika', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Kardiologlar avlodi', 'place' => 'RIKIATM Surxondaryo mintaqaviy filiali', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh kardiologlar', 'place' => 'RIKIATM Surxondaryo mintaqaviy filiali', 'day' => 'Juma', 'time' => '15:00-17:00'],
+                        ['name' => 'Tibbiyotda zamonaviy diagnostika', 'place' => 'Viloyat ko\'p tarmoqli tibbiyot markazi', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
+                        ['name' => '"SMART DOCTOR" ichki kasalliklar klubi', 'place' => 'Viloyat ko\'p tarmoqli tibbiyot markazi, 8-o\'quv xona', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Kardiologiya', 'place' => 'RShTTYoIM Surxondaryo filiali', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '15:00-17:00'],
+                    ]
+                ],
             ];
         @endphp
 
@@ -57,9 +81,9 @@
                     <h2 class="text-[11px] font-bold text-{{ $section['color'] }}-800 text-center leading-snug">{{ $section['title'] }}</h2>
                 </div>
                 <div class="border border-t-0 border-gray-200 rounded-b-xl">
-                    <div class="grid grid-cols-2 gap-px bg-gray-100 rounded-b-xl overflow-hidden">
+                    <div class="grid grid-cols-2 rounded-b-xl overflow-hidden">
                         @foreach($section['clubs'] as $i => $club)
-                            <div class="px-2.5 py-2.5 bg-white {{ count($section['clubs']) % 2 !== 0 && $loop->last ? 'col-span-2' : '' }}">
+                            <div class="px-2.5 py-2.5 bg-white border-b border-r border-gray-200 {{ count($section['clubs']) % 2 !== 0 && $loop->last ? 'col-span-2 border-r-0' : '' }} {{ $loop->iteration % 2 === 0 ? 'border-r-0' : '' }} {{ $loop->last || ($loop->iteration % 2 !== 0 && $loop->iteration === count($section['clubs']) - 1) ? 'border-b-0' : '' }}">
                                 <div class="font-semibold text-xs text-gray-800">{{ $i + 1 }}. {{ $club['name'] }}</div>
                                 <div class="mt-1 flex flex-col gap-0.5 text-[11px] text-gray-500">
                                     <div class="flex items-center gap-1">

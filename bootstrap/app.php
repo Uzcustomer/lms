@@ -24,6 +24,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
         ]);
 
+        // locale cookie ni encrypt qilmaslik
+        $middleware->encryptCookies(except: ['locale']);
+
         // Til sozlamasi middleware
         $middleware->append(\App\Http\Middleware\SetLocale::class);
 

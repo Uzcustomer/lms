@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Attendance;
 use App\Models\CurriculumSubject;
 use App\Models\Deadline;
 use App\Models\Department;
@@ -447,18 +448,14 @@ class VedomostController extends Controller
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
                     $oskiLimit = $markingScore->oski_active ? $markingScore->oski_limit : 0;
                     $testLimit = $markingScore->test_active ? $markingScore->test_limit : 0;
-                    $token = config('services.hemis.token');
-                    $response = Http::withoutVerifying()->withToken($token)
-                        ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-                    $qoldirgan = 0;
+                    $qoldirgan = (int) DB::table('attendances')
+                        ->where('student_hemis_id', $student->hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $vedomost->semester_code)
+                        ->whereNotIn('training_type_code', [99, 100, 101, 102])
+                        ->sum('absent_off');
                     $ozlashtirish = 0;
-                    if ($response->successful()) {
-                        $data = $response->json()['data'];
-                        foreach ($data['items'] as $item) {
-                            $qoldirgan += $item['absent_off'];
-                        }
-                    }
-                    $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
+                    $student->qoldiq = round($qoldirgan * 100 / ($subject->total_acload ?: 1), 2);
                     if ($student->qoldiq > 25 or $student->jb < $jnLimit or $student->mt < $mtLimit or ($vedomost->oraliq_percent != 0 and $student->on < $onLimit)) {
                         $ozlashtirish = -2;
                     } elseif (
@@ -861,18 +858,14 @@ class VedomostController extends Controller
                     $onLimit = $markingScore->on_active ? $markingScore->on_limit : 0;
                     $oskiLimit = $markingScore->oski_active ? $markingScore->oski_limit : 0;
                     $testLimit = $markingScore->test_active ? $markingScore->test_limit : 0;
-                    $token = config('services.hemis.token');
-                    $response = Http::withoutVerifying()->withToken($token)
-                        ->get("https://student.ttatf.uz/rest/v1/data/attendance-list?limit=200&page=1&_group=" . $group->group_hemis_id . "&_subject=" . $subject->subject_id . "&_student=" . $student->hemis_id);
-                    $qoldirgan = 0;
+                    $qoldirgan = (int) DB::table('attendances')
+                        ->where('student_hemis_id', $student->hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $vedomost->semester_code)
+                        ->whereNotIn('training_type_code', [99, 100, 101, 102])
+                        ->sum('absent_off');
                     $ozlashtirish = 0;
-                    if ($response->successful()) {
-                        $data = $response->json()['data'];
-                        foreach ($data['items'] as $item) {
-                            $qoldirgan += $item['absent_off'];
-                        }
-                    }
-                    $student->qoldiq = round($qoldirgan * 100 / $subject->total_acload, 2);
+                    $student->qoldiq = round($qoldirgan * 100 / ($subject->total_acload ?: 1), 2);
                     if ($student->qoldiq > 25 || $student->jb < $jnLimit || $student->mt < $mtLimit || ($vedomost->oraliq_percent != 0 && $student->on < $onLimit) || $student->jb_secend < $jnLimit || $student->mt_secend < $mtLimit) {
                         $ozlashtirish = -2;
                     } elseif (

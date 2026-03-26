@@ -603,19 +603,38 @@ class VedomostTekshirishController extends Controller
             $lectureTeacher   = $this->getTopTeacher($groupHemisId, $subjectId, $semesterCode, [11]);
             $practiceTeacher  = $this->getTopTeacher($groupHemisId, $subjectId, $semesterCode, [12, 13, 14, 18]);
 
-            // --- Davomat ---
-            $davomatByStudent = [];
+            // --- Davomat (attendances jadvalidan, jurnal bilan bir xil hisoblash) ---
             $totalHours = (int) ($subject->total_acload ?? 0);
+            $excludedAttendanceCodes = [99, 100, 101, 102];
+            $attendanceByStudent = DB::table('attendances')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->when($educationYearCode, fn($q) => $q->where('education_year_code', $educationYearCode))
+                ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+                ->selectRaw('student_hemis_id, SUM(absent_off) as total_absent_off')
+                ->groupBy('student_hemis_id')
+                ->pluck('total_absent_off', 'student_hemis_id');
+
+            $nonAuditoriumCodes = ['17'];
+            $auditoriumHours = 0;
+            if (is_array($subject->subject_details)) {
+                foreach ($subject->subject_details as $detail) {
+                    $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                    if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                        $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                    }
+                }
+            }
+            if ($auditoriumHours <= 0) {
+                $auditoriumHours = (float) ($subject->total_acload ?? 0);
+            }
+
+            $davomatByStudent = [];
             foreach ($students as $stu) {
-                $absent = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->where('student_hemis_id', $stu->hemis_id)
-                    ->where('subject_id', $subjectId)
-                    ->where('semester_code', $semesterCode)
-                    ->where('reason', 'absent')
-                    ->count();
-                $davomatByStudent[$stu->hemis_id] = $totalHours > 0
-                    ? round($absent / $totalHours * 100, 2)
+                $absentOff = (float) ($attendanceByStudent[$stu->hemis_id] ?? 0);
+                $davomatByStudent[$stu->hemis_id] = $auditoriumHours > 0
+                    ? round(($absentOff / $auditoriumHours) * 100, 2)
                     : 0.0;
             }
 

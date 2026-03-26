@@ -14,6 +14,7 @@ use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Services\SubjectMatcherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -53,7 +54,32 @@ class AbsenceExcuseController extends Controller
         $endDate = Carbon::parse($request->end_date);
         $groupId = $student->group_id;
 
+        // 1. Sababli kunlar oralig'idagi nazoratlar
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+
+        // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan nazoratlar
+        // (sababli kunlar bilan qayta topshirish orasidagi "bo'shliq"dagi nazoratlar ham topiladi)
+        $totalDays = $this->countNonSundays($startDate, $endDate);
+        if ($totalDays > 0) {
+            $makeupEnd = $this->addNonSundayDays(Carbon::today()->copy(), $totalDays);
+
+            // endDate dan keyingi kundan makeupEnd gacha qidirish
+            $searchStart = $endDate->copy()->addDay();
+            if ($searchStart->lte($makeupEnd)) {
+                $makeupAssessments = $this->findMissedAssessments($groupId, $searchStart, $makeupEnd);
+
+                $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+
+                foreach ($makeupAssessments as $ma) {
+                    $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
+                    if (!in_array($key, $existingKeys)) {
+                        $ma['is_makeup_period'] = true;
+                        $missedAssessments->push($ma);
+                        $existingKeys[] = $key;
+                    }
+                }
+            }
+        }
 
         // Shu muddat ichidagi barcha darslardan unique fanlarni olish (JN uchun)
         $jnSubjects = Schedule::where('group_id', $groupId)
@@ -160,9 +186,13 @@ class AbsenceExcuseController extends Controller
         $makeupDates = $request->input('makeup_dates', []);
         foreach ($makeupDates as $i => $makeup) {
             if (($makeup['assessment_type'] ?? '') === 'jn') {
+                // JN topshirilgan bo'lsa, sana talab qilinmaydi
+                if (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1') {
+                    continue;
+                }
                 if (empty($makeup['makeup_start']) || empty($makeup['makeup_end'])) {
                     return back()->withErrors([
-                        "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang',
+                        "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang yoki "Topshirilgan" tugmasini bosing',
                     ])->withInput();
                 }
             } else {
@@ -197,32 +227,55 @@ class AbsenceExcuseController extends Controller
 
             // Makeup sanalarni saqlash
             foreach ($makeupDates as $makeup) {
-                // JN uchun makeup_start, boshqalar uchun makeup_date
-                $dateToSave = ($makeup['assessment_type'] === 'jn')
-                    ? ($makeup['makeup_start'] ?? $makeup['makeup_date'])
-                    : $makeup['makeup_date'];
+                $isJn = ($makeup['assessment_type'] ?? '') === 'jn';
+                $isJnSubmitted = $isJn && !empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1';
 
-                $parsedDate = Carbon::parse($dateToSave);
-                if ($parsedDate->isSunday()) {
-                    throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
+                // JN topshirilgan bo'lsa, sanasiz saqlaymiz
+                $dateToSave = null;
+                $makeupEndDate = null;
+
+                if ($isJnSubmitted) {
+                    // Topshirilgan JN — sana kerak emas, original_date ni saqlaymiz
+                    $dateToSave = $makeup['original_date'];
+                } elseif ($isJn) {
+                    $dateToSave = $makeup['makeup_start'] ?? $makeup['makeup_date'];
+                    if (!empty($makeup['makeup_end'])) {
+                        $makeupEndDate = $makeup['makeup_end'];
+                    }
+                } else {
+                    $dateToSave = $makeup['makeup_date'];
                 }
 
-                $makeupEndDate = null;
-                if (($makeup['assessment_type'] ?? '') === 'jn' && !empty($makeup['makeup_end'])) {
-                    $makeupEndDate = $makeup['makeup_end'];
+                if (!$isJnSubmitted) {
+                    $parsedDate = Carbon::parse($dateToSave);
+                    if ($parsedDate->isSunday()) {
+                        throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
+                    }
+                }
+
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $makeup['subject_id'] ?? null;
+                $matchResult = SubjectMatcherService::resolveSubjectId(
+                    $makeup['subject_name'],
+                    $resolvedSubjectId,
+                    $student
+                );
+                if ($matchResult) {
+                    $resolvedSubjectId = $matchResult['subject_id'];
                 }
 
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
                     'subject_name' => $makeup['subject_name'],
-                    'subject_id' => $makeup['subject_id'] ?? null,
+                    'subject_id' => $resolvedSubjectId,
                     'assessment_type' => $makeup['assessment_type'],
                     'assessment_type_code' => $makeup['assessment_type_code'],
                     'original_date' => $makeup['original_date'],
                     'makeup_date' => $dateToSave,
                     'makeup_end_date' => $makeupEndDate,
-                    'status' => 'scheduled',
+                    'jn_submitted' => $isJnSubmitted,
+                    'status' => $isJnSubmitted ? 'completed' : 'scheduled',
                 ]);
             }
 
@@ -255,11 +308,22 @@ class AbsenceExcuseController extends Controller
 
         if ($existingMakeups->isEmpty() && $missedAssessments->isNotEmpty()) {
             foreach ($missedAssessments as $assessment) {
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $assessment['subject_id'];
+                $match = SubjectMatcherService::resolveSubjectId(
+                    $assessment['subject_name'],
+                    $assessment['subject_id'],
+                    $student
+                );
+                if ($match) {
+                    $resolvedSubjectId = $match['subject_id'];
+                }
+
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
                     'subject_name' => $assessment['subject_name'],
-                    'subject_id' => $assessment['subject_id'],
+                    'subject_id' => $resolvedSubjectId,
                     'assessment_type' => $assessment['assessment_type'],
                     'assessment_type_code' => $assessment['assessment_type_code'],
                     'original_date' => $assessment['original_date'],
@@ -432,6 +496,24 @@ class AbsenceExcuseController extends Controller
     }
 
     /**
+     * Bugundan boshlab N ta yakshanba bo'lmagan kun qo'shish
+     */
+    private function addNonSundayDays(Carbon $start, int $days): Carbon
+    {
+        $count = 0;
+        $d = $start->copy();
+        while ($count < $days) {
+            if ($d->dayOfWeek !== Carbon::SUNDAY) {
+                $count++;
+            }
+            if ($count < $days) {
+                $d->addDay();
+            }
+        }
+        return $d;
+    }
+
+    /**
      * Sana oralig'i bo'yicha o'tkazib yuborilgan nazoratlarni topish
      */
     private function findMissedAssessments($groupId, $startDate, $endDate)
@@ -516,16 +598,19 @@ class AbsenceExcuseController extends Controller
         $examSchedules = ExamSchedule::where('group_hemis_id', $groupId)
             ->where(function ($q) use ($startDate, $endDate) {
                 $q->where(function ($q2) use ($startDate, $endDate) {
-                    $q2->whereDate('oski_date', '>=', $startDate)
+                    $q2->whereNotNull('oski_date')
+                        ->whereDate('oski_date', '>=', $startDate)
                         ->whereDate('oski_date', '<=', $endDate);
                 })->orWhere(function ($q2) use ($startDate, $endDate) {
-                    $q2->whereDate('test_date', '>=', $startDate)
+                    $q2->whereNotNull('test_date')
+                        ->whereDate('test_date', '>=', $startDate)
                         ->whereDate('test_date', '<=', $endDate);
                 });
             })->get();
 
         foreach ($examSchedules as $es) {
-            if ($es->oski_date && $es->oski_date->between($startDate, $endDate)) {
+            // oski_na NULL yoki false bo'lsa — OSKI ko'rsatiladi
+            if (!$es->oski_na && $es->oski_date && $es->oski_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
                     'subject_id' => $es->subject_id,
@@ -534,7 +619,8 @@ class AbsenceExcuseController extends Controller
                     'original_date' => $es->oski_date->format('Y-m-d'),
                 ]);
             }
-            if ($es->test_date && $es->test_date->between($startDate, $endDate)) {
+            // test_na NULL yoki false bo'lsa — Test ko'rsatiladi
+            if (!$es->test_na && $es->test_date && $es->test_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
                     'subject_id' => $es->subject_id,

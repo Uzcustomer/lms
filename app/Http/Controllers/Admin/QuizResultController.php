@@ -1629,12 +1629,14 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
-                ->where('code', $student->semester_code)
-                ->first();
-
+            // Fan uchun CurriculumSubject topish (curriculum bo'yicha aniq qidirish)
             $subject = null;
-            if ($result->fan_id) {
+            if ($result->fan_id && $group) {
+                $subject = CurriculumSubject::where('subject_id', $result->fan_id)
+                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                    ->first();
+            }
+            if (!$subject && $result->fan_id) {
                 $subject = CurriculumSubject::where('subject_id', $result->fan_id)->first();
             }
             if (!$subject) {
@@ -1642,6 +1644,12 @@ class QuizResultController extends Controller
                 $errors[] = $rowInfo;
                 continue;
             }
+
+            // Semester — talabaning hozirgi semestri bo'yicha (jurnal shu semestrni ko'rsatadi)
+            $semesterCode = $student->semester_code;
+            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('code', $semesterCode)
+                ->first();
 
             $existing = StudentGrade::where('quiz_result_id', $result->id)->first();
             if ($existing) {
@@ -1710,6 +1718,24 @@ class QuizResultController extends Controller
             'error_count' => count($errors),
             'errors' => $errors,
         ]);
+    }
+
+    /**
+     * Oldin yuklangan natijalarni qayta yuklash.
+     * Eski student_grades yozuvlarini o'chirib, yangidan yaratadi (to'g'ri semester_code bilan).
+     */
+    public function reUploadToGrades(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+        ]);
+
+        // Eski student_grades yozuvlarini o'chirish (quiz_result_id bo'yicha)
+        StudentGrade::whereIn('quiz_result_id', $request->ids)->delete();
+
+        // uploadToGrades ni chaqirish (endi eski yozuvlar yo'q — dublikat tekshiruv o'tmaydi)
+        return $this->uploadToGrades($request);
     }
 
     /**

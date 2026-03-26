@@ -13,6 +13,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaytnomaController;
 use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Student\HemisOAuthController;
 use App\Http\Controllers\Student\StudentAuthController;
@@ -50,6 +51,17 @@ use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
+    // Agar foydalanuvchi allaqachon login bo'lgan bo'lsa — o'z dashboardiga yo'naltirish
+    if (Auth::guard('web')->check()) {
+        return redirect()->route('admin.dashboard');
+    }
+    if (Auth::guard('teacher')->check()) {
+        return redirect()->route('teacher.dashboard');
+    }
+    if (Auth::guard('student')->check()) {
+        return redirect()->route('student.dashboard');
+    }
+
     return response()
         ->view('welcome')
         ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -79,15 +91,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::get('/login', function () {
-        if (auth()->check()) {
+        if (Auth::guard('web')->check() || Auth::guard('teacher')->check()) {
             return redirect()->route('admin.dashboard');
-        } else {
-            return response()
-                ->view('auth.login')
-                ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
-                ->header('Pragma', 'no-cache')
-                ->header('Expires', '0');
         }
+        return response()
+            ->view('auth.login')
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     })->name('login');
 
 
@@ -517,6 +528,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
+            Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
@@ -692,6 +704,11 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/job-listings', function () {
             return view('student.job-listings');
         })->name('job-listings');
+
+        // To'garaklar
+        Route::get('/clubs', function () {
+            return view('student.clubs');
+        })->name('clubs');
 
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
@@ -900,6 +917,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
+            Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });

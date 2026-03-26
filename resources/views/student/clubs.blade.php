@@ -168,13 +168,13 @@
 
         @foreach($sections as $section)
             <div class="mb-5">
-                <div class="rounded-t-xl px-3 py-2 border border-b-0 border-gray-200" style="background-color:#c2def9;">
+                <div class="rounded-t-xl px-3 py-2 border border-b-0 border-gray-200" style="background-color:#c2def9;margin-bottom:5px;">
                     <h2 class="text-[11px] font-bold text-gray-800 text-center leading-snug">{{ $section['title'] }}</h2>
                 </div>
                 <div class="border border-t-0 border-gray-200 rounded-b-xl">
                     <div class="grid grid-cols-2 rounded-b-xl overflow-hidden">
                         @foreach($section['clubs'] as $i => $club)
-                            <div class="px-2.5 py-2.5 border-b border-r border-gray-200 {{ count($section['clubs']) % 2 !== 0 && $loop->last ? 'col-span-2 border-r-0' : '' }} {{ $loop->iteration % 2 === 0 ? 'border-r-0' : '' }} {{ $loop->last || ($loop->iteration % 2 !== 0 && $loop->iteration === count($section['clubs']) - 1) ? 'border-b-0' : '' }}" style="background-color:#edf9ed;margin-bottom:5px;">
+                            <div class="px-2.5 py-2.5 border-b border-r border-gray-200 {{ count($section['clubs']) % 2 !== 0 && $loop->last ? 'col-span-2 border-r-0' : '' }} {{ $loop->iteration % 2 === 0 ? 'border-r-0' : '' }} {{ $loop->last || ($loop->iteration % 2 !== 0 && $loop->iteration === count($section['clubs']) - 1) ? 'border-b-0' : '' }}" style="background-color:#edf9ed;">
                                 <div class="font-semibold text-xs text-gray-800">{{ $i + 1 }}. {{ $club['name'] }}</div>
                                 <div class="mt-1 flex flex-col gap-0.5 text-[11px] text-gray-500">
                                     <div class="flex items-center gap-1">

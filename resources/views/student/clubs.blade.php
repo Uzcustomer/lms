@@ -7,9 +7,9 @@
 
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 py-4">
         <div class="text-center mb-5">
-            <h1 class="text-base font-bold text-gray-800 uppercase leading-snug">
-                ToshDTU Termiz Filiali<br>
-                2025-2026 o'quv yili to'garaklar jadvali
+            <h1 class="text-xs font-bold text-gray-800 uppercase leading-snug">
+                Toshkent Davlat Tibbiyot Universiteti Termiz Filialida<br>
+                2025-2026 o'quv yilida tashkil etilgan to'garaklar to'g'risida ma'lumot
             </h1>
         </div>
 

@@ -168,8 +168,8 @@
 
         @foreach($sections as $section)
             <div class="mb-5">
-                <div class="rounded-t-xl px-3 py-2 border border-b-0 border-black" style="background-color:#c2def9;margin-bottom:5px;">
-                    <h2 class="text-[11px] font-bold text-gray-800 text-center leading-snug">{{ $section['title'] }}</h2>
+                <div class="rounded-t-xl px-3 py-2 border border-b-0 border-black" style="background-color:#c2def9;">
+                    <h2 class="text-xs font-bold text-gray-800 text-center leading-snug">{{ $section['title'] }}</h2>
                 </div>
                 <div class="border border-t-0 border-black rounded-b-xl">
                     <div class="grid grid-cols-2 rounded-b-xl overflow-hidden">

@@ -3,11 +3,11 @@
     <div style="display: flex; margin-bottom: 1.2rem; border-bottom: 2px solid #e5e7eb;">
         <a href="{{ route('student.login') }}"
            style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 600; text-decoration: none; border-bottom: 3px solid transparent; color: #1e40af; background-color: #dbeafe; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
-            Talaba
+            {{ __('Talaba') }}
         </a>
         <a href="{{ route('teacher.login') }}"
            style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent; color: #1e40af; background-color: #dbeafe; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
-            Xodim
+            {{ __('Xodim') }}
         </a>
     </div>
 
@@ -17,30 +17,30 @@
         <div id="step-id-input">
             <div style="text-align: center; margin-bottom: 1.2rem;">
                 <div style="font-size: 2rem; margin-bottom: 0.4rem;">🪪</div>
-                <h2 style="font-size: 1rem; font-weight: 600; color: #1e40af;">Face ID bilan kirish</h2>
-                <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Talaba ID raqamingizni kiriting</p>
+                <h2 style="font-size: 1rem; font-weight: 600; color: #1e40af;">{{ __('Face ID bilan kirish') }}</h2>
+                <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">{{ __('Talaba ID raqamingizni kiriting') }}</p>
             </div>
 
             <div id="id-error" style="display:none; background:#fee2e2; color:#b91c1c; padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:10px;"></div>
 
-            <input type="text" id="student_id_number" placeholder="Talaba ID (masalan: 20202005010028)"
+            <input type="text" id="student_id_number" placeholder="{{ __('Talaba ID (masalan: 20202005010028)') }}"
                    style="width:100%; padding: 0.6rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 14px; outline: none; box-sizing: border-box;"
                    autocomplete="off" autofocus />
 
             <button id="btn-check-student"
                     style="width:100%; margin-top: 0.75rem; padding: 0.65rem; background-color: #1d4ed8; color: #fff; font-size: 14px; font-weight: 600; border: none; border-radius: 0.5rem; cursor: pointer;">
-                Davom etish
+                {{ __('Davom etish') }}
             </button>
 
             <div style="display: flex; align-items: center; margin: 1rem 0;">
                 <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
-                <span style="padding: 0 0.75rem; font-size: 12px; color: #9ca3af;">yoki</span>
+                <span style="padding: 0 0.75rem; font-size: 12px; color: #9ca3af;">{{ __('yoki') }}</span>
                 <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
             </div>
 
             <a href="{{ route('student.login') }}"
                style="display: block; text-align: center; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 13px; color: #374151; text-decoration: none;">
-                Parol bilan kirish
+                {{ __('Parol bilan kirish') }}
             </a>
         </div>
 
@@ -53,7 +53,7 @@
                     <div id="student-name" style="font-weight:600; font-size:13px; color:#1e3a5f;"></div>
                     <div id="student-idnum" style="font-size:11px; color:#6b7280;"></div>
                 </div>
-                <button id="btn-back-to-id" style="margin-left:auto; background:none; border:none; cursor:pointer; color:#6b7280; font-size:12px; text-decoration:underline;">O'zgartirish</button>
+                <button id="btn-back-to-id" style="margin-left:auto; background:none; border:none; cursor:pointer; color:#6b7280; font-size:12px; text-decoration:underline;">{{ __('O\'zgartirish') }}</button>
             </div>
 
             <!-- Kamera oynasi -->
@@ -84,15 +84,15 @@
             <!-- Tugmalar -->
             <div style="display:flex; gap:8px; margin-top:12px;">
                 <button id="btn-retry" style="display:none; flex:1; padding:0.55rem; background:#f3f4f6; color:#374151; border:1px solid #d1d5db; border-radius:0.5rem; font-size:13px; cursor:pointer;">
-                    Qayta urinish
+                    {{ __('Qayta urinish') }}
                 </button>
                 <button id="btn-start-liveness" style="flex:1; padding:0.55rem; background:#1d4ed8; color:#fff; border:none; border-radius:0.5rem; font-size:13px; font-weight:600; cursor:pointer;">
-                    Boshlash
+                    {{ __('Boshlash') }}
                 </button>
             </div>
 
             <div style="margin-top:10px; text-align:center;">
-                <a href="{{ route('student.login') }}" style="font-size:12px; color:#6b7280; text-decoration:underline;">Parol bilan kirish</a>
+                <a href="{{ route('student.login') }}" style="font-size:12px; color:#6b7280; text-decoration:underline;">{{ __('Parol bilan kirish') }}</a>
             </div>
         </div>
 

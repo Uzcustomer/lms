@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Qayta topshirish sanalarini tanlash
+            {{ __('Qayta topshirish sanalarini tanlash') }}
         </h2>
     </x-slot>
 
@@ -100,7 +100,7 @@
                 <div class="p-4">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h3 class="text-lg font-medium text-gray-900">Ariza #{{ $excuse->id }}</h3>
+                            <h3 class="text-lg font-medium text-gray-900">{{ __('Ariza') }} #{{ $excuse->id }}</h3>
                             <p class="text-sm text-gray-500 mt-1">
                                 {{ $excuse->reason_label }} &mdash;
                                 {{ $excuse->start_date->format('d.m.Y') }} - {{ $excuse->end_date->format('d.m.Y') }}
@@ -121,14 +121,14 @@
                         <svg class="mx-auto h-12 w-12 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        <h3 class="mt-2 text-sm font-medium text-gray-900">Nazorat topilmadi</h3>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900">{{ __('Nazorat topilmadi') }}</h3>
                         <p class="mt-1 text-sm text-gray-500">
-                            Siz kelmagan kunlarda JN, MT, OSKI yoki Test nazorat turlari rejalashtirilmagan.
+                            {{ __('Siz kelmagan kunlarda JN, MT, OSKI yoki Test nazorat turlari rejalashtirilmagan.') }}
                         </p>
                         <div class="mt-4">
                             <a href="{{ route('student.absence-excuses.show', $excuse->id) }}"
                                class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
-                                Ariza sahifasiga o'tish
+                                {{ __('Ariza sahifasiga o\'tish') }}
                             </a>
                         </div>
                     </div>
@@ -139,7 +139,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-4">
                             <div class="text-sm">
-                                <span class="font-medium text-gray-700">Tanlangan kunlar:</span>
+                                <span class="font-medium text-gray-700">{{ __('Tanlangan kunlar:') }}</span>
                                 <span class="ml-1 font-bold"
                                       :class="uniqueSelectedDates.length > maxDays ? 'text-red-600' : 'text-indigo-600'"
                                       x-text="uniqueSelectedDates.length"></span>
@@ -150,14 +150,14 @@
                                 <span x-text="makeups.filter(m => m.makeup_date).length"></span>
                                 <span class="text-gray-400">/</span>
                                 <span x-text="makeups.length"></span>
-                                <span class="text-gray-400">nazorat tanlangan</span>
+                                <span class="text-gray-400">{{ __('nazorat tanlangan') }}</span>
                             </div>
                         </div>
                         <div x-show="!allSelected" class="text-xs text-amber-600 font-medium">
-                            Barcha nazoratlar uchun sana tanlang
+                            {{ __('Barcha nazoratlar uchun sana tanlang') }}
                         </div>
                         <div x-show="allSelected && uniqueSelectedDates.length > maxDays" class="text-xs text-red-600 font-medium">
-                            Kunlar soni limitdan oshib ketdi
+                            {{ __('Kunlar soni limitdan oshib ketdi') }}
                         </div>
                     </div>
                 </div>
@@ -178,25 +178,25 @@
                                                   x-text="makeup.assessment_type_label"></span>
                                         </div>
                                         <div class="text-xs text-gray-500">
-                                            Asl sana: <span class="font-medium" x-text="formatDate(makeup.original_date)"></span>
+                                            {{ __('Asl sana:') }} <span class="font-medium" x-text="formatDate(makeup.original_date)"></span>
                                         </div>
                                     </div>
 
                                     {{-- Tanlangan sana ko'rsatish --}}
                                     <div class="mb-2 flex items-center justify-between">
                                         <div class="text-sm">
-                                            <span class="text-gray-500">Qayta topshirish:</span>
+                                            <span class="text-gray-500">{{ __('Qayta topshirish:') }}</span>
                                             <template x-if="makeup.makeup_date">
                                                 <span class="ml-1 font-semibold text-indigo-600" x-text="formatDate(makeup.makeup_date)"></span>
                                             </template>
                                             <template x-if="!makeup.makeup_date">
-                                                <span class="ml-1 text-amber-500 italic">tanlanmagan</span>
+                                                <span class="ml-1 text-amber-500 italic">{{ __('tanlanmagan') }}</span>
                                             </template>
                                         </div>
                                         <template x-if="makeup.makeup_date">
                                             <button type="button" @click="makeup.makeup_date = ''"
                                                     class="text-xs text-red-500 hover:text-red-700">
-                                                Bekor qilish
+                                                {{ __('Bekor qilish') }}
                                             </button>
                                         </template>
                                     </div>
@@ -240,14 +240,14 @@
                     <div class="mt-6 flex items-center justify-between">
                         <a href="{{ route('student.absence-excuses.show', $excuse->id) }}"
                            class="text-gray-600 hover:text-gray-800 text-sm">
-                            &larr; Keyinroq tanlash
+                            &larr; {{ __('Keyinroq tanlash') }}
                         </a>
                         <button type="submit"
                                 :disabled="!canSubmit"
                                 :class="canSubmit ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-300 cursor-not-allowed'"
                                 class="px-6 py-2.5 text-white font-semibold rounded-md
                                        focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition">
-                            Sanalarni saqlash
+                            {{ __('Sanalarni saqlash') }}
                         </button>
                     </div>
                 </form>

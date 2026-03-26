@@ -137,21 +137,21 @@
 
             {{-- Shartnoma olish --}}
             <div class="bg-yellow-50 rounded-xl border border-yellow-200 p-4 mb-4">
-                <p class="text-sm text-yellow-700">Ma'lumotlaringizni tekshiring, xatolik bo'lsa tuzating va bo'sh joylarni to'ldiring. <span class="text-red-500">*</span> bilan belgilangan maydonlar majburiy.</p>
+                <p class="text-sm text-yellow-700">{{ __('Ma\'lumotlaringizni tekshiring, xatolik bo\'lsa tuzating va bo\'sh joylarni to\'ldiring.') }} <span class="text-red-500">*</span> {{ __('bilan belgilangan maydonlar majburiy.') }}</p>
             </div>
             <div class="text-center mb-6">
                 <button type="submit" style="padding: 10px 50px;" class="inline-flex items-center gap-2 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition shadow-sm">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                     </svg>
-                    Shartnoma olish
+                    {{ __('Shartnoma olish') }}
                 </button>
             </div>
         </form>
 
         {{-- Tayyor shartnomalar --}}
         @if($contracts->isNotEmpty())
-            <h3 class="text-lg font-bold text-gray-800 mb-3">Yuborilgan arizalar</h3>
+            <h3 class="text-lg font-bold text-gray-800 mb-3">{{ __('Yuborilgan arizalar') }}</h3>
             <div class="space-y-4">
                 @foreach($contracts as $contract)
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -163,7 +163,7 @@
 
                             @if($contract->status === 'rejected' && $contract->reject_reason)
                                 <div class="bg-red-50 rounded-lg p-3 mt-2">
-                                    <p class="text-sm text-red-700"><strong>Rad etish sababi:</strong> {{ $contract->reject_reason }}</p>
+                                    <p class="text-sm text-red-700"><strong>{{ __('Rad etish sababi:') }}</strong> {{ $contract->reject_reason }}</p>
                                 </div>
                             @endif
 
@@ -172,7 +172,7 @@
                                     <a href="{{ route('student.contracts.download', $contract) }}"
                                        class="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition">
                                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                        Yuklab olish
+                                        {{ __('Yuklab olish') }}
                                     </a>
                                 @endif
                                 <form method="POST" action="{{ route('student.contracts.destroy', $contract) }}" class="inline"
@@ -181,7 +181,7 @@
                                     @method('DELETE')
                                     <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition">
                                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                        O'chirish
+                                        {{ __('O\'chirish') }}
                                     </button>
                                 </form>
                             </div>

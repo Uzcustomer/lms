@@ -12,13 +12,13 @@
                         <span class="cal-trigger-text"><span x-text="fmtDate(item.makeup_start)"></span> <span class="text-gray-400 font-normal">— tugash?</span></span>
                     </template>
                     <template x-if="!item.makeup_start">
-                        <span class="cal-trigger-placeholder">Sana oralig'ini tanlang</span>
+                        <span class="cal-trigger-placeholder">{{ __('Sana oralig\'ini tanlang') }}</span>
                     </template>
                 </div>
                 <div class="flex items-center gap-2">
                     <template x-if="item.makeup_start || item.makeup_end">
                         <button type="button" @click.stop="clearMiniDates(item._idx); item.show_cal = false"
-                                class="text-xs text-red-400 hover:text-red-600 font-medium">Tozalash</button>
+                                class="text-xs text-red-400 hover:text-red-600 font-medium">{{ __('Tozalash') }}</button>
                     </template>
                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 </div>
@@ -38,13 +38,13 @@
                         </span>
                     </template>
                     <template x-if="!item.makeup_date">
-                        <span class="cal-trigger-placeholder">Sanani tanlang</span>
+                        <span class="cal-trigger-placeholder">{{ __('Sanani tanlang') }}</span>
                     </template>
                 </div>
                 <div class="flex items-center gap-2">
                     <template x-if="item.makeup_date">
                         <button type="button" @click.stop="item.makeup_date = ''; item.show_cal = false"
-                                class="text-xs text-red-400 hover:text-red-600 font-medium">Bekor qilish</button>
+                                class="text-xs text-red-400 hover:text-red-600 font-medium">{{ __('Bekor qilish') }}</button>
                     </template>
                     <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 </div>

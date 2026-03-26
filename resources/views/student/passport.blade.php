@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Pasport ma'lumotlari
+            {{ __('Pasport ma\'lumotlari') }}
         </h2>
     </x-slot>
 

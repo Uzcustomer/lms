@@ -3,11 +3,11 @@
     <div style="display: flex; margin-bottom: 1.2rem; border-bottom: 2px solid #e5e7eb;">
         <a href="{{ route('student.login') }}"
            style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 600; text-decoration: none; border-bottom: 3px solid #1d4ed8; color: #ffffff; background-color: #1e40af; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
-            Talaba
+            {{ __('Talaba') }}
         </a>
         <a href="{{ route('teacher.login') }}"
            style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent; color: #1e40af; background-color: #dbeafe; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
-            Xodim
+            {{ __('Xodim') }}
         </a>
     </div>
 
@@ -63,7 +63,7 @@
     <!-- Ajratuvchi chiziq -->
     <div style="display: flex; align-items: center; margin: 1.2rem 0;">
         <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
-        <span style="padding: 0 0.75rem; font-size: 12px; color: #9ca3af;">yoki</span>
+        <span style="padding: 0 0.75rem; font-size: 12px; color: #9ca3af;">{{ __('yoki') }}</span>
         <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
     </div>
 
@@ -75,13 +75,13 @@
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 1.25rem; height: 1.25rem;">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
         </svg>
-        Face ID bilan kirish
+        {{ __('Face ID bilan kirish') }}
     </a>
 
     <!-- Ajratuvchi chiziq -->
     <div style="display: flex; align-items: center; margin: 1rem 0;">
         <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
-        <span style="padding: 0 0.75rem; font-size: 12px; color: #9ca3af;">yoki</span>
+        <span style="padding: 0 0.75rem; font-size: 12px; color: #9ca3af;">{{ __('yoki') }}</span>
         <div style="flex: 1; height: 1px; background-color: #e5e7eb;"></div>
     </div>
 
@@ -93,11 +93,11 @@
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 1.25rem; height: 1.25rem;">
             <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
         </svg>
-        Hemis orqali kirish
+        {{ __('Hemis orqali kirish') }}
     </a>
 
     <p style="margin-top: 12px; font-size: 11px; color: #9ca3af; line-height: 1.5;">
-        Lokal parol bilan kiring yoki "Hemis orqali kirish" tugmasini bosing. Parol esdan chiqqan bo'lsa, dekanatga murojaat qiling.
+        {{ __('Lokal parol bilan kiring yoki "Hemis orqali kirish" tugmasini bosing. Parol esdan chiqqan bo\'lsa, dekanatga murojaat qiling.') }}
     </p>
 
     <script>

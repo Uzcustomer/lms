@@ -10,7 +10,7 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-4 sm:p-6 text-gray-900">
                     <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-xl sm:text-2xl font-bold">Yakuniy nazorat (YN) imtihon jadvali</h3>
+                        <h3 class="text-xl sm:text-2xl font-bold">{{ __('Yakuniy nazorat (YN) imtihon jadvali') }}</h3>
                     </div>
 
                     <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -26,8 +26,8 @@
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
-                            <h3 class="mt-2 text-sm font-medium text-gray-900">Imtihon jadvali topilmadi</h3>
-                            <p class="mt-1 text-sm text-gray-500">Hozircha sizning semestr uchun imtihon jadvali kiritilmagan.</p>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">{{ __('Imtihon jadvali topilmadi') }}</h3>
+                            <p class="mt-1 text-sm text-gray-500">{{ __('Hozircha sizning semestr uchun imtihon jadvali kiritilmagan.') }}</p>
                         </div>
                     @else
                         {{-- Desktop table --}}
@@ -36,11 +36,11 @@
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fan nomi</th>
-                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">OSKI sanasi</th>
-                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Test sanasi</th>
-                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Test vaqti</th>
-                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Holat</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Fan nomi') }}</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('OSKI sanasi') }}</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Test sanasi') }}</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Test vaqti') }}</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Holat') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
@@ -78,7 +78,7 @@
                                                         {{ $schedule->oski_date->format('d.m.Y') }}
                                                     </span>
                                                 @else
-                                                    <span class="text-gray-400">Belgilanmagan</span>
+                                                    <span class="text-gray-400">{{ __('Belgilanmagan') }}</span>
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
@@ -89,7 +89,7 @@
                                                         {{ $schedule->test_date->format('d.m.Y') }}
                                                     </span>
                                                 @else
-                                                    <span class="text-gray-400">Belgilanmagan</span>
+                                                    <span class="text-gray-400">{{ __('Belgilanmagan') }}</span>
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
@@ -105,19 +105,19 @@
                                                 @if($daysLeft !== null)
                                                     @if($daysLeft == 0)
                                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                                            Bugun!
+                                                            {{ __('Bugun!') }}
                                                         </span>
                                                     @elseif($daysLeft == 1)
                                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                                            Ertaga!
+                                                            {{ __('Ertaga!') }}
                                                         </span>
                                                     @elseif($daysLeft <= 3)
                                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                                            {{ $daysLeft }} kun qoldi
+                                                            {{ $daysLeft }} {{ __('kun qoldi') }}
                                                         </span>
                                                     @else
                                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                            {{ $daysLeft }} kun qoldi
+                                                            {{ $daysLeft }} {{ __('kun qoldi') }}
                                                         </span>
                                                     @endif
                                                 @else
@@ -129,7 +129,7 @@
                                                     @endphp
                                                     @if($bothPassed && ($oskiDate || $testDate))
                                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                                                            Tugagan
+                                                            {{ __('Tugagan') }}
                                                         </span>
                                                     @else
                                                         <span class="text-gray-400">-</span>
@@ -174,40 +174,40 @@
                                         </h4>
                                         @if($daysLeft !== null)
                                             @if($daysLeft == 0)
-                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Bugun!</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">{{ __('Bugun!') }}</span>
                                             @elseif($daysLeft == 1)
-                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Ertaga!</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">{{ __('Ertaga!') }}</span>
                                             @elseif($daysLeft <= 3)
-                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">{{ $daysLeft }} kun</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">{{ $daysLeft }} {{ __('kun') }}</span>
                                             @else
-                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ $daysLeft }} kun</span>
+                                                <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ $daysLeft }} {{ __('kun') }}</span>
                                             @endif
                                         @endif
                                     </div>
                                     <div class="grid grid-cols-2 gap-2 text-xs">
                                         <div>
-                                            <span class="text-gray-500">OSKI:</span>
+                                            <span class="text-gray-500">{{ __('OSKI') }}:</span>
                                             @if($schedule->oski_na)
                                                 <span class="text-gray-400 ml-1">-</span>
                                             @elseif($schedule->oski_date)
                                                 <span class="font-medium ml-1 {{ $oskiDate->lt($today) ? 'text-gray-500' : 'text-indigo-700' }}">{{ $schedule->oski_date->format('d.m.Y') }}</span>
                                             @else
-                                                <span class="text-gray-400 ml-1">Belgilanmagan</span>
+                                                <span class="text-gray-400 ml-1">{{ __('Belgilanmagan') }}</span>
                                             @endif
                                         </div>
                                         <div>
-                                            <span class="text-gray-500">Test:</span>
+                                            <span class="text-gray-500">{{ __('Test') }}:</span>
                                             @if($schedule->test_na)
                                                 <span class="text-gray-400 ml-1">-</span>
                                             @elseif($schedule->test_date)
                                                 <span class="font-medium ml-1 {{ $testDate->lt($today) ? 'text-gray-500' : 'text-green-700' }}">{{ $schedule->test_date->format('d.m.Y') }}</span>
                                             @else
-                                                <span class="text-gray-400 ml-1">Belgilanmagan</span>
+                                                <span class="text-gray-400 ml-1">{{ __('Belgilanmagan') }}</span>
                                             @endif
                                         </div>
                                         @if($schedule->test_time)
                                         <div>
-                                            <span class="text-gray-500">Test vaqti:</span>
+                                            <span class="text-gray-500">{{ __('Test vaqti') }}:</span>
                                             <span class="font-medium ml-1 text-blue-700">{{ \Carbon\Carbon::parse($schedule->test_time)->format('H:i') }}</span>
                                         </div>
                                         @endif

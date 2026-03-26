@@ -18,39 +18,39 @@
                         <div class="md:w-3/4 mt-4 md:mt-0">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div class="bg-gray-50 p-4 rounded-lg">
-                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">Shaxsiy ma'lumotlar</h4>
+                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __("Shaxsiy ma'lumotlar") }}</h4>
                                     <ul class="space-y-2">
-                                        <li><span class="font-medium">Tug'ilgan sana:</span> {{ date('d.m.Y', $profileData['birth_date']) }}</li>
-                                        <li><span class="font-medium">Telefon:</span> {{ $profileData['phone'] }}</li>
-                                        <li><span class="font-medium">Email:</span> {{ $profileData['email'] }}</li>
-                                        <li><span class="font-medium">Jinsi:</span> {{ $profileData['gender']['name'] }}</li>
+                                        <li><span class="font-medium">{{ __("Tug'ilgan sana:") }}</span> {{ date('d.m.Y', $profileData['birth_date']) }}</li>
+                                        <li><span class="font-medium">{{ __('Telefon:') }}</span> {{ $profileData['phone'] }}</li>
+                                        <li><span class="font-medium">{{ __('Email:') }}</span> {{ $profileData['email'] }}</li>
+                                        <li><span class="font-medium">{{ __('Jinsi:') }}</span> {{ $profileData['gender']['name'] }}</li>
                                     </ul>
                                 </div>
                                 <div class="bg-gray-50 p-4 rounded-lg">
-                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">Ta'lim ma'lumotlari</h4>
+                                    <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __("Ta'lim ma'lumotlari") }}</h4>
                                     <ul class="space-y-2">
-                                        <li><span class="font-medium">Fakultet:</span> {{ $profileData['faculty']['name'] }}</li>
-                                        <li><span class="font-medium">Yo'nalish:</span> {{ $profileData['specialty']['name'] }}</li>
-                                        <li><span class="font-medium">Guruh:</span> {{ $profileData['group']['name'] }}</li>
-                                        <li><span class="font-medium">Kurs:</span> {{ $profileData['level']['name'] }}</li>
-                                        <li><span class="font-medium">Ta'lim turi:</span> {{ $profileData['educationType']['name'] }}</li>
+                                        <li><span class="font-medium">{{ __('Fakultet:') }}</span> {{ $profileData['faculty']['name'] }}</li>
+                                        <li><span class="font-medium">{{ __("Yo'nalish:") }}</span> {{ $profileData['specialty']['name'] }}</li>
+                                        <li><span class="font-medium">{{ __('Guruh:') }}</span> {{ $profileData['group']['name'] }}</li>
+                                        <li><span class="font-medium">{{ __('Kurs:') }}</span> {{ $profileData['level']['name'] }}</li>
+                                        <li><span class="font-medium">{{ __("Ta'lim turi:") }}</span> {{ $profileData['educationType']['name'] }}</li>
                                         <li>
-                                            <span class="font-medium">Talaba holati:</span>
+                                            <span class="font-medium">{{ __('Talaba holati:') }}</span>
                                             @if($profileData['is_graduate'])
-                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Bitiruvchi</span>
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">{{ __('Bitiruvchi') }}</span>
                                             @else
-                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Talaba</span>
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ __('Talaba') }}</span>
                                             @endif
                                         </li>
                                     </ul>
                                 </div>
                             </div>
                             <div class="mt-6 bg-gray-50 p-4 rounded-lg">
-                                <h4 class="font-semibold text-lg mb-3 text-gray-700">Manzil</h4>
+                                <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __('Manzil') }}</h4>
                                 <ul class="space-y-2">
-                                    <li><span class="font-medium">To'liq manzil:</span> {{ $profileData['address'] }}</li>
-                                    <li><span class="font-medium">Viloyat:</span> {{ $profileData['province']['name'] }}</li>
-                                    <li><span class="font-medium">Tuman:</span> {{ $profileData['district']['name'] }}</li>
+                                    <li><span class="font-medium">{{ __("To'liq manzil:") }}</span> {{ $profileData['address'] }}</li>
+                                    <li><span class="font-medium">{{ __('Viloyat:') }}</span> {{ $profileData['province']['name'] }}</li>
+                                    <li><span class="font-medium">{{ __('Tuman:') }}</span> {{ $profileData['district']['name'] }}</li>
                                 </ul>
                             </div>
                         </div>
@@ -65,7 +65,7 @@
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
                                 </svg>
-                                Tizimdan chiqish
+                                {{ __('Tizimdan chiqish') }}
                             </button>
                         </form>
                     </div>

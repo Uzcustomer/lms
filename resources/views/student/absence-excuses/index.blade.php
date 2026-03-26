@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Sababli arizalarim
+            {{ __('Sababli arizalarim') }}
         </h2>
     </x-slot>
 
@@ -25,7 +25,7 @@
                 <a href="{{ route('student.absence-excuses.create') }}"
                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                    Yangi ariza
+                    {{ __('Yangi ariza') }}
                 </a>
             </div>
 
@@ -34,8 +34,8 @@
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">Ariza topilmadi</h3>
-                    <p class="mt-1 text-sm text-gray-500">Hozircha ariza topshirmagansiz.</p>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">{{ __('Ariza topilmadi') }}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{{ __('Hozircha ariza topshirmagansiz.') }}</p>
                 </div>
             @else
                 <div class="flex flex-col px-3 sm:px-0" style="gap:6px;">
@@ -87,7 +87,7 @@
                                         {{-- Yuborilgan vaqt --}}
                                         <div class="flex items-center gap-2 text-xs text-gray-600">
                                             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                            Yuborilgan: <span class="font-medium">{{ $excuse->created_at->format('d.m.Y H:i') }}</span>
+                                            {{ __('Yuborilgan:') }} <span class="font-medium">{{ $excuse->created_at->format('d.m.Y H:i') }}</span>
                                         </div>
 
                                         {{-- Amallar --}}
@@ -96,7 +96,7 @@
                                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition"
                                                style="background:{{ $c['accent'] }};color:white;">
                                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                                Ko'rish
+                                                {{ __('Ko\'rish') }}
                                             </a>
                                             @if($excuse->isApproved() && $excuse->approved_pdf_path)
                                                 <a href="{{ route('student.absence-excuses.download-pdf', $excuse->id) }}"

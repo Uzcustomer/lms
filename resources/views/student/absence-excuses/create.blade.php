@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Sababli dars qoldirish arizasi
+            {{ __('Sababli dars qoldirish arizasi') }}
         </h2>
     </x-slot>
 
@@ -279,18 +279,18 @@
                             </svg>
                         </div>
                         <div>
-                            <h3 class="text-lg font-bold text-gray-900">Ariza ma'lumotlari</h3>
-                            <p class="text-sm text-gray-500 mt-0.5">Sabab, hujjat raqami va tasdiqlovchi fayl</p>
+                            <h3 class="text-lg font-bold text-gray-900">{{ __('Ariza ma\'lumotlari') }}</h3>
+                            <p class="text-sm text-gray-500 mt-0.5">{{ __('Sabab, hujjat raqami va tasdiqlovchi fayl') }}</p>
                         </div>
                     </div>
                     <div class="ae-card-body space-y-6">
                         {{-- ROW 1: Sabab + Hujjat raqami + Tasdiqlovchi hujjat --}}
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div>
-                                <label for="reason" class="ae-label">Sabab <span class="req">*</span></label>
+                                <label for="reason" class="ae-label">{{ __('Sabab') }} <span class="req">*</span></label>
                                 <select name="reason" id="reason" required x-model="reason"
                                         @change="onReasonChange()" class="ae-select">
-                                    <option value="">Sababni tanlang...</option>
+                                    <option value="">{{ __('Sababni tanlang...') }}</option>
                                     @foreach($reasons as $key => $data)
                                         <option value="{{ $key }}" {{ old('reason') == $key ? 'selected' : '' }}>{{ $data['label'] }}</option>
                                     @endforeach
@@ -300,16 +300,16 @@
                                 @enderror
                             </div>
                             <div>
-                                <label for="doc_number" class="ae-label">Hujjat raqami <span class="req">*</span></label>
+                                <label for="doc_number" class="ae-label">{{ __('Hujjat raqami') }} <span class="req">*</span></label>
                                 <input type="text" name="doc_number" id="doc_number"
-                                       value="{{ old('doc_number') }}" placeholder="Masalan: 123/2026"
+                                       value="{{ old('doc_number') }}" placeholder="{{ __('Masalan: 123/2026') }}"
                                        required class="ae-input">
                                 @error('doc_number')
                                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                                 @enderror
                             </div>
                             <div>
-                                <label class="ae-label">Tasdiqlovchi hujjat <span class="req">*</span></label>
+                                <label class="ae-label">{{ __('Tasdiqlovchi hujjat') }} <span class="req">*</span></label>
                                 <label for="file" class="ae-file-zone block" :class="fileName ? 'has-file' : ''"
                                        @dragover.prevent="$el.classList.add('border-indigo-400','bg-indigo-50')"
                                        @dragleave.prevent="$el.classList.remove('border-indigo-400','bg-indigo-50')"
@@ -318,7 +318,7 @@
                                         <svg class="w-5 h-5 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                                         </svg>
-                                        <span class="text-sm text-gray-500">Faylni <span class="text-indigo-600 font-semibold">tanlang</span> <span class="text-gray-400">(PDF, JPG)</span></span>
+                                        <span class="text-sm text-gray-500">{{ __('Faylni') }} <span class="text-indigo-600 font-semibold">{{ __('tanlang') }}</span> <span class="text-gray-400">(PDF, JPG)</span></span>
                                     </div>
                                     <div x-show="fileName" class="flex items-center gap-2">
                                         <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,12 +344,12 @@
                                 </svg>
                             </div>
                             <div>
-                                <p class="font-semibold text-indigo-900 text-base">Talab qilinadigan hujjat:</p>
+                                <p class="font-semibold text-indigo-900 text-base">{{ __('Talab qilinadigan hujjat:') }}</p>
                                 <p class="text-indigo-700 mt-1 text-base" x-text="selectedReason?.document"></p>
                                 <div class="flex flex-wrap gap-2 mt-2">
                                     <template x-if="selectedReason?.max_days">
                                         <span class="inline-flex items-center px-3 py-1 text-sm font-bold bg-indigo-100 text-indigo-700 rounded-lg">
-                                            Maksimum: <span x-text="selectedReason?.max_days" class="ml-1"></span> kun
+                                            {{ __('Maksimum:') }} <span x-text="selectedReason?.max_days" class="ml-1"></span> {{ __('kun') }}
                                         </span>
                                     </template>
                                 </div>
@@ -362,14 +362,14 @@
                         {{-- ROW 2: Sana oralig'i (dropdown calendar) --}}
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div class="cal-dropdown-wrap" @click.outside="showMainCal = false">
-                                <label class="ae-label">Sana oralig'i <span class="req">*</span></label>
+                                <label class="ae-label">{{ __('Sana oralig\'i') }} <span class="req">*</span></label>
 
                                 <template x-if="!reason">
                                     <div class="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
                                         <svg class="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.832c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                                         </svg>
-                                        <p class="text-sm font-medium text-amber-700">Avval sababni tanlang</p>
+                                        <p class="text-sm font-medium text-amber-700">{{ __('Avval sababni tanlang') }}</p>
                                     </div>
                                 </template>
 
@@ -383,10 +383,10 @@
                                                     <span class="cal-trigger-text" x-text="fmtDate(startDate) + '  —  ' + fmtDate(endDate) + ' (' + totalDays + ' kun)'"></span>
                                                 </template>
                                                 <template x-if="startDate && !endDate">
-                                                    <span class="cal-trigger-text"><span x-text="fmtDate(startDate)"></span> <span class="text-gray-400 font-normal">— tugash sanasini tanlang</span></span>
+                                                    <span class="cal-trigger-text"><span x-text="fmtDate(startDate)"></span> <span class="text-gray-400 font-normal">— {{ __('tugash sanasini tanlang') }}</span></span>
                                                 </template>
                                                 <template x-if="!startDate">
-                                                    <span class="cal-trigger-placeholder">Boshlanish — Tugash</span>
+                                                    <span class="cal-trigger-placeholder">{{ __('Boshlanish') }} — {{ __('Tugash') }}</span>
                                                 </template>
                                             </div>
                                             <div class="flex items-center gap-2">
@@ -403,7 +403,7 @@
                                             {{-- Hint --}}
                                             <div x-show="startDate && !endDate && selecting === 'end'" class="px-3 py-1.5 bg-blue-50 text-xs text-blue-600 font-medium flex items-center gap-1">
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                                Tugash sanasini tanlang
+                                                {{ __('Tugash sanasini tanlang') }}
                                                 <template x-if="maxEndDateLabel">
                                                     <span>(maks: <span x-text="maxEndDateLabel"></span>)</span>
                                                 </template>
@@ -477,7 +477,7 @@
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                         </svg>
-                        <p class="mt-3 text-base text-gray-500 font-medium">Nazoratlar tekshirilmoqda...</p>
+                        <p class="mt-3 text-base text-gray-500 font-medium">{{ __('Nazoratlar tekshirilmoqda...') }}</p>
                     </div>
                 </div>
 
@@ -493,12 +493,12 @@
                                 </svg>
                             </div>
                             <div class="flex-1">
-                                <h3 class="text-lg font-bold text-gray-900">O'tkazib yuborilgan nazoratlar</h3>
-                                <p class="text-sm text-gray-500 mt-0.5">Har bir nazorat uchun qayta topshirish sanasini tanlang</p>
+                                <h3 class="text-lg font-bold text-gray-900">{{ __('O\'tkazib yuborilgan nazoratlar') }}</h3>
+                                <p class="text-sm text-gray-500 mt-0.5">{{ __('Har bir nazorat uchun qayta topshirish sanasini tanlang') }}</p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.assessment_type === 'jn' ? (a.jn_submitted || (a.makeup_start && a.makeup_end)) : !!a.makeup_date).length + '/' + assessments.length"></span>
-                                <span class="text-gray-400 text-sm">tanlangan</span>
+                                <span class="text-gray-400 text-sm">{{ __('tanlangan') }}</span>
                             </div>
                         </div>
                     </div>
@@ -537,9 +537,9 @@
                 {{-- ===== IZOH ===== --}}
                 <div class="ae-card mb-6">
                     <div class="ae-card-body">
-                        <label for="description" class="ae-label">Izoh <span class="text-gray-400 font-normal">(ixtiyoriy)</span></label>
+                        <label for="description" class="ae-label">{{ __('Izoh') }} <span class="text-gray-400 font-normal">{{ __('(ixtiyoriy)') }}</span></label>
                         <textarea name="description" id="description" rows="4" maxlength="1000"
-                                  class="ae-textarea" placeholder="Qo'shimcha ma'lumot...">{{ old('description') }}</textarea>
+                                  class="ae-textarea" placeholder="{{ __('Qo\'shimcha ma\'lumot...') }}">{{ old('description') }}</textarea>
                     </div>
                 </div>
 
@@ -547,7 +547,7 @@
                 <div class="flex items-center justify-end py-5">
                     <button type="submit" :disabled="!canSubmit" class="ae-submit">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                        Ariza yuborish
+                        {{ __('Ariza yuborish') }}
                     </button>
                 </div>
             </form>

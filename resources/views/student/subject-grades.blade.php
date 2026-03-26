@@ -1,13 +1,13 @@
 @php
     function getStatusBadge($status) {
         $statuses = [
-            'pending' => ['color' => 'yellow', 'text' => 'Kutilmoqda'],
-            'recorded' => ['color' => 'green', 'text' => 'Baholangan'],
-            'retake' => ['color' => 'blue', 'text' => 'Qayta topshirilgan'],
-            'closed' => ['color' => 'red', 'text' => 'Yopilgan'],
+            'pending' => ['color' => 'yellow', 'text' => __('Kutilmoqda')],
+            'recorded' => ['color' => 'green', 'text' => __('Baholangan')],
+            'retake' => ['color' => 'blue', 'text' => __('Qayta topshirilgan')],
+            'closed' => ['color' => 'red', 'text' => __('Yopilgan')],
         ];
 
-        return $statuses[$status] ?? ['color' => 'gray', 'text' => 'Noma\'lum'];
+        return $statuses[$status] ?? ['color' => 'gray', 'text' => __('Noma\'lum')];
     }
 @endphp
 <x-student-app-layout>
@@ -26,13 +26,13 @@
                             <thead class="bg-gray-50">
                             <tr>
                                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dars sanasi</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fan</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mashg'ulot turi</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Juftlik</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Xodim</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Baholar</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Holat</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Dars sanasi') }}</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Fan') }}</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __("Mashg'ulot turi") }}</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Juftlik') }}</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Xodim') }}</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Baholar') }}</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Holat') }}</th>
                             </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -73,7 +73,7 @@
                     {{-- YN rozilik bo'limi --}}
                     @if(isset($subjectId))
                     <div class="mt-6 border-t pt-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Yakuniy nazorat (YN) ga rozilik</h3>
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">{{ __('Yakuniy nazorat (YN) ga rozilik') }}</h3>
 
                         @if(isset($ynSubmission) && $ynSubmission)
                             {{-- YN ga allaqachon yuborilgan --}}
@@ -83,7 +83,7 @@
                                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
                                     </svg>
                                     <span class="text-blue-800 font-medium">
-                                        YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }}). Baholar qulflangan.
+                                        {{ __('YN ga yuborilgan') }} ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }}). {{ __('Baholar qulflangan') }}.
                                     </span>
                                 </div>
                             </div>
@@ -96,7 +96,7 @@
                                             <svg class="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                             </svg>
-                                            <span class="text-green-800 font-medium">YN topshirishga rozilik yuborildi</span>
+                                            <span class="text-green-800 font-medium">{{ __('YN topshirishga rozilik yuborildi') }}</span>
                                             <span class="text-green-600 text-sm ml-2">({{ $ynConsent->submitted_at->format('d.m.Y H:i') }})</span>
                                         </div>
                                     </div>
@@ -106,7 +106,7 @@
                                             <svg class="h-5 w-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
                                             </svg>
-                                            <span class="text-red-800 font-medium">YN topshirishdan rad etildi</span>
+                                            <span class="text-red-800 font-medium">{{ __('YN topshirishdan rad etildi') }}</span>
                                             <span class="text-red-600 text-sm ml-2">({{ $ynConsent->submitted_at->format('d.m.Y H:i') }})</span>
                                         </div>
                                     </div>
@@ -118,14 +118,14 @@
                                     @if($ynConsent->status === 'approved')
                                         <button type="submit" name="status" value="rejected"
                                             class="px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition"
-                                            onclick="return confirm('Rozilikni bekor qilmoqchimisiz?')">
-                                            Bekor qilish
+                                            onclick="return confirm('{{ __("Rozilikni bekor qilmoqchimisiz?") }}')">
+                                            {{ __('Bekor qilish') }}
                                         </button>
                                     @else
                                         <button type="submit" name="status" value="approved"
                                             class="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
-                                            onclick="return confirm('YN topshirishga rozilik berasizmi?')">
-                                            Rozilik berish
+                                            onclick="return confirm('{{ __("YN topshirishga rozilik berasizmi?") }}')">
+                                            {{ __('Rozilik berish') }}
                                         </button>
                                     @endif
                                 </form>
@@ -134,7 +134,7 @@
                             {{-- Hali rozilik berilmagan --}}
                             <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                                 <p class="text-yellow-800 text-sm">
-                                    Darslar tugagandan so'ng, yakuniy nazorat (YN) ga kirishga ruxsat berish uchun roziligingizni bildiring.
+                                    {{ __("Darslar tugagandan so'ng, yakuniy nazorat (YN) ga kirishga ruxsat berish uchun roziligingizni bildiring.") }}
                                 </p>
                             </div>
                             <div class="flex space-x-4">
@@ -143,8 +143,8 @@
                                     <input type="hidden" name="subject_id" value="{{ $subjectId }}">
                                     <button type="submit" name="status" value="approved"
                                         class="px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition shadow-sm"
-                                        onclick="return confirm('YN topshirishga tayyorman — rozilik berasizmi?')">
-                                        YN topshirishga tayyorman
+                                        onclick="return confirm('{{ __("YN topshirishga tayyorman — rozilik berasizmi?") }}')">
+                                        {{ __('YN topshirishga tayyorman') }}
                                     </button>
                                 </form>
                                 <form method="POST" action="{{ route('student.yn-consent') }}">
@@ -152,8 +152,8 @@
                                     <input type="hidden" name="subject_id" value="{{ $subjectId }}">
                                     <button type="submit" name="status" value="rejected"
                                         class="px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition shadow-sm"
-                                        onclick="return confirm('YN topshirishga rozi emasligingizni bildirasizmi?')">
-                                        Rozi emasman
+                                        onclick="return confirm('{{ __("YN topshirishga rozi emasligingizni bildirasizmi?") }}')">
+                                        {{ __('Rozi emasman') }}
                                     </button>
                                 </form>
                             </div>

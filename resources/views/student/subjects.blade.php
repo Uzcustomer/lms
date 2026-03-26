@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="text-sm font-semibold leading-tight text-gray-800 dark:text-gray-200">
-            Joriy fanlar <span class="text-base font-normal text-gray-500">({{ $semester }})</span>
+            {{ __('Joriy fanlar') }} <span class="text-base font-normal text-gray-500">({{ $semester }})</span>
         </h2>
     </x-slot>
 
@@ -341,22 +341,22 @@
             <div class="summary-bar">
                 <div class="s-item">
                     <span class="s-dot" style="background: #6366f1;"></span>
-                    <span class="s-text"><b>{{ $subjectCount }}</b> ta fan</span>
+                    <span class="s-text"><b>{{ $subjectCount }}</b> {{ __('ta fan') }}</span>
                 </div>
                 <span class="s-sep"></span>
                 <div class="s-item">
                     <span class="s-dot" style="background: #8b5cf6;"></span>
-                    <span class="s-text"><b>{{ $totalCredit }}</b> kredit</span>
+                    <span class="s-text"><b>{{ $totalCredit }}</b> {{ __('kredit') }}</span>
                 </div>
                 <span class="s-sep"></span>
                 <div class="s-item">
                     <span class="s-dot" style="background: #10b981;"></span>
-                    <span class="s-text">O'rt JN: <b>{{ $avgJn }}%</b></span>
+                    <span class="s-text">{{ __("O'rt JN") }}: <b>{{ $avgJn }}%</b></span>
                 </div>
                 <span class="s-sep"></span>
                 <div class="s-item">
                     <span class="s-dot" style="background: {{ $totalAbsent > 0 ? '#f59e0b' : '#10b981' }};"></span>
-                    <span class="s-text">Qoldirgan: <b>{{ $totalAbsent }}</b> / {{ $totalAuditorium }} soat</span>
+                    <span class="s-text">{{ __('Qoldirgan') }}: <b>{{ $totalAbsent }}</b> / {{ $totalAuditorium }} {{ __('soat') }}</span>
                 </div>
             </div>
 
@@ -438,15 +438,15 @@
                                 </div>
 
                                 <div class="dav-section">
-                                    <span class="dav-label">Davomat</span>
+                                    <span class="dav-label">{{ __('Davomat') }}</span>
                                     <div class="dav-track">
                                         <div class="dav-fill" style="width: {{ $davWidth }}%; background: {{ $davColor }};"></div>
                                     </div>
-                                    <span class="dav-value" style="color: {{ $davColor }};" title="Qoldirgan: {{ $subject['absent_hours'] }} / {{ $subject['auditorium_hours'] }} soat">{{ number_format($dp, 2) }}%</span>
+                                    <span class="dav-value" style="color: {{ $davColor }};" title="{{ __('Qoldirgan') }}: {{ $subject['absent_hours'] }} / {{ $subject['auditorium_hours'] }} {{ __('soat') }}">{{ number_format($dp, 2) }}%</span>
                                 </div>
 
                                 <div class="card-footer">
-                                    <span class="card-hours"><b>{{ $subject['absent_hours'] }}</b> / {{ $subject['auditorium_hours'] }} soat</span>
+                                    <span class="card-hours"><b>{{ $subject['absent_hours'] }}</b> / {{ $subject['auditorium_hours'] }} {{ __('soat') }}</span>
                                     <div style="display: flex; gap: 8px; align-items: center;">
                                         {{-- MT yuklash button --}}
                                         @if($subject['mt'])
@@ -454,50 +454,50 @@
                                             @if($mt['grade_locked'])
                                                 {{-- Baho >= minimumLimit: Baholangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-green">
-                                                    Baholangan <b>{{ $mt['grade'] }}</b>
+                                                    {{ __('Baholangan') }} <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['can_resubmit'])
                                                 {{-- Baho < minimumLimit, deadline ichida, urinish bor: Qayta yuklash --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-orange btn-mt-pulse">
-                                                    Qayta yuklash
+                                                    {{ __('Qayta yuklash') }}
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60) && $mt['remaining_attempts'] <= 0)
                                                 {{-- Baho < minimumLimit, urinish limiti tugagan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Limit tugagan <b>{{ $mt['grade'] }}</b>
+                                                    {{ __('Limit tugagan') }} <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['submission'] && $mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60))
                                                 {{-- Baho < minimumLimit, deadline o'tgan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-danger">
-                                                    Muddat tugagan <b>{{ $mt['grade'] }}</b>
+                                                    {{ __('Muddat tugagan') }} <b>{{ $mt['grade'] }}</b>
                                                 </button>
                                             @elseif($mt['submission'] && $mt['is_viewed'])
                                                 {{-- Yuklangan + o'qituvchi ko'rgan: Tekshirilmoqda --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-yellow">
-                                                    Tekshirilmoqda
+                                                    {{ __('Tekshirilmoqda') }}
                                                 </button>
                                             @elseif($mt['submission'])
                                                 {{-- Yuklangan, o'qituvchi hali ko'rmagan: Yuklangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
-                                                    Yuklangan
+                                                    {{ __('Yuklangan') }}
                                                 </button>
                                             @elseif($mt['is_overdue'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-gray">
-                                                    Muddat tugagan
+                                                    {{ __('Muddat tugagan') }}
                                                 </button>
                                             @elseif($mt['is_warning'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-red btn-mt-pulse">
-                                                    MT yuklash
+                                                    {{ __('MT yuklash') }}
                                                 </button>
                                             @else
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-amber">
-                                                    MT yuklash
+                                                    {{ __('MT yuklash') }}
                                                 </button>
                                             @endif
                                         @endif
 
                                         <button class="btn-detail" @click="openModal({{ $index }})">
-                                            Batafsil
+                                            {{ __('Batafsil') }}
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                                         </button>
                                     </div>
@@ -511,7 +511,7 @@
                     <svg style="width: 48px; height: 48px; color: #cbd5e1; margin: 0 auto 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
                     </svg>
-                    Bu semestrda fanlar topilmadi
+                    {{ __('Bu semestrda fanlar topilmadi') }}
                 </div>
             @endif
         </div>
@@ -543,43 +543,43 @@
                             <div class="modal-info">
                                 <div class="info-grid">
                                     <div class="info-item">
-                                        <span class="info-label">Kredit</span>
+                                        <span class="info-label">{{ __('Kredit') }}</span>
                                         <span class="info-value">{{ $subject['credit'] }}</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">JN %</span>
+                                        <span class="info-label">{{ __('JN') }} %</span>
                                         <span class="info-value" style="color: {{ $subject['jn_average'] >= 90 ? '#059669' : ($subject['jn_average'] >= 70 ? '#2563eb' : ($subject['jn_average'] >= ($minimumLimit ?? 60) ? '#d97706' : ($subject['jn_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
                                             {{ $subject['jn_average'] > 0 ? $subject['jn_average'] : '-' }}
                                         </span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">MT %</span>
+                                        <span class="info-label">{{ __('MT') }} %</span>
                                         <span class="info-value" style="color: {{ $subject['mt_average'] >= 90 ? '#059669' : ($subject['mt_average'] >= 70 ? '#2563eb' : ($subject['mt_average'] >= ($minimumLimit ?? 60) ? '#d97706' : ($subject['mt_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
                                             {{ $subject['mt_average'] > 0 ? $subject['mt_average'] : '-' }}
                                         </span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Dav %</span>
+                                        <span class="info-label">{{ __('Dav') }} %</span>
                                         <span class="info-value" style="color: {{ $subject['dav_percent'] >= 25 ? '#dc2626' : ($subject['dav_percent'] >= 15 ? '#d97706' : '#6366f1') }}">
                                             {{ number_format($subject['dav_percent'], 2) }}%
                                         </span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Qoldirgan</span>
-                                        <span class="info-value">{{ $subject['absent_hours'] }} <small style="color: #94a3b8; font-weight: 400;">/ {{ $subject['auditorium_hours'] }} soat</small></span>
+                                        <span class="info-label">{{ __('Qoldirgan') }}</span>
+                                        <span class="info-value">{{ $subject['absent_hours'] }} <small style="color: #94a3b8; font-weight: 400;">/ {{ $subject['auditorium_hours'] }} {{ __('soat') }}</small></span>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="modal-tabs">
                                 <button class="modal-tab-btn" :class="{ 'active': activeTab === 'amaliy' }" @click="activeTab = 'amaliy'">
-                                    Amaliy (JN) <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['jb_daily_data']) }})</span>
+                                    {{ __('Amaliy (JN)') }} <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['jb_daily_data']) }})</span>
                                 </button>
                                 <button class="modal-tab-btn" :class="{ 'active': activeTab === 'maruza' }" @click="activeTab = 'maruza'">
-                                    Ma'ruza <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['lecture_by_date']) }})</span>
+                                    {{ __("Ma'ruza") }} <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['lecture_by_date']) }})</span>
                                 </button>
                                 <button class="modal-tab-btn" :class="{ 'active': activeTab === 'mt' }" @click="activeTab = 'mt'">
-                                    Mustaqil ta'lim <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['mt_daily_data']) }})</span>
+                                    {{ __("Mustaqil ta'lim") }} <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['mt_daily_data']) }})</span>
                                 </button>
                             </div>
 
@@ -591,8 +591,8 @@
                                         <table class="journal-table border-collapse text-xs">
                                             <thead>
                                                 <tr>
-                                                    <th colspan="{{ $jbCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Joriy nazorat (kunlik o'rtacha)</th>
-                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
+                                                    <th colspan="{{ $jbCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">{{ __("Joriy nazorat (kunlik o'rtacha)") }}</th>
+                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">{{ __('JN') }} %</th>
                                                 </tr>
                                                 <tr>
                                                     @foreach($jbData as $idx => $day)
@@ -625,7 +625,7 @@
                                         </table>
                                     </div>
                                 @else
-                                    <div class="empty-state">Amaliy (JN) baholar mavjud emas</div>
+                                    <div class="empty-state">{{ __('Amaliy (JN) baholar mavjud emas') }}</div>
                                 @endif
                             </div>
 
@@ -660,7 +660,7 @@
                                         </table>
                                     </div>
                                 @else
-                                    <div class="empty-state">Ma'ruza davomati mavjud emas</div>
+                                    <div class="empty-state">{{ __("Ma'ruza davomati mavjud emas") }}</div>
                                 @endif
                             </div>
 
@@ -672,8 +672,8 @@
                                         <table class="journal-table border-collapse text-xs">
                                             <thead>
                                                 <tr>
-                                                    <th colspan="{{ $mtCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Mustaqil ta'lim (kunlik o'rtacha)</th>
-                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
+                                                    <th colspan="{{ $mtCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">{{ __("Mustaqil ta'lim (kunlik o'rtacha)") }}</th>
+                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">{{ __('MT') }} %</th>
                                                 </tr>
                                                 <tr>
                                                     @foreach($mtData as $idx => $day)
@@ -706,7 +706,7 @@
                                         </table>
                                     </div>
                                 @else
-                                    <div class="empty-state">Mustaqil ta'lim baholar mavjud emas</div>
+                                    <div class="empty-state">{{ __("Mustaqil ta'lim baholar mavjud emas") }}</div>
                                 @endif
                             </div>
                         </div>
@@ -725,7 +725,7 @@
                     <path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
             </div>
-            <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">Fayl siqilmoqda...</p>
+            <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">{{ __('Fayl siqilmoqda...') }}</p>
             <p id="compress-detail" style="font-size:12px; color:#6b7280; margin-top:4px;"></p>
         </div>
     </div>
@@ -739,27 +739,27 @@
                 <div style="padding: 16px;">
                     {{-- Header --}}
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
-                        <h3 style="font-size: 13px; font-weight: 700; color: #1e293b; margin: 0;">Mustaqil ta'lim</h3>
+                        <h3 style="font-size: 13px; font-weight: 700; color: #1e293b; margin: 0;">{{ __("Mustaqil ta'lim") }}</h3>
                         <button onclick="closeAllMtPopovers()" style="background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 18px; line-height: 1;">&times;</button>
                     </div>
 
                     {{-- Deadline info --}}
                     <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['is_overdue'] ? '#fef2f2' : ($mt['is_warning'] ? '#fff7ed' : '#eff6ff') }};">
                         <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">Muddat:</span>
+                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">{{ __('Muddat') }}:</span>
                             <span style="font-size: 11px; font-weight: 700; color: {{ $mt['is_overdue'] ? '#dc2626' : ($mt['is_warning'] ? '#ea580c' : '#1e293b') }};">
-                                {{ $mt['deadline'] }} ({{ $mt['deadline_time'] }} gacha)
+                                {{ $mt['deadline'] }} ({{ $mt['deadline_time'] }} {{ __('gacha') }})
                             </span>
                         </div>
                         @if($mt['is_overdue'])
-                            <div style="font-size: 11px; color: #dc2626; font-weight: 600; text-align: right; margin-top: 4px;">Muddat tugagan</div>
+                            <div style="font-size: 11px; color: #dc2626; font-weight: 600; text-align: right; margin-top: 4px;">{{ __('Muddat tugagan') }}</div>
                         @elseif($mt['is_warning'])
                             <div style="font-size: 11px; color: #ea580c; font-weight: 600; text-align: right; margin-top: 4px;">
-                                Qolgan: {{ $mt['days_remaining'] ?? 0 }} kun — Shoshiling!
+                                {{ __('Qolgan') }}: {{ $mt['days_remaining'] ?? 0 }} {{ __('kun') }} — {{ __('Shoshiling!') }}
                             </div>
                         @elseif($mt['days_remaining'] !== null)
                             <div style="font-size: 11px; color: #2563eb; font-weight: 500; text-align: right; margin-top: 4px;">
-                                Qolgan: {{ $mt['days_remaining'] }} kun
+                                {{ __('Qolgan') }}: {{ $mt['days_remaining'] }} {{ __('kun') }}
                             </div>
                         @endif
                     </div>
@@ -767,7 +767,7 @@
                     {{-- Current submission info --}}
                     @if($mt['submission'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #ecfdf5;">
-                            <div style="font-size: 11px; font-weight: 600; color: #065f46; margin-bottom: 4px;">Yuklangan fayl</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #065f46; margin-bottom: 4px;">{{ __('Yuklangan fayl') }}</div>
                             <a href="{{ route('student.independents.download', $mt['submission']->id) }}" target="_blank"
                                style="font-size: 11px; color: #2563eb; word-break: break-all;">
                                 {{ $mt['submission']->file_original_name }}
@@ -782,13 +782,13 @@
                     @if($mt['grade'] !== null)
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['grade'] >= ($minimumLimit ?? 60) ? '#ecfdf5' : '#fef2f2' }};">
                             <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <span style="font-size: 11px; color: #64748b; font-weight: 500;">Baho:</span>
+                                <span style="font-size: 11px; color: #64748b; font-weight: 500;">{{ __('Baho') }}:</span>
                                 <span style="font-size: 14px; font-weight: 700; color: {{ $mt['grade'] >= ($minimumLimit ?? 60) ? '#059669' : '#dc2626' }};">
                                     {{ $mt['grade'] }}
                                     @if($mt['grade_locked'])
-                                        <span style="font-size: 10px; font-weight: 400; color: #059669;">(Qabul qilindi)</span>
+                                        <span style="font-size: 10px; font-weight: 400; color: #059669;">({{ __('Qabul qilindi') }})</span>
                                     @else
-                                        <span style="font-size: 10px; font-weight: 400; color: #dc2626;">(Qoniqarsiz)</span>
+                                        <span style="font-size: 10px; font-weight: 400; color: #dc2626;">({{ __('Qoniqarsiz') }})</span>
                                     @endif
                                 </span>
                             </div>
@@ -798,7 +798,7 @@
                     {{-- Grade history --}}
                     @if($mt['grade_history']->count() > 0)
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
-                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">Oldingi baholar:</span>
+                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">{{ __('Oldingi baholar') }}:</span>
                             <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
                                 @foreach($mt['grade_history'] as $history)
                                     <span style="display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 12px; background: {{ $history->grade >= ($minimumLimit ?? 60) ? '#ecfdf5' : '#fef2f2' }}; color: {{ $history->grade >= ($minimumLimit ?? 60) ? '#059669' : '#dc2626' }};">
@@ -815,39 +815,39 @@
                     @elseif($mt['can_resubmit'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #fff7ed; border: 1px solid #fdba74;">
                             <div style="font-size: 11px; color: #9a3412; font-weight: 600; margin-bottom: 8px;">
-                                Qayta yuklash ({{ $mt['remaining_attempts'] }} marta qoldi)
+                                {{ __('Qayta yuklash') }} ({{ $mt['remaining_attempts'] }} {{ __('marta qoldi') }})
                             </div>
                             <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                                 @csrf
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
                                        style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #ea580c; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
-                                    Qayta yuklash
+                                    {{ __('Qayta yuklash') }}
                                 </button>
                             </form>
                             <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif($mt['submission'] && $mt['grade'] === null && !$mt['is_overdue'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #eff6ff; border: 1px solid #93c5fd;">
-                            <div style="font-size: 11px; color: #1e40af; font-weight: 600; margin-bottom: 8px;">Faylni yangilash</div>
+                            <div style="font-size: 11px; color: #1e40af; font-weight: 600; margin-bottom: 8px;">{{ __('Faylni yangilash') }}</div>
                             <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                                 @csrf
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
                                        style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #2563eb; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
-                                    Yangilash
+                                    {{ __('Yangilash') }}
                                 </button>
                             </form>
                             <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif(!$mt['submission'] && !$mt['is_overdue'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #fffbeb; border: 1px solid #fcd34d;">
-                            <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Fayl yuklash</div>
+                            <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">{{ __('Fayl yuklash') }}</div>
                             @if($mt['file_path'])
                                 <div style="margin-bottom: 8px;">
                                     <a href="{{ asset('storage/' . $mt['file_path']) }}" target="_blank"
                                        style="font-size: 11px; color: #2563eb;">
-                                        Topshiriq faylini ko'rish
+                                        {{ __("Topshiriq faylini ko'rish") }}
                                     </a>
                                 </div>
                             @endif
@@ -856,18 +856,18 @@
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
                                        style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #d97706; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
-                                    Yuklash
+                                    {{ __('Yuklash') }}
                                 </button>
                             </form>
                             <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif($mt['is_overdue'] && !$mt['submission'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
-                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">Muddat tugagan — fayl yuklanmagan</span>
+                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">{{ __('Muddat tugagan — fayl yuklanmagan') }}</span>
                         </div>
                     @elseif($mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60) && $mt['remaining_attempts'] <= 0)
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
-                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">MT topshirig'ini qayta yuklash imkoniyati tugagan</span>
+                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">{{ __("MT topshirig'ini qayta yuklash imkoniyati tugagan") }}</span>
                         </div>
                     @endif
 
@@ -876,7 +876,7 @@
                         <div style="margin-bottom: 12px;">
                             <a href="{{ asset('storage/' . $mt['file_path']) }}" target="_blank"
                                style="font-size: 11px; color: #2563eb;">
-                                Topshiriq faylini ko'rish
+                                {{ __("Topshiriq faylini ko'rish") }}
                             </a>
                         </div>
                     @endif
@@ -886,9 +886,9 @@
                         <div style="display: flex; align-items: flex-start; gap: 6px;">
                             <span style="font-size: 14px; line-height: 1; flex-shrink: 0;">&#9888;</span>
                             <p style="font-size: 10px; color: #854d0e; line-height: 1.5; margin: 0;">
-                                MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.
-                                Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.
-                                MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.
+                                {{ __("MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.") }}
+                                {{ __("Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.") }}
+                                {{ __("MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.") }}
                             </p>
                         </div>
                     </div>

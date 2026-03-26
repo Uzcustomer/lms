@@ -1,13 +1,13 @@
 @php
     function getStatusBadge($status) {
         $statuses = [
-             'pending' => ['color' => 'yellow', 'text' => 'Kutilmoqda'],
-            'recorded' => ['color' => 'green', 'text' => 'Baholangan'],
-            'retake' => ['color' => 'blue', 'text' => 'Qayta topshirilgan'],
-            'closed' => ['color' => 'red', 'text' => 'Yopilgan'],
+             'pending' => ['color' => 'yellow', 'text' => __('Kutilmoqda')],
+            'recorded' => ['color' => 'green', 'text' => __('Baholangan')],
+            'retake' => ['color' => 'blue', 'text' => __('Qayta topshirilgan')],
+            'closed' => ['color' => 'red', 'text' => __('Yopilgan')],
         ];
 
-        return $statuses[$status] ?? ['color' => 'gray', 'text' => 'Noma\'lum'];
+        return $statuses[$status] ?? ['color' => 'gray', 'text' => __('Noma\'lum')];
     }
 @endphp
 <x-student-app-layout>
@@ -29,31 +29,31 @@
                                         <thead class="bg-gray-50">
                                         <tr>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Dars Idsi
+                                                {{ __('Dars Idsi') }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Fan
+                                                {{ __('Fan') }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                O'qituvchi
+                                                {{ __("O'qituvchi") }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Mashg'ulot turi
+                                                {{ __("Mashg'ulot turi") }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Sana
+                                                {{ __('Sana') }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Sabab
+                                                {{ __('Sabab') }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Status
+                                                {{ __('Status') }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Muddat
+                                                {{ __('Muddat') }}
                                             </th>
                                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                                Ball
+                                                {{ __('Ball') }}
                                             </th>
                                         </tr>
                                         </thead>
@@ -67,9 +67,9 @@
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ format_date($lesson->lesson_date) }}</td>
 {{--                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ $lesson->reason == 'absent' ? 'NB' : 'Past baho' }}</td>--}}
                                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">  @if($lesson->reason == 'teacher_victim')
-                                                        Kechiktirilgan baho
+                                                        {{ __('Kechiktirilgan baho') }}
                                                     @elseif($lesson->status == 'low_grade')
-                                                        Past baho
+                                                        {{ __('Past baho') }}
                                                     @else
                                                         NB
                                                     @endif</td>
@@ -106,7 +106,7 @@
                             </div>
                         </div>
                     @else
-                        <p class="text-gray-500">Hozircha qayta topshirish uchun fanlar yo'q.</p>
+                        <p class="text-gray-500">{{ __("Hozircha qayta topshirish uchun fanlar yo'q.") }}</p>
                     @endif
                 </div>
             </div>

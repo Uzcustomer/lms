@@ -705,6 +705,11 @@ Route::prefix('student')->name('student.')->group(function () {
             return view('student.job-listings');
         })->name('job-listings');
 
+        // To'garaklar
+        Route::get('/clubs', function () {
+            return view('student.clubs');
+        })->name('clubs');
+
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\NotificationController::class, 'index'])->name('index');

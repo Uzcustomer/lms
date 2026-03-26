@@ -116,20 +116,20 @@
 
             {{-- 4 tomonlama qo'shimcha ma'lumotlar --}}
             <div x-show="contractType === '4_tomonlama'" x-transition class="bg-purple-50 rounded-xl shadow-sm border border-purple-200 p-5 mb-4">
-                <h3 class="text-sm font-semibold text-purple-600 uppercase mb-4">4-tomon ma'lumotlari</h3>
+                <h3 class="text-sm font-semibold text-purple-600 uppercase mb-4">{{ __('4-tomon ma\'lumotlari') }}</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-purple-600 mb-1">{{ __('Tuman sog\'liqni saqlash bosh boshqarmasi') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="fourth_party_name" value=""
                                class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
-                               placeholder="Tuman nomini kiriting"
+                               placeholder="{{ __('Tuman nomini kiriting') }}"
                                x-bind:required="contractType === '4_tomonlama'">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-purple-600 mb-1">Tuman sog'liqni saqlash bosh boshqarmasi boshlig'i <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-purple-600 mb-1">{{ __('Tuman sog\'liqni saqlash bosh boshqarmasi boshlig\'i') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="fourth_party_director_name" value=""
                                class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
-                               placeholder="Rahbar to'liq ismi"
+                               placeholder="{{ __('Rahbar to\'liq ismi') }}"
                                x-bind:required="contractType === '4_tomonlama'">
                     </div>
                 </div>

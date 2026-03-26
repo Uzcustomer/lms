@@ -17,7 +17,6 @@
             $sections = [
                 [
                     'title' => "O'zbek va xorijiy tillar kafedrasi faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'indigo',
                     'clubs' => [
                         ['name' => '"Yosh tilshunoslar"', 'place' => '1-o\'quv bino, 412-xona', 'day' => 'Payshanba', 'time' => '15:00-16:00'],
                         ['name' => '"Русское слово"', 'place' => '1-o\'quv bino, 332-xona', 'day' => 'Payshanba', 'time' => '15:00-16:00'],
@@ -28,21 +27,18 @@
                 ],
                 [
                     'title' => "Travmatologiya-ortopediya, harbiy dala jarrohligi, neyrojarrohllik, anesteziologiya va tex tibbiy yordam kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'red',
                     'clubs' => [
                         ['name' => 'Yosh Travmatolog-ortoped', 'place' => 'Viloyat ko\'p tarmoqli tibbiyot markazi', 'day' => 'Shanba', 'time' => '14:30-16:30'],
                     ]
                 ],
                 [
                     'title' => "Otorinolaringologiya, oftasmologiya, onkologiya va tibbiy radiologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'purple',
                     'clubs' => [
                         ['name' => 'Yosh onkologlar', 'place' => 'Viloyat Onkologiya shifoxonasi', 'day' => 'Chorshanba, Shanba', 'time' => '15:00-17:00'],
                     ]
                 ],
                 [
                     'title' => "Normal va patologik fiziologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'teal',
                     'clubs' => [
                         ['name' => 'Tibbiyot falsafasi', 'place' => 'Asosiy o\'quv bino, 5-qavat', 'day' => 'Chorshanba, Juma', 'time' => '16:30-17:30'],
                         ['name' => 'Yosh fiziologlar', 'place' => 'Asosiy o\'quv bino, 5-qavat', 'day' => 'Chorshanba, Shanba', 'time' => '16:30-17:30'],
@@ -50,7 +46,6 @@
                 ],
                 [
                     'title' => "Mikrobiologiya jamoat salomatligi gigiyena va menejment kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'amber',
                     'clubs' => [
                         ['name' => '"Yosh mikrobiologlar"', 'place' => 'Asosiy o\'quv bino, 4-qavat 408-xona', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
                         ['name' => 'Yosh gigiyenistlar', 'place' => '1-o\'quv bino, 308-xona', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
@@ -58,7 +53,6 @@
                 ],
                 [
                     'title' => "Ichki kasalliklar, HDT, gematologiya va oilaviy shifokorlikda terapiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'blue',
                     'clubs' => [
                         ['name' => 'Oilaviy hifokorlikda terapiya', 'place' => 'RIKIATM Surxondaryo mintaqaviy filiali', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
                         ['name' => 'Yosh allergologlar', 'place' => 'Viloyat ko\'p tarmoqli tibbiyot markazi', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
@@ -74,7 +68,6 @@
                 ],
                 [
                     'title' => "Farmakologiya va klinik farmakologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'pink',
                     'clubs' => [
                         ['name' => 'Mediator', 'place' => '1-o\'quv binosi, 333-xona', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
                         ['name' => 'Yosh tabobatchi', 'place' => '1-o\'quv binosi, 326-xona', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
@@ -82,7 +75,6 @@
                 ],
                 [
                     'title' => "Bolalar kasalliklari propedevtikasi, bolalar kasalliklari va oilaviy shifokorlikda pediatriya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'rose',
                     'clubs' => [
                         ['name' => 'Yosh pediator', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Shanba', 'time' => '15:00-17:00'],
                         ['name' => 'Pediatriya bilimdonlari', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '15:00-17:00'],
@@ -91,7 +83,6 @@
                 ],
                 [
                     'title' => "Anatomiya va klinik anatomiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'orange',
                     'clubs' => [
                         ['name' => 'Skalpel', 'place' => '1-o\'quv bino, 224-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
                         ['name' => 'Moxir anatomlar', 'place' => '1-o\'quv bino, 217-xona', 'day' => 'Chorshanba, Juma', 'time' => '15:00-17:00'],
@@ -100,7 +91,6 @@
                 ],
                 [
                     'title' => "Tibbiy biologiya va gistologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'lime',
                     'clubs' => [
                         ['name' => '"Yosh biologlar"', 'place' => '1-o\'quv bino, 115-xona', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
                         ['name' => '"Yosh gistologlar"', 'place' => '1-o\'quv bino, 106-xona', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
@@ -108,14 +98,12 @@
                 ],
                 [
                     'title' => "Akusherlik va ginekologiya va Oilaviy shifokorlikda ginekologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'fuchsia',
                     'clubs' => [
                         ['name' => '"Yosh akusher-ginekologlar"', 'place' => 'RIO va BSIATMSF Reproduktiv salomatlik bo\'limi', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
                     ]
                 ],
                 [
                     'title' => "Umumiyxirurgiya, bolalar xirurgiyasi, urologiya va bolalar urologiyasi kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'cyan',
                     'clubs' => [
                         ['name' => 'Surgeon', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Dushanba', 'time' => '15:00-17:00'],
                         ['name' => 'Yosh jarrohlar', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
@@ -124,7 +112,6 @@
                 ],
                 [
                     'title' => "Ijtimoiy-gumanitar fanlar kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'violet',
                     'clubs' => [
                         ['name' => 'Yosh tarixchi', 'place' => '1-o\'quv bino, 416-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
                         ['name' => 'Kompyuter bilimdoni', 'place' => 'o\'quv bino, 430-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
@@ -134,7 +121,6 @@
                 ],
                 [
                     'title' => "Tibbiy va biologik kimyo kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'emerald',
                     'clubs' => [
                         ['name' => 'Yosh kimyogarlar', 'place' => 'Asosiy o\'quv bino, 301-xona', 'day' => 'Dushanba', 'time' => '15:00-16:00'],
                         ['name' => 'Yosh biokimyogarlar', 'place' => 'Asosiy o\'quv bino, 313-xona', 'day' => 'Payshanba', 'time' => '15:00-16:00'],
@@ -142,7 +128,6 @@
                 ],
                 [
                     'title' => "Patologik anatomiya, sud tibbiyoti huquqi kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'stone',
                     'clubs' => [
                         ['name' => 'Buyuk patologoanatomlar', 'place' => 'Asosiy o\'quv bino, 2-qavat', 'day' => 'Seshanba, Payshanba', 'time' => '16:30-17:30'],
                         ['name' => 'Adolatli sud-tibbiy ekspertlar', 'place' => 'RSTYIAM Surxondaryo viloyati filiali binosi', 'day' => 'Chorshanba, Juma', 'time' => '16:30-17:30'],
@@ -150,7 +135,6 @@
                 ],
                 [
                     'title' => "Tibbiy psixologiya nevrologiya va psixiatriya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'sky',
                     'clubs' => [
                         ['name' => 'Yosh nevrologlar', 'place' => 'Ko\'p tarmoqli markaziy poliklinika, 403-xona', 'day' => 'Seshanba, Payshanba, Shanba', 'time' => '16:00-18:00'],
                         ['name' => 'Yosh Psixiatrlar', 'place' => 'Viloyat Ruhiy asab kasalliklar shifoxonasi, 3-xona', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '16:00-18:00'],
@@ -158,7 +142,6 @@
                 ],
                 [
                     'title' => "Yuqumli kasalliklar, dermatovenerologiya, ftiziatriya va pulmonologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'yellow',
                     'clubs' => [
                         ['name' => 'Dermatovenerologlar', 'place' => 'Surxondaryo viloyati Teri tanosil kasalliklari dispanseri', 'day' => 'Shanba', 'time' => '16:00-18:00'],
                         ['name' => 'Infeksionistlar', 'place' => 'Viloyat yuqumli kasalliklar shifoxonasi', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '16:00-18:00'],
@@ -167,14 +150,12 @@
                 ],
                 [
                     'title' => "Ichki kasalliklar, propedevtikasi, reabitologiya, xalq tabobati va endokrinologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'slate',
                     'clubs' => [
                         ['name' => 'Yosh endokrinologlar', 'place' => 'Mashxura klinikasi', 'day' => 'Dushanba, Juma', 'time' => '15:00-17:00'],
                     ]
                 ],
                 [
                     'title' => "Xirurgik kasalliklar va oilaviy shifokorlikda xirurgiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
-                    'color' => 'zinc',
                     'clubs' => [
                         ['name' => 'Torakal va yurak-qon tomir xirurgiyasi', 'place' => 'O\'tan polvon DDM, Kafedra xonasi', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
                         ['name' => 'Kardioxirurgiyada zamonaviy tekshirish usullari', 'place' => 'O\'tan polvon DDM, Kafedra xonasi', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
@@ -187,13 +168,13 @@
 
         @foreach($sections as $section)
             <div class="mb-5">
-                <div class="bg-{{ $section['color'] }}-50 rounded-t-xl px-3 py-2 border border-b-0 border-{{ $section['color'] }}-200">
-                    <h2 class="text-[11px] font-bold text-{{ $section['color'] }}-800 text-center leading-snug">{{ $section['title'] }}</h2>
+                <div class="rounded-t-xl px-3 py-2 border border-b-0 border-gray-200" style="background-color:#c2def9;">
+                    <h2 class="text-[11px] font-bold text-gray-800 text-center leading-snug">{{ $section['title'] }}</h2>
                 </div>
                 <div class="border border-t-0 border-gray-200 rounded-b-xl">
                     <div class="grid grid-cols-2 rounded-b-xl overflow-hidden">
                         @foreach($section['clubs'] as $i => $club)
-                            <div class="px-2.5 py-2.5 bg-white border-b border-r border-gray-200 {{ count($section['clubs']) % 2 !== 0 && $loop->last ? 'col-span-2 border-r-0' : '' }} {{ $loop->iteration % 2 === 0 ? 'border-r-0' : '' }} {{ $loop->last || ($loop->iteration % 2 !== 0 && $loop->iteration === count($section['clubs']) - 1) ? 'border-b-0' : '' }}">
+                            <div class="px-2.5 py-2.5 border-b border-r border-gray-200 {{ count($section['clubs']) % 2 !== 0 && $loop->last ? 'col-span-2 border-r-0' : '' }} {{ $loop->iteration % 2 === 0 ? 'border-r-0' : '' }} {{ $loop->last || ($loop->iteration % 2 !== 0 && $loop->iteration === count($section['clubs']) - 1) ? 'border-b-0' : '' }}" style="background-color:#edf9ed;margin-bottom:5px;">
                                 <div class="font-semibold text-xs text-gray-800">{{ $i + 1 }}. {{ $club['name'] }}</div>
                                 <div class="mt-1 flex flex-col gap-0.5 text-[11px] text-gray-500">
                                     <div class="flex items-center gap-1">

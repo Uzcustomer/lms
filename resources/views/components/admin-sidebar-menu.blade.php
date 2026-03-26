@@ -647,32 +647,14 @@
         </a>
         @endif
 
-        {{-- ============ MA'LUMOTLAR EKSPORTI ============ --}}
+        {{-- ============ DB MA'LUMOTLAR ============ --}}
         @if($hasActiveRole(['superadmin', 'admin']))
-        <div class="sidebar-section">Ma'lumotlar eksporti</div>
-
-        <a href="{{ route('admin.export.curriculum-subjects') }}"
-           class="sidebar-link">
+        <a href="{{ route('admin.db-export.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.db-export.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/>
             </svg>
-            Curriculum Subjects
-        </a>
-
-        <a href="{{ route('admin.export.semesters') }}"
-           class="sidebar-link">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
-            </svg>
-            Semesters
-        </a>
-
-        <a href="{{ route('admin.export.curricula') }}"
-           class="sidebar-link">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
-            </svg>
-            Curricula
+            DB ma'lumotlar
         </a>
         @endif
 

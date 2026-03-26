@@ -353,7 +353,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return view('admin.job-listings');
         })->name('job-listings.index');
 
-        // Ma'lumotlar eksporti
+        // DB ma'lumotlar sahifasi va eksport
+        Route::get('/db-export', function () {
+            return view('admin.db-export');
+        })->name('db-export.index');
         Route::get('/export/curriculum-subjects', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculumSubjectsExport, 'curriculum_subjects.xlsx');
         })->name('export.curriculum-subjects');

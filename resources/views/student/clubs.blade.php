@@ -72,6 +72,74 @@
                         ['name' => 'Kardiologiya', 'place' => 'RShTTYoIM Surxondaryo filiali', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '15:00-17:00'],
                     ]
                 ],
+                [
+                    'title' => "Farmakologiya va klinik farmakologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'pink',
+                    'clubs' => [
+                        ['name' => 'Mediator', 'place' => '1-o\'quv binosi, 333-xona', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh tabobatchi', 'place' => '1-o\'quv binosi, 326-xona', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Bolalar kasalliklari propedevtikasi, bolalar kasalliklari va oilaviy shifokorlikda pediatriya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'rose',
+                    'clubs' => [
+                        ['name' => 'Yosh pediator', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Shanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Pediatriya bilimdonlari', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Dushanba, Chorshanba, Juma', 'time' => '15:00-17:00'],
+                        ['name' => 'Ustoz va shogird', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Seshanba, Payshanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Anatomiya va klinik anatomiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'orange',
+                    'clubs' => [
+                        ['name' => 'Skalpel', 'place' => '1-o\'quv bino, 224-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Moxir anatomlar', 'place' => '1-o\'quv bino, 217-xona', 'day' => 'Chorshanba, Juma', 'time' => '15:00-17:00'],
+                        ['name' => 'MAXAON', 'place' => '1-o\'quv bino, 222-xona', 'day' => 'Seshanba, Payshanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Tibbiy biologiya va gistologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'lime',
+                    'clubs' => [
+                        ['name' => '"Yosh biologlar"', 'place' => '1-o\'quv bino, 115-xona', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
+                        ['name' => '"Yosh gistologlar"', 'place' => '1-o\'quv bino, 106-xona', 'day' => 'Payshanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Akusherlik va ginekologiya va Oilaviy shifokorlikda ginekologiya kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'fuchsia',
+                    'clubs' => [
+                        ['name' => '"Yosh akusher-ginekologlar"', 'place' => 'RIO va BSIATMSF Reproduktiv salomatlik bo\'limi', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Umumiyxirurgiya, bolalar xirurgiyasi, urologiya va bolalar urologiyasi kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'cyan',
+                    'clubs' => [
+                        ['name' => 'Surgeon', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Dushanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh jarrohlar', 'place' => 'Viloyat bolalar ko\'p tarmoqli tibbiyot markazi', 'day' => 'Seshanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Nefroclub', 'place' => 'Viloyat ko\'p tarmoqli tibbiyot markazi', 'day' => 'Chorshanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Ijtimoiy-gumanitar fanlar kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'violet',
+                    'clubs' => [
+                        ['name' => 'Yosh tarixchi', 'place' => '1-o\'quv bino, 416-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Kompyuter bilimdoni', 'place' => 'o\'quv bino, 430-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Yosh biofiziklar', 'place' => '1-o\'quv bino, 424-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
+                        ['name' => 'Qalb shifokorlari', 'place' => '1-o\'quv bino, 416-xona', 'day' => 'Shanba', 'time' => '15:00-17:00'],
+                    ]
+                ],
+                [
+                    'title' => "Tibbiy va biologik kimyo kafedrasida faoliyat ko'rsatayotgan to'garak mashg'ulotlar jadvali",
+                    'color' => 'emerald',
+                    'clubs' => [
+                        ['name' => 'Yosh kimyogarlar', 'place' => 'Asosiy o\'quv bino, 301-xona', 'day' => 'Dushanba', 'time' => '15:00-16:00'],
+                        ['name' => 'Yosh biokimyogarlar', 'place' => 'Asosiy o\'quv bino, 313-xona', 'day' => 'Payshanba', 'time' => '15:00-16:00'],
+                    ]
+                ],
             ];
         @endphp
 

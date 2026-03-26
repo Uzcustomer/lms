@@ -383,10 +383,10 @@
                                                     <span class="cal-trigger-text" x-text="fmtDate(startDate) + '  —  ' + fmtDate(endDate) + ' (' + totalDays + ' kun)'"></span>
                                                 </template>
                                                 <template x-if="startDate && !endDate">
-                                                    <span class="cal-trigger-text"><span x-text="fmtDate(startDate)"></span> <span class="text-gray-400 font-normal">— tugash sanasini tanlang</span></span>
+                                                    <span class="cal-trigger-text"><span x-text="fmtDate(startDate)"></span> <span class="text-gray-400 font-normal">— {{ __('tugash sanasini tanlang') }}</span></span>
                                                 </template>
                                                 <template x-if="!startDate">
-                                                    <span class="cal-trigger-placeholder">Boshlanish — Tugash</span>
+                                                    <span class="cal-trigger-placeholder">{{ __('Boshlanish') }} — {{ __('Tugash') }}</span>
                                                 </template>
                                             </div>
                                             <div class="flex items-center gap-2">

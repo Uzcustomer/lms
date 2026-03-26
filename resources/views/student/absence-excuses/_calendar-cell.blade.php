@@ -6,10 +6,10 @@
                  style="padding:8px 12px; font-size:13px; border-radius:8px;">
                 <div>
                     <template x-if="item.makeup_start && item.makeup_end">
-                        <span class="cal-trigger-text" x-text="fmtDate(item.makeup_start) + ' dan ' + fmtDate(item.makeup_end) + ' gacha'"></span>
+                        <span class="cal-trigger-text" x-text="fmtDate(item.makeup_start) + ' {{ __('dan') }} ' + fmtDate(item.makeup_end) + ' {{ __('gacha') }}'"></span>
                     </template>
                     <template x-if="item.makeup_start && !item.makeup_end">
-                        <span class="cal-trigger-text"><span x-text="fmtDate(item.makeup_start)"></span> <span class="text-gray-400 font-normal">— tugash?</span></span>
+                        <span class="cal-trigger-text"><span x-text="fmtDate(item.makeup_start)"></span> <span class="text-gray-400 font-normal">— {{ __('tugash?') }}</span></span>
                     </template>
                     <template x-if="!item.makeup_start">
                         <span class="cal-trigger-placeholder">{{ __('Sana oralig\'ini tanlang') }}</span>

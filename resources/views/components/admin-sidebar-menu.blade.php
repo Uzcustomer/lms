@@ -647,6 +647,35 @@
         </a>
         @endif
 
+        {{-- ============ MA'LUMOTLAR EKSPORTI ============ --}}
+        @if($hasActiveRole(['superadmin', 'admin']))
+        <div class="sidebar-section">Ma'lumotlar eksporti</div>
+
+        <a href="{{ route('admin.export.curriculum-subjects') }}"
+           class="sidebar-link">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            Curriculum Subjects
+        </a>
+
+        <a href="{{ route('admin.export.semesters') }}"
+           class="sidebar-link">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            Semesters
+        </a>
+
+        <a href="{{ route('admin.export.curricula') }}"
+           class="sidebar-link">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
+            </svg>
+            Curricula
+        </a>
+        @endif
+
     </nav>
 
     <!-- User Section with Profile Dropdown -->

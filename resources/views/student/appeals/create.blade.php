@@ -153,13 +153,13 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                             </div>
-                            <h3 class="text-base font-bold text-gray-800 mb-1">Muddat tugagan</h3>
-                            <p class="text-sm text-gray-500 text-center">Baho qo'yilganidan 24 soat o'tgan. Faqat 24 soat ichida apellyatsiya topshirish mumkin.</p>
+                            <h3 class="text-base font-bold text-gray-800 mb-1">{{ __('Muddat tugagan') }}</h3>
+                            <p class="text-sm text-gray-500 text-center">{{ __('Baho qo\'yilganidan 24 soat o\'tgan. Faqat 24 soat ichida apellyatsiya topshirish mumkin.') }}</p>
                         </div>
                         <div class="px-5 pb-4 pt-1">
                             <button @click="showErrorModal = false"
                                     class="w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition">
-                                Tushundim
+                                {{ __('Tushundim') }}
                             </button>
                         </div>
                     </div>
@@ -168,7 +168,7 @@
                 {{-- 2. Sabab --}}
                 <div x-show="selectedGradeId" x-transition>
                     <label for="reason" class="block text-sm font-semibold text-gray-700 mb-1.5">
-                        Apellyatsiya sababi <span class="text-red-500">*</span>
+                        {{ __('Apellyatsiya sababi') }} <span class="text-red-500">*</span>
                     </label>
                     <textarea name="reason" id="reason" rows="5" required minlength="20" maxlength="2000"
                               placeholder="Nima uchun bu bahoga e'tiroz bildiryapsiz? Batafsil yozing..."

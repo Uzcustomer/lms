@@ -739,27 +739,27 @@
                 <div style="padding: 16px;">
                     {{-- Header --}}
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
-                        <h3 style="font-size: 13px; font-weight: 700; color: #1e293b; margin: 0;">Mustaqil ta'lim</h3>
+                        <h3 style="font-size: 13px; font-weight: 700; color: #1e293b; margin: 0;">{{ __("Mustaqil ta'lim") }}</h3>
                         <button onclick="closeAllMtPopovers()" style="background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 18px; line-height: 1;">&times;</button>
                     </div>
 
                     {{-- Deadline info --}}
                     <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['is_overdue'] ? '#fef2f2' : ($mt['is_warning'] ? '#fff7ed' : '#eff6ff') }};">
                         <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">Muddat:</span>
+                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">{{ __('Muddat') }}:</span>
                             <span style="font-size: 11px; font-weight: 700; color: {{ $mt['is_overdue'] ? '#dc2626' : ($mt['is_warning'] ? '#ea580c' : '#1e293b') }};">
                                 {{ $mt['deadline'] }} ({{ $mt['deadline_time'] }} gacha)
                             </span>
                         </div>
                         @if($mt['is_overdue'])
-                            <div style="font-size: 11px; color: #dc2626; font-weight: 600; text-align: right; margin-top: 4px;">Muddat tugagan</div>
+                            <div style="font-size: 11px; color: #dc2626; font-weight: 600; text-align: right; margin-top: 4px;">{{ __('Muddat tugagan') }}</div>
                         @elseif($mt['is_warning'])
                             <div style="font-size: 11px; color: #ea580c; font-weight: 600; text-align: right; margin-top: 4px;">
-                                Qolgan: {{ $mt['days_remaining'] ?? 0 }} kun — Shoshiling!
+                                {{ __('Qolgan') }}: {{ $mt['days_remaining'] ?? 0 }} {{ __('kun') }} — {{ __('Shoshiling!') }}
                             </div>
                         @elseif($mt['days_remaining'] !== null)
                             <div style="font-size: 11px; color: #2563eb; font-weight: 500; text-align: right; margin-top: 4px;">
-                                Qolgan: {{ $mt['days_remaining'] }} kun
+                                {{ __('Qolgan') }}: {{ $mt['days_remaining'] }} {{ __('kun') }}
                             </div>
                         @endif
                     </div>
@@ -767,7 +767,7 @@
                     {{-- Current submission info --}}
                     @if($mt['submission'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #ecfdf5;">
-                            <div style="font-size: 11px; font-weight: 600; color: #065f46; margin-bottom: 4px;">Yuklangan fayl</div>
+                            <div style="font-size: 11px; font-weight: 600; color: #065f46; margin-bottom: 4px;">{{ __('Yuklangan fayl') }}</div>
                             <a href="{{ route('student.independents.download', $mt['submission']->id) }}" target="_blank"
                                style="font-size: 11px; color: #2563eb; word-break: break-all;">
                                 {{ $mt['submission']->file_original_name }}
@@ -782,13 +782,13 @@
                     @if($mt['grade'] !== null)
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: {{ $mt['grade'] >= ($minimumLimit ?? 60) ? '#ecfdf5' : '#fef2f2' }};">
                             <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <span style="font-size: 11px; color: #64748b; font-weight: 500;">Baho:</span>
+                                <span style="font-size: 11px; color: #64748b; font-weight: 500;">{{ __('Baho') }}:</span>
                                 <span style="font-size: 14px; font-weight: 700; color: {{ $mt['grade'] >= ($minimumLimit ?? 60) ? '#059669' : '#dc2626' }};">
                                     {{ $mt['grade'] }}
                                     @if($mt['grade_locked'])
-                                        <span style="font-size: 10px; font-weight: 400; color: #059669;">(Qabul qilindi)</span>
+                                        <span style="font-size: 10px; font-weight: 400; color: #059669;">({{ __('Qabul qilindi') }})</span>
                                     @else
-                                        <span style="font-size: 10px; font-weight: 400; color: #dc2626;">(Qoniqarsiz)</span>
+                                        <span style="font-size: 10px; font-weight: 400; color: #dc2626;">({{ __('Qoniqarsiz') }})</span>
                                     @endif
                                 </span>
                             </div>

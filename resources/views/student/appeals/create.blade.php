@@ -37,10 +37,10 @@
                 {{-- Baho turi filter --}}
                 @if(!$grades->isEmpty())
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Baho turi</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">{{ __('Baho turi') }}</label>
                         <select x-model="typeFilter"
                                 class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                            <option value="">Barcha turlar</option>
+                            <option value="">{{ __('Barcha turlar') }}</option>
                             @foreach($grades->pluck('training_type_name')->filter()->unique()->values() as $typeName)
                                 <option value="{{ $typeName }}">{{ $typeName }}</option>
                             @endforeach
@@ -51,12 +51,12 @@
                 {{-- Baholar ro'yxati --}}
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">
-                        Bahoni tanlang <span class="text-red-500">*</span>
+                        {{ __('Bahoni tanlang') }} <span class="text-red-500">*</span>
                     </label>
 
                     @if($grades->isEmpty())
                         <div class="px-4 py-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs">
-                            Hozircha baholar topilmadi.
+                            {{ __('Hozircha baholar topilmadi.') }}
                         </div>
                     @else
                         <div class="space-y-2 max-h-[400px] overflow-y-auto rounded-xl border border-gray-200 p-2">
@@ -105,7 +105,7 @@
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
-                                                Qo'yilgan: {{ $g['graded_at'] }}
+                                                {{ __('Qo\'yilgan:') }} {{ $g['graded_at'] }}
                                             </span>
                                         @endif
                                     </div>
@@ -117,7 +117,7 @@
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
-                                                Apellyatsiya mumkin
+                                                {{ __('Apellyatsiya mumkin') }}
                                             </span>
                                         </div>
                                     @else
@@ -126,7 +126,7 @@
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
-                                                Muddat tugagan (24 soat)
+                                                {{ __('Muddat tugagan (24 soat)') }}
                                             </span>
                                         </div>
                                     @endif

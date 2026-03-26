@@ -60,8 +60,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75h6m-6 3h4" />
                     </svg>
                 </div>
-                <span class="text-sm font-bold text-gray-800 text-center leading-tight">Shartnoma</span>
-                <span class="text-[11px] text-gray-400 mt-1 text-center">3 va 4 tomonlama</span>
+                <span class="text-sm font-bold text-gray-800 text-center leading-tight">{{ __('Shartnoma') }}</span>
+                <span class="text-[11px] text-gray-400 mt-1 text-center">{{ __('3 va 4 tomonlama') }}</span>
             </a>
             @endif
 

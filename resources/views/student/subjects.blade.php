@@ -479,25 +479,25 @@
                                             @elseif($mt['submission'])
                                                 {{-- Yuklangan, o'qituvchi hali ko'rmagan: Yuklangan --}}
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-blue">
-                                                    Yuklangan
+                                                    {{ __('Yuklangan') }}
                                                 </button>
                                             @elseif($mt['is_overdue'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-gray">
-                                                    Muddat tugagan
+                                                    {{ __('Muddat tugagan') }}
                                                 </button>
                                             @elseif($mt['is_warning'])
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-red btn-mt-pulse">
-                                                    MT yuklash
+                                                    {{ __('MT yuklash') }}
                                                 </button>
                                             @else
                                                 <button onclick="toggleMtPopover(event, {{ $index }})" class="btn-mt btn-mt-amber">
-                                                    MT yuklash
+                                                    {{ __('MT yuklash') }}
                                                 </button>
                                             @endif
                                         @endif
 
                                         <button class="btn-detail" @click="openModal({{ $index }})">
-                                            Batafsil
+                                            {{ __('Batafsil') }}
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                                         </button>
                                     </div>
@@ -511,7 +511,7 @@
                     <svg style="width: 48px; height: 48px; color: #cbd5e1; margin: 0 auto 12px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
                     </svg>
-                    Bu semestrda fanlar topilmadi
+                    {{ __('Bu semestrda fanlar topilmadi') }}
                 </div>
             @endif
         </div>
@@ -543,7 +543,7 @@
                             <div class="modal-info">
                                 <div class="info-grid">
                                     <div class="info-item">
-                                        <span class="info-label">Kredit</span>
+                                        <span class="info-label">{{ __('Kredit') }}</span>
                                         <span class="info-value">{{ $subject['credit'] }}</span>
                                     </div>
                                     <div class="info-item">
@@ -565,7 +565,7 @@
                                         </span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Qoldirgan</span>
+                                        <span class="info-label">{{ __('Qoldirgan') }}</span>
                                         <span class="info-value">{{ $subject['absent_hours'] }} <small style="color: #94a3b8; font-weight: 400;">/ {{ $subject['auditorium_hours'] }} soat</small></span>
                                     </div>
                                 </div>
@@ -573,13 +573,13 @@
 
                             <div class="modal-tabs">
                                 <button class="modal-tab-btn" :class="{ 'active': activeTab === 'amaliy' }" @click="activeTab = 'amaliy'">
-                                    Amaliy (JN) <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['jb_daily_data']) }})</span>
+                                    {{ __('Amaliy (JN)') }} <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['jb_daily_data']) }})</span>
                                 </button>
                                 <button class="modal-tab-btn" :class="{ 'active': activeTab === 'maruza' }" @click="activeTab = 'maruza'">
-                                    Ma'ruza <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['lecture_by_date']) }})</span>
+                                    {{ __("Ma'ruza") }} <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['lecture_by_date']) }})</span>
                                 </button>
                                 <button class="modal-tab-btn" :class="{ 'active': activeTab === 'mt' }" @click="activeTab = 'mt'">
-                                    Mustaqil ta'lim <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['mt_daily_data']) }})</span>
+                                    {{ __("Mustaqil ta'lim") }} <span style="opacity: 0.5; font-size: 11px;">({{ count($subject['mt_daily_data']) }})</span>
                                 </button>
                             </div>
 
@@ -591,7 +591,7 @@
                                         <table class="journal-table border-collapse text-xs">
                                             <thead>
                                                 <tr>
-                                                    <th colspan="{{ $jbCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Joriy nazorat (kunlik o'rtacha)</th>
+                                                    <th colspan="{{ $jbCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">{{ __("Joriy nazorat (kunlik o'rtacha)") }}</th>
                                                     <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
                                                 </tr>
                                                 <tr>
@@ -625,7 +625,7 @@
                                         </table>
                                     </div>
                                 @else
-                                    <div class="empty-state">Amaliy (JN) baholar mavjud emas</div>
+                                    <div class="empty-state">{{ __('Amaliy (JN) baholar mavjud emas') }}</div>
                                 @endif
                             </div>
 
@@ -660,7 +660,7 @@
                                         </table>
                                     </div>
                                 @else
-                                    <div class="empty-state">Ma'ruza davomati mavjud emas</div>
+                                    <div class="empty-state">{{ __("Ma'ruza davomati mavjud emas") }}</div>
                                 @endif
                             </div>
 
@@ -672,7 +672,7 @@
                                         <table class="journal-table border-collapse text-xs">
                                             <thead>
                                                 <tr>
-                                                    <th colspan="{{ $mtCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">Mustaqil ta'lim (kunlik o'rtacha)</th>
+                                                    <th colspan="{{ $mtCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">{{ __("Mustaqil ta'lim (kunlik o'rtacha)") }}</th>
                                                     <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
                                                 </tr>
                                                 <tr>
@@ -706,7 +706,7 @@
                                         </table>
                                     </div>
                                 @else
-                                    <div class="empty-state">Mustaqil ta'lim baholar mavjud emas</div>
+                                    <div class="empty-state">{{ __("Mustaqil ta'lim baholar mavjud emas") }}</div>
                                 @endif
                             </div>
                         </div>

@@ -20,7 +20,7 @@
     <div class="flex-1 flex flex-col">
         <header class="bg-white shadow">
             <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                <h1 class="text-2xl font-bold text-gray-900">{{ config('app.name', 'Talaba Tizimi') }}</h1>
+                <h1 class="text-2xl font-bold text-gray-900">{{ config('app.name', __('Talaba Tizimi')) }}</h1>
             </div>
         </header>
 

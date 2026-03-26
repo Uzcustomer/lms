@@ -171,14 +171,14 @@
                         {{ __('Apellyatsiya sababi') }} <span class="text-red-500">*</span>
                     </label>
                     <textarea name="reason" id="reason" rows="5" required minlength="20" maxlength="2000"
-                              placeholder="Nima uchun bu bahoga e'tiroz bildiryapsiz? Batafsil yozing..."
+                              placeholder="{{ __('Nima uchun bu bahoga e\'tiroz bildiryapsiz? Batafsil yozing...') }}"
                               x-on:input="charCount = $el.value.length"
                               class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 @error('reason') border-red-300 @enderror">{{ old('reason') }}</textarea>
                     <div class="flex justify-between mt-1">
                         @error('reason')
                             <p class="text-xs text-red-600">{{ $message }}</p>
                         @else
-                            <p class="text-[11px] text-gray-400">Kamida 20 ta belgi</p>
+                            <p class="text-[11px] text-gray-400">{{ __('Kamida 20 ta belgi') }}</p>
                         @enderror
                         <p class="text-[11px] text-gray-400"><span x-text="charCount"></span>/2000</p>
                     </div>
@@ -187,7 +187,7 @@
                 {{-- 3. Fayl yuklash --}}
                 <div x-show="selectedGradeId" x-transition>
                     <label for="file" class="block text-sm font-semibold text-gray-700 mb-1.5">
-                        Qo'shimcha hujjat <span class="text-gray-400 font-normal">(ixtiyoriy)</span>
+                        {{ __('Qo\'shimcha hujjat') }} <span class="text-gray-400 font-normal">{{ __('(ixtiyoriy)') }}</span>
                     </label>
                     <div class="relative">
                         <input type="file" name="file" id="file" accept=".pdf,.jpg,.jpeg,.png"
@@ -196,7 +196,7 @@
                     @error('file')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                     @else
-                        <p class="mt-1 text-[11px] text-gray-400">PDF, JPG, PNG. Maksimum 5MB.</p>
+                        <p class="mt-1 text-[11px] text-gray-400">{{ __('PDF, JPG, PNG. Maksimum 5MB.') }}</p>
                     @enderror
                 </div>
 
@@ -207,7 +207,7 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                         </svg>
-                        Apellyatsiya topshirish
+                        {{ __('Apellyatsiya topshirish') }}
                     </button>
                 </div>
             </form>

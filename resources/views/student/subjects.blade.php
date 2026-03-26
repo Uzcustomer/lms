@@ -442,7 +442,7 @@
                                     <div class="dav-track">
                                         <div class="dav-fill" style="width: {{ $davWidth }}%; background: {{ $davColor }};"></div>
                                     </div>
-                                    <span class="dav-value" style="color: {{ $davColor }};" title="Qoldirgan: {{ $subject['absent_hours'] }} / {{ $subject['auditorium_hours'] }} soat">{{ number_format($dp, 2) }}%</span>
+                                    <span class="dav-value" style="color: {{ $davColor }};" title="{{ __('Qoldirgan') }}: {{ $subject['absent_hours'] }} / {{ $subject['auditorium_hours'] }} {{ __('soat') }}">{{ number_format($dp, 2) }}%</span>
                                 </div>
 
                                 <div class="card-footer">
@@ -547,26 +547,26 @@
                                         <span class="info-value">{{ $subject['credit'] }}</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">JN %</span>
+                                        <span class="info-label">{{ __('JN') }} %</span>
                                         <span class="info-value" style="color: {{ $subject['jn_average'] >= 90 ? '#059669' : ($subject['jn_average'] >= 70 ? '#2563eb' : ($subject['jn_average'] >= ($minimumLimit ?? 60) ? '#d97706' : ($subject['jn_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
                                             {{ $subject['jn_average'] > 0 ? $subject['jn_average'] : '-' }}
                                         </span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">MT %</span>
+                                        <span class="info-label">{{ __('MT') }} %</span>
                                         <span class="info-value" style="color: {{ $subject['mt_average'] >= 90 ? '#059669' : ($subject['mt_average'] >= 70 ? '#2563eb' : ($subject['mt_average'] >= ($minimumLimit ?? 60) ? '#d97706' : ($subject['mt_average'] > 0 ? '#dc2626' : '#94a3b8'))) }}">
                                             {{ $subject['mt_average'] > 0 ? $subject['mt_average'] : '-' }}
                                         </span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Dav %</span>
+                                        <span class="info-label">{{ __('Dav') }} %</span>
                                         <span class="info-value" style="color: {{ $subject['dav_percent'] >= 25 ? '#dc2626' : ($subject['dav_percent'] >= 15 ? '#d97706' : '#6366f1') }}">
                                             {{ number_format($subject['dav_percent'], 2) }}%
                                         </span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">{{ __('Qoldirgan') }}</span>
-                                        <span class="info-value">{{ $subject['absent_hours'] }} <small style="color: #94a3b8; font-weight: 400;">/ {{ $subject['auditorium_hours'] }} soat</small></span>
+                                        <span class="info-value">{{ $subject['absent_hours'] }} <small style="color: #94a3b8; font-weight: 400;">/ {{ $subject['auditorium_hours'] }} {{ __('soat') }}</small></span>
                                     </div>
                                 </div>
                             </div>
@@ -592,7 +592,7 @@
                                             <thead>
                                                 <tr>
                                                     <th colspan="{{ $jbCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">{{ __("Joriy nazorat (kunlik o'rtacha)") }}</th>
-                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
+                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">{{ __('JN') }} %</th>
                                                 </tr>
                                                 <tr>
                                                     @foreach($jbData as $idx => $day)
@@ -673,7 +673,7 @@
                                             <thead>
                                                 <tr>
                                                     <th colspan="{{ $mtCount }}" class="px-1 py-2 font-bold text-gray-700 text-center date-separator date-end joriy-header">{{ __("Mustaqil ta'lim (kunlik o'rtacha)") }}</th>
-                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">MT %</th>
+                                                    <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">{{ __('MT') }} %</th>
                                                 </tr>
                                                 <tr>
                                                     @foreach($mtData as $idx => $day)
@@ -725,7 +725,7 @@
                     <path style="opacity:0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
             </div>
-            <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">Fayl siqilmoqda...</p>
+            <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">{{ __('Fayl siqilmoqda...') }}</p>
             <p id="compress-detail" style="font-size:12px; color:#6b7280; margin-top:4px;"></p>
         </div>
     </div>
@@ -748,7 +748,7 @@
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                             <span style="font-size: 11px; color: #64748b; font-weight: 500;">{{ __('Muddat') }}:</span>
                             <span style="font-size: 11px; font-weight: 700; color: {{ $mt['is_overdue'] ? '#dc2626' : ($mt['is_warning'] ? '#ea580c' : '#1e293b') }};">
-                                {{ $mt['deadline'] }} ({{ $mt['deadline_time'] }} gacha)
+                                {{ $mt['deadline'] }} ({{ $mt['deadline_time'] }} {{ __('gacha') }})
                             </span>
                         </div>
                         @if($mt['is_overdue'])
@@ -798,7 +798,7 @@
                     {{-- Grade history --}}
                     @if($mt['grade_history']->count() > 0)
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
-                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">Oldingi baholar:</span>
+                            <span style="font-size: 11px; color: #64748b; font-weight: 500;">{{ __('Oldingi baholar') }}:</span>
                             <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
                                 @foreach($mt['grade_history'] as $history)
                                     <span style="display: inline-flex; align-items: center; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 12px; background: {{ $history->grade >= ($minimumLimit ?? 60) ? '#ecfdf5' : '#fef2f2' }}; color: {{ $history->grade >= ($minimumLimit ?? 60) ? '#059669' : '#dc2626' }};">
@@ -815,39 +815,39 @@
                     @elseif($mt['can_resubmit'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #fff7ed; border: 1px solid #fdba74;">
                             <div style="font-size: 11px; color: #9a3412; font-weight: 600; margin-bottom: 8px;">
-                                Qayta yuklash ({{ $mt['remaining_attempts'] }} marta qoldi)
+                                {{ __('Qayta yuklash') }} ({{ $mt['remaining_attempts'] }} {{ __('marta qoldi') }})
                             </div>
                             <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                                 @csrf
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
                                        style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #ea580c; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
-                                    Qayta yuklash
+                                    {{ __('Qayta yuklash') }}
                                 </button>
                             </form>
                             <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif($mt['submission'] && $mt['grade'] === null && !$mt['is_overdue'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #eff6ff; border: 1px solid #93c5fd;">
-                            <div style="font-size: 11px; color: #1e40af; font-weight: 600; margin-bottom: 8px;">Faylni yangilash</div>
+                            <div style="font-size: 11px; color: #1e40af; font-weight: 600; margin-bottom: 8px;">{{ __('Faylni yangilash') }}</div>
                             <form method="POST" action="{{ route('student.independents.submit', $mt['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                                 @csrf
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
                                        style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #2563eb; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
-                                    Yangilash
+                                    {{ __('Yangilash') }}
                                 </button>
                             </form>
                             <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif(!$mt['submission'] && !$mt['is_overdue'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #fffbeb; border: 1px solid #fcd34d;">
-                            <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">Fayl yuklash</div>
+                            <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">{{ __('Fayl yuklash') }}</div>
                             @if($mt['file_path'])
                                 <div style="margin-bottom: 8px;">
                                     <a href="{{ asset('storage/' . $mt['file_path']) }}" target="_blank"
                                        style="font-size: 11px; color: #2563eb;">
-                                        Topshiriq faylini ko'rish
+                                        {{ __("Topshiriq faylini ko'rish") }}
                                     </a>
                                 </div>
                             @endif
@@ -856,18 +856,18 @@
                                 <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf"
                                        style="width: 100%; font-size: 11px; margin-bottom: 8px;" class="mt-file-input">
                                 <button type="submit" style="width: 100%; padding: 6px 12px; background: #d97706; color: white; font-size: 11px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer;">
-                                    Yuklash
+                                    {{ __('Yuklash') }}
                                 </button>
                             </form>
                             <p style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Max 10MB (zip, doc, ppt, pdf) — katta fayllar avtomatik siqiladi</p>
                         </div>
                     @elseif($mt['is_overdue'] && !$mt['submission'])
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
-                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">Muddat tugagan — fayl yuklanmagan</span>
+                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">{{ __('Muddat tugagan — fayl yuklanmagan') }}</span>
                         </div>
                     @elseif($mt['grade'] !== null && $mt['grade'] < ($minimumLimit ?? 60) && $mt['remaining_attempts'] <= 0)
                         <div style="margin-bottom: 12px; padding: 8px 10px; border-radius: 8px; background: #f8fafc;">
-                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">MT topshirig'ini qayta yuklash imkoniyati tugagan</span>
+                            <span style="font-size: 11px; color: #dc2626; font-weight: 500;">{{ __("MT topshirig'ini qayta yuklash imkoniyati tugagan") }}</span>
                         </div>
                     @endif
 
@@ -876,7 +876,7 @@
                         <div style="margin-bottom: 12px;">
                             <a href="{{ asset('storage/' . $mt['file_path']) }}" target="_blank"
                                style="font-size: 11px; color: #2563eb;">
-                                Topshiriq faylini ko'rish
+                                {{ __("Topshiriq faylini ko'rish") }}
                             </a>
                         </div>
                     @endif
@@ -886,9 +886,9 @@
                         <div style="display: flex; align-items: flex-start; gap: 6px;">
                             <span style="font-size: 14px; line-height: 1; flex-shrink: 0;">&#9888;</span>
                             <p style="font-size: 10px; color: #854d0e; line-height: 1.5; margin: 0;">
-                                MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.
-                                Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.
-                                MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.
+                                {{ __("MT topshiriq muddati oxirgi darsdan bitta oldingi darsda soat 17.00 gacha yuklanishi shart.") }}
+                                {{ __("Muddatida yuklanmagan MT topshiriqlari ko'rib chiqilmaydi va baholanmaydi.") }}
+                                {{ __("MT dan qoniqarsiz baho olgan yoki baholanmagan talabalar fandan akademik qarzdor hisoblanadi.") }}
                             </p>
                         </div>
                     </div>

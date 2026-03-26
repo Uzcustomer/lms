@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Shartnoma
+            {{ __('Shartnoma') }}
         </h2>
     </x-slot>
 
@@ -34,46 +34,46 @@
 
             {{-- Shartnoma turi tanlash --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-4">
-                <label class="block text-sm font-semibold text-gray-700 mb-3">Shartnoma turini tanlang <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">{{ __('Shartnoma turini tanlang') }} <span class="text-red-500">*</span></label>
                 <select name="contract_type" x-model="contractType" required class="w-full rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500">
-                    <option value="3_tomonlama">3 tomonlama shartnoma</option>
-                    <option value="4_tomonlama">4 tomonlama shartnoma</option>
+                    <option value="3_tomonlama">{{ __('3 tomonlama shartnoma') }}</option>
+                    <option value="4_tomonlama">{{ __('4 tomonlama shartnoma') }}</option>
                 </select>
             </div>
 
             {{-- Talaba ma'lumotlari --}}
             <div class="bg-green-50 rounded-xl shadow-sm border border-green-200 p-5 mb-4">
-                <h3 class="text-sm font-semibold text-green-700 uppercase mb-4">Shartnomadagi ma'lumotlaringiz</h3>
+                <h3 class="text-sm font-semibold text-green-700 uppercase mb-4">{{ __('Shartnomadagi ma\'lumotlaringiz') }}</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">F.I.SH <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">{{ __('F.I.SH') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="student_name" value="{{ $placeholderData['student_name'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Manzil <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">{{ __('Manzil') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="student_address" value="{{ $placeholderData['student_address'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white"
-                               placeholder="Tuman, MFY, ko'cha, uy">
+                               placeholder="{{ __('Tuman, MFY, ko\'cha, uy') }}">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Yo'nalish <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">{{ __('Yo\'nalish') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="specialty_name" value="{{ $placeholderData['specialty_name'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Bitirish yili <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">{{ __('Bitirish yili') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="contract_year" value="{{ $placeholderData['contract_year'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Telefon <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">{{ __('Telefon') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="student_phone" value="{{ $placeholderData['student_phone'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white"
                                placeholder="+998901234567">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Passport seriya va raqami <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">{{ __('Passport seriya va raqami') }} <span class="text-red-500">*</span></label>
                         <div class="flex gap-2">
                             <input type="text" name="student_passport_series" value="{{ $placeholderData['student_passport_series'] }}" required
                                    class="w-24 rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white uppercase tracking-widest font-semibold text-center"
@@ -86,7 +86,7 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-green-600 mb-1">Passport JSHSHIR <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-green-600 mb-1">{{ __('Passport JSHSHIR') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="student_inn" value="{{ $placeholderData['student_inn'] }}" required
                                class="w-full rounded-lg border-green-300 text-sm focus:ring-green-500 focus:border-green-500 bg-white tracking-wide"
                                placeholder="12345678901234" maxlength="14"
@@ -97,19 +97,19 @@
 
             {{-- 3-tomon ma'lumotlari --}}
             <div class="bg-blue-50 rounded-xl shadow-sm border border-blue-200 p-5 mb-4">
-                <h3 class="text-sm font-semibold text-blue-700 uppercase mb-4">3-tomon ma'lumotlari</h3>
+                <h3 class="text-sm font-semibold text-blue-700 uppercase mb-4">{{ __('3-tomon ma\'lumotlari') }}</h3>
                 <div class="space-y-3">
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}" required
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                               placeholder="Surxondaryo viloyati">
+                               placeholder="{{ __('Surxondaryo viloyati') }}">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-blue-600 mb-1">Viloyat sog'liqni saqlash bosh boshqarmasi boshlig'i <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi boshlig\'i') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="employer_director_name" value="{{ $placeholderData['employer_director_name'] }}" required
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                               placeholder="Rahbar to'liq ismi">
+                               placeholder="{{ __('Rahbar to\'liq ismi') }}">
                     </div>
                 </div>
             </div>

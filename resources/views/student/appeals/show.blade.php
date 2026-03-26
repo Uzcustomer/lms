@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Apellyatsiya #{{ $appeal->id }}
+            {{ __('Apellyatsiya') }} #{{ $appeal->id }}
         </h2>
     </x-slot>
 
@@ -80,7 +80,7 @@
 
                 {{-- Sabab --}}
                 <div>
-                    <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Sabab</p>
+                    <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">{{ __('Sabab') }}</p>
                     <div class="bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
                         <p class="text-[13px] text-gray-700 whitespace-pre-line leading-relaxed">{{ $appeal->reason }}</p>
                     </div>
@@ -105,10 +105,10 @@
                     <div class="flex items-center gap-2 mb-2">
                         @if($appeal->status === 'approved')
                             <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            <span class="text-xs font-bold text-emerald-700">Qabul qilindi</span>
+                            <span class="text-xs font-bold text-emerald-700">{{ __('Qabul qilindi') }}</span>
                         @else
                             <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            <span class="text-xs font-bold text-red-700">Rad etildi</span>
+                            <span class="text-xs font-bold text-red-700">{{ __('Rad etildi') }}</span>
                         @endif
                     </div>
                     <div class="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500">
@@ -129,7 +129,7 @@
                 @if($appeal->relationLoaded('comments'))
                 <div>
                     <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                        Izohlar @if($appeal->comments->count() > 0)<span class="text-gray-500">({{ $appeal->comments->count() }})</span>@endif
+                        {{ __('Izohlar') }} @if($appeal->comments->count() > 0)<span class="text-gray-500">({{ $appeal->comments->count() }})</span>@endif
                     </p>
                     @if($appeal->comments->count() > 0)
                         <div class="space-y-2 mb-3 max-h-80 overflow-y-auto">
@@ -164,12 +164,12 @@
                         <input type="text" name="comment" required minlength="3" maxlength="1000"
                                class="flex-1 rounded-lg border-2 border-indigo-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3"
                                style="height: 40px;"
-                               placeholder="Izoh yozing...">
+                               placeholder="{{ __('Izoh yozing...') }}">
                         <input type="file" name="file" id="comment-file-input" class="hidden"
                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip">
                         <button type="button" onclick="document.getElementById('comment-file-input').click()"
                                 class="flex items-center justify-center bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition flex-shrink-0 border border-gray-300 relative"
-                                style="height: 40px; width: 40px;" title="Hujjat yuklash">
+                                style="height: 40px; width: 40px;" title="{{ __('Hujjat yuklash') }}">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                             <span id="file-indicator" class="hidden absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-white"></span>
                         </button>

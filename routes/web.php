@@ -720,9 +720,8 @@ Route::prefix('student')->name('student.')->group(function () {
         })->name('job-listings');
 
         // To'garaklar
-        Route::get('/clubs', function () {
-            return view('student.clubs');
-        })->name('clubs');
+        Route::get('/clubs', [\App\Http\Controllers\Student\ClubMembershipController::class, 'index'])->name('clubs');
+        Route::post('/clubs/join', [\App\Http\Controllers\Student\ClubMembershipController::class, 'store'])->name('clubs.join');
 
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {

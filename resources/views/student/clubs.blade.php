@@ -6,6 +6,39 @@
     </x-slot>
 
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 py-4">
+
+        {{-- Flash messages --}}
+        @if(session('success'))
+            <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">{{ session('success') }}</div>
+        @endif
+        @if(session('error'))
+            <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{{ session('error') }}</div>
+        @endif
+
+        {{-- Men a'zo bo'lgan to'garaklar --}}
+        @if($myMemberships->count() > 0)
+        <div class="mb-6">
+            <h2 class="text-sm font-bold text-gray-800 mb-3">Men a'zo bo'lgan to'garaklar</h2>
+            <div class="space-y-2">
+                @foreach($myMemberships as $m)
+                    <div class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2.5">
+                        <div>
+                            <div class="font-semibold text-xs text-gray-800">{{ $m->club_name }}</div>
+                            <div class="text-[11px] text-gray-500">{{ $m->kafedra_name }}</div>
+                        </div>
+                        @if($m->status === 'pending')
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-700">Ariza yuborildi</span>
+                        @elseif($m->status === 'approved')
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">Tasdiqlangan</span>
+                        @elseif($m->status === 'rejected')
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-100 text-red-700" title="{{ $m->reject_reason }}">Rad etilgan</span>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
+
         <div class="text-center mb-5">
             <h1 class="text-xs font-bold text-gray-800 uppercase leading-snug">
                 Toshkent Davlat Tibbiyot Universiteti Termiz Filialida<br>
@@ -164,6 +197,8 @@
                     ]
                 ],
             ];
+
+            $myClubNames = $myMemberships->pluck('club_name')->toArray();
         @endphp
 
         @foreach($sections as $section)
@@ -189,6 +224,21 @@
                                         <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                         <span>{{ $club['time'] }}</span>
                                     </div>
+                                </div>
+                                <div class="mt-2">
+                                    @if(in_array($club['name'], $myClubNames))
+                                        <span class="inline-block text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 rounded-lg px-2 py-0.5">Ariza yuborilgan</span>
+                                    @else
+                                        <form method="POST" action="{{ route('student.clubs.join') }}">
+                                            @csrf
+                                            <input type="hidden" name="club_name" value="{{ $club['name'] }}">
+                                            <input type="hidden" name="club_place" value="{{ $club['place'] }}">
+                                            <input type="hidden" name="club_day" value="{{ $club['day'] }}">
+                                            <input type="hidden" name="club_time" value="{{ $club['time'] }}">
+                                            <input type="hidden" name="kafedra_name" value="{{ $section['title'] }}">
+                                            <button type="submit" class="text-[10px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2.5 py-1 transition">A'zo bo'lish</button>
+                                        </form>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach

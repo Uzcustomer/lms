@@ -20,6 +20,16 @@ class ClubMembershipController extends Controller
         return view('student.clubs', compact('myMemberships'));
     }
 
+    public function myClubs()
+    {
+        $student = Auth::guard('student')->user();
+        $myMemberships = ClubMembership::where('student_id', $student->id)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('student.my-clubs', compact('myMemberships'));
+    }
+
     public function store(Request $request)
     {
         $request->validate([

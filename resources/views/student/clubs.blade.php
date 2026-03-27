@@ -17,26 +17,13 @@
 
         {{-- Men a'zo bo'lgan to'garaklar --}}
         @if($myMemberships->count() > 0)
-        <div class="mb-6">
-            <h2 class="text-sm font-bold text-gray-800 mb-3">Men a'zo bo'lgan to'garaklar</h2>
-            <div class="space-y-2">
-                @foreach($myMemberships as $m)
-                    <div class="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2.5">
-                        <div>
-                            <div class="font-semibold text-xs text-gray-800">{{ $m->club_name }}</div>
-                            <div class="text-[11px] text-gray-500">{{ $m->kafedra_name }}</div>
-                        </div>
-                        @if($m->status === 'pending')
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-700">Ariza yuborildi</span>
-                        @elseif($m->status === 'approved')
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">Tasdiqlangan</span>
-                        @elseif($m->status === 'rejected')
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-100 text-red-700" title="{{ $m->reject_reason }}">Rad etilgan</span>
-                        @endif
-                    </div>
-                @endforeach
+        <a href="{{ route('student.my-clubs') }}" class="flex items-center justify-between bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-5 hover:bg-indigo-100 transition">
+            <div>
+                <div class="font-bold text-sm text-indigo-800">Mening to'garaklarim</div>
+                <div class="text-xs text-indigo-500">{{ $myMemberships->count() }} ta ariza</div>
             </div>
-        </div>
+            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+        </a>
         @endif
 
         <div class="text-center mb-5">

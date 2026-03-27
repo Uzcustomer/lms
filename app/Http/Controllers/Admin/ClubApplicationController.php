@@ -32,6 +32,12 @@ class ClubApplicationController extends Controller
         return view('admin.club-applications', compact('applications'));
     }
 
+    public function show(ClubMembership $application)
+    {
+        $this->checkAccess($application);
+        return view('admin.club-applications-show', compact('application'));
+    }
+
     public function approve(ClubMembership $application)
     {
         $this->checkAccess($application);

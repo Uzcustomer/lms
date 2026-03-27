@@ -444,6 +444,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // To'garak arizalari
         Route::prefix('club-applications')->name('club-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'index'])->name('index');
+            Route::get('/{application}', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'show'])->name('show');
             Route::post('/{application}/approve', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'approve'])->name('approve');
             Route::post('/{application}/reject', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'reject'])->name('reject');
         });
@@ -728,6 +729,7 @@ Route::prefix('student')->name('student.')->group(function () {
 
         // To'garaklar
         Route::get('/clubs', [\App\Http\Controllers\Student\ClubMembershipController::class, 'index'])->name('clubs');
+        Route::get('/my-clubs', [\App\Http\Controllers\Student\ClubMembershipController::class, 'myClubs'])->name('my-clubs');
         Route::post('/clubs/join', [\App\Http\Controllers\Student\ClubMembershipController::class, 'store'])->name('clubs.join');
 
         // Xabarnomalar

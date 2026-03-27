@@ -16,7 +16,7 @@
                 $rejected = $applications->where('status', 'rejected');
             @endphp
 
-            {{-- Stats --}}
+            {{-- Stats row --}}
             <div class="grid grid-cols-3 gap-4 mb-6">
                 <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
                     <div class="text-2xl font-bold text-yellow-700">{{ $pending->count() }}</div>
@@ -32,84 +32,36 @@
                 </div>
             </div>
 
-            {{-- Pending --}}
-            @if($pending->count() > 0)
-            <div class="bg-white shadow-sm rounded-xl border border-gray-200 mb-6">
-                <div class="px-4 py-3 border-b border-gray-200 bg-yellow-50 rounded-t-xl">
-                    <h3 class="font-semibold text-sm text-yellow-800">Kutilayotgan arizalar ({{ $pending->count() }})</h3>
-                </div>
-                <div class="divide-y divide-gray-100">
-                    @foreach($pending as $app)
-                    <div class="px-4 py-3 flex items-center justify-between gap-3">
-                        <div class="flex-1 min-w-0">
-                            <div class="font-semibold text-sm text-gray-800">{{ $app->student_name }}</div>
-                            <div class="text-xs text-gray-500">{{ $app->group_name }} &middot; {{ $app->club_name }}</div>
-                            <div class="text-xs text-gray-400 mt-0.5">{{ $app->created_at->format('d.m.Y H:i') }}</div>
+            {{-- Applications grid --}}
+            @if($applications->count() > 0)
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    @foreach($applications as $app)
+                        <div class="bg-white border rounded-xl p-4 {{ $app->status === 'pending' ? 'border-yellow-300' : ($app->status === 'approved' ? 'border-green-300' : 'border-red-300') }}">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="font-bold text-sm text-gray-800">{{ $app->student_name }}</div>
+                                @if($app->status === 'pending')
+                                    <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-700 flex-shrink-0">Kutilmoqda</span>
+                                @elseif($app->status === 'approved')
+                                    <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 flex-shrink-0">Tasdiqlangan</span>
+                                @else
+                                    <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 flex-shrink-0">Rad etilgan</span>
+                                @endif
+                            </div>
+                            <div class="text-xs text-gray-500 mb-1">{{ $app->group_name }}</div>
+                            <div class="text-xs font-semibold text-gray-700 mb-1">{{ $app->club_name }}</div>
+                            <div class="text-[11px] text-gray-400 mb-3">{{ $app->created_at->format('d.m.Y H:i') }}</div>
+                            <a href="{{ route('admin.club-applications.show', $app) }}" class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                Ko'rish
+                            </a>
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                            <form method="POST" action="{{ route('admin.club-applications.approve', $app) }}">
-                                @csrf
-                                <button type="submit" class="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition">Tasdiqlash</button>
-                            </form>
-                            <form method="POST" action="{{ route('admin.club-applications.reject', $app) }}" x-data="{ open: false }">
-                                @csrf
-                                <button type="button" @click="open = !open" class="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition">Rad etish</button>
-                                <div x-show="open" x-cloak class="mt-2">
-                                    <input type="text" name="reject_reason" placeholder="Sabab (ixtiyoriy)" class="w-full text-xs border border-gray-300 rounded-lg px-2 py-1 mb-1">
-                                    <button type="submit" class="text-xs text-red-600 font-semibold">Tasdiqlash</button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
                     @endforeach
                 </div>
-            </div>
+            @else
+                <div class="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400 text-sm">
+                    Arizalar mavjud emas
+                </div>
             @endif
-
-            {{-- All applications table --}}
-            <div class="bg-white shadow-sm rounded-xl border border-gray-200">
-                <div class="px-4 py-3 border-b border-gray-200">
-                    <h3 class="font-semibold text-sm text-gray-800">Barcha arizalar ({{ $applications->count() }})</h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="bg-gray-50 text-left">
-                                <th class="px-4 py-2 font-semibold text-gray-600">#</th>
-                                <th class="px-4 py-2 font-semibold text-gray-600">Talaba</th>
-                                <th class="px-4 py-2 font-semibold text-gray-600">Guruh</th>
-                                <th class="px-4 py-2 font-semibold text-gray-600">To'garak</th>
-                                <th class="px-4 py-2 font-semibold text-gray-600">Sana</th>
-                                <th class="px-4 py-2 font-semibold text-gray-600">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            @forelse($applications as $i => $app)
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-4 py-2 text-gray-500">{{ $i + 1 }}</td>
-                                <td class="px-4 py-2 font-medium text-gray-800">{{ $app->student_name }}</td>
-                                <td class="px-4 py-2 text-gray-600">{{ $app->group_name }}</td>
-                                <td class="px-4 py-2 text-gray-600">{{ $app->club_name }}</td>
-                                <td class="px-4 py-2 text-gray-500">{{ $app->created_at->format('d.m.Y') }}</td>
-                                <td class="px-4 py-2">
-                                    @if($app->status === 'pending')
-                                        <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Kutilmoqda</span>
-                                    @elseif($app->status === 'approved')
-                                        <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Tasdiqlangan</span>
-                                    @else
-                                        <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700" title="{{ $app->reject_reason }}">Rad etilgan</span>
-                                    @endif
-                                </td>
-                            </tr>
-                            @empty
-                            <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-gray-400">Arizalar mavjud emas</td>
-                            </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
 
         </div>
     </div>

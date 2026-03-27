@@ -19,12 +19,14 @@ return new class extends Migration
             $table->string('club_day')->nullable();
             $table->string('club_time')->nullable();
             $table->string('kafedra_name')->nullable();
+            $table->unsignedBigInteger('department_hemis_id')->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');
             $table->text('reject_reason')->nullable();
             $table->timestamps();
 
             $table->index('student_hemis_id');
             $table->index('status');
+            $table->index('department_hemis_id');
             $table->unique(['student_id', 'club_name'], 'unique_student_club');
         });
     }

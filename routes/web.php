@@ -441,6 +441,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/plan/{curriculumSubjectId}', [KtrController::class, 'resetPlan'])->name('reset-plan');
         });
 
+        // To'garak arizalari
+        Route::prefix('club-applications')->name('club-applications.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'index'])->name('index');
+            Route::post('/{application}/approve', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'approve'])->name('approve');
+            Route::post('/{application}/reject', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'reject'])->name('reject');
+        });
+
         // Kafedra (Fakultet va kafedralar tuzilmasi)
         Route::prefix('kafedra')->name('kafedra.')->group(function () {
             Route::get('/', [KafedraController::class, 'index'])->name('index');

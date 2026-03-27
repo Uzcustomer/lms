@@ -1390,20 +1390,6 @@
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
-                                                        @elseif($hasRetake && $retakeType === 'absent' && $isAdminRole)
-                                                            {{-- NB + retake baho — admin o'zgartira oladi (YN dan keyin ham) --}}
-                                                            @php
-                                                                $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
-                                                                $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
-                                                                $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
-                                                                $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
-                                                            @endphp
-                                                            <div class="split-cell cursor-pointer hover:bg-amber-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'zgartirish"
-                                                                @if($isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ round($grade, 0) }})" @else onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
-                                                                <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
-                                                                <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
-                                                                <span class="split-bottom">{{ round($grade, 0) }}</span>
-                                                            </div>
                                                         @elseif($hasRetake && $retakeType === 'absent')
                                                             {{-- NB + retake baho — admin emas, faqat ko'rish --}}
                                                             @php
@@ -1467,10 +1453,9 @@
                                                             {{-- NB — muddat o'tgan --}}
                                                             <span class="{{ $nbColorClass }} font-medium" title="Muddat o'tgan: {{ $deadlineStr }}">NB</span>
                                                         @elseif($hasRetake)
-                                                            {{-- NB + otrabotka qilgan: diagonal split --}}
+                                                            {{-- NB + otrabotka qilgan: diagonal split (faqat ko'rish) --}}
                                                             @php $retakeVal = round($absenceData['retake_grade'], 0); @endphp
-                                                            <div class="split-cell @if($isAdminRole && $isSababli) cursor-pointer hover:bg-amber-50 @elseif($canRateAdmin) cursor-pointer hover:bg-blue-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ ($isAdminRole && $isSababli) || $canRateAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($isAdminRole && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ $retakeVal }})" @elseif($canRateAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
+                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1909,9 +1894,9 @@
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? !$isAdminMt
+                                                ? (!$isAdminMt || $hasGrade)
                                                 : ($isAdminMt
-                                                    ? ($isDekan || $isRegistrator || (!$hasFile && !$isAdminMt))
+                                                    ? ($isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt))
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
                                             // YN yuborilgan bo'lsa hamma action bloklash (admin bundan mustasno)
                                             if ($isYnSubmittedMt && !$isAdminMt) {
@@ -2026,15 +2011,7 @@
                                                         Saqlash
                                                     </button>
                                                     @endif
-                                                @elseif($isAdminMt && $hasGrade)
-                                                    {{-- Admin: can always edit grade --}}
-                                                    <button type="button"
-                                                        onclick="saveMtGrade('{{ $student->hemis_id }}', false, true)"
-                                                        id="mt-save-btn-{{ $student->hemis_id }}"
-                                                        style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #7c3aed; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
-                                                        O'zgartirish
-                                                    </button>
-                                                @elseif($isLockedPermanent)
+                                                @elseif($isLockedPermanent || ($isAdminMt && $hasGrade))
                                                     {{-- Grade >= minimumLimit: permanently locked --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">
                                                         &#128274; Qabul qilindi

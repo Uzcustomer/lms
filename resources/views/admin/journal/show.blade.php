@@ -1469,8 +1469,8 @@
                                                         @elseif($hasRetake)
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php $retakeVal = round($absenceData['retake_grade'], 0); @endphp
-                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-blue-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($canRateAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
+                                                            <div class="split-cell @if($isAdminRole && $isSababli) cursor-pointer hover:bg-amber-50 @elseif($canRateAdmin) cursor-pointer hover:bg-blue-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ ($isAdminRole && $isSababli) || $canRateAdmin ? ' — bosib o\'zgartirish' : '' }}"
+                                                                @if($isAdminRole && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ $retakeVal }})" @elseif($canRateAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -4186,10 +4186,10 @@
             });
         }
         // === SABABLI BAHO MODAL ===
-        function openExcuseModal(studentHemisId, studentName, gradeId, excuseId) {
+        function openExcuseModal(studentHemisId, studentName, gradeId, excuseId, existingGrade) {
             document.getElementById('excuse-modal-student-name').textContent = studentName;
             document.getElementById('excuse-modal-hemis-id').textContent = studentHemisId;
-            document.getElementById('excuse-modal-grade-input').value = '';
+            document.getElementById('excuse-modal-grade-input').value = existingGrade || '';
             document.getElementById('excuse-modal-comment').value = '';
             document.getElementById('excuse-modal-save-btn').disabled = false;
             document.getElementById('excuse-modal-save-btn').textContent = 'Saqlash';

@@ -43,20 +43,27 @@ class ClubMembershipController extends Controller
         // Kafedra nomidan department_hemis_id ni topish
         $departmentHemisId = null;
         if ($request->kafedra_name) {
+            $kafedraTitle = mb_strtolower($request->kafedra_name);
             $department = Department::where('active', true)
                 ->where('name', 'LIKE', '%kafedra%')
                 ->get()
-                ->first(function ($dept) use ($request) {
-                    // Kafedra section title ichidan department nomini izlaymiz
-                    return mb_stripos($request->kafedra_name, mb_substr($dept->name, 0, 20)) !== false
-                        || mb_stripos($dept->name, 'kafedra') !== false
-                            && $this->kafedraMatch($request->kafedra_name, $dept->name);
+                ->first(function ($dept) use ($kafedraTitle) {
+                    $deptName = mb_strtolower($dept->name);
+                    // Kafedra nomidan "kafedra" so'zini olib tashlab asosiy qismini tekshiramiz
+                    $deptCore = trim(preg_replace('/\s*kafedras?i?\s*/ui', ' ', $deptName));
+                    $words = array_filter(explode(' ', $deptCore), fn($w) => mb_strlen($w) > 3);
+                    if (empty($words)) return false;
+                    $matched = 0;
+                    foreach ($words as $w) {
+                        if (mb_stripos($kafedraTitle, $w) !== false) $matched++;
+                    }
+                    return $matched >= count($words) * 0.5;
                 });
 
             $departmentHemisId = $department?->department_hemis_id;
         }
 
-        ClubMembership::create([
+        $data = [
             'student_id' => $student->id,
             'student_hemis_id' => $student->hemis_id,
             'student_name' => $student->full_name,
@@ -66,30 +73,16 @@ class ClubMembershipController extends Controller
             'club_day' => $request->club_day,
             'club_time' => $request->club_time,
             'kafedra_name' => $request->kafedra_name,
-            'department_hemis_id' => $departmentHemisId,
             'status' => 'pending',
-        ]);
+        ];
+
+        if (\Schema::hasColumn('club_memberships', 'department_hemis_id')) {
+            $data['department_hemis_id'] = $departmentHemisId;
+        }
+
+        ClubMembership::create($data);
 
         return back()->with('success', 'To\'garakka a\'zo bo\'lish uchun ariza yuborildi!');
     }
 
-    private function kafedraMatch(string $sectionTitle, string $deptName): bool
-    {
-        // Department nomidan asosiy so'zlarni olamiz (kafedra so'zini olib tashlab)
-        $deptClean = mb_strtolower(preg_replace('/\s*kafedra\s*/ui', ' ', $deptName));
-        $keywords = array_filter(explode(' ', trim($deptClean)), fn($w) => mb_strlen($w) > 3);
-
-        if (empty($keywords)) return false;
-
-        $titleLower = mb_strtolower($sectionTitle);
-        $matched = 0;
-        foreach ($keywords as $kw) {
-            if (mb_stripos($titleLower, $kw) !== false) {
-                $matched++;
-            }
-        }
-
-        // Kamida 60% so'zlar mos kelsa
-        return $matched >= count($keywords) * 0.6;
-    }
 }

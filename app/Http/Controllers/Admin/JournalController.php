@@ -4698,6 +4698,7 @@ class JournalController extends Controller
                 ->where('id', $request->grade_id)
                 ->update([
                     'retake_grade' => $request->grade,
+                    'retake_comment' => $request->comment,
                     'status' => 'closed',
                     'updated_at' => now(),
                 ]);

@@ -13,14 +13,20 @@ class ClubApplicationController extends Controller
         $user = auth()->user();
         $activeRole = session('active_role', '');
 
-        if (in_array($activeRole, ['superadmin', 'admin', 'kichik_admin'])) {
-            $applications = ClubMembership::orderByDesc('created_at')->get();
-        } elseif ($activeRole === 'kafedra_mudiri') {
-            $applications = ClubMembership::where('department_hemis_id', $user->department_hemis_id)
-                ->orderByDesc('created_at')
-                ->get();
-        } else {
+        if (!in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'kafedra_mudiri'])) {
             abort(403);
+        }
+
+        try {
+            if ($activeRole === 'kafedra_mudiri') {
+                $applications = ClubMembership::where('department_hemis_id', $user->department_hemis_id)
+                    ->orderByDesc('created_at')
+                    ->get();
+            } else {
+                $applications = ClubMembership::orderByDesc('created_at')->get();
+            }
+        } catch (\Exception $e) {
+            $applications = collect();
         }
 
         return view('admin.club-applications', compact('applications'));
@@ -28,14 +34,14 @@ class ClubApplicationController extends Controller
 
     public function approve(ClubMembership $application)
     {
-        $this->authorize($application);
+        $this->checkAccess($application);
         $application->update(['status' => 'approved', 'reject_reason' => null]);
         return back()->with('success', '\'' . $application->club_name . '\' arizasi tasdiqlandi.');
     }
 
     public function reject(Request $request, ClubMembership $application)
     {
-        $this->authorize($application);
+        $this->checkAccess($application);
         $request->validate(['reject_reason' => 'nullable|string|max:500']);
         $application->update([
             'status' => 'rejected',
@@ -44,7 +50,7 @@ class ClubApplicationController extends Controller
         return back()->with('success', '\'' . $application->club_name . '\' arizasi rad etildi.');
     }
 
-    private function authorize(ClubMembership $application): void
+    private function checkAccess(ClubMembership $application): void
     {
         $user = auth()->user();
         $activeRole = session('active_role', '');

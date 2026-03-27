@@ -1909,14 +1909,13 @@
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? true
+                                                ? !$isAdminMt
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator || (!$hasFile && !$isAdminMt))
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
-                                            // YN yuborilgan bo'lsa hamma action bloklash
-                                            if ($isYnSubmittedMt) {
+                                            // YN yuborilgan bo'lsa hamma action bloklash (admin bundan mustasno)
+                                            if ($isYnSubmittedMt && !$isAdminMt) {
                                                 $canRegrade = false;
-                                                $isAdminMt = false;
                                             }
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade

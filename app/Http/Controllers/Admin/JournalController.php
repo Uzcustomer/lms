@@ -4630,77 +4630,94 @@ class JournalController extends Controller
      */
     public function saveExcuseGrade(Request $request)
     {
-        $request->validate([
-            'student_hemis_id' => 'required|string',
-            'subject_id' => 'required',
-            'semester_code' => 'required',
-            'group_hemis_id' => 'required',
-            'grade_id' => 'required|integer',
-            'grade' => 'required|numeric|min:0|max:100',
-            'comment' => 'nullable|string|max:500',
-            'absence_excuse_id' => 'required|integer',
-        ]);
-
-        $studentHemisId = $request->student_hemis_id;
-        $subjectId = $request->subject_id;
-        $semesterCode = $request->semester_code;
-
-        // Tasdiqlangan sababli hujjat mavjudligini tekshirish
-        $excuse = AbsenceExcuse::where('id', $request->absence_excuse_id)
-            ->where('student_hemis_id', $studentHemisId)
-            ->where('status', 'approved')
-            ->first();
-
-        if (!$excuse) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Tasdiqlangan sababli hujjat topilmadi.',
-            ], 403);
-        }
-
-        // YN yuborilganligini tekshirish (sababli faqat YN yuborilgandan keyin ishlaydi)
-        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('group_hemis_id', $request->group_hemis_id)
-            ->first();
-
-        if (!$ynSubmission) {
-            return response()->json([
-                'success' => false,
-                'message' => 'YN hali yuborilmagan. Avval YN ga yuborilishi kerak.',
-            ], 400);
-        }
-
-        // student_grades jadvalida retake baho qo'yish
-        $studentGrade = DB::table('student_grades')
-            ->where('id', $request->grade_id)
-            ->where('student_hemis_id', $studentHemisId)
-            ->where('subject_id', $subjectId)
-            ->where('reason', 'absent')
-            ->whereNull('deleted_at')
-            ->first();
-
-        if (!$studentGrade) {
-            return response()->json([
-                'success' => false,
-                'message' => 'NB yozuvi topilmadi.',
-            ], 404);
-        }
-
-        DB::table('student_grades')
-            ->where('id', $request->grade_id)
-            ->update([
-                'retake_grade' => $request->grade,
-                'retake_comment' => $request->comment,
-                'status' => 'closed',
-                'updated_at' => now(),
+        try {
+            $request->validate([
+                'student_hemis_id' => 'required|string',
+                'subject_id' => 'required',
+                'semester_code' => 'required',
+                'group_hemis_id' => 'required',
+                'grade_id' => 'required|integer',
+                'grade' => 'required|numeric|min:0|max:100',
+                'comment' => 'nullable|string|max:500',
+                'absence_excuse_id' => 'required|integer',
             ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Sababli baho saqlandi.',
-            'grade' => $request->grade,
-        ]);
+            $studentHemisId = $request->student_hemis_id;
+            $subjectId = $request->subject_id;
+            $semesterCode = $request->semester_code;
+
+            // Tasdiqlangan sababli hujjat mavjudligini tekshirish
+            $excuse = AbsenceExcuse::where('id', $request->absence_excuse_id)
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('status', 'approved')
+                ->first();
+
+            if (!$excuse) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tasdiqlangan sababli hujjat topilmadi.',
+                ], 403);
+            }
+
+            // YN yuborilganligini tekshirish (sababli faqat YN yuborilgandan keyin ishlaydi)
+            $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('group_hemis_id', $request->group_hemis_id)
+                ->first();
+
+            if (!$ynSubmission) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN hali yuborilmagan. Avval YN ga yuborilishi kerak.',
+                ], 400);
+            }
+
+            // student_grades jadvalida retake baho qo'yish
+            $studentGrade = DB::table('student_grades')
+                ->where('id', $request->grade_id)
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (!$studentGrade) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Baho yozuvi topilmadi (grade_id: ' . $request->grade_id . ').',
+                ], 404);
+            }
+
+            if ($studentGrade->reason !== 'absent') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bu baho NB (absent) emas. Reason: ' . ($studentGrade->reason ?? 'null'),
+                ], 400);
+            }
+
+            DB::table('student_grades')
+                ->where('id', $request->grade_id)
+                ->update([
+                    'retake_grade' => $request->grade,
+                    'retake_comment' => $request->comment,
+                    'status' => 'closed',
+                    'updated_at' => now(),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Sababli baho saqlandi.',
+                'grade' => $request->grade,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('saveExcuseGrade error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Server xatosi: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

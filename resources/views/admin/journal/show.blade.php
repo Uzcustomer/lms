@@ -1390,16 +1390,16 @@
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
-                                                        @elseif($hasRetake && $retakeType === 'absent' && $canRateAdmin)
-                                                            {{-- NB + retake baho — admin o'zgartira oladi --}}
+                                                        @elseif($hasRetake && $retakeType === 'absent' && $isAdminRole)
+                                                            {{-- NB + retake baho — admin o'zgartira oladi (YN dan keyin ham) --}}
                                                             @php
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                                 $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
                                                                 $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
-                                                            <div class="split-cell cursor-pointer hover:bg-blue-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'zgartirish"
-                                                                onclick="makeEditable(this, {{ $gradeRecordId }})">
+                                                            <div class="split-cell cursor-pointer hover:bg-amber-50" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }} — bosib o'zgartirish"
+                                                                @if($isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ round($grade, 0) }})" @else onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>

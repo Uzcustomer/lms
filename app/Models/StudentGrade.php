@@ -46,6 +46,7 @@ class StudentGrade extends Model
         'deadline',
         'status',
         'retake_grade',
+        'retake_comment',
         'graded_by_user_id',
         'retake_graded_at',
         'retake_file_path',

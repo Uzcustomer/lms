@@ -3148,6 +3148,7 @@
         function switchView(viewType) {
             document.querySelectorAll('.sidebar-view-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById('view-' + viewType).classList.add('active');
+            localStorage.setItem('journal_view_mode', viewType);
 
             if (viewType === 'compact') {
                 document.getElementById('mz-compact-view')?.classList.remove('hidden');
@@ -3165,6 +3166,14 @@
                 document.getElementById('mt-detailed-view')?.classList.remove('hidden');
             }
         }
+
+        // Sahifa yuklanishida oldingi view modeni tiklash
+        (function() {
+            var savedView = localStorage.getItem('journal_view_mode');
+            if (savedView === 'detailed') {
+                switchView('detailed');
+            }
+        })();
 
         // Retake grade functionality - Excel-like inline editing
         let currentEditingCell = null;

@@ -429,38 +429,7 @@
                     gh += '</div>';
                     $('#all-records-wrap').html(gh);
 
-                    // Ikkita qarzdorlik ro'yxati: majburiy va biriktirilgan
-                    var debtsAll      = resp.grade_debts    || [];
-                    var debtsAssigned = resp.grade_debts_ss; // null = SS ma'lumoti yo'q
-                    var hasSS         = resp.has_ss_data && debtsAssigned !== null;
-                    if (!hasSS) debtsAssigned = [];
-                    var isTeng = hasSS && (debtsAll.length === debtsAssigned.length);
-
-                    // Bitta birlashgan jadval: har bir noyob fan uchun bitta qator,
-                    // Biriktirilgan va Majburiy ustunlari bo'sh yoki "Qarzdor" ko'rsatadi
-                    var mergedMap = {}; // key: semester_code|subject_name
-                    var mergedOrder = [];
-
-                    function addToMerged(list, field) {
-                        for (var i = 0; i < list.length; i++) {
-                            var d = list[i];
-                            var key = d.semester_code + '|' + d.subject_name;
-                            if (!mergedMap[key]) {
-                                mergedMap[key] = { semester_name: d.semester_name, subject_name: d.subject_name, credit: d.credit, total_acload: d.total_acload, ss: false, curr: false, semester_code: d.semester_code };
-                                mergedOrder.push(key);
-                            }
-                            mergedMap[key][field] = true;
-                        }
-                    }
-                    addToMerged(debtsAssigned, 'ss');
-                    addToMerged(debtsAll, 'curr');
-
-                    // semester_code bo'yicha tartiblash
-                    mergedOrder.sort(function(a, b) {
-                        var sa = mergedMap[a].semester_code, sb = mergedMap[b].semester_code;
-                        if (sa !== sb) return sa < sb ? -1 : 1;
-                        return mergedMap[a].subject_name < mergedMap[b].subject_name ? -1 : 1;
-                    });
+                    var debtsAll = resp.grade_debts || [];
 
                     var dh = '<div style="border-top:2px solid #e2e8f0;">';
                     dh += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
@@ -550,13 +519,10 @@
                     gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th><th>Holat</th></tr></thead><tbody>';
                     for (var g = 0; g < grades.length; g++) {
                         var gr = grades[g];
-                        var point = (gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
-                        var grade = (gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
-                        // PHP bilan bir xil mantiq: grade 0 yoki 2 = qarzdor, boshqalar = o'tdi
-                        var gradeNum = (grade !== '-') ? parseFloat(grade) : null;
-                        var isDebt = (grade === '-' || gradeNum === null || isNaN(gradeNum) || gradeNum === 0 || gradeNum === 2);
+                        var isDebt = gr.is_debt || false;
+                        var point = (!isDebt && gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
+                        var grade = (!isDebt && gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
                         var gradeClass = isDebt ? 'cell-fail' : 'cell-pass';
-                        var subNameLower = (gr.subject_name || '').trim().toLowerCase();
                         var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
                         gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
@@ -564,7 +530,7 @@
                         gh += '<td>' + esc(gr.credit) + '</td>';
                         gh += '<td>' + esc(gr.total_acload) + '</td>';
                         gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
-                        gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
+                        gh += '<td>' + (isDebt ? '<span style="color:#94a3b8;">—</span>' : '<span class="badge badge-indigo">' + esc(grade) + '</span>') + '</td>';
                         gh += '<td>';
                         if (isDebt) {
                             gh += '<span class="reason-badge">Qarzdor</span>';

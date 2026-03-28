@@ -3105,25 +3105,45 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
-            // academic_records dan to'g'ridan-to'g'ri — join kerak emas
-            $grades = DB::table('academic_records')
-                ->where('student_id', $studentId)
-                ->where('semester_id', $semesterCode)
-                ->select('subject_name', 'credit', 'total_acload', 'total_point', 'grade')
-                ->orderBy('subject_name')
-                ->get();
-
-            // Guruh suffiksi bo'yicha filtr: "d1/23-01b" → "b"
-            $grades = $this->filterSubjectsByGroupSuffix($grades, $groupName);
-
-            $semesterName = DB::table('curriculum_subjects')
+            // Curriculum subjects — shu semestrga tegishli barcha fanlar
+            $currSubjects = DB::table('curriculum_subjects')
                 ->where('curricula_hemis_id', $student->curriculum_id)
                 ->where('semester_code', $semesterCode)
                 ->where('is_active', true)
-                ->value('semester_name');
+                ->where('subject_code', 'not like', '%/%')
+                ->select('subject_id', 'subject_name', 'semester_name', 'credit', 'total_acload')
+                ->distinct()
+                ->orderBy('subject_name')
+                ->get();
+
+            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
+
+            // Academic records — shu semestrga tegishli baholar
+            $arRecords = DB::table('academic_records')
+                ->where('student_id', $studentId)
+                ->where('semester_id', $semesterCode)
+                ->select('subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade')
+                ->get()
+                ->keyBy('subject_id');
+
+            // Curriculum fanlarini academic records bilan birlashtirish
+            $grades = [];
+            foreach ($currSubjects as $sub) {
+                $ar = $arRecords->get($sub->subject_id);
+                $grades[] = (object) [
+                    'subject_name' => $sub->subject_name,
+                    'credit'       => $sub->credit,
+                    'total_acload' => $sub->total_acload,
+                    'total_point'  => $ar->total_point ?? null,
+                    'grade'        => $ar->grade ?? null,
+                    'is_debt'      => !$ar, // academic_records da yo'q = qarzdor
+                ];
+            }
+
+            $semesterName = $currSubjects->first()->semester_name ?? $semesterCode . '-semestr';
 
             return response()->json([
-                'semester_name' => $semesterName ?? $semesterCode . '-semestr',
+                'semester_name' => $semesterName,
                 'grades' => $grades,
             ]);
         } catch (\Exception $e) {
@@ -3168,10 +3188,13 @@ class ReportController extends Controller
 
             // Semestrlarga guruhlash:
             // Toggle ON: faqat joriy semestr tab ko'rinadi
-            // Toggle OFF: barcha semestrlar ko'rinadi
+            // Toggle OFF: joriy semestrdan oldingilar ko'rinadi (joriy dahil emas)
             $semesters = $records->groupBy('semester_code')
                 ->when($showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
                     return $collection->filter(fn($items, $code) => (string) $code === $studentSemesterCode);
+                })
+                ->when(!$showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
+                    return $collection->filter(fn($items, $code) => (int) $code < (int) $studentSemesterCode);
                 })
                 ->map(function ($items, $semesterCode) {
                     return (object) [
@@ -3193,71 +3216,43 @@ class ReportController extends Controller
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
-            // Academic records lookup
+            // Academic records lookup — faqat mavjudligini tekshirish
+            $arExists = [];
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
-                ->get();
-
-            $arLookup = [];
-            foreach ($arRecords as $ar) {
-                $key = $ar->subject_id . '|' . $ar->semester_id;
-                if (!isset($arLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arLookup[$key]->grade ?? 0)) {
-                    $arLookup[$key] = $ar;
-                }
-            }
-
-            // student_subjects lookup — "Biriktirilgan" ro'yxati uchun
-            $ssRows = DB::table('student_subjects')
-                ->where('student_hemis_id', $studentId)
                 ->select('subject_id', 'semester_id')
                 ->get();
-            $assignedKeys = [];
-            $hasAnySS = $ssRows->isNotEmpty();
-            foreach ($ssRows as $s) {
-                $assignedKeys[$s->subject_id . '|' . $s->semester_id] = true;
+            foreach ($arRecords as $ar) {
+                $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
             }
 
-            // Ikkita ro'yxat: majburiy (curriculum) va biriktirilgan (student_subjects)
-            $debtsAll      = []; // majburiy
-            $debtsAssigned = []; // biriktirilgan (null = ma'lumot yo'q)
+            // Qarzlar: curriculum da bor, academic_records da yo'q
+            $debtsAll = [];
 
             foreach ($currSubjects as $sub) {
-                if ($showCurrentSemester && $studentSemesterCode && (string) $sub->semester_code !== $studentSemesterCode) continue;
+                $subSemCode = (int) $sub->semester_code;
 
-                $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
+                if ($showCurrentSemester) {
+                    if ($studentSemesterCode && $subSemCode !== (int) $studentSemesterCode) continue;
+                } else {
+                    if ($studentSemesterCode && $subSemCode >= (int) $studentSemesterCode) continue;
+                }
 
-                $isDebt = !$ar
-                    || $ar->grade === null
-                    || (float) $ar->grade == 0 || (float) $ar->grade == 2
-                    || $ar->retraining_status;
+                if (isset($arExists[$sub->subject_id . '|' . $sub->semester_code])) continue;
 
-                if (!$isDebt) continue;
-
-                $item = [
+                $debtsAll[] = [
                     'semester_code' => $sub->semester_code,
                     'semester_name' => $sub->semester_name,
                     'subject_name'  => $sub->subject_name,
                     'credit'        => $sub->credit,
                     'total_acload'  => $sub->total_acload,
-                    'total_point'   => $ar->total_point ?? null,
-                    'grade'         => $ar->grade ?? null,
                     'status'        => 'Qarzdor',
                 ];
-
-                $debtsAll[] = $item;
-
-                // Biriktirilgan: faqat student_subjects da mavjud fanlar
-                if ($hasAnySS && isset($assignedKeys[$sub->subject_id . '|' . $sub->semester_code])) {
-                    $debtsAssigned[] = $item;
-                }
             }
 
             return response()->json([
-                'semesters'      => $semesters,
-                'grade_debts'    => $debtsAll,                        // majburiy (curriculum)
-                'grade_debts_ss' => $hasAnySS ? $debtsAssigned : null, // null = SS ma'lumoti yo'q
-                'has_ss_data'    => $hasAnySS,
+                'semesters'   => $semesters,
+                'grade_debts' => $debtsAll,
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'grade_debts' => []], 500);

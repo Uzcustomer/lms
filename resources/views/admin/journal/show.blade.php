@@ -1391,14 +1391,16 @@
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
                                                             </div>
                                                         @elseif($hasRetake && $retakeType === 'absent')
-                                                            {{-- NB + retake baho — admin emas, faqat ko'rish --}}
+                                                            {{-- NB + retake baho --}}
                                                             @php
+                                                                $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                                 $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
                                                                 $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
-                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
+                                                            <div class="split-cell @if($isSuperAdmin) cursor-pointer hover:bg-amber-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}{{ $isSuperAdmin ? ' — bosib o\'zgartirish' : '' }}"
+                                                                @if($isSuperAdmin && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ round($grade, 0) }})" @elseif($isSuperAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>
@@ -1453,9 +1455,13 @@
                                                             {{-- NB — muddat o'tgan --}}
                                                             <span class="{{ $nbColorClass }} font-medium" title="Muddat o'tgan: {{ $deadlineStr }}">NB</span>
                                                         @elseif($hasRetake)
-                                                            {{-- NB + otrabotka qilgan: diagonal split (faqat ko'rish) --}}
-                                                            @php $retakeVal = round($absenceData['retake_grade'], 0); @endphp
-                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
+                                                            {{-- NB + otrabotka qilgan: diagonal split --}}
+                                                            @php
+                                                                $retakeVal = round($absenceData['retake_grade'], 0);
+                                                                $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
+                                                            @endphp
+                                                            <div class="split-cell @if($isSuperAdmin) cursor-pointer hover:bg-amber-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $isSuperAdmin ? ' — bosib o\'zgartirish' : '' }}"
+                                                                @if($isSuperAdmin && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ $retakeVal }})" @elseif($isSuperAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1892,14 +1898,17 @@
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                            $isSuperAdminMt = auth()->user()?->hasRole('superadmin') ?? false;
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? (!$isAdminMt || $hasGrade)
-                                                : ($isAdminMt
-                                                    ? ($isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt))
-                                                    : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
-                                            // YN yuborilgan bo'lsa hamma action bloklash (admin bundan mustasno)
-                                            if ($isYnSubmittedMt && !$isAdminMt) {
+                                                ? !$isSuperAdminMt
+                                                : ($isSuperAdminMt
+                                                    ? ($isDekan || $isRegistrator)
+                                                    : ($isAdminMt
+                                                        ? ($isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt))
+                                                        : ($isDekan || $isRegistrator || $hasGrade || !$hasFile)));
+                                            // YN yuborilgan bo'lsa hamma action bloklash (superadmin bundan mustasno)
+                                            if ($isYnSubmittedMt && !$isSuperAdminMt) {
                                                 $canRegrade = false;
                                             }
 
@@ -2011,6 +2020,14 @@
                                                         Saqlash
                                                     </button>
                                                     @endif
+                                                @elseif($isSuperAdminMt && $hasGrade)
+                                                    {{-- Superadmin: can edit saved grade --}}
+                                                    <button type="button"
+                                                        onclick="saveMtGrade('{{ $student->hemis_id }}', false, true)"
+                                                        id="mt-save-btn-{{ $student->hemis_id }}"
+                                                        style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #7c3aed; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+                                                        O'zgartirish
+                                                    </button>
                                                 @elseif($isLockedPermanent || ($isAdminMt && $hasGrade))
                                                     {{-- Grade >= minimumLimit: permanently locked --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">

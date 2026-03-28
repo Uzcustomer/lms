@@ -2752,7 +2752,12 @@ class ReportController extends Controller
                 $studentQuery->where('s.level_code', $request->level_code);
             }
             if ($request->filled('group')) {
-                $studentQuery->where('s.group_id', $request->group);
+                $groupVal = $request->group;
+                if (is_numeric($groupVal)) {
+                    $studentQuery->where('s.group_id', $groupVal);
+                } else {
+                    $studentQuery->where('s.group_name', 'like', '%' . $groupVal . '%');
+                }
             }
             if ($request->filled('education_type')) {
                 $studentQuery->where('s.education_type_code', $request->education_type);

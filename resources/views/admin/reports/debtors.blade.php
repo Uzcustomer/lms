@@ -103,15 +103,6 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Qarz holati</label>
-                            <select id="debt_status" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                <option value="teng">Teng (mos)</option>
-                                <option value="teng_emas">Teng emas (farq bor)</option>
-                                <option value="noma'lum">Noma'lum (SS yo'q)</option>
-                            </select>
-                        </div>
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
                             <div class="toggle-switch" id="current-semester-toggle" onclick="toggleSemester()">
@@ -199,9 +190,7 @@
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="student_type_name">Toifa <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Fanga biriktirilgan (student_subjects) asosida"><a href="#" class="sort-link" data-sort="debt_count_ss">Biriktirilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="O'quv reja (curriculum) asosida majburiy fanlar"><a href="#" class="sort-link" data-sort="debt_count_curr">Majburiy <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th style="text-align:center;">Status</th>
+                                        <th style="text-align:center;" title="Qarzlar soni (curriculum da bor, academic records da yo'q)"><a href="#" class="sort-link" data-sort="debt_count">Qarzlar soni <span class="sort-icon active">&#9660;</span></a></th>
                                         @unless($isExpelledPage ?? false)
                                         <th><a href="#" class="sort-link" data-sort="lesson_days">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         @endunless
@@ -246,7 +235,7 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'debt_count_curr';
+        let currentSort = 'debt_count';
         let currentDirection = 'desc';
         let currentPage = 1;
         let reportData = [];
@@ -278,7 +267,6 @@
                 student_status: $('#student_status').val() || '',
                 student_type: $('#student_type').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                debt_status: $('#debt_status').val() || '',
                 min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
@@ -372,20 +360,7 @@
                 }
                 html += '</td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
-                var debtSS   = r.debt_count_ss;
-                var debtCurr = (r.debt_count_curr !== undefined) ? r.debt_count_curr : r.debt_count;
-                var ssKnown  = (debtSS !== null && debtSS !== undefined);
-                html += '<td style="text-align:center;">' + (ssKnown ? '<span class="badge badge-debt" style="background:#1d4ed8;">' + debtSS + '</span>' : '<span style="color:#94a3b8;font-size:12px;">—</span>') + '</td>';
-                html += '<td style="text-align:center;"><span class="badge badge-debt">' + debtCurr + '</span></td>';
-                html += '<td style="text-align:center;">';
-                if (!ssKnown) {
-                    html += '<span style="background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Noma\'lum</span>';
-                } else if (r.debt_status === 'teng') {
-                    html += '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Teng</span>';
-                } else {
-                    html += '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;">Teng emas</span>';
-                }
-                html += '</td>';
+                html += '<td style="text-align:center;"><span class="badge badge-debt">' + r.debt_count + '</span></td>';
                 if (!isExpelledPage) {
                     html += '<td style="text-align:center;"><span class="badge badge-violet">' + (r.lesson_days || 0) + ' kun</span></td>';
                 }
@@ -487,40 +462,25 @@
                         return mergedMap[a].subject_name < mergedMap[b].subject_name ? -1 : 1;
                     });
 
-                    var statusBadge = !hasSS
-                        ? '<span style="background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Noma\'lum (SS yo\'q)</span>'
-                        : isTeng
-                            ? '<span style="background:#dcfce7;color:#16a34a;border:1px solid #86efac;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng</span>'
-                            : '<span style="background:#fef3c7;color:#b45309;border:1px solid #fcd34d;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin-left:8px;">Teng emas</span>';
-
                     var dh = '<div style="border-top:2px solid #e2e8f0;">';
                     dh += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
-                    dh += '<span style="font-weight:700;color:#1d4ed8;font-size:13px;">Biriktirilgan: ' + (hasSS ? debtsAssigned.length + ' ta fan' : '— (ma\'lumot yo\'q)') + '</span>';
-                    dh += '<span style="color:#94a3b8;">|</span>';
-                    dh += '<span style="font-weight:700;color:#dc2626;font-size:13px;">Majburiy: ' + debtsAll.length + ' ta fan</span>';
-                    dh += statusBadge;
+                    dh += '<span style="font-weight:700;color:#dc2626;font-size:13px;">Qarzlar soni: ' + debtsAll.length + ' ta fan</span>';
                     dh += '</div>';
 
-                    if (mergedOrder.length === 0) {
+                    if (debtsAll.length === 0) {
                         dh += '<div style="padding:12px 20px;color:#16a34a;font-size:13px;">Qarzdorlik yo\'q</div>';
                     } else {
                         dh += '<table class="detail-table">';
                         dh += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th>';
-                        dh += '<th style="text-align:center;color:#1d4ed8;">Biriktirilgan</th>';
-                        dh += '<th style="text-align:center;color:#dc2626;">Majburiy</th>';
                         dh += '</tr></thead><tbody>';
-                        for (var i = 0; i < mergedOrder.length; i++) {
-                            var row = mergedMap[mergedOrder[i]];
-                            var onlyInCurr = !row.ss && row.curr; // faqat majburiyda bor
-                            var rowStyle = onlyInCurr ? 'background:#fff7ed;' : '';
-                            dh += '<tr style="' + rowStyle + '">';
+                        for (var i = 0; i < debtsAll.length; i++) {
+                            var row = debtsAll[i];
+                            dh += '<tr>';
                             dh += '<td>' + (i+1) + '</td>';
                             dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(row.semester_name) + '</span></td>';
                             dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name) + '</td>';
                             dh += '<td>' + esc(row.credit) + '</td>';
                             dh += '<td>' + esc(row.total_acload) + '</td>';
-                            dh += '<td style="text-align:center;">' + (row.ss   ? '<span class="reason-badge" style="background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;">Qarzdor</span>' : '') + '</td>';
-                            dh += '<td style="text-align:center;">' + (row.curr ? '<span class="reason-badge">Qarzdor</span>' : '') + '</td>';
                             dh += '</tr>';
                         }
                         dh += '</tbody></table>';
@@ -528,7 +488,7 @@
                     dh += '</div>';
 
                     var currentTitle = $('#modal-title').text().split(' — ')[0];
-                    $('#modal-title').text(currentTitle + ' — Biriktirilgan: ' + debtsAssigned.length + ' | Majburiy: ' + debtsAll.length);
+                    $('#modal-title').text(currentTitle + ' — Qarzlar: ' + debtsAll.length + ' ta fan');
 
                     $('#grade-debts-wrap').html(dh).show();
                     currentDebtSubjects = debtsAll;

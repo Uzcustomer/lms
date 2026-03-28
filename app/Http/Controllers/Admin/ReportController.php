@@ -2794,49 +2794,34 @@ class ReportController extends Controller
                 unset($arRecords);
             }
 
-            // 3b-QADAM: student_subjects lookup — "Biriktirilgan" ustuni uchun
-            $studentSubjectsLookup = [];   // student_hemis_id|subject_id|semester_id => true
-            $studentsWithAnySS = [];       // student_hemis_id => true (umuman SS yozuvi bor)
-            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
-                $ssRows = DB::table('student_subjects')
-                    ->whereIn('student_hemis_id', $chunk)
-                    ->select('student_hemis_id', 'subject_id', 'semester_id')
-                    ->get();
-                foreach ($ssRows as $ss) {
-                    $studentSubjectsLookup[$ss->student_hemis_id . '|' . $ss->subject_id . '|' . $ss->semester_id] = true;
-                    $studentsWithAnySS[$ss->student_hemis_id] = true;
-                }
-                unset($ssRows);
-            }
-
-            $filterDebtStatus = $request->get('debt_status', ''); // 'teng' | 'teng_emas' | ''
-
             // 4-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
 
             foreach ($students as $st) {
                 if (!$st->curriculum_id) continue;
 
-                $studentSemCode = $st->semester_code ? (string) $st->semester_code : null;
+                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
                 $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
                 $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
 
-                // Ikki xil hisoblash:
-                // debt_curr  — o'quv reja (curriculum_subjects) asosida, majburiy fanlar ham kiritiladi
-                // debt_ss    — fanga biriktirilgan (student_subjects) asosida
-                $debtsCurr = [];
-                $debtsAssigned = [];
+                $debts = [];
 
                 foreach ($subjects as $sub) {
-                    if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
+                    $subSemCode = (int) $sub->semester_code;
+
+                    if ($showCurrentSemester) {
+                        // Toggle ON: faqat joriy semestr
+                        if ($studentSemCode && $subSemCode !== $studentSemCode) continue;
+                    } else {
+                        // Toggle OFF: joriy semestrgacha (joriy dahil)
+                        if ($studentSemCode && $subSemCode > $studentSemCode) continue;
+                    }
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
-                    $hasRecord = isset($arExistsLookup[$arKey]);
+                    if (isset($arExistsLookup[$arKey])) continue;
 
                     // Curriculum da bor, academic_records da yo'q = qarzdor
-                    if ($hasRecord) continue;
-
-                    $debtItem = [
+                    $debts[] = [
                         'subject_id'    => $sub->subject_id,
                         'subject_name'  => $sub->subject_name,
                         'semester_code' => $sub->semester_code,
@@ -2844,34 +2829,13 @@ class ReportController extends Controller
                         'credit'        => $sub->credit,
                         'total_acload'  => $sub->total_acload,
                     ];
-
-                    // Majburiy (curriculum) hisobiga
-                    $debtsCurr[] = $debtItem;
-
-                    // Biriktirilgan hisobiga: faqat student_subjects da bo'lgan fanlar
-                    if (isset($studentSubjectsLookup[$st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code])) {
-                        $debtsAssigned[] = $debtItem;
-                    }
                 }
 
-                $debtCountCurr = count($debtsCurr);
-
-                // Agar talabaning student_subjects yozuvi umuman yo'q bo'lsa —
-                // "biriktirilgan" ma'lumot noma'lum (null), status ham noma'lum
-                $hasSS = isset($studentsWithAnySS[$st->hemis_id]);
-                $debtCountAssigned = $hasSS ? count($debtsAssigned) : null;
-                $debtStatus = !$hasSS ? 'noma\'lum'
-                    : ($debtCountCurr === $debtCountAssigned ? 'teng' : 'teng_emas');
-
-                // min_debt_count filtrini curriculum asosida qo'llash
-                if ($debtCountCurr < $minDebtCount) continue;
-
-                // Status filtr (noma'lum har doim ko'rsatiladi, filter faqat teng/teng_emas uchun)
-                if ($filterDebtStatus && $filterDebtStatus !== 'noma\'lum' && $debtStatus !== $filterDebtStatus) continue;
-                if ($filterDebtStatus === 'noma\'lum' && $debtStatus !== 'noma\'lum') continue;
+                $debtCount = count($debts);
+                if ($debtCount < $minDebtCount) continue;
 
                 // Semestr bo'yicha tartiblash
-                usort($debtsCurr, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
 
                 $finalResults[] = [
                     'hemis_id'          => $st->hemis_id,
@@ -2884,12 +2848,12 @@ class ReportController extends Controller
                     'group_name'        => $st->group_name ?? '-',
                     'group_id'          => $st->group_id ?? '',
                     'student_type_name' => $st->student_type_name ?? null,
-                    'debt_count'        => $debtCountCurr,
-                    'debt_count_curr'   => $debtCountCurr,
-                    'debt_count_ss'     => $debtCountAssigned, // null = ma'lumot yo'q
-                    'debt_status'       => $debtStatus,
+                    'debt_count'        => $debtCount,
+                    'debt_count_curr'   => $debtCount,
+                    'debt_count_ss'     => null,
+                    'debt_status'       => '',
                     'lesson_days'       => 0,
-                    'debts'             => $debtsCurr,
+                    'debts'             => $debts,
                 ];
             }
 

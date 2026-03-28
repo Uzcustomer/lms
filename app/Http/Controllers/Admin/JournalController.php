@@ -2644,8 +2644,8 @@ class JournalController extends Controller
                 }
             }
 
-            // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
-            if ($studentGrade->is_yn_locked && !auth()->user()->hasRole('superadmin')) {
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
                 return response()->json([
                     'success' => false,
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -2765,8 +2765,8 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Bu yozuvda retake bahosi yo\'q.'], 400);
             }
 
-            // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
-            if ($studentGrade->is_yn_locked && !auth()->user()->hasRole('superadmin')) {
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
                 return response()->json([
                     'success' => false,
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -2847,7 +2847,7 @@ class JournalController extends Controller
                 ->where('is_yn_locked', true)
                 ->exists();
 
-            if ($ynLocked && !(auth()->user()?->hasRole('superadmin'))) {
+            if ($ynLocked) {
                 return response()->json([
                     'success' => false,
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -6199,8 +6199,8 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
             }
 
-            // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
-            if ($studentGrade->is_yn_locked && !auth()->user()->hasRole('superadmin')) {
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
                 return response()->json([
                     'success' => false,
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',

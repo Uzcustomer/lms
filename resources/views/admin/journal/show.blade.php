@@ -1315,11 +1315,10 @@
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                                        $isSuperAdminRole = auth()->user()?->hasRole('superadmin') ?? false;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRateAdmin = !$isDekan && (($isAdminRole && !$isYnSubmitted) || $isSuperAdminRole);
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted || $isSuperAdminRole;
+                                                        $canRateAdmin = !$isDekan && $isAdminRole && !$isYnSubmitted;
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted;
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;

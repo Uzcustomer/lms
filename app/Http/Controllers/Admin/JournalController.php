@@ -2106,8 +2106,8 @@ class JournalController extends Controller
         $isRegrade = (bool) $request->input('regrade', false);
         $isAdminEdit = (bool) $request->input('admin_edit', false);
 
-        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas (admin/superadmin bundan mustasno)
-        $isAdmin = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas (superadmin bundan mustasno)
+        $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
         $ynLocked = DB::table('student_grades')
             ->where('student_hemis_id', $studentHemisId)
             ->where('subject_id', $subjectId)
@@ -2115,7 +2115,7 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked && !$isAdmin) {
+        if ($ynLocked && !$isSuperAdmin) {
             return response()->json([
                 'success' => false,
                 'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',

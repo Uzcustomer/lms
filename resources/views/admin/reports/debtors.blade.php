@@ -88,7 +88,7 @@
                         </div>
                         <div class="filter-item" style="min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <input id="group" type="text" placeholder="Guruh nomi..." style="height:36px;border-radius:8px;border:1px solid #cbd5e1;font-size:0.8rem;padding:0 10px;width:100%;" />
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 220px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.SH</label>

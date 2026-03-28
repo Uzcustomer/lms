@@ -2752,17 +2752,7 @@ class ReportController extends Controller
                 $studentQuery->where('s.level_code', $request->level_code);
             }
             if ($request->filled('group')) {
-                $groupVal = $request->group;
-                if (is_numeric($groupVal)) {
-                    $studentQuery->where('s.group_id', $groupVal);
-                } else {
-                    // Maxsus belgilarni olib tashlab qidirish: d12301b -> d1/23-01b
-                    $cleanInput = preg_replace('/[\/\(\),\-\.\s]/', '', $groupVal);
-                    $studentQuery->where(function ($q) use ($groupVal, $cleanInput) {
-                        $q->where('s.group_name', 'like', '%' . $groupVal . '%')
-                          ->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(s.group_name, '/', ''), '-', ''), ' ', ''), '.', '') LIKE ?", ['%' . $cleanInput . '%']);
-                    });
-                }
+                $studentQuery->where('s.group_id', $request->group);
             }
             if ($request->filled('education_type')) {
                 $studentQuery->where('s.education_type_code', $request->education_type);

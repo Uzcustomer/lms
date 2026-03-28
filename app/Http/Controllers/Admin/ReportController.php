@@ -2752,7 +2752,10 @@ class ReportController extends Controller
                 $studentQuery->where('s.level_code', $request->level_code);
             }
             if ($request->filled('group')) {
-                $studentQuery->where('s.group_id', $request->group);
+                $group = \App\Models\Group::find($request->group);
+                if ($group) {
+                    $studentQuery->where('s.group_id', $group->group_hemis_id);
+                }
             }
             if ($request->filled('education_type')) {
                 $studentQuery->where('s.education_type_code', $request->education_type);

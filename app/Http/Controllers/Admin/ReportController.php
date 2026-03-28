@@ -2813,8 +2813,8 @@ class ReportController extends Controller
                         // Toggle ON: faqat joriy semestr
                         if ($studentSemCode && $subSemCode !== $studentSemCode) continue;
                     } else {
-                        // Toggle OFF: joriy semestrgacha (joriy dahil)
-                        if ($studentSemCode && $subSemCode > $studentSemCode) continue;
+                        // Toggle OFF: joriy semestrdan oldingi semestrlar (joriy dahil emas)
+                        if ($studentSemCode && $subSemCode >= $studentSemCode) continue;
                     }
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;

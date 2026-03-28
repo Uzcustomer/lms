@@ -2780,20 +2780,16 @@ class ReportController extends Controller
                 ->distinct()
                 ->get();
 
-            // 3-QADAM: Academic records olish (grade va retraining_status ham kerak)
-            $arRecordsLookup = [];
+            // 3-QADAM: Academic records olish — faqat mavjudligini tekshirish uchun
+            $arExistsLookup = [];
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $arRecords = DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
-                    ->select('student_id', 'subject_id', 'semester_id', 'grade', 'retraining_status')
+                    ->select('student_id', 'subject_id', 'semester_id')
                     ->get();
 
                 foreach ($arRecords as $ar) {
-                    $key = $ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id;
-                    // Eng yaxshi bahoni saqlash (qayta topshirish va asl baho bo'lishi mumkin)
-                    if (!isset($arRecordsLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arRecordsLookup[$key]->grade ?? 0)) {
-                        $arRecordsLookup[$key] = $ar;
-                    }
+                    $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
                 }
                 unset($arRecords);
             }
@@ -2835,14 +2831,10 @@ class ReportController extends Controller
                     if ($showCurrentSemester && $studentSemCode && (string) $sub->semester_code !== $studentSemCode) continue;
 
                     $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
-                    $ar = $arRecordsLookup[$arKey] ?? null;
+                    $hasRecord = isset($arExistsLookup[$arKey]);
 
-                    $isDebt = !$ar
-                        || $ar->grade === null
-                        || (float) $ar->grade == 0 || (float) $ar->grade == 2
-                        || $ar->retraining_status;
-
-                    if (!$isDebt) continue;
+                    // Curriculum da bor, academic_records da yo'q = qarzdor
+                    if ($hasRecord) continue;
 
                     $debtItem = [
                         'subject_id'    => $sub->subject_id,

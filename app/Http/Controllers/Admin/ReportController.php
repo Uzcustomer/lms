@@ -2930,50 +2930,101 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Qarzdorlar hisoboti');
 
-        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Toifa', 'Semestr',
-            'Biriktirilgan (qarz)', 'Majburiy (qarz)', 'Status', 'Darslar soni (kun)'];
+        $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Semestr',
+            'Qarzlar soni', 'Fan semestr', 'Fan nomi', 'Kredit', 'Soat', 'Baho'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
 
         $headerStyle = [
-            'font' => ['bold' => true, 'size' => 11],
-            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1a3268']],
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+        $lastCol = 'N';
+        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray($headerStyle);
 
-        foreach ($data as $i => $r) {
-            $row = $i + 2;
-            $sheet->setCellValue([1, $row], $i + 1);
-            $sheet->setCellValue([2, $row], $r['full_name']);
-            $sheet->setCellValueExplicit([3, $row], $r['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $sheet->setCellValue([4, $row], $r['department_name']);
-            $sheet->setCellValue([5, $row], $r['specialty_name']);
-            $sheet->setCellValue([6, $row], $r['level_name']);
-            $sheet->setCellValue([7, $row], $r['group_name']);
-            $sheet->setCellValue([8, $row], $r['student_type_name'] ?? '');
-            $sheet->setCellValue([9, $row], $r['semester_name']);
-            $sheet->setCellValue([10, $row], $r['debt_count_ss'] ?? '');
-            $sheet->setCellValue([11, $row], $r['debt_count_curr']);
-            $statusLabel = match($r['debt_status'] ?? '') {
-                'teng'      => 'Teng',
-                'teng_emas' => 'Teng emas',
-                default     => "Noma'lum",
-            };
-            $sheet->setCellValue([12, $row], $statusLabel);
-            $sheet->setCellValue([13, $row], $r['lesson_days']);
+        // Har bir talaba uchun barcha curriculum fanlarini academic records bilan birlashtirish
+        $rowNum = 2;
+        $idx = 1;
+        $debtFill = [
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEF2F2']],
+            'font' => ['color' => ['rgb' => 'DC2626'], 'bold' => true],
+        ];
+
+        foreach ($data as $student) {
+            $hemisId = $student['hemis_id'];
+            $curriculumId = null;
+
+            // Talabaning curriculum_id sini olish
+            $st = DB::table('students')->where('hemis_id', $hemisId)->first();
+            if (!$st || !$st->curriculum_id) continue;
+            $curriculumId = $st->curriculum_id;
+            $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+
+            // Curriculum subjects
+            $currSubjects = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $curriculumId)
+                ->where('is_active', true)
+                ->where('subject_code', 'not like', '%/%')
+                ->select('subject_id', 'subject_name', 'semester_code', 'semester_name', 'credit', 'total_acload')
+                ->distinct()
+                ->orderBy('semester_code')
+                ->orderBy('subject_name')
+                ->get();
+
+            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $student['group_name'] ?? '');
+
+            // Academic records
+            $arRecords = DB::table('academic_records')
+                ->where('student_id', $hemisId)
+                ->select('subject_id', 'semester_id', 'grade')
+                ->get()
+                ->keyBy(fn($ar) => $ar->subject_id . '|' . $ar->semester_id);
+
+            $firstRow = $rowNum;
+            foreach ($currSubjects as $sub) {
+                $subSemCode = (int) $sub->semester_code;
+                // Joriy semestrdan oldingi semestrlar
+                if ($studentSemCode && $subSemCode >= $studentSemCode) continue;
+
+                $arKey = $sub->subject_id . '|' . $sub->semester_code;
+                $ar = $arRecords->get($arKey);
+                $isDebt = !$ar;
+
+                $sheet->setCellValue([1, $rowNum], $idx);
+                $sheet->setCellValue([2, $rowNum], $student['full_name']);
+                $sheet->setCellValueExplicit([3, $rowNum], $student['student_id_number'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValue([4, $rowNum], $student['department_name']);
+                $sheet->setCellValue([5, $rowNum], $student['specialty_name']);
+                $sheet->setCellValue([6, $rowNum], $student['level_name']);
+                $sheet->setCellValue([7, $rowNum], $student['group_name']);
+                $sheet->setCellValue([8, $rowNum], $student['semester_name']);
+                $sheet->setCellValue([9, $rowNum], $student['debt_count']);
+                $sheet->setCellValue([10, $rowNum], $sub->semester_name);
+                $sheet->setCellValue([11, $rowNum], $sub->subject_name);
+                $sheet->setCellValue([12, $rowNum], $sub->credit);
+                $sheet->setCellValue([13, $rowNum], $sub->total_acload);
+                $sheet->setCellValue([14, $rowNum], $isDebt ? 'Qarzdor' : $ar->grade);
+
+                if ($isDebt) {
+                    $sheet->getStyle("A{$rowNum}:{$lastCol}{$rowNum}")->applyFromArray($debtFill);
+                }
+
+                $rowNum++;
+            }
+            $idx++;
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 15, 18, 10, 12, 12, 12, 12];
+        $widths = [5, 30, 15, 25, 30, 8, 15, 10, 10, 12, 35, 8, 8, 10];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
-        $lastRow = count($data) + 1;
+        $lastRow = $rowNum - 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:{$lastCol}{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

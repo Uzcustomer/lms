@@ -113,23 +113,10 @@
                         <div class="filter-item" style="min-width: 380px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <div class="excel-dropdown" id="excel-dropdown">
-                                    <button type="button" id="btn-excel" class="btn-excel" onclick="toggleExcelMenu()" disabled>
-                                        <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                        Excel
-                                        <svg style="width:12px;height:12px;margin-left:2px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                    </button>
-                                    <div class="excel-menu" id="excel-menu">
-                                        <button type="button" onclick="downloadExcel('summary')">
-                                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                            Hisobotni yuklash
-                                        </button>
-                                        <button type="button" onclick="downloadExcel('full')">
-                                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V9.41a1 1 0 00-.29-.71l-4.41-4.41a1 1 0 00-.71-.29H7c-2 0-3 1-3 3z"/></svg>
-                                            To'liq yuklash
-                                        </button>
-                                    </div>
-                                </div>
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel('summary')" disabled>
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    Excel
+                                </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
@@ -555,21 +542,7 @@
             });
         }
 
-        function toggleExcelMenu() {
-            var menu = document.getElementById('excel-menu');
-            menu.classList.toggle('show');
-        }
-
-        // Close excel menu when clicking outside
-        document.addEventListener('click', function(e) {
-            var dropdown = document.getElementById('excel-dropdown');
-            if (dropdown && !dropdown.contains(e.target)) {
-                document.getElementById('excel-menu').classList.remove('show');
-            }
-        });
-
         function downloadExcel(type) {
-            document.getElementById('excel-menu').classList.remove('show');
             var params = getFilters();
             params.export = type;
             var query = $.param(params);

@@ -1,116 +1,42 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="p-2 bg-indigo-100 rounded-lg">
-                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582"/>
-                    </svg>
-                </div>
-                <h2 class="font-semibold text-sm text-gray-800 leading-tight">Xalqaro talabalar</h2>
-            </div>
-            <a href="{{ route('admin.international-students.export', request()->all()) }}"
-               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition shadow-sm">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/>
-                </svg>
-                Excel
-            </a>
-        </div>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">Xalqaro talabalar</h2>
     </x-slot>
 
+    @if(session('success'))
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
+            <span class="block sm:inline">{{ session('success') }}</span>
+        </div>
+    @endif
+
     <div class="py-4">
-        <div class="max-w-full mx-auto sm:px-6 lg:px-8 px-3">
-            @if(session('success'))
-                <div class="mb-3 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{{ session('success') }}</div>
-            @endif
+        <div class="max-w-full mx-auto sm:px-4 lg:px-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
 
-            {{-- Statistika --}}
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-                {{-- Jami --}}
-                <div class="bg-white rounded-xl border border-gray-200 p-3.5 shadow-sm">
-                    <p class="text-[11px] text-gray-400 font-medium uppercase tracking-wide">Jami</p>
-                    <p class="text-2xl font-bold text-gray-800 mt-0.5">{{ $stats['totalIntStudents'] }}</p>
-                    <div class="flex gap-2 mt-1.5">
-                        <span class="text-[10px] font-medium text-green-600 bg-green-50 px-1.5 py-0.5 rounded">{{ $stats['filledCount'] }} kiritgan</span>
-                        <span class="text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded">{{ $stats['notFilledCount'] }} kiritmagan</span>
-                    </div>
-                </div>
-                {{-- Tasdiqlangan --}}
-                <div class="bg-white rounded-xl border border-gray-200 p-3.5 shadow-sm">
-                    <p class="text-[11px] text-gray-400 font-medium uppercase tracking-wide">Tasdiqlangan</p>
-                    <p class="text-2xl font-bold text-green-600 mt-0.5">{{ $stats['approvedCount'] }}</p>
-                </div>
-                {{-- Kutilmoqda --}}
-                <div class="bg-white rounded-xl border border-gray-200 p-3.5 shadow-sm">
-                    <p class="text-[11px] text-gray-400 font-medium uppercase tracking-wide">Kutilmoqda</p>
-                    <p class="text-2xl font-bold text-yellow-600 mt-0.5">{{ $stats['pendingCount'] }}</p>
-                </div>
-                {{-- Rad etilgan --}}
-                <div class="bg-white rounded-xl border border-gray-200 p-3.5 shadow-sm">
-                    <p class="text-[11px] text-gray-400 font-medium uppercase tracking-wide">Rad etilgan</p>
-                    <p class="text-2xl font-bold text-red-500 mt-0.5">{{ $stats['rejectedCount'] }}</p>
-                </div>
-                {{-- Viza yaqin --}}
-                <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border border-orange-200 p-3.5 shadow-sm">
-                    <p class="text-[11px] text-orange-500 font-medium uppercase tracking-wide">Viza yaqin (30 kun)</p>
-                    <p class="text-2xl font-bold text-orange-600 mt-0.5">{{ $stats['visaUrgentCount'] }}</p>
-                    @if($stats['expiredVisaCount'] > 0)
-                        <span class="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded mt-1 inline-block">{{ $stats['expiredVisaCount'] }} muddati o'tgan!</span>
-                    @endif
-                </div>
-                {{-- Propiska yaqin --}}
-                <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl border border-orange-200 p-3.5 shadow-sm">
-                    <p class="text-[11px] text-orange-500 font-medium uppercase tracking-wide">Propiska yaqin (7 kun)</p>
-                    <p class="text-2xl font-bold text-orange-600 mt-0.5">{{ $stats['regUrgentCount'] }}</p>
-                    @if($stats['expiredRegCount'] > 0)
-                        <span class="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded mt-1 inline-block">{{ $stats['expiredRegCount'] }} muddati o'tgan!</span>
-                    @endif
-                </div>
-            </div>
-
-            {{-- Filtrlar --}}
-            @php $hasFilters = request()->hasAny(['search','level_code','group_name','firm','data_status','visa_expiry','registration_expiry']); @endphp
-            <div class="bg-white shadow-sm rounded-xl border border-gray-200 mb-4" x-data="{ open: {{ $hasFilters ? 'true' : 'false' }} }">
-                <button @click="open = !open" type="button" class="w-full flex items-center justify-between px-4 py-3 text-left">
-                    <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z"/>
-                        </svg>
-                        <span class="text-sm font-medium text-gray-700">Filtrlar</span>
-                        @if($hasFilters)
-                            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-700 rounded-full">Faol</span>
-                        @endif
-                    </div>
-                    <svg class="w-4 h-4 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
-                    </svg>
-                </button>
-                <div x-show="open" x-transition.duration.200ms class="px-4 pb-4 border-t border-gray-100">
-                    <form method="GET" action="{{ route('admin.international-students.index') }}" class="pt-3">
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-3">
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Ism</label>
-                                <input type="text" name="search" value="{{ request('search') }}" placeholder="Qidirish..."
-                                       class="w-full text-sm rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 h-9">
+                {{-- Filtrlar --}}
+                <form method="GET" action="{{ route('admin.international-students.index') }}">
+                    <div class="filter-container">
+                        <div class="filter-row">
+                            <div class="filter-item" style="flex:1; min-width:200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.Sh</label>
+                                <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism bo'yicha qidirish" class="filter-input">
                             </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Kurs</label>
-                                <select name="level_code" class="w-full text-sm rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 h-9">
+                            <div class="filter-item" style="min-width:120px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                                <select name="level_code" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
                                     @for($i = 1; $i <= 6; $i++)
                                         <option value="{{ $i }}" {{ request('level_code') == $i ? 'selected' : '' }}>{{ $i }}-kurs</option>
                                     @endfor
                                 </select>
                             </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Guruh</label>
-                                <input type="text" name="group_name" value="{{ request('group_name') }}" placeholder="Guruh..."
-                                       class="w-full text-sm rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 h-9">
+                            <div class="filter-item" style="min-width:150px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                                <input type="text" name="group_name" value="{{ request('group_name') }}" placeholder="Guruh nomi" class="filter-input">
                             </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Firma</label>
-                                <select name="firm" class="w-full text-sm rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 h-9">
+                            <div class="filter-item" style="min-width:140px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Firma</label>
+                                <select name="firm" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
                                     @foreach($firms as $key => $label)
                                         <option value="{{ $key }}" {{ request('firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
@@ -118,11 +44,9 @@
                                     <option value="other" {{ request('firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-3">
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Ma'lumot holati</label>
-                                <select name="data_status" class="w-full text-sm rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 h-9">
+                            <div class="filter-item" style="min-width:150px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ma'lumot holati</label>
+                                <select name="data_status" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
                                     <option value="filled" {{ request('data_status') === 'filled' ? 'selected' : '' }}>Kiritilgan</option>
                                     <option value="not_filled" {{ request('data_status') === 'not_filled' ? 'selected' : '' }}>Kiritilmagan</option>
@@ -131,164 +55,201 @@
                                     <option value="rejected" {{ request('data_status') === 'rejected' ? 'selected' : '' }}>Rad etilgan</option>
                                 </select>
                             </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Viza tugash</label>
-                                <select name="visa_expiry" class="w-full text-sm rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 h-9">
+                        </div>
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width:150px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash</label>
+                                <select name="visa_expiry" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
                                     <option value="15" {{ request('visa_expiry') == '15' ? 'selected' : '' }}>15 kun ichida</option>
                                     <option value="20" {{ request('visa_expiry') == '20' ? 'selected' : '' }}>20 kun ichida</option>
                                     <option value="30" {{ request('visa_expiry') == '30' ? 'selected' : '' }}>30 kun ichida</option>
                                 </select>
                             </div>
-                            <div>
-                                <label class="block text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Propiska tugash</label>
-                                <select name="registration_expiry" class="w-full text-sm rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 h-9">
+                            <div class="filter-item" style="min-width:160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Propiska tugash</label>
+                                <select name="registration_expiry" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
                                     <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun ichida</option>
                                     <option value="5" {{ request('registration_expiry') == '5' ? 'selected' : '' }}>5 kun ichida</option>
                                     <option value="7" {{ request('registration_expiry') == '7' ? 'selected' : '' }}>7 kun ichida</option>
                                 </select>
                             </div>
-                            <div class="flex items-end gap-2">
-                                <button type="submit" class="px-4 h-9 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm">
-                                    Filtrlash
+                            <div class="filter-item" style="min-width:120px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <button type="submit" class="btn-calc">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
                                 </button>
-                                @if($hasFilters)
-                                    <a href="{{ route('admin.international-students.index') }}" class="px-3 h-9 inline-flex items-center bg-gray-100 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
-                                        Tozalash
-                                    </a>
-                                @endif
                             </div>
                         </div>
-                    </form>
-                </div>
-            </div>
+                    </div>
+                </form>
 
-            {{-- Jadval --}}
-            <div class="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
+                {{-- Statistika paneli --}}
+                <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span class="badge" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ $stats['totalIntStudents'] }} ta talaba</span>
+                        <span class="badge" style="background:#dcfce7;color:#166534;padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid #bbf7d0;">{{ $stats['filledCount'] }} kiritgan</span>
+                        <span class="badge" style="background:#fef2f2;color:#991b1b;padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid #fecaca;">{{ $stats['notFilledCount'] }} kiritmagan</span>
+                        <span class="badge" style="background:#f0fdf4;color:#166534;padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid #bbf7d0;">{{ $stats['approvedCount'] }} tasdiqlangan</span>
+                        <span class="badge" style="background:#fefce8;color:#854d0e;padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid #fef08a;">{{ $stats['pendingCount'] }} kutilmoqda</span>
+                        @if($stats['expiredVisaCount'] > 0)
+                            <span class="badge" style="background:#dc2626;color:#fff;padding:6px 12px;font-size:12px;border-radius:8px;font-weight:700;">{{ $stats['expiredVisaCount'] }} viza muddati o'tgan!</span>
+                        @endif
+                        @if($stats['expiredRegCount'] > 0)
+                            <span class="badge" style="background:#ea580c;color:#fff;padding:6px 12px;font-size:12px;border-radius:8px;font-weight:700;">{{ $stats['expiredRegCount'] }} propiska muddati o'tgan!</span>
+                        @endif
+                        @if($stats['visaUrgentCount'] > 0)
+                            <span class="badge" style="background:#fff7ed;color:#c2410c;padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid #fed7aa;">{{ $stats['visaUrgentCount'] }} viza yaqin (30k)</span>
+                        @endif
+                        @if($stats['regUrgentCount'] > 0)
+                            <span class="badge" style="background:#fff7ed;color:#c2410c;padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid #fed7aa;">{{ $stats['regUrgentCount'] }} propiska yaqin (7k)</span>
+                        @endif
+                    </div>
+                    <a href="{{ route('admin.international-students.export', request()->all()) }}"
+                       style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;font-weight:600;color:#fff;background:linear-gradient(135deg,#16a34a,#22c55e);border-radius:8px;text-decoration:none;transition:opacity 0.2s;white-space:nowrap;"
+                       onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Excel yuklab olish
+                    </a>
+                </div>
+
+                {{-- Jadval --}}
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                    <table class="student-table">
                         <thead>
-                            <tr class="bg-gradient-to-r from-slate-50 to-gray-50">
-                                <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider w-10">#</th>
-                                <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Talaba</th>
-                                <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Guruh</th>
-                                <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Kurs</th>
-                                <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Ma'lumot</th>
-                                <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Propiska</th>
-                                <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Viza</th>
-                                <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Firma</th>
-                                <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Holat</th>
-                                <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Pasport</th>
+                            <tr>
+                                <th>F.I.Sh</th>
+                                <th>Guruh</th>
+                                <th>Kurs</th>
+                                <th>Ma'lumot</th>
+                                <th>Propiska tugash</th>
+                                <th>Viza tugash</th>
+                                <th>Firma</th>
+                                <th>Holat</th>
+                                <th>Pasport</th>
+                                <th style="text-align:center;">Amallar</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            @forelse($students as $i => $student)
+                        <tbody>
+                            @forelse($students as $student)
                                 @php
                                     $visa = $student->visaInfo;
                                     $regDays = $visa?->registrationDaysLeft();
                                     $visaDays = $visa?->visaDaysLeft();
-                                    $hasUrgent = ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15);
                                 @endphp
-                                <tr class="hover:bg-indigo-50/40 cursor-pointer transition {{ $hasUrgent ? 'bg-red-50/30' : '' }}"
-                                    onclick="window.location='{{ route('admin.international-students.show', $student) }}'">
-                                    <td class="px-3 py-2.5 text-gray-400 text-xs">{{ $students->firstItem() + $i }}</td>
-                                    <td class="px-3 py-2.5">
-                                        <span class="font-medium text-gray-900">{{ $student->full_name }}</span>
+                                <tr style="{{ ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15) ? 'background:#fef2f2 !important;' : '' }}">
+                                    <td>
+                                        <a href="{{ route('admin.international-students.show', $student) }}" class="student-name-link">{{ $student->full_name }}</a>
                                     </td>
-                                    <td class="px-3 py-2.5 text-gray-600">{{ $student->group_name }}</td>
-                                    <td class="px-3 py-2.5 text-center">
-                                        <span class="inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded-full bg-slate-100 text-slate-600">{{ $student->level_code }}</span>
-                                    </td>
-                                    <td class="px-3 py-2.5 text-center">
+                                    <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
+                                    <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
+                                    <td>
                                         @if($visa)
-                                            <span class="inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-semibold rounded-full bg-green-100 text-green-700">
-                                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                                                Ha
+                                            <span style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;font-size:11px;font-weight:600;border-radius:20px;background:#dcfce7;color:#166534;">
+                                                <svg style="width:12px;height:12px;" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                                Kiritilgan
                                             </span>
                                         @else
-                                            <span class="inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-semibold rounded-full bg-red-100 text-red-700">
-                                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                                Yo'q
+                                            <span style="display:inline-flex;align-items:center;gap:3px;padding:3px 10px;font-size:11px;font-weight:600;border-radius:20px;background:#fef2f2;color:#991b1b;">
+                                                <svg style="width:12px;height:12px;" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                                Kiritilmagan
                                             </span>
                                         @endif
                                     </td>
-                                    <td class="px-3 py-2.5 text-center">
+                                    <td>
                                         @if($visa?->registration_end_date)
-                                            <div class="text-xs {{ $regDays <= 3 ? 'text-red-600 font-bold' : ($regDays <= 5 ? 'text-yellow-600 font-semibold' : ($regDays <= 7 ? 'text-green-600 font-medium' : 'text-gray-600')) }}">
+                                            <div style="font-size:12px;font-weight:{{ $regDays <= 5 ? '700' : '500' }};color:{{ $regDays <= 3 ? '#dc2626' : ($regDays <= 5 ? '#d97706' : ($regDays <= 7 ? '#16a34a' : '#475569')) }};">
                                                 {{ $visa->registration_end_date->format('d.m.Y') }}
                                             </div>
                                             @if($regDays !== null && $regDays <= 7)
-                                                <span class="inline-flex items-center px-1.5 py-0.5 mt-0.5 text-[10px] font-bold rounded {{ $regDays <= 0 ? 'bg-red-600 text-white' : ($regDays <= 3 ? 'bg-red-100 text-red-700' : ($regDays <= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700')) }}">
+                                                <span style="display:inline-block;margin-top:2px;padding:1px 8px;font-size:10px;font-weight:700;border-radius:4px;color:#fff;background:{{ $regDays <= 0 ? '#dc2626' : ($regDays <= 3 ? '#ef4444' : ($regDays <= 5 ? '#f59e0b' : '#22c55e')) }};">
                                                     {{ $regDays <= 0 ? 'TUGAGAN' : $regDays . ' kun' }}
                                                 </span>
                                             @endif
                                         @else
-                                            <span class="text-gray-300">—</span>
+                                            <span style="color:#cbd5e1;">—</span>
                                         @endif
                                     </td>
-                                    <td class="px-3 py-2.5 text-center">
+                                    <td>
                                         @if($visa?->visa_end_date)
-                                            <div class="text-xs {{ $visaDays <= 15 ? 'text-red-600 font-bold' : ($visaDays <= 20 ? 'text-yellow-600 font-semibold' : ($visaDays <= 30 ? 'text-green-600 font-medium' : 'text-gray-600')) }}">
+                                            <div style="font-size:12px;font-weight:{{ $visaDays <= 20 ? '700' : '500' }};color:{{ $visaDays <= 15 ? '#dc2626' : ($visaDays <= 20 ? '#d97706' : ($visaDays <= 30 ? '#16a34a' : '#475569')) }};">
                                                 {{ $visa->visa_end_date->format('d.m.Y') }}
                                             </div>
                                             @if($visaDays !== null && $visaDays <= 30)
-                                                <span class="inline-flex items-center px-1.5 py-0.5 mt-0.5 text-[10px] font-bold rounded {{ $visaDays <= 0 ? 'bg-red-600 text-white' : ($visaDays <= 15 ? 'bg-red-100 text-red-700' : ($visaDays <= 20 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700')) }}">
+                                                <span style="display:inline-block;margin-top:2px;padding:1px 8px;font-size:10px;font-weight:700;border-radius:4px;color:#fff;background:{{ $visaDays <= 0 ? '#dc2626' : ($visaDays <= 15 ? '#ef4444' : ($visaDays <= 20 ? '#f59e0b' : '#22c55e')) }};">
                                                     {{ $visaDays <= 0 ? 'TUGAGAN' : $visaDays . ' kun' }}
                                                 </span>
                                             @endif
                                         @else
-                                            <span class="text-gray-300">—</span>
+                                            <span style="color:#cbd5e1;">—</span>
                                         @endif
                                     </td>
-                                    <td class="px-3 py-2.5 text-xs text-gray-600">{{ $visa?->firm_display ?? '—' }}</td>
-                                    <td class="px-3 py-2.5 text-center">
+                                    <td style="font-size:12px;color:#475569;">{{ $visa?->firm_display ?? '—' }}</td>
+                                    <td>
                                         @if($visa)
                                             @if($visa->status === 'approved')
-                                                <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full bg-green-100 text-green-700">Tasdiqlangan</span>
+                                                <span style="padding:3px 10px;font-size:11px;font-weight:600;border-radius:20px;background:#dcfce7;color:#166534;">Tasdiqlangan</span>
                                             @elseif($visa->status === 'rejected')
-                                                <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full bg-red-100 text-red-700">Rad etilgan</span>
+                                                <span style="padding:3px 10px;font-size:11px;font-weight:600;border-radius:20px;background:#fef2f2;color:#991b1b;">Rad etilgan</span>
                                             @else
-                                                <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full bg-yellow-100 text-yellow-700">Kutilmoqda</span>
+                                                <span style="padding:3px 10px;font-size:11px;font-weight:600;border-radius:20px;background:#fefce8;color:#854d0e;">Kutilmoqda</span>
                                             @endif
                                         @else
-                                            <span class="text-gray-300">—</span>
+                                            <span style="color:#cbd5e1;">—</span>
                                         @endif
                                     </td>
-                                    <td class="px-3 py-2.5 text-center">
-                                        @if($visa)
-                                            @if($visa->passport_handed_over)
-                                                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100">
-                                                    <svg class="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                                                </span>
-                                            @else
-                                                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100">
-                                                    <svg class="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                                </span>
-                                            @endif
+                                    <td style="text-align:center;">
+                                        @if($visa?->passport_handed_over)
+                                            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#dcfce7;">
+                                                <svg style="width:14px;height:14px;color:#16a34a;" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                                            </span>
+                                        @elseif($visa)
+                                            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#fef2f2;">
+                                                <svg style="width:14px;height:14px;color:#dc2626;" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                            </span>
                                         @else
-                                            <span class="text-gray-300">—</span>
+                                            <span style="color:#cbd5e1;">—</span>
                                         @endif
+                                    </td>
+                                    <td style="text-align:center;">
+                                        <a href="{{ route('admin.international-students.show', $student) }}" class="btn-action btn-action-blue">Ko'rish</a>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="10" class="px-4 py-12 text-center">
-                                        <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/>
-                                        </svg>
-                                        <p class="text-sm text-gray-500">Talabalar topilmadi</p>
-                                    </td>
+                                    <td colspan="10" style="text-align:center;padding:40px 20px;color:#94a3b8;">Talabalar topilmadi</td>
                                 </tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
-                @if($students->hasPages())
-                <div class="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-                    {{ $students->links() }}
+
+                {{-- Pagination --}}
+                <div style="padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:between;">
+                    <div class="flex-1 flex justify-between sm:hidden">
+                        {{ $students->appends(request()->query())->links('pagination::simple-tailwind') }}
+                    </div>
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700 leading-5">
+                                {!! __('Showing') !!}
+                                <span class="font-medium">{{ $students->firstItem() ?? 0 }}</span>
+                                {!! __('to') !!}
+                                <span class="font-medium">{{ $students->lastItem() ?? 0 }}</span>
+                                {!! __('of') !!}
+                                <span class="font-medium">{{ $students->total() }}</span>
+                                {!! __('results') !!}
+                            </p>
+                        </div>
+                        <div>
+                            {{ $students->appends(request()->query())->links() }}
+                        </div>
+                    </div>
                 </div>
-                @endif
             </div>
         </div>
     </div>

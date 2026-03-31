@@ -191,6 +191,11 @@ class CheckVisaExpiryCommand extends Command
                     'is_draft' => false,
                     'sent_at' => now(),
                 ]);
+
+                // Firma javobgariga Telegram xabar
+                if ($firmUser->telegram_chat_id) {
+                    $telegram->sendToUser($firmUser->telegram_chat_id, $message);
+                }
             }
         }
     }

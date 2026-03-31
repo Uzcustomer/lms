@@ -51,6 +51,13 @@
                                 <option value="other" {{ $user->assigned_firm === 'other' ? 'selected' : '' }}>Boshqa</option>
                             </select>
                             <p class="text-gray-500 text-xs mt-1">Bu xodim qaysi firma talabalari uchun javobgar</p>
+                            <div class="mt-3">
+                                <label for="telegram_chat_id" class="block text-gray-700 text-sm font-bold mb-2">Telegram Chat ID:</label>
+                                <input type="text" name="telegram_chat_id" id="telegram_chat_id" value="{{ $user->telegram_chat_id }}"
+                                       class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                                       placeholder="Masalan: 123456789">
+                                <p class="text-gray-500 text-xs mt-1">Telegram orqali ogohlantirish yuborish uchun</p>
+                            </div>
                         </div>
 
                         <div class="flex items-center justify-between">

@@ -181,6 +181,15 @@
                     </div>
                 </div>
 
+                {{-- Chegaradan kirish --}}
+                <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Chegaradan kirish') }}</h5>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <span class="block text-xs text-gray-500">{{ __('Chegaradan kirgan sana') }}</span>
+                        <span class="text-sm font-medium text-gray-800">{{ $visaInfo->entry_date?->format('d.m.Y') }}</span>
+                    </div>
+                </div>
+
                 {{-- Firma --}}
                 <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Firma') }}</h5>
                 <div class="mb-6">

@@ -311,6 +311,28 @@ class InternationalStudentController extends Controller
         }
     }
 
+    /**
+     * Admin talaba viza ma'lumotlarini o'chiradi.
+     */
+    public function destroyVisaInfo(Request $request, Student $student)
+    {
+        $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+
+        // Yuklangan fayllarni o'chirish
+        foreach (['passport_scan_path', 'visa_scan_path', 'registration_doc_path'] as $field) {
+            if ($visaInfo->$field) {
+                \Storage::disk('public')->delete($visaInfo->$field);
+            }
+        }
+
+        $visaInfo->delete();
+
+        $this->notifyStudent($student, 'Viza ma\'lumotlaringiz admin tomonidan o\'chirildi. Qaytadan kiritishingiz kerak.');
+
+        return redirect()->route('admin.international-students.show', $student)
+            ->with('success', 'Talaba viza ma\'lumotlari o\'chirildi.');
+    }
+
     public function showFile(Student $student, string $field)
     {
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();

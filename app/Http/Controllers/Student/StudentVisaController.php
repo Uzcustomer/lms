@@ -7,12 +7,18 @@ use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class StudentVisaController extends Controller
 {
     public function index()
     {
+        if (!Schema::hasTable('student_visa_infos')) {
+            return redirect()->route('student.dashboard')
+                ->with('error', 'Viza bo\'limi hali faollashtirilmagan.');
+        }
+
         $student = Auth::guard('student')->user();
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
 

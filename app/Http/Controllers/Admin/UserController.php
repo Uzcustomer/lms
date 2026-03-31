@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
+use App\Models\StudentVisaInfo;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use App\Models\User;
@@ -20,31 +21,42 @@ class UserController extends Controller
     public function create()
     {
         $roles = ProjectRole::staffRoles();
-        return view('admin.users.create', compact('roles'));
+        $firmOptions = StudentVisaInfo::FIRM_OPTIONS;
+        return view('admin.users.create', compact('roles', 'firmOptions'));
     }
 
     public function edit(User $user)
     {
         $roles = ProjectRole::staffRoles();
-        return view('admin.users.edit', compact('user', 'roles'));
+        $firmOptions = StudentVisaInfo::FIRM_OPTIONS;
+        return view('admin.users.edit', compact('user', 'roles', 'firmOptions'));
     }
 
     public function store(Request $request)
     {
         $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
 
-        $request->validate([
+        $rules = [
             'name' => 'required',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8',
             'roles' => 'required|array|min:1',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
-        ]);
+        ];
+
+        if (in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []))) {
+            $rules['assigned_firm'] = 'required|string|max:255';
+        }
+
+        $request->validate($rules);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => bcrypt($request->password),
+            'assigned_firm' => in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []))
+                ? $request->assigned_firm
+                : null,
         ]);
 
         $user->syncRoles($request->roles);
@@ -59,18 +71,27 @@ class UserController extends Controller
     {
         $validRoleValues = array_map(fn ($r) => $r->value, ProjectRole::staffRoles());
 
-        $request->validate([
+        $rules = [
             'name' => 'required',
             'email' => 'required|email|unique:users,email,' . $user->id,
             'roles' => 'required|array|min:1',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
-        ]);
+        ];
+
+        if (in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []))) {
+            $rules['assigned_firm'] = 'required|string|max:255';
+        }
+
+        $request->validate($rules);
 
         $oldRoles = $user->getRoleNames()->toArray();
 
         $user->update([
             'name' => $request->name,
             'email' => $request->email,
+            'assigned_firm' => in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []))
+                ? $request->assigned_firm
+                : null,
         ]);
 
         if ($request->filled('password')) {

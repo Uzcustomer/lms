@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\InternationalStudentsExport;
-use App\Models\Department;
 use App\Models\Student;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 
 class InternationalStudentController extends Controller
@@ -18,20 +18,22 @@ class InternationalStudentController extends Controller
      * Xalqaro talabalar fakulteti talabalari ro'yxatini filtrlash uchun
      * "Xalqaro ta'lim" so'zi bo'lgan yoki citizenship_code 'UZ' bo'lmagan talabalar.
      */
+    /**
+     * Faqat Xalqaro ta'lim fakulteti talabalari.
+     */
     private function internationalStudentsQuery()
     {
-        return Student::where(function ($q) {
-            $q->where('department_name', 'like', '%alqaro%')
-              ->orWhere(function ($q2) {
-                  $q2->whereNotNull('citizenship_code')
-                      ->where('citizenship_code', '!=', '')
-                      ->where('citizenship_code', '!=', 'UZ');
-              });
-        });
+        return Student::where('department_name', 'like', '%alqaro%');
     }
 
     public function index(Request $request)
     {
+        // Migratsiya bajarilganligini tekshirish
+        if (!Schema::hasTable('student_visa_infos')) {
+            return redirect()->route('admin.dashboard')
+                ->with('error', 'Iltimos, avval migratsiyani bajaring: php artisan migrate');
+        }
+
         $query = $this->internationalStudentsQuery();
 
         // Filterlash

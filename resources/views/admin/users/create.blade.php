@@ -29,17 +29,31 @@
                                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                    required>
                         </div>
-                        <div class="mb-4">
+                        <div class="mb-4" x-data="{ showFirm: false }">
                             <label for="roles" class="block text-gray-700 text-sm font-bold mb-2">Rollar (bir nechta tanlash mumkin):</label>
                             <select name="roles[]" id="roles" multiple
                                     class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                     style="min-height: 150px;"
-                                    required>
+                                    required
+                                    @change="showFirm = Array.from($el.selectedOptions).some(o => o.value === 'javobgar_firma')">
                                 @foreach($roles as $role)
                                     <option value="{{ $role->value }}">{{ $role->label() }}</option>
                                 @endforeach
                             </select>
                             <p class="text-gray-500 text-xs mt-1">Ctrl (Cmd) tugmasini bosib bir nechta rol tanlang</p>
+
+                            <div x-show="showFirm" x-transition class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <label for="assigned_firm" class="block text-gray-700 text-sm font-bold mb-2">Javobgar firma:</label>
+                                <select name="assigned_firm" id="assigned_firm"
+                                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                                    <option value="">Tanlang</option>
+                                    @foreach($firmOptions as $key => $label)
+                                        <option value="{{ $key }}">{{ $label }}</option>
+                                    @endforeach
+                                    <option value="other">Boshqa</option>
+                                </select>
+                                <p class="text-gray-500 text-xs mt-1">Bu xodim qaysi firma talabalari uchun javobgar</p>
+                            </div>
                         </div>
                         <div class="flex items-center justify-between">
                             <button type="submit"

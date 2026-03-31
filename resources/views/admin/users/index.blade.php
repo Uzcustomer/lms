@@ -46,7 +46,12 @@
                                 <tr>
                                     <td class="px-6 py-4 whitespace-nowrap">{{ $user->name }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap">{{ $user->email }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap">{{ $user->roles->pluck('name')->implode(', ') }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        {{ $user->roles->pluck('name')->implode(', ') }}
+                                        @if($user->assigned_firm)
+                                            <span class="ml-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">{{ \App\Models\StudentVisaInfo::FIRM_OPTIONS[$user->assigned_firm] ?? $user->assigned_firm }}</span>
+                                        @endif
+                                    </td>
                                     @if( auth()->user()->hasRole(['admin']))
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <a href="{{ route('admin.users.edit', $user) }}"

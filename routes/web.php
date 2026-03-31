@@ -102,7 +102,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
 
 
-    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi|javobgar_firma'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('admin.dashboard');
         });
@@ -346,6 +346,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{student}/reject', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'reject'])->name('reject');
             Route::post('/{student}/confirm-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'confirmPassportHandover'])->name('confirm-passport');
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showFile'])->name('file');
+        });
+
+        // Javobgar firma talabalari (faqat o'qish)
+        Route::prefix('firm-students')->name('firm-students.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'index'])->name('index');
+            Route::get('/{student}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'show'])->name('show');
+            Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'showFile'])->name('file');
         });
 
         // Bitiruvchi shartnomalar (registrator ofisi)

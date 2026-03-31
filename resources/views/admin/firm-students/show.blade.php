@@ -88,7 +88,7 @@
 
                 {{-- Pasport --}}
                 <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Pasport ma\'lumotlari') }}</h5>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
                         <span class="block text-xs text-gray-500">{{ __('Pasport berilgan joy') }}</span>
                         <span class="text-sm font-medium text-gray-800">{{ $visaInfo->passport_issued_place }}</span>
@@ -98,12 +98,18 @@
                         <span class="text-sm font-medium text-gray-800">{{ $visaInfo->passport_number }}</span>
                     </div>
                     <div>
-                        <span class="block text-xs text-gray-500">{{ __('Pasport amal qilish muddati') }}</span>
-                        <span class="text-sm font-medium text-gray-800">{{ $visaInfo->passport_expiry_date?->format('d.m.Y') }}</span>
-                    </div>
-                    <div>
                         <span class="block text-xs text-gray-500">{{ __('Tug\'ilgan sanasi') }}</span>
                         <span class="text-sm font-medium text-gray-800">{{ $visaInfo->birth_date?->format('d.m.Y') }}</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <span class="block text-xs text-gray-500">{{ __('Pasport berilgan sana') }}</span>
+                        <span class="text-sm font-medium text-gray-800">{{ $visaInfo->passport_issued_date?->format('d.m.Y') }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-gray-500">{{ __('Pasport muddati tugash sanasi') }}</span>
+                        <span class="text-sm font-medium text-gray-800">{{ $visaInfo->passport_expiry_date?->format('d.m.Y') }}</span>
                     </div>
                 </div>
 

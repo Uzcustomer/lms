@@ -92,7 +92,43 @@ class InternationalStudentController extends Controller
 
         $firms = StudentVisaInfo::FIRM_OPTIONS;
 
-        return view('admin.international-students.index', compact('students', 'firms'));
+        // Statistika
+        $intStudentIds = Student::where('department_name', 'like', '%alqaro%')->pluck('id');
+        $allVisas = StudentVisaInfo::whereIn('student_id', $intStudentIds);
+        $totalIntStudents = Student::where('department_name', 'like', '%alqaro%')->count();
+        $filledCount = (clone $allVisas)->count();
+        $notFilledCount = $totalIntStudents - $filledCount;
+        $approvedCount = (clone $allVisas)->where('status', 'approved')->count();
+        $pendingCount = (clone $allVisas)->where('status', 'pending')->count();
+        $rejectedCount = (clone $allVisas)->where('status', 'rejected')->count();
+
+        // Muddati yaqin talabalar
+        $visaUrgentCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('visa_end_date')
+            ->whereDate('visa_end_date', '<=', now()->addDays(30))
+            ->whereDate('visa_end_date', '>=', now())
+            ->count();
+        $regUrgentCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('registration_end_date')
+            ->whereDate('registration_end_date', '<=', now()->addDays(7))
+            ->whereDate('registration_end_date', '>=', now())
+            ->count();
+        $expiredVisaCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('visa_end_date')
+            ->whereDate('visa_end_date', '<', now())
+            ->count();
+        $expiredRegCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('registration_end_date')
+            ->whereDate('registration_end_date', '<', now())
+            ->count();
+
+        $stats = compact(
+            'totalIntStudents', 'filledCount', 'notFilledCount',
+            'approvedCount', 'pendingCount', 'rejectedCount',
+            'visaUrgentCount', 'regUrgentCount', 'expiredVisaCount', 'expiredRegCount'
+        );
+
+        return view('admin.international-students.index', compact('students', 'firms', 'stats'));
     }
 
     public function show(Student $student)

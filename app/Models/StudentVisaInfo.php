@@ -13,6 +13,7 @@ class StudentVisaInfo extends Model
         'birth_city',
         'passport_issued_place',
         'passport_number',
+        'passport_issued_date',
         'passport_expiry_date',
         'birth_date',
         'registration_start_date',
@@ -41,6 +42,7 @@ class StudentVisaInfo extends Model
     ];
 
     protected $casts = [
+        'passport_issued_date' => 'date',
         'passport_expiry_date' => 'date',
         'birth_date' => 'date',
         'registration_start_date' => 'date',

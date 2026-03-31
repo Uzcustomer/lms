@@ -124,14 +124,14 @@
                     $regActive = $vi->isRegistrationProcessActive();
                     $visActive = $vi->isVisaProcessActive();
 
-                    // Propiska: 5 kun — pasport topshirish modali, 3 kun — bloklash (agar jarayon boshlanmagan bo'lsa)
+                    // Registratsiya: 5 kun — pasport topshirish modali, 3 kun — bloklash (agar jarayon boshlanmagan bo'lsa)
                     if ($rDays !== null && $rDays <= 5 && !$regActive) {
                         if ($rDays <= 3 && !$vi->passport_handed_over) {
                             $blockSite = !$onVisaPage;
-                            $topBanner = ['level' => 'danger', 'msg' => "Propiska muddati tugashiga {$rDays} kun! Pasportingizni topshiring!"];
+                            $topBanner = ['level' => 'danger', 'msg' => "Registratsiya muddati tugashiga {$rDays} kun! Pasportingizni topshiring!"];
                         } else {
                             $showPassportModal = !$vi->passport_handed_over && !$onVisaPage;
-                            $topBanner = ['level' => 'warning', 'msg' => "Propiska tugashiga {$rDays} kun. Pasportingizni firmaga yoki registrator ofisiga topshiring."];
+                            $topBanner = ['level' => 'warning', 'msg' => "Registratsiya tugashiga {$rDays} kun. Pasportingizni firmaga yoki registrator ofisiga topshiring."];
                         }
                     }
 
@@ -152,7 +152,7 @@
                     if (($rDays !== null && $rDays <= 0 && !$regActive) || ($vDays !== null && $vDays <= 0 && !$visActive)) {
                         $blockSite = !$onVisaPage;
                         $expired = [];
-                        if ($rDays !== null && $rDays <= 0 && !$regActive) $expired[] = 'Propiska muddati tugagan!';
+                        if ($rDays !== null && $rDays <= 0 && !$regActive) $expired[] = 'Registratsiya muddati tugagan!';
                         if ($vDays !== null && $vDays <= 0 && !$visActive) $expired[] = 'Viza muddati tugagan!';
                         $topBanner = ['level' => 'danger', 'msg' => implode(' ', $expired) . ' Registrator ofisiga murojaat qiling.'];
                     }
@@ -160,7 +160,7 @@
                     // Yashil/sariq ogohlantirish (muddati yaqin lekin hali bloklash emas)
                     if (!$topBanner) {
                         $parts = [];
-                        if ($rDays !== null && $rDays <= 7) $parts[] = "Propiska tugashiga {$rDays} kun";
+                        if ($rDays !== null && $rDays <= 7) $parts[] = "Registratsiya tugashiga {$rDays} kun";
                         if ($vDays !== null && $vDays <= 30) $parts[] = "Viza tugashiga {$vDays} kun";
                         if (count($parts) > 0) {
                             $isDanger = ($rDays !== null && $rDays <= 3) || ($vDays !== null && $vDays <= 15);
@@ -213,7 +213,7 @@
                 <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 text-center">
                     <svg class="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
                     <h3 class="text-lg font-bold text-gray-800 mb-2">Viza ma'lumotlaringizni to'ldiring!</h3>
-                    <p class="text-sm text-gray-600 mb-6">Platformadan to'liq foydalanish uchun viza, propiska va pasport ma'lumotlaringizni kiritishingiz kerak.</p>
+                    <p class="text-sm text-gray-600 mb-6">Platformadan to'liq foydalanish uchun viza, registratsiya va pasport ma'lumotlaringizni kiritishingiz kerak.</p>
                     <div class="flex gap-3">
                         <button @click="show = false" class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">Keyinroq</button>
                         <a href="{{ route('student.visa-info.index') }}" class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition text-center">To'ldirish</a>

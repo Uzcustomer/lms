@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
 class CheckVisaExpiryCommand extends Command
 {
     protected $signature = 'visa:check-expiry';
-    protected $description = 'Xalqaro talabalar viza va propiska muddatlarini tekshirish va bildirishnoma yuborish';
+    protected $description = 'Xalqaro talabalar viza va registratsiya muddatlarini tekshirish va bildirishnoma yuborish';
 
     public function handle(): int
     {
@@ -36,7 +36,7 @@ class CheckVisaExpiryCommand extends Command
             $sent += $this->checkPassportHandover($info, $student, $telegram);
         }
 
-        $this->info("Viza va propiska tekshiruvi tugadi. {$sent} ta bildirishnoma yuborildi.");
+        $this->info("Viza va registratsiya tekshiruvi tugadi. {$sent} ta bildirishnoma yuborildi.");
 
         return self::SUCCESS;
     }
@@ -59,19 +59,19 @@ class CheckVisaExpiryCommand extends Command
         $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
 
         if ($daysLeft <= 0) {
-            $message = "{$emoji} Propiska muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
+            $message = "{$emoji} Registratsiya muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
         } else {
-            $message = "{$emoji} Propiska muddati tugashiga {$daysLeft} kun qoldi. Muddatini uzaytiring.";
+            $message = "{$emoji} Registratsiya muddati tugashiga {$daysLeft} kun qoldi. Muddatini uzaytiring.";
         }
 
         // Talabaga bildirishnoma
-        $this->notifyStudent($student, $telegram, $message, $level, 'propiska');
+        $this->notifyStudent($student, $telegram, $message, $level, 'registratsiya');
 
         // Qizil holatda — firma javobgariga va registrator ofisiga ham
         if ($level === 'danger') {
-            $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — propiska muddati tugashiga {$daysLeft} kun qoldi!";
+            $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — registratsiya muddati tugashiga {$daysLeft} kun qoldi!";
             if ($daysLeft <= 0) {
-                $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — propiska muddati TUGAGAN!";
+                $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — registratsiya muddati TUGAGAN!";
             }
             $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
         }
@@ -137,7 +137,7 @@ class CheckVisaExpiryCommand extends Command
             'student_id' => $student->id,
             'type' => 'system',
             'title' => match($type) {
-                'propiska' => 'Propiska muddati ogohlantirishi',
+                'registratsiya' => 'Registratsiya muddati ogohlantirishi',
                 'visa' => 'Viza muddati ogohlantirishi',
                 'passport' => 'Pasport topshirish ogohlantirishi',
             },

@@ -290,7 +290,7 @@ class InternationalStudentController extends Controller
 
         $visaInfo->update($updates);
 
-        $label = $type === 'registration' ? 'Propiska' : 'Viza';
+        $label = $type === 'registration' ? 'Registratsiya' : 'Viza';
         $this->notifyStudent($student, "Pasportingiz qaytarildi. {$label} ma'lumotlaringizni qaytadan kiriting.");
 
         return redirect()->route('admin.international-students.show', $student)

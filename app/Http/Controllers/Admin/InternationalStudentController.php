@@ -23,7 +23,12 @@ class InternationalStudentController extends Controller
      */
     private function internationalStudentsQuery()
     {
-        return Student::where('department_name', 'like', '%alqaro%');
+        return Student::where('department_name', 'like', '%alqaro%')
+            ->where(function ($q) {
+                $q->whereNull('citizenship_code')
+                  ->orWhere('citizenship_code', '')
+                  ->orWhere('citizenship_code', '!=', 'UZ');
+            });
     }
 
     public function index(Request $request)
@@ -93,9 +98,9 @@ class InternationalStudentController extends Controller
         $firms = StudentVisaInfo::FIRM_OPTIONS;
 
         // Statistika
-        $intStudentIds = Student::where('department_name', 'like', '%alqaro%')->pluck('id');
+        $intStudentIds = $this->internationalStudentsQuery()->pluck('id');
         $allVisas = StudentVisaInfo::whereIn('student_id', $intStudentIds);
-        $totalIntStudents = Student::where('department_name', 'like', '%alqaro%')->count();
+        $totalIntStudents = $intStudentIds->count();
         $filledCount = (clone $allVisas)->count();
         $notFilledCount = $totalIntStudents - $filledCount;
         $approvedCount = (clone $allVisas)->where('status', 'approved')->count();

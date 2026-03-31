@@ -10,32 +10,30 @@
         <p class="text-sm text-blue-800 font-medium">{{ __('Barcha ma\'lumotlarni to\'g\'ri va aniq kiriting. Bu ma\'lumotlar registrator ofisi tomonidan tekshiriladi.') }}</p>
     </div>
 
-    {{-- Tug'ilgan joy --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Tug\'ilgan joy') }}</h5>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    {{-- HEMIS ma'lumotlari (faqat ko'rish) --}}
+    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Shaxsiy ma\'lumotlar (HEMIS)') }}</h5>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Davlat') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="birth_country" value="{{ old('birth_country', $visaInfo?->birth_country ?? '') }}" required
-                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-            @error('birth_country') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            <span class="block text-xs text-gray-500 mb-1">{{ __('F.I.Sh') }}</span>
+            <span class="text-sm font-semibold text-gray-800">{{ $student->full_name }}</span>
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viloyat') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="birth_region" value="{{ old('birth_region', $visaInfo?->birth_region ?? '') }}" required
-                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-            @error('birth_region') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            <span class="block text-xs text-gray-500 mb-1">{{ __('Tug\'ilgan sana') }}</span>
+            <span class="text-sm font-semibold text-gray-800">{{ $student->birth_date?->format('d.m.Y') ?? '—' }}</span>
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Shahar') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="birth_city" value="{{ old('birth_city', $visaInfo?->birth_city ?? '') }}" required
-                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-            @error('birth_city') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            <span class="block text-xs text-gray-500 mb-1">{{ __('Fuqaroligi') }}</span>
+            <span class="text-sm font-semibold text-gray-800">{{ $student->citizenship_name ?? '—' }}</span>
+        </div>
+        <div>
+            <span class="block text-xs text-gray-500 mb-1">{{ __('Davlat') }}</span>
+            <span class="text-sm font-semibold text-gray-800">{{ $student->country_name ?? '—' }}</span>
         </div>
     </div>
 
     {{-- Pasport ma'lumotlari --}}
     <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Pasport ma\'lumotlari') }}</h5>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport berilgan joy') }} <span class="text-red-500">*</span></label>
             <input type="text" name="passport_issued_place" value="{{ old('passport_issued_place', $visaInfo?->passport_issued_place ?? '') }}" required
@@ -47,12 +45,6 @@
             <input type="text" name="passport_number" value="{{ old('passport_number', $visaInfo?->passport_number ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('passport_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Tug\'ilgan sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="birth_date" value="{{ old('birth_date', $visaInfo?->birth_date?->format('Y-m-d') ?? '') }}" required
-                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-            @error('birth_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

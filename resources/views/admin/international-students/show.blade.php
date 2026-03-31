@@ -117,29 +117,82 @@
                         </form>
                     </div>
 
-                    {{-- Pasport topshirish --}}
+                    {{-- Propiska jarayoni --}}
                     <div class="mt-4 pt-4 border-t border-gray-200">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <span class="text-sm font-medium text-gray-700">{{ __('Pasport topshirilgan') }}:</span>
-                                @if($visaInfo->passport_handed_over)
-                                    <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700 ml-2">
-                                        {{ __('Ha') }} - {{ $visaInfo->passport_handed_at?->format('d.m.Y H:i') }}
-                                    </span>
-                                @else
-                                    <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700 ml-2">
-                                        {{ __('Yo\'q') }}
-                                    </span>
-                                @endif
-                            </div>
-                            @if(!$visaInfo->passport_handed_over)
-                            <form method="POST" action="{{ route('admin.international-students.confirm-passport', $student) }}">
-                                @csrf
-                                <button type="submit" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition"
-                                        onclick="return confirm('Pasport qabul qilinganini tasdiqlaysizmi?')">
-                                    {{ __('Pasport qabul qilindi') }}
-                                </button>
-                            </form>
+                        <h5 class="text-sm font-semibold text-gray-700 mb-3">Propiska jarayoni</h5>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xs text-gray-500">Holat:</span>
+                            @php $rps = $visaInfo->registration_process_status; @endphp
+                            <span class="px-2 py-0.5 text-xs font-semibold rounded-full {{ match($rps) {
+                                'passport_accepted' => 'bg-blue-100 text-blue-700',
+                                'registering' => 'bg-yellow-100 text-yellow-700',
+                                'done' => 'bg-green-100 text-green-700',
+                                default => 'bg-gray-100 text-gray-600'
+                            } }}">{{ match($rps) {
+                                'passport_accepted' => 'Pasport qabul qilindi',
+                                'registering' => 'Registratsiya qilinmoqda',
+                                'done' => 'Tugallangan',
+                                default => 'Kutilmoqda'
+                            } }}</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            @if($rps === 'none' || $rps === 'done')
+                                <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
+                                    @csrf <input type="hidden" name="process_type" value="registration">
+                                    <button type="submit" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition" onclick="return confirm('Pasportni qabul qilasizmi?')">Pasport qabul qilish</button>
+                                </form>
+                            @endif
+                            @if($rps === 'passport_accepted')
+                                <form method="POST" action="{{ route('admin.international-students.mark-registering', $student) }}">
+                                    @csrf <input type="hidden" name="process_type" value="registration">
+                                    <button type="submit" class="px-3 py-1.5 bg-yellow-500 text-white text-xs font-medium rounded-lg hover:bg-yellow-600 transition">Registratsiya qilinmoqda</button>
+                                </form>
+                            @endif
+                            @if($rps === 'registering')
+                                <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
+                                    @csrf <input type="hidden" name="process_type" value="registration">
+                                    <button type="submit" class="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition" onclick="return confirm('Pasportni qaytarasizmi? Talaba yangi propiska ma\'lumotlarni kiritishi kerak.')">Registratsiya yangilandi — Pasport qaytarish</button>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Viza jarayoni --}}
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-3">Viza jarayoni</h5>
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-xs text-gray-500">Holat:</span>
+                            @php $vps = $visaInfo->visa_process_status; @endphp
+                            <span class="px-2 py-0.5 text-xs font-semibold rounded-full {{ match($vps) {
+                                'passport_accepted' => 'bg-blue-100 text-blue-700',
+                                'registering' => 'bg-yellow-100 text-yellow-700',
+                                'done' => 'bg-green-100 text-green-700',
+                                default => 'bg-gray-100 text-gray-600'
+                            } }}">{{ match($vps) {
+                                'passport_accepted' => 'Pasport qabul qilindi',
+                                'registering' => 'Viza yangilanmoqda',
+                                'done' => 'Tugallangan',
+                                default => 'Kutilmoqda'
+                            } }}</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            @if($vps === 'none' || $vps === 'done')
+                                <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
+                                    @csrf <input type="hidden" name="process_type" value="visa">
+                                    <button type="submit" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition" onclick="return confirm('Pasportni qabul qilasizmi?')">Pasport qabul qilish</button>
+                                </form>
+                            @endif
+                            @if($vps === 'passport_accepted')
+                                <form method="POST" action="{{ route('admin.international-students.mark-registering', $student) }}">
+                                    @csrf <input type="hidden" name="process_type" value="visa">
+                                    <button type="submit" class="px-3 py-1.5 bg-yellow-500 text-white text-xs font-medium rounded-lg hover:bg-yellow-600 transition">Viza yangilanmoqda</button>
+                                </form>
+                            @endif
+                            @if($vps === 'registering')
+                                <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
+                                    @csrf <input type="hidden" name="process_type" value="visa">
+                                    <button type="submit" class="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition" onclick="return confirm('Pasportni qaytarasizmi? Talaba yangi viza ma\'lumotlarni kiritishi kerak.')">Viza yangilandi — Pasport qaytarish</button>
+                                </form>
                             @endif
                         </div>
                     </div>

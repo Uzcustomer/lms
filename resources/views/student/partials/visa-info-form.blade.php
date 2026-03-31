@@ -181,6 +181,13 @@
 
     {{-- Hujjatlar yuklash --}}
     <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Hujjatlar yuklash') }}</h5>
+    <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+        <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+        <div class="text-xs text-amber-800">
+            <p class="font-bold mb-1">Hujjatlarni sifatli skaner qiling!</p>
+            <p>Faqat PDF formatida, <strong>aniq va o'qilishi mumkin</strong> bo'lgan skaner yuklang. Sifatsiz yoki xiralashgan fayllar rad etiladi. Telefon kamerasi bilan suratga olganda yaxshi yorug'likda, to'g'ri burchakda oling.</p>
+        </div>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport skaneri (PDF)') }} <span class="text-red-500">*</span></label>

@@ -18,10 +18,12 @@ class StudentVisaInfo extends Model
         'birth_date',
         'registration_start_date',
         'registration_end_date',
+        'registration_process_status',
         'visa_number',
         'visa_type',
         'visa_start_date',
         'visa_end_date',
+        'visa_process_status',
         'visa_entries_count',
         'visa_stay_days',
         'visa_issued_place',
@@ -40,6 +42,7 @@ class StudentVisaInfo extends Model
         'passport_handed_at',
         'passport_received_by',
         'agreement_accepted',
+        'visa_info_deadline',
     ];
 
     protected $casts = [
@@ -56,6 +59,7 @@ class StudentVisaInfo extends Model
         'passport_handed_at' => 'datetime',
         'passport_handed_over' => 'boolean',
         'agreement_accepted' => 'boolean',
+        'visa_info_deadline' => 'datetime',
     ];
 
     public const FIRM_OPTIONS = [
@@ -75,6 +79,22 @@ class StudentVisaInfo extends Model
         'E-1' => 'E-1',
         'E-2' => 'E-2',
     ];
+
+    // Jarayon holatlari: none -> passport_accepted -> registering -> done
+    public const PROCESS_NONE = 'none';                     // Hali boshlanmagan
+    public const PROCESS_PASSPORT_ACCEPTED = 'passport_accepted'; // Pasport qabul qilindi
+    public const PROCESS_REGISTERING = 'registering';       // Registratsiya qilinmoqda
+    public const PROCESS_DONE = 'done';                     // Tugallandi, pasport qaytarildi
+
+    public function isRegistrationProcessActive(): bool
+    {
+        return in_array($this->registration_process_status, [self::PROCESS_PASSPORT_ACCEPTED, self::PROCESS_REGISTERING]);
+    }
+
+    public function isVisaProcessActive(): bool
+    {
+        return in_array($this->visa_process_status, [self::PROCESS_PASSPORT_ACCEPTED, self::PROCESS_REGISTERING]);
+    }
 
     public function student()
     {

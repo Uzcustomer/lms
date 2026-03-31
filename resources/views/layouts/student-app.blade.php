@@ -99,83 +99,154 @@
         @endif
     @endauth
 
-    {{-- Viza/Propiska muddati ogohlantirishi --}}
+    {{-- Xalqaro talaba ogohlantirish tizimi --}}
     @auth('student')
         @php
-            $visaStudent = auth()->guard('student')->user();
-            $visaAlert = null;
-            $isInternational = $visaStudent && str_starts_with(strtolower($visaStudent->group_name ?? ''), 'xd');
-            if ($isInternational) {
-                $vi = \App\Models\StudentVisaInfo::where('student_id', $visaStudent->id)->first();
-                if ($vi) {
-                    $vDays = $vi->visaDaysLeft();
-                    $rDays = $vi->registrationDaysLeft();
-                    $isDanger = ($vDays !== null && $vDays <= 15) || ($rDays !== null && $rDays <= 3);
-                    $isWarning = !$isDanger && (($vDays !== null && $vDays <= 20) || ($rDays !== null && $rDays <= 5));
-                    $isInfo = !$isDanger && !$isWarning && (($vDays !== null && $vDays <= 30) || ($rDays !== null && $rDays <= 7));
+            $vs = auth()->guard('student')->user();
+            $isXd = $vs && str_starts_with(strtolower($vs->group_name ?? ''), 'xd');
+            $vi = $isXd ? \App\Models\StudentVisaInfo::where('student_id', $vs->id)->first() : null;
 
-                    $parts = [];
-                    if ($rDays !== null && $rDays <= 7) {
-                        $parts[] = $rDays <= 0 ? 'Propiska muddati tugagan!' : "Propiska tugashiga {$rDays} kun";
+            $blockSite = false;      // Saytni to'liq bloklash
+            $showPassportModal = false; // Pasport topshirish modali
+            $showFillModal = false;  // Ma'lumot to'ldirish modali (yopiladigan)
+            $topBanner = null;       // Tepa banner
+
+            if ($isXd) {
+                $onVisaPage = request()->routeIs('student.visa-info.*');
+
+                if (!$vi) {
+                    // Ma'lumotlar umuman kiritilmagan
+                    $showFillModal = !$onVisaPage;
+                    $topBanner = ['level' => 'warning', 'msg' => 'Viza ma\'lumotlaringizni to\'ldiring!'];
+                } elseif ($vi) {
+                    $rDays = $vi->registrationDaysLeft();
+                    $vDays = $vi->visaDaysLeft();
+                    $regActive = $vi->isRegistrationProcessActive();
+                    $visActive = $vi->isVisaProcessActive();
+
+                    // Propiska: 5 kun — pasport topshirish modali, 3 kun — bloklash (agar jarayon boshlanmagan bo'lsa)
+                    if ($rDays !== null && $rDays <= 5 && !$regActive) {
+                        if ($rDays <= 3 && !$vi->passport_handed_over) {
+                            $blockSite = !$onVisaPage;
+                            $topBanner = ['level' => 'danger', 'msg' => "Propiska muddati tugashiga {$rDays} kun! Pasportingizni topshiring!"];
+                        } else {
+                            $showPassportModal = !$vi->passport_handed_over && !$onVisaPage;
+                            $topBanner = ['level' => 'warning', 'msg' => "Propiska tugashiga {$rDays} kun. Pasportingizni firmaga yoki registrator ofisiga topshiring."];
+                        }
                     }
-                    if ($vDays !== null && $vDays <= 30) {
-                        $parts[] = $vDays <= 0 ? 'Viza muddati tugagan!' : "Viza tugashiga {$vDays} kun";
+
+                    // Viza: 20 kun — pasport topshirish, 15 kun — bloklash
+                    if ($vDays !== null && $vDays <= 20 && !$visActive && !$blockSite) {
+                        if ($vDays <= 15 && !$vi->passport_handed_over) {
+                            $blockSite = !$onVisaPage;
+                            $topBanner = ['level' => 'danger', 'msg' => "Viza muddati tugashiga {$vDays} kun! Pasportingizni topshiring!"];
+                        } elseif (!$showPassportModal) {
+                            $showPassportModal = !$vi->passport_handed_over && !$onVisaPage;
+                            if (!$topBanner) {
+                                $topBanner = ['level' => 'warning', 'msg' => "Viza tugashiga {$vDays} kun. Pasportingizni firmaga yoki registrator ofisiga topshiring."];
+                            }
+                        }
                     }
-                    if (count($parts) > 0) {
-                        $visaAlert = [
-                            'level' => $isDanger ? 'danger' : ($isWarning ? 'warning' : 'info'),
-                            'message' => implode(' | ', $parts),
-                            'isDanger' => $isDanger,
-                        ];
+
+                    // Muddati tugagan
+                    if (($rDays !== null && $rDays <= 0 && !$regActive) || ($vDays !== null && $vDays <= 0 && !$visActive)) {
+                        $blockSite = !$onVisaPage;
+                        $expired = [];
+                        if ($rDays !== null && $rDays <= 0 && !$regActive) $expired[] = 'Propiska muddati tugagan!';
+                        if ($vDays !== null && $vDays <= 0 && !$visActive) $expired[] = 'Viza muddati tugagan!';
+                        $topBanner = ['level' => 'danger', 'msg' => implode(' ', $expired) . ' Registrator ofisiga murojaat qiling.'];
+                    }
+
+                    // Yashil/sariq ogohlantirish (muddati yaqin lekin hali bloklash emas)
+                    if (!$topBanner) {
+                        $parts = [];
+                        if ($rDays !== null && $rDays <= 7) $parts[] = "Propiska tugashiga {$rDays} kun";
+                        if ($vDays !== null && $vDays <= 30) $parts[] = "Viza tugashiga {$vDays} kun";
+                        if (count($parts) > 0) {
+                            $isDanger = ($rDays !== null && $rDays <= 3) || ($vDays !== null && $vDays <= 15);
+                            $isWarn = ($rDays !== null && $rDays <= 5) || ($vDays !== null && $vDays <= 20);
+                            $topBanner = ['level' => $isDanger ? 'danger' : ($isWarn ? 'warning' : 'info'), 'msg' => implode(' | ', $parts)];
+                        }
                     }
                 }
             }
         @endphp
-        @if($visaAlert)
-            @if($visaAlert['isDanger'])
-                {{-- Qizil: har doim tepa qismda ko'rinib turadi --}}
+
+        {{-- Tepa banner --}}
+        @if($topBanner)
+            @if($topBanner['level'] === 'danger')
                 <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;padding:10px 0;position:sticky;top:0;z-index:9990;">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 flex-shrink-0 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-                            </svg>
-                            <span class="text-sm font-bold">{{ $visaAlert['message'] }}</span>
+                            <svg class="w-5 h-5 flex-shrink-0 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                            <span class="text-sm font-bold">{{ $topBanner['msg'] }}</span>
                         </div>
-                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-white text-red-700 text-xs font-bold rounded hover:bg-red-50 transition flex-shrink-0">
-                            Viza ma'lumotlarim
-                        </a>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-white text-red-700 text-xs font-bold rounded hover:bg-red-50 transition flex-shrink-0">Viza ma'lumotlarim</a>
                     </div>
                 </div>
-            @elseif($visaAlert['level'] === 'warning')
+            @elseif($topBanner['level'] === 'warning')
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
                     <div class="flex items-center justify-between px-4 py-3 rounded-lg border bg-yellow-50 border-yellow-200">
                         <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-                            </svg>
-                            <span class="text-sm font-semibold text-yellow-800">{{ $visaAlert['message'] }}</span>
+                            <svg class="w-5 h-5 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                            <span class="text-sm font-semibold text-yellow-800">{{ $topBanner['msg'] }}</span>
                         </div>
-                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-yellow-600 text-white text-xs font-bold rounded hover:bg-yellow-700 transition flex-shrink-0">
-                            Viza ma'lumotlarim
-                        </a>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-yellow-600 text-white text-xs font-bold rounded hover:bg-yellow-700 transition flex-shrink-0">Viza ma'lumotlarim</a>
                     </div>
                 </div>
             @else
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
                     <div class="flex items-center justify-between px-4 py-3 rounded-lg border bg-green-50 border-green-200">
                         <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-                            </svg>
-                            <span class="text-sm font-medium text-green-800">{{ $visaAlert['message'] }}</span>
+                            <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                            <span class="text-sm font-medium text-green-800">{{ $topBanner['msg'] }}</span>
                         </div>
-                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 transition flex-shrink-0">
-                            Viza ma'lumotlarim
-                        </a>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 transition flex-shrink-0">Viza ma'lumotlarim</a>
                     </div>
                 </div>
             @endif
+        @endif
+
+        {{-- Ma'lumot to'ldirish modali (yopiladigan) --}}
+        @if($showFillModal)
+            <div x-data="{ show: true }" x-show="show" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 text-center">
+                    <svg class="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Viza ma'lumotlaringizni to'ldiring!</h3>
+                    <p class="text-sm text-gray-600 mb-6">Platformadan to'liq foydalanish uchun viza, propiska va pasport ma'lumotlaringizni kiritishingiz kerak.</p>
+                    <div class="flex gap-3">
+                        <button @click="show = false" class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">Keyinroq</button>
+                        <a href="{{ route('student.visa-info.index') }}" class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition text-center">To'ldirish</a>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- Pasport topshirish modali (yopiladigan) --}}
+        @if($showPassportModal)
+            <div x-data="{ show: true }" x-show="show" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
+                <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 text-center">
+                    <svg class="w-16 h-16 text-orange-500 mx-auto mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z"/></svg>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">Pasportingizni topshiring!</h3>
+                    <p class="text-sm text-gray-600 mb-6">Pasportingizni o'zingizning firmaga yoki registrator ofisiga topshiring. Muddati yaqinlashmoqda!</p>
+                    <button @click="show = false" class="w-full px-4 py-2.5 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">Tushundim</button>
+                </div>
+            </div>
+        @endif
+
+        {{-- Saytni bloklash modali (YOPILMAYDI) --}}
+        @if($blockSite)
+            <div style="position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);">
+                <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 p-8 text-center">
+                    <div style="width:80px;height:80px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+                        <svg class="w-10 h-10 text-red-600 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-red-700 mb-3">Platformadan foydalanish cheklangan!</h3>
+                    <p class="text-sm text-gray-600 mb-2">{{ $topBanner['msg'] ?? '' }}</p>
+                    <p class="text-sm text-gray-600 mb-6">Pasportingizni registrator ofisiga yoki firmangizga topshiring. Platformadan foydalanish uchun registratsiya jarayoni boshlanishi kerak.</p>
+                    <a href="{{ route('student.visa-info.index') }}" class="inline-block px-6 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition">Viza ma'lumotlarim</a>
+                </div>
+            </div>
         @endif
     @endauth
 

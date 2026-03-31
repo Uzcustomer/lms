@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\InternationalStudentsExport;
-use App\Models\Department;
 use App\Models\Student;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 
 class InternationalStudentController extends Controller
@@ -32,6 +32,12 @@ class InternationalStudentController extends Controller
 
     public function index(Request $request)
     {
+        // Migratsiya bajarilganligini tekshirish
+        if (!Schema::hasTable('student_visa_infos')) {
+            return redirect()->route('admin.dashboard')
+                ->with('error', 'Iltimos, avval migratsiyani bajaring: php artisan migrate');
+        }
+
         $query = $this->internationalStudentsQuery();
 
         // Filterlash

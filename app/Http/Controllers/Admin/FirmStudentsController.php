@@ -6,11 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\StudentVisaInfo;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class FirmStudentsController extends Controller
 {
     public function index(Request $request)
     {
+        if (!Schema::hasTable('student_visa_infos')) {
+            return redirect()->route('admin.dashboard')
+                ->with('error', 'Iltimos, avval migratsiyani bajaring: php artisan migrate');
+        }
+
         $user = auth()->user();
         $assignedFirm = $user->assigned_firm;
 

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Student;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
+use App\Models\User;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
 
@@ -43,18 +44,13 @@ class CheckVisaExpiryCommand extends Command
     private function checkRegistration(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
     {
         $daysLeft = $info->registrationDaysLeft();
-        if ($daysLeft === null) return 0;
+        if ($daysLeft === null || $daysLeft > 7) return 0;
 
-        // 7 kun va undan kam qolganda bildirishnoma
-        if ($daysLeft > 7) return 0;
-
-        // Qizil (3 kun va kam) — har kuni yuboriladi
-        // Sariq (5 kun) va Yashil (7 kun) — faqat shu kuni
         if ($daysLeft <= 3) {
             $level = 'danger';
-        } elseif ($daysLeft == 4 || $daysLeft == 5) {
+        } elseif ($daysLeft <= 5) {
             $level = 'warning';
-        } elseif ($daysLeft == 6 || $daysLeft == 7) {
+        } elseif ($daysLeft <= 7) {
             $level = 'info';
         } else {
             return 0;
@@ -63,25 +59,31 @@ class CheckVisaExpiryCommand extends Command
         $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
 
         if ($daysLeft <= 0) {
-            $message = "{$emoji} Vaqtinchalik ro'yxatga qo'yish (propiska) muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
+            $message = "{$emoji} Propiska muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
         } else {
             $message = "{$emoji} Propiska muddati tugashiga {$daysLeft} kun qoldi. Muddatini uzaytiring.";
         }
 
-        $this->sendNotification($student, $telegram, $message, $level, 'propiska');
+        // Talabaga bildirishnoma
+        $this->notifyStudent($student, $telegram, $message, $level, 'propiska');
+
+        // Qizil holatda — firma javobgariga va registrator ofisiga ham
+        if ($level === 'danger') {
+            $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — propiska muddati tugashiga {$daysLeft} kun qoldi!";
+            if ($daysLeft <= 0) {
+                $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — propiska muddati TUGAGAN!";
+            }
+            $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
+        }
+
         return 1;
     }
 
     private function checkVisa(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
     {
         $daysLeft = $info->visaDaysLeft();
-        if ($daysLeft === null) return 0;
+        if ($daysLeft === null || $daysLeft > 30) return 0;
 
-        // 30 kun va undan kam qolganda bildirishnoma
-        if ($daysLeft > 30) return 0;
-
-        // Qizil (15 kun va kam) — har kuni yuboriladi
-        // Sariq (20 kun) va Yashil (30 kun) — shu oraliqda
         if ($daysLeft <= 15) {
             $level = 'danger';
         } elseif ($daysLeft <= 20) {
@@ -100,7 +102,17 @@ class CheckVisaExpiryCommand extends Command
             $message = "{$emoji} Viza muddati tugashiga {$daysLeft} kun qoldi. Vizangizni yangilang.";
         }
 
-        $this->sendNotification($student, $telegram, $message, $level, 'visa');
+        $this->notifyStudent($student, $telegram, $message, $level, 'visa');
+
+        // Qizil holatda — firma javobgariga va registrator ofisiga ham
+        if ($level === 'danger') {
+            $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — viza muddati tugashiga {$daysLeft} kun qoldi!";
+            if ($daysLeft <= 0) {
+                $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — viza muddati TUGAGAN!";
+            }
+            $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
+        }
+
         return 1;
     }
 
@@ -115,11 +127,11 @@ class CheckVisaExpiryCommand extends Command
         if (!$shouldWarn) return 0;
 
         $message = "⚠️ Pasportingizni registrator ofisi xodimiga topshirishingiz kerak. Iltimos, tezroq topshiring.";
-        $this->sendNotification($student, $telegram, $message, 'danger', 'passport');
+        $this->notifyStudent($student, $telegram, $message, 'danger', 'passport');
         return 1;
     }
 
-    private function sendNotification(Student $student, TelegramService $telegram, string $message, string $level, string $type): void
+    private function notifyStudent(Student $student, TelegramService $telegram, string $message, string $level, string $type): void
     {
         StudentNotification::create([
             'student_id' => $student->id,
@@ -135,6 +147,41 @@ class CheckVisaExpiryCommand extends Command
 
         if ($student->telegram_chat_id) {
             $telegram->sendToUser($student->telegram_chat_id, $message);
+        }
+    }
+
+    /**
+     * Firma javobgariga va registrator ofisi Telegram guruhiga xabar yuborish.
+     */
+    private function notifyFirmAndRegistrar(StudentVisaInfo $info, TelegramService $telegram, string $message): void
+    {
+        // Registrator ofisi Telegram guruhiga
+        $registrarGroupId = config('services.telegram.registrar_group_id');
+        if ($registrarGroupId) {
+            $telegram->sendToUser($registrarGroupId, $message);
+        }
+
+        // Firma javobgariga (assigned_firm bo'yicha)
+        if ($info->firm) {
+            $firmUsers = User::where('assigned_firm', $info->firm)
+                ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
+                ->get();
+
+            foreach ($firmUsers as $firmUser) {
+                // Saytda bildirishnoma (Notification model orqali)
+                \App\Models\Notification::create([
+                    'sender_id' => null,
+                    'sender_type' => null,
+                    'recipient_id' => $firmUser->id,
+                    'recipient_type' => User::class,
+                    'subject' => 'Talaba muddati yaqinlashmoqda',
+                    'body' => $message,
+                    'type' => 'alert',
+                    'is_read' => false,
+                    'is_draft' => false,
+                    'sent_at' => now(),
+                ]);
+            }
         }
     }
 }

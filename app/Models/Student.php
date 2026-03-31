@@ -312,6 +312,11 @@ class Student extends Authenticatable
         return $this->hasMany(StudentGrade::class, 'student_hemis_id', 'hemis_id');
     }
 
+    public function visaInfo()
+    {
+        return $this->hasOne(\App\Models\StudentVisaInfo::class);
+    }
+
     public function faceDescriptor()
     {
         return $this->hasOne(\App\Models\FaceIdDescriptor::class);

@@ -61,5 +61,8 @@ Schedule::command('absence-excuses:send-pending-reminder')->dailyAt('16:00');
 // Registrator ofisiga baho qo'yilmaganlar hisoboti — back ofis menejerlari kesimida (har kuni 08:30 da)
 Schedule::command('registrar:send-unrated-report')->dailyAt('08:30');
 
+// Xalqaro talabalar viza va propiska muddatlarini tekshirish (har kuni 09:00 da)
+Schedule::command('visa:check-expiry')->dailyAt('09:00');
+
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)

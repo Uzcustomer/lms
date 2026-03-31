@@ -347,6 +347,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{student}/accept-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'acceptPassport'])->name('accept-passport');
             Route::post('/{student}/mark-registering', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'markRegistering'])->name('mark-registering');
             Route::post('/{student}/return-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'returnPassport'])->name('return-passport');
+            Route::delete('/{student}/visa-info', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'destroyVisaInfo'])->name('destroy-visa-info');
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showFile'])->name('file');
         });
 

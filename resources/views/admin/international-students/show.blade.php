@@ -117,9 +117,20 @@
                         </form>
                     </div>
 
-                    {{-- Propiska jarayoni --}}
+                    {{-- Ma'lumotlarni o'chirish --}}
                     <div class="mt-4 pt-4 border-t border-gray-200">
-                        <h5 class="text-sm font-semibold text-gray-700 mb-3">Propiska jarayoni</h5>
+                        <form method="POST" action="{{ route('admin.international-students.destroy-visa-info', $student) }}" class="inline">
+                            @csrf @method('DELETE')
+                            <button type="submit" class="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-medium rounded-lg hover:bg-red-200 transition border border-red-200"
+                                    onclick="return confirm('Talabaning barcha viza ma\'lumotlarini o\'chirishni xohlaysizmi? Bu amalni qaytarib bo\'lmaydi!')">
+                                Barcha viza ma'lumotlarini o'chirish
+                            </button>
+                        </form>
+                    </div>
+
+                    {{-- Registratsiya jarayoni --}}
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <h5 class="text-sm font-semibold text-gray-700 mb-3">Registratsiya jarayoni</h5>
                         <div class="flex items-center gap-2 mb-3">
                             <span class="text-xs text-gray-500">Holat:</span>
                             @php $rps = $visaInfo->registration_process_status; @endphp
@@ -151,7 +162,7 @@
                             @if($rps === 'registering')
                                 <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
                                     @csrf <input type="hidden" name="process_type" value="registration">
-                                    <button type="submit" class="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition" onclick="return confirm('Pasportni qaytarasizmi? Talaba yangi propiska ma\'lumotlarni kiritishi kerak.')">Registratsiya yangilandi — Pasport qaytarish</button>
+                                    <button type="submit" class="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition" onclick="return confirm('Pasportni qaytarasizmi? Talaba yangi registratsiya ma\'lumotlarni kiritishi kerak.')">Registratsiya yangilandi — Pasport qaytarish</button>
                                 </form>
                             @endif
                         </div>
@@ -244,7 +255,7 @@
                         </div>
                     </div>
 
-                    {{-- Propiska --}}
+                    {{-- Registratsiya --}}
                     <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Vaqtinchalik ro\'yxatga qo\'yish') }}</h5>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>

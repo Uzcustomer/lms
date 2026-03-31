@@ -67,7 +67,7 @@
                                 </select>
                             </div>
                             <div class="filter-item" style="min-width:160px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Propiska tugash</label>
+                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Registratsiya tugash</label>
                                 <select name="registration_expiry" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
                                     <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun ichida</option>
@@ -98,13 +98,13 @@
                             <span class="int-badge int-badge-danger">{{ $stats['expiredVisaCount'] }} viza muddati o'tgan!</span>
                         @endif
                         @if($stats['expiredRegCount'] > 0)
-                            <span class="int-badge int-badge-danger-orange">{{ $stats['expiredRegCount'] }} propiska muddati o'tgan!</span>
+                            <span class="int-badge int-badge-danger-orange">{{ $stats['expiredRegCount'] }} registratsiya muddati o'tgan!</span>
                         @endif
                         @if($stats['visaUrgentCount'] > 0)
                             <span class="int-badge int-badge-warning">{{ $stats['visaUrgentCount'] }} viza yaqin (30k)</span>
                         @endif
                         @if($stats['regUrgentCount'] > 0)
-                            <span class="int-badge int-badge-warning">{{ $stats['regUrgentCount'] }} propiska yaqin (7k)</span>
+                            <span class="int-badge int-badge-warning">{{ $stats['regUrgentCount'] }} registratsiya yaqin (7k)</span>
                         @endif
                     </div>
                     <a href="{{ route('admin.international-students.export', request()->all()) }}" class="int-btn-export">
@@ -125,7 +125,7 @@
                                 <th>Guruh</th>
                                 <th>Kurs</th>
                                 <th>Ma'lumot</th>
-                                <th>Propiska tugash</th>
+                                <th>Registratsiya tugash</th>
                                 <th>Viza tugash</th>
                                 <th>Firma</th>
                                 <th>Holat</th>

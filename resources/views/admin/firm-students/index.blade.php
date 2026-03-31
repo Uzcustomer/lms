@@ -62,7 +62,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('Talaba') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('Guruh') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('Kurs') }}</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('Propiska tugash') }}</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('Registratsiya tugash') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('Viza tugash') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{{ __('Holat') }}</th>
                             </tr>

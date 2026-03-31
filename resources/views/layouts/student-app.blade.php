@@ -99,6 +99,85 @@
         @endif
     @endauth
 
+    {{-- Viza/Propiska muddati ogohlantirishi --}}
+    @auth('student')
+        @php
+            $visaStudent = auth()->guard('student')->user();
+            $visaAlert = null;
+            if ($visaStudent) {
+                $vi = \App\Models\StudentVisaInfo::where('student_id', $visaStudent->id)->first();
+                if ($vi) {
+                    $vDays = $vi->visaDaysLeft();
+                    $rDays = $vi->registrationDaysLeft();
+                    $isDanger = ($vDays !== null && $vDays <= 15) || ($rDays !== null && $rDays <= 3);
+                    $isWarning = !$isDanger && (($vDays !== null && $vDays <= 20) || ($rDays !== null && $rDays <= 5));
+                    $isInfo = !$isDanger && !$isWarning && (($vDays !== null && $vDays <= 30) || ($rDays !== null && $rDays <= 7));
+
+                    $parts = [];
+                    if ($rDays !== null && $rDays <= 7) {
+                        $parts[] = $rDays <= 0 ? 'Propiska muddati tugagan!' : "Propiska tugashiga {$rDays} kun";
+                    }
+                    if ($vDays !== null && $vDays <= 30) {
+                        $parts[] = $vDays <= 0 ? 'Viza muddati tugagan!' : "Viza tugashiga {$vDays} kun";
+                    }
+                    if (count($parts) > 0) {
+                        $visaAlert = [
+                            'level' => $isDanger ? 'danger' : ($isWarning ? 'warning' : 'info'),
+                            'message' => implode(' | ', $parts),
+                            'isDanger' => $isDanger,
+                        ];
+                    }
+                }
+            }
+        @endphp
+        @if($visaAlert)
+            @if($visaAlert['isDanger'])
+                {{-- Qizil: har doim tepa qismda ko'rinib turadi --}}
+                <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;padding:10px 0;position:sticky;top:0;z-index:9990;">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 flex-shrink-0 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+                            </svg>
+                            <span class="text-sm font-bold">{{ $visaAlert['message'] }}</span>
+                        </div>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-white text-red-700 text-xs font-bold rounded hover:bg-red-50 transition flex-shrink-0">
+                            Viza ma'lumotlarim
+                        </a>
+                    </div>
+                </div>
+            @elseif($visaAlert['level'] === 'warning')
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg border bg-yellow-50 border-yellow-200">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+                            </svg>
+                            <span class="text-sm font-semibold text-yellow-800">{{ $visaAlert['message'] }}</span>
+                        </div>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-yellow-600 text-white text-xs font-bold rounded hover:bg-yellow-700 transition flex-shrink-0">
+                            Viza ma'lumotlarim
+                        </a>
+                    </div>
+                </div>
+            @else
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg border bg-green-50 border-green-200">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+                            </svg>
+                            <span class="text-sm font-medium text-green-800">{{ $visaAlert['message'] }}</span>
+                        </div>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 transition flex-shrink-0">
+                            Viza ma'lumotlarim
+                        </a>
+                    </div>
+                </div>
+            @endif
+        @endif
+    @endauth
+
     {{-- Impersonatsiya banneri --}}
     @if(session('impersonating'))
         <div class="bg-red-600 text-white">

@@ -1,5 +1,5 @@
 <form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm"
-      x-data="{ showAgreementModal: false, firm: '{{ old('firm', $visaInfo->firm ?? '') }}' }">
+      x-data="{ showAgreementModal: false, firm: '{{ old('firm', $visaInfo?->firm ?? '') }}' }">
     @csrf
 
     {{-- Ogohlantirish --}}
@@ -15,19 +15,19 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Davlat') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="birth_country" value="{{ old('birth_country', $visaInfo->birth_country ?? '') }}" required
+            <input type="text" name="birth_country" value="{{ old('birth_country', $visaInfo?->birth_country ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('birth_country') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viloyat') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="birth_region" value="{{ old('birth_region', $visaInfo->birth_region ?? '') }}" required
+            <input type="text" name="birth_region" value="{{ old('birth_region', $visaInfo?->birth_region ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('birth_region') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Shahar') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="birth_city" value="{{ old('birth_city', $visaInfo->birth_city ?? '') }}" required
+            <input type="text" name="birth_city" value="{{ old('birth_city', $visaInfo?->birth_city ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('birth_city') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -38,25 +38,25 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport berilgan joy') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="passport_issued_place" value="{{ old('passport_issued_place', $visaInfo->passport_issued_place ?? '') }}" required
+            <input type="text" name="passport_issued_place" value="{{ old('passport_issued_place', $visaInfo?->passport_issued_place ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('passport_issued_place') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport raqami') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="passport_number" value="{{ old('passport_number', $visaInfo->passport_number ?? '') }}" required
+            <input type="text" name="passport_number" value="{{ old('passport_number', $visaInfo?->passport_number ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('passport_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport amal qilish muddati') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="passport_expiry_date" value="{{ old('passport_expiry_date', $visaInfo->passport_expiry_date?->format('Y-m-d') ?? '') }}" required
+            <input type="date" name="passport_expiry_date" value="{{ old('passport_expiry_date', $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('passport_expiry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Tug\'ilgan sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="birth_date" value="{{ old('birth_date', $visaInfo->birth_date?->format('Y-m-d') ?? '') }}" required
+            <input type="date" name="birth_date" value="{{ old('birth_date', $visaInfo?->birth_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('birth_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -67,13 +67,13 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Boshlanish sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="registration_start_date" value="{{ old('registration_start_date', $visaInfo->registration_start_date?->format('Y-m-d') ?? '') }}" required
+            <input type="date" name="registration_start_date" value="{{ old('registration_start_date', $visaInfo?->registration_start_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('registration_start_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Tugash sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="registration_end_date" value="{{ old('registration_end_date', $visaInfo->registration_end_date?->format('Y-m-d') ?? '') }}" required
+            <input type="date" name="registration_end_date" value="{{ old('registration_end_date', $visaInfo?->registration_end_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('registration_end_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -84,7 +84,7 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza raqami') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="visa_number" value="{{ old('visa_number', $visaInfo->visa_number ?? '') }}" required
+            <input type="text" name="visa_number" value="{{ old('visa_number', $visaInfo?->visa_number ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -93,7 +93,7 @@
             <select name="visa_type" required class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="">{{ __('Tanlang') }}</option>
                 @foreach(\App\Models\StudentVisaInfo::VISA_TYPES as $key => $label)
-                    <option value="{{ $key }}" {{ old('visa_type', $visaInfo->visa_type ?? '') === $key ? 'selected' : '' }}>{{ $label }}</option>
+                    <option value="{{ $key }}" {{ old('visa_type', $visaInfo?->visa_type ?? '') === $key ? 'selected' : '' }}>{{ $label }}</option>
                 @endforeach
             </select>
             @error('visa_type') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
@@ -103,7 +103,7 @@
             <select name="visa_entries_count" required class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="">{{ __('Tanlang') }}</option>
                 @for($i = 1; $i <= 10; $i++)
-                    <option value="{{ $i }}" {{ (int) old('visa_entries_count', $visaInfo->visa_entries_count ?? '') === $i ? 'selected' : '' }}>{{ $i }}</option>
+                    <option value="{{ $i }}" {{ (int) old('visa_entries_count', $visaInfo?->visa_entries_count ?? '') === $i ? 'selected' : '' }}>{{ $i }}</option>
                 @endfor
             </select>
             @error('visa_entries_count') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
@@ -113,13 +113,13 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza boshlanish sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="visa_start_date" value="{{ old('visa_start_date', $visaInfo->visa_start_date?->format('Y-m-d') ?? '') }}" required
+            <input type="date" name="visa_start_date" value="{{ old('visa_start_date', $visaInfo?->visa_start_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_start_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza tugash sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="visa_end_date" value="{{ old('visa_end_date', $visaInfo->visa_end_date?->format('Y-m-d') ?? '') }}" required
+            <input type="date" name="visa_end_date" value="{{ old('visa_end_date', $visaInfo?->visa_end_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_end_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -128,19 +128,19 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Istiqomat muddati (kunlarda)') }} <span class="text-red-500">*</span></label>
-            <input type="number" name="visa_stay_days" min="1" value="{{ old('visa_stay_days', $visaInfo->visa_stay_days ?? '') }}" required
+            <input type="number" name="visa_stay_days" min="1" value="{{ old('visa_stay_days', $visaInfo?->visa_stay_days ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_stay_days') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza berilgan joy') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="visa_issued_place" value="{{ old('visa_issued_place', $visaInfo->visa_issued_place ?? '') }}" required
+            <input type="text" name="visa_issued_place" value="{{ old('visa_issued_place', $visaInfo?->visa_issued_place ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_issued_place') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza berilgan vaqti') }} <span class="text-red-500">*</span></label>
-            <input type="date" name="visa_issued_date" value="{{ old('visa_issued_date', $visaInfo->visa_issued_date?->format('Y-m-d') ?? '') }}" required
+            <input type="date" name="visa_issued_date" value="{{ old('visa_issued_date', $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -162,7 +162,7 @@
         </div>
         <div x-show="firm === 'other'" x-transition>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Firma nomi') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="firm_custom" value="{{ old('firm_custom', $visaInfo->firm_custom ?? '') }}"
+            <input type="text" name="firm_custom" value="{{ old('firm_custom', $visaInfo?->firm_custom ?? '') }}"
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('firm_custom') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>

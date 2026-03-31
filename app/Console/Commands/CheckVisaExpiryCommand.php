@@ -18,115 +18,109 @@ class CheckVisaExpiryCommand extends Command
         $telegram = app(TelegramService::class);
 
         $visaInfos = StudentVisaInfo::with('student')
-            ->whereNotNull('registration_end_date')
-            ->orWhereNotNull('visa_end_date')
+            ->where(function ($q) {
+                $q->whereNotNull('registration_end_date')
+                  ->orWhereNotNull('visa_end_date');
+            })
             ->get();
+
+        $sent = 0;
 
         foreach ($visaInfos as $info) {
             $student = $info->student;
             if (!$student) continue;
 
-            $this->checkRegistration($info, $student, $telegram);
-            $this->checkVisa($info, $student, $telegram);
-            $this->checkPassportHandover($info, $student, $telegram);
+            $sent += $this->checkRegistration($info, $student, $telegram);
+            $sent += $this->checkVisa($info, $student, $telegram);
+            $sent += $this->checkPassportHandover($info, $student, $telegram);
         }
 
-        $this->info('Viza va propiska tekshiruvi tugadi.');
+        $this->info("Viza va propiska tekshiruvi tugadi. {$sent} ta bildirishnoma yuborildi.");
 
         return self::SUCCESS;
     }
 
-    private function checkRegistration(StudentVisaInfo $info, Student $student, TelegramService $telegram): void
+    private function checkRegistration(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
     {
         $daysLeft = $info->registrationDaysLeft();
-        if ($daysLeft === null) return;
+        if ($daysLeft === null) return 0;
 
-        $level = $this->getRegistrationNotificationLevel($daysLeft);
-        if (!$level) return;
+        // 7 kun va undan kam qolganda bildirishnoma
+        if ($daysLeft > 7) return 0;
 
-        $message = $this->buildRegistrationMessage($daysLeft, $level);
+        // Qizil (3 kun va kam) — har kuni yuboriladi
+        // Sariq (5 kun) va Yashil (7 kun) — faqat shu kuni
+        if ($daysLeft <= 3) {
+            $level = 'danger';
+        } elseif ($daysLeft == 4 || $daysLeft == 5) {
+            $level = 'warning';
+        } elseif ($daysLeft == 6 || $daysLeft == 7) {
+            $level = 'info';
+        } else {
+            return 0;
+        }
+
+        $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
+
+        if ($daysLeft <= 0) {
+            $message = "{$emoji} Vaqtinchalik ro'yxatga qo'yish (propiska) muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
+        } else {
+            $message = "{$emoji} Propiska muddati tugashiga {$daysLeft} kun qoldi. Muddatini uzaytiring.";
+        }
+
         $this->sendNotification($student, $telegram, $message, $level, 'propiska');
+        return 1;
     }
 
-    private function checkVisa(StudentVisaInfo $info, Student $student, TelegramService $telegram): void
+    private function checkVisa(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
     {
         $daysLeft = $info->visaDaysLeft();
-        if ($daysLeft === null) return;
+        if ($daysLeft === null) return 0;
 
-        $level = $this->getVisaNotificationLevel($daysLeft);
-        if (!$level) return;
+        // 30 kun va undan kam qolganda bildirishnoma
+        if ($daysLeft > 30) return 0;
 
-        $message = $this->buildVisaMessage($daysLeft, $level);
+        // Qizil (15 kun va kam) — har kuni yuboriladi
+        // Sariq (20 kun) va Yashil (30 kun) — shu oraliqda
+        if ($daysLeft <= 15) {
+            $level = 'danger';
+        } elseif ($daysLeft <= 20) {
+            $level = 'warning';
+        } elseif ($daysLeft <= 30) {
+            $level = 'info';
+        } else {
+            return 0;
+        }
+
+        $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
+
+        if ($daysLeft <= 0) {
+            $message = "{$emoji} Viza muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
+        } else {
+            $message = "{$emoji} Viza muddati tugashiga {$daysLeft} kun qoldi. Vizangizni yangilang.";
+        }
+
         $this->sendNotification($student, $telegram, $message, $level, 'visa');
+        return 1;
     }
 
-    private function checkPassportHandover(StudentVisaInfo $info, Student $student, TelegramService $telegram): void
+    private function checkPassportHandover(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
     {
-        if ($info->passport_handed_over) return;
+        if ($info->passport_handed_over) return 0;
 
         $regDays = $info->registrationDaysLeft();
         $visaDays = $info->visaDaysLeft();
 
-        // Faqat propiska yoki viza muddati yaqinlashganda pasport ogohlantirishi
         $shouldWarn = ($regDays !== null && $regDays <= 7) || ($visaDays !== null && $visaDays <= 30);
-        if (!$shouldWarn) return;
+        if (!$shouldWarn) return 0;
 
-        $message = "⚠️ Diqqat! Pasportingizni registrator ofisi xodimiga topshirishingiz kerak. Iltimos, tezroq topshiring.";
-
+        $message = "⚠️ Pasportingizni registrator ofisi xodimiga topshirishingiz kerak. Iltimos, tezroq topshiring.";
         $this->sendNotification($student, $telegram, $message, 'danger', 'passport');
-    }
-
-    private function getRegistrationNotificationLevel(int $daysLeft): ?string
-    {
-        if ($daysLeft <= 3) return 'danger';
-        if ($daysLeft <= 5) return 'warning';
-        if ($daysLeft <= 7) return 'info';
-
-        return null;
-    }
-
-    private function getVisaNotificationLevel(int $daysLeft): ?string
-    {
-        if ($daysLeft <= 15) return 'danger';
-        if ($daysLeft <= 20) return 'warning';
-        if ($daysLeft <= 30) return 'info';
-
-        return null;
-    }
-
-    private function buildRegistrationMessage(int $daysLeft, string $level): string
-    {
-        $emoji = match($level) {
-            'danger' => '🔴',
-            'warning' => '🟡',
-            'info' => '🟢',
-        };
-
-        if ($daysLeft <= 0) {
-            return "{$emoji} Vaqtinchalik ro'yxatga qo'yish (propiska) muddati tugagan! Iltimos, zudlik bilan registrator ofisiga murojaat qiling.";
-        }
-
-        return "{$emoji} Vaqtinchalik ro'yxatga qo'yish (propiska) muddati tugashiga {$daysLeft} kun qoldi. Iltimos, muddatini uzaytiring.";
-    }
-
-    private function buildVisaMessage(int $daysLeft, string $level): string
-    {
-        $emoji = match($level) {
-            'danger' => '🔴',
-            'warning' => '🟡',
-            'info' => '🟢',
-        };
-
-        if ($daysLeft <= 0) {
-            return "{$emoji} Viza muddati tugagan! Iltimos, zudlik bilan registrator ofisiga murojaat qiling.";
-        }
-
-        return "{$emoji} Viza muddati tugashiga {$daysLeft} kun qoldi. Iltimos, vizangizni yangilang.";
+        return 1;
     }
 
     private function sendNotification(Student $student, TelegramService $telegram, string $message, string $level, string $type): void
     {
-        // Saytda bildirishnoma
         StudentNotification::create([
             'student_id' => $student->id,
             'type' => 'system',
@@ -139,7 +133,6 @@ class CheckVisaExpiryCommand extends Command
             'data' => ['level' => $level, 'type' => $type],
         ]);
 
-        // Telegram orqali xabar
         if ($student->telegram_chat_id) {
             $telegram->sendToUser($student->telegram_chat_id, $message);
         }

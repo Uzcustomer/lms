@@ -154,6 +154,17 @@
         </div>
     </div>
 
+    {{-- Chegaradan kirish --}}
+    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Chegaradan kirish') }}</h5>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Chegaradan kirgan sana') }} <span class="text-red-500">*</span></label>
+            <input type="date" name="entry_date" value="{{ old('entry_date', $visaInfo?->entry_date?->format('Y-m-d') ?? '') }}" required
+                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+            @error('entry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
+    </div>
+
     {{-- Firma --}}
     <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Qaysi firma orqali kelgan') }}</h5>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

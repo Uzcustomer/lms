@@ -29,32 +29,33 @@
                                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                    required>
                         </div>
-                        <div class="mb-4" x-data="{ showFirm: false }">
+                        <div class="mb-4">
                             <label for="roles" class="block text-gray-700 text-sm font-bold mb-2">Rollar (bir nechta tanlash mumkin):</label>
                             <select name="roles[]" id="roles" multiple
                                     class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
                                     style="min-height: 150px;"
                                     required
-                                    @change="showFirm = Array.from($el.selectedOptions).some(o => o.value === 'javobgar_firma')">
+                                    onchange="toggleFirmSelect()">
                                 @foreach($roles as $role)
                                     <option value="{{ $role->value }}">{{ $role->label() }}</option>
                                 @endforeach
                             </select>
                             <p class="text-gray-500 text-xs mt-1">Ctrl (Cmd) tugmasini bosib bir nechta rol tanlang</p>
-
-                            <div x-show="showFirm" x-transition class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                <label for="assigned_firm" class="block text-gray-700 text-sm font-bold mb-2">Javobgar firma:</label>
-                                <select name="assigned_firm" id="assigned_firm"
-                                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                                    <option value="">Tanlang</option>
-                                    @foreach($firmOptions as $key => $label)
-                                        <option value="{{ $key }}">{{ $label }}</option>
-                                    @endforeach
-                                    <option value="other">Boshqa</option>
-                                </select>
-                                <p class="text-gray-500 text-xs mt-1">Bu xodim qaysi firma talabalari uchun javobgar</p>
-                            </div>
                         </div>
+
+                        <div id="firm-section" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg" style="display: none;">
+                            <label for="assigned_firm" class="block text-gray-700 text-sm font-bold mb-2">Javobgar firma: <span class="text-red-500">*</span></label>
+                            <select name="assigned_firm" id="assigned_firm"
+                                    class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                                <option value="">Tanlang</option>
+                                @foreach($firmOptions as $key => $label)
+                                    <option value="{{ $key }}">{{ $label }}</option>
+                                @endforeach
+                                <option value="other">Boshqa</option>
+                            </select>
+                            <p class="text-gray-500 text-xs mt-1">Bu xodim qaysi firma talabalari uchun javobgar</p>
+                        </div>
+
                         <div class="flex items-center justify-between">
                             <button type="submit"
                                     class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
@@ -70,4 +71,13 @@
             </div>
         </div>
     </div>
+
+    <script>
+    function toggleFirmSelect() {
+        var select = document.getElementById('roles');
+        var firmSection = document.getElementById('firm-section');
+        var selected = Array.from(select.selectedOptions).map(function(o) { return o.value; });
+        firmSection.style.display = selected.includes('javobgar_firma') ? 'block' : 'none';
+    }
+    </script>
 </x-app-layout>

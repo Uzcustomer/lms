@@ -344,7 +344,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{student}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'show'])->name('show');
             Route::post('/{student}/approve', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'approve'])->name('approve');
             Route::post('/{student}/reject', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'reject'])->name('reject');
-            Route::post('/{student}/confirm-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'confirmPassportHandover'])->name('confirm-passport');
+            Route::post('/{student}/accept-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'acceptPassport'])->name('accept-passport');
+            Route::post('/{student}/mark-registering', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'markRegistering'])->name('mark-registering');
+            Route::post('/{student}/return-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'returnPassport'])->name('return-passport');
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showFile'])->name('file');
         });
 

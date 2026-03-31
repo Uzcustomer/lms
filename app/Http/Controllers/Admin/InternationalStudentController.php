@@ -217,18 +217,98 @@ class InternationalStudentController extends Controller
             ->with('success', 'Talaba ma\'lumotlari rad etildi.');
     }
 
-    public function confirmPassportHandover(Request $request, Student $student)
+    /**
+     * Pasport qabul qilindi — registratsiya/viza jarayoni boshlandi.
+     */
+    public function acceptPassport(Request $request, Student $student)
     {
+        $request->validate(['process_type' => 'required|in:registration,visa']);
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
         $visaInfo->update([
+            $field => StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED,
             'passport_handed_over' => true,
             'passport_handed_at' => now(),
             'passport_received_by' => $this->currentUserId(),
         ]);
 
+        $this->notifyStudent($student, 'Pasportingiz qabul qilindi. Registratsiya jarayoni boshlandi.');
+
         return redirect()->route('admin.international-students.show', $student)
-            ->with('success', 'Pasport qabul qilindi.');
+            ->with('success', 'Pasport qabul qilindi. Jarayon boshlandi.');
+    }
+
+    /**
+     * Registratsiya qilinmoqda holatiga o'tkazish.
+     */
+    public function markRegistering(Request $request, Student $student)
+    {
+        $request->validate(['process_type' => 'required|in:registration,visa']);
+        $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
+
+        $visaInfo->update([$field => StudentVisaInfo::PROCESS_REGISTERING]);
+
+        $this->notifyStudent($student, 'Registratsiya jarayoni davom etmoqda.');
+
+        return redirect()->route('admin.international-students.show', $student)
+            ->with('success', 'Holat yangilandi: Registratsiya qilinmoqda.');
+    }
+
+    /**
+     * Pasportni qaytarish — talaba yangi ma'lumotlarni kiritishi kerak.
+     */
+    public function returnPassport(Request $request, Student $student)
+    {
+        $request->validate(['process_type' => 'required|in:registration,visa']);
+        $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $type = $request->process_type;
+
+        $updates = [
+            'passport_handed_over' => false,
+            'passport_handed_at' => null,
+            'passport_received_by' => null,
+        ];
+
+        if ($type === 'registration') {
+            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_DONE;
+            // Eski registratsiya ma'lumotlarini tozalash — talaba qaytadan kiritadi
+            $updates['registration_start_date'] = null;
+            $updates['registration_end_date'] = null;
+            $updates['registration_doc_path'] = null;
+        } else {
+            $updates['visa_process_status'] = StudentVisaInfo::PROCESS_DONE;
+            $updates['visa_start_date'] = null;
+            $updates['visa_end_date'] = null;
+            $updates['visa_number'] = null;
+            $updates['visa_scan_path'] = null;
+        }
+
+        // Status qaytadan pending qilish — talaba yangi ma'lumot kiritishi kerak
+        $updates['status'] = 'pending';
+
+        $visaInfo->update($updates);
+
+        $label = $type === 'registration' ? 'Propiska' : 'Viza';
+        $this->notifyStudent($student, "Pasportingiz qaytarildi. {$label} ma'lumotlaringizni qaytadan kiriting.");
+
+        return redirect()->route('admin.international-students.show', $student)
+            ->with('success', 'Pasport qaytarildi. Talaba yangi ma\'lumotlarni kiritishi kerak.');
+    }
+
+    private function notifyStudent(Student $student, string $message): void
+    {
+        StudentNotification::create([
+            'student_id' => $student->id,
+            'type' => 'system',
+            'title' => 'Viza/Registratsiya jarayoni',
+            'message' => $message,
+        ]);
+
+        if ($student->telegram_chat_id) {
+            app(TelegramService::class)->sendToUser($student->telegram_chat_id, $message);
+        }
     }
 
     public function showFile(Student $student, string $field)

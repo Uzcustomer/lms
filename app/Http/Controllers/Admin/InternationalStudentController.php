@@ -138,6 +138,17 @@ class InternationalStudentController extends Controller
         return view('admin.international-students.show', compact('student', 'visaInfo'));
     }
 
+    /**
+     * Hozirgi foydalanuvchi ID si (web yoki teacher guard).
+     */
+    private function currentUserId(): ?int
+    {
+        if (auth()->guard('web')->check()) {
+            return auth()->guard('web')->id();
+        }
+        return null;
+    }
+
     public function approve(Request $request, Student $student)
     {
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
@@ -145,7 +156,7 @@ class InternationalStudentController extends Controller
         $visaInfo->update([
             'status' => 'approved',
             'rejection_reason' => null,
-            'reviewed_by' => auth()->id(),
+            'reviewed_by' => $this->currentUserId(),
             'reviewed_at' => now(),
         ]);
 
@@ -182,7 +193,7 @@ class InternationalStudentController extends Controller
         $visaInfo->update([
             'status' => 'rejected',
             'rejection_reason' => $request->rejection_reason,
-            'reviewed_by' => auth()->id(),
+            'reviewed_by' => $this->currentUserId(),
             'reviewed_at' => now(),
         ]);
 
@@ -213,7 +224,7 @@ class InternationalStudentController extends Controller
         $visaInfo->update([
             'passport_handed_over' => true,
             'passport_handed_at' => now(),
-            'passport_received_by' => auth()->id(),
+            'passport_received_by' => $this->currentUserId(),
         ]);
 
         return redirect()->route('admin.international-students.show', $student)

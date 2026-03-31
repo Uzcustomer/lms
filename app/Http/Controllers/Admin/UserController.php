@@ -50,13 +50,14 @@ class UserController extends Controller
 
         $request->validate($rules);
 
+        $isFirmRole = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []));
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => bcrypt($request->password),
-            'assigned_firm' => in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []))
-                ? $request->assigned_firm
-                : null,
+            'assigned_firm' => $isFirmRole ? $request->assigned_firm : null,
+            'telegram_chat_id' => $isFirmRole ? $request->telegram_chat_id : null,
         ]);
 
         $user->syncRoles($request->roles);
@@ -86,12 +87,13 @@ class UserController extends Controller
 
         $oldRoles = $user->getRoleNames()->toArray();
 
+        $isFirmRole = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []));
+
         $user->update([
             'name' => $request->name,
             'email' => $request->email,
-            'assigned_firm' => in_array(ProjectRole::FIRM_RESPONSIBLE->value, $request->input('roles', []))
-                ? $request->assigned_firm
-                : null,
+            'assigned_firm' => $isFirmRole ? $request->assigned_firm : null,
+            'telegram_chat_id' => $isFirmRole ? $request->telegram_chat_id : $user->telegram_chat_id,
         ]);
 
         if ($request->filled('password')) {

@@ -151,14 +151,25 @@ class CheckVisaExpiryCommand extends Command
     }
 
     /**
-     * Firma javobgariga va registrator ofisi Telegram guruhiga xabar yuborish.
+     * Firma javobgariga va registrator ofisi xodimlariga xabar yuborish.
      */
     private function notifyFirmAndRegistrar(StudentVisaInfo $info, TelegramService $telegram, string $message): void
     {
-        // Registrator ofisi Telegram guruhiga
-        $registrarGroupId = config('services.telegram.registrar_group_id');
-        if ($registrarGroupId) {
-            $telegram->sendToUser($registrarGroupId, $message);
+        // Registrator ofisi xodimlariga sayt bildirishnomasi
+        $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
+        foreach ($registrarUsers as $regUser) {
+            \App\Models\Notification::create([
+                'sender_id' => null,
+                'sender_type' => null,
+                'recipient_id' => $regUser->id,
+                'recipient_type' => User::class,
+                'subject' => 'Talaba muddati yaqinlashmoqda',
+                'body' => $message,
+                'type' => 'alert',
+                'is_read' => false,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
         }
 
         // Firma javobgariga (assigned_firm bo'yicha)
@@ -168,7 +179,6 @@ class CheckVisaExpiryCommand extends Command
                 ->get();
 
             foreach ($firmUsers as $firmUser) {
-                // Saytda bildirishnoma (Notification model orqali)
                 \App\Models\Notification::create([
                     'sender_id' => null,
                     'sender_type' => null,
@@ -181,6 +191,11 @@ class CheckVisaExpiryCommand extends Command
                     'is_draft' => false,
                     'sent_at' => now(),
                 ]);
+
+                // Firma javobgariga Telegram xabar
+                if ($firmUser->telegram_chat_id) {
+                    $telegram->sendToUser($firmUser->telegram_chat_id, $message);
+                }
             }
         }
     }

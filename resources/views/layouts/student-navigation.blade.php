@@ -41,9 +41,11 @@
                         {{ __('Ishga joylashish') }}
                     </x-nav-link>
                     @endif
+                    @if(Auth::guard('student')->user()->citizenship_code && Auth::guard('student')->user()->citizenship_code !== 'UZ')
                     <x-nav-link :href="route('student.visa-info.index')" :active="request()->routeIs('student.visa-info.*')">
                         {{ __('Viza ma\'lumotlarim') }}
                     </x-nav-link>
+                    @endif
                 </div>
             </div>
 

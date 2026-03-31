@@ -27,6 +27,11 @@ class InternationalStudentsExport implements FromQuery, WithHeadings, ShouldAuto
     public function query()
     {
         $query = Student::where('department_name', 'like', '%alqaro%')
+            ->where(function ($q) {
+                $q->whereNull('citizenship_code')
+                  ->orWhere('citizenship_code', '')
+                  ->orWhere('citizenship_code', '!=', 'UZ');
+            })
             ->with('visaInfo');
 
         if (!empty($this->filters['search'])) {

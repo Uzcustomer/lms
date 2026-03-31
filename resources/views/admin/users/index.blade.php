@@ -9,7 +9,7 @@
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 bg-white border-b border-gray-200">
-                    @if( auth()->user()->hasRole(['admin']))
+                    @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
                         <div class="flex justify-end mb-4">
                             <a href="{{ route('admin.users.create') }}"
                                class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition duration-300">
@@ -33,7 +33,7 @@
                                     class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Foydalanuvchi Roli
                                 </th>
-                                @if( auth()->user()->hasRole(['admin']))
+                                @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
                                     <th scope="col"
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Amallar
@@ -52,7 +52,7 @@
                                             <span class="ml-1 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">{{ \App\Models\StudentVisaInfo::FIRM_OPTIONS[$user->assigned_firm] ?? $user->assigned_firm }}</span>
                                         @endif
                                     </td>
-                                    @if( auth()->user()->hasRole(['admin']))
+                                    @if( auth()->user()->hasRole(['superadmin', 'admin', 'kichik_admin']))
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <a href="{{ route('admin.users.edit', $user) }}"
                                            class="text-indigo-600 hover:text-indigo-900 mr-3">

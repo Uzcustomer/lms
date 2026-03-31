@@ -41,6 +41,9 @@
                         {{ __('Ishga joylashish') }}
                     </x-nav-link>
                     @endif
+                    <x-nav-link :href="route('student.visa-info.index')" :active="request()->routeIs('student.visa-info.*')">
+                        {{ __('Viza ma\'lumotlarim') }}
+                    </x-nav-link>
                 </div>
             </div>
 

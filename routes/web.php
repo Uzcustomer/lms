@@ -337,6 +337,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/specialties', [StaffRegistrationController::class, 'getSpecialties'])->name('specialties');
         });
 
+        // Xalqaro talabalar (registrator ofisi)
+        Route::prefix('international-students')->name('international-students.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'export'])->name('export');
+            Route::get('/{student}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'show'])->name('show');
+            Route::post('/{student}/approve', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'approve'])->name('approve');
+            Route::post('/{student}/reject', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'reject'])->name('reject');
+            Route::post('/{student}/confirm-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'confirmPassportHandover'])->name('confirm-passport');
+            Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showFile'])->name('file');
+        });
+
         // Bitiruvchi shartnomalar (registrator ofisi)
         Route::prefix('student-contracts')->name('student-contracts.')->group(function () {
             Route::get('/', [AdminStudentContractController::class, 'index'])->name('index');
@@ -763,6 +774,13 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/{contract}', [StudentContractCtrl::class, 'show'])->name('show');
             Route::get('/{contract}/download', [StudentContractCtrl::class, 'download'])->name('download');
             Route::delete('/{contract}', [StudentContractCtrl::class, 'destroy'])->name('destroy');
+        });
+
+        // Viza ma'lumotlari (xalqaro talabalar)
+        Route::prefix('visa-info')->name('visa-info.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'store'])->name('store');
+            Route::get('/file/{field}', [\App\Http\Controllers\Student\StudentVisaController::class, 'showFile'])->name('file');
         });
 
         // Pasport ma'lumotlari

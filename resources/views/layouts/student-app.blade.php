@@ -129,7 +129,7 @@
         elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
         elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
         elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
-        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.contracts.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons')) $activeTab = 'foydali';
+        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.contracts.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons') || request()->routeIs('student.visa-info.*')) $activeTab = 'foydali';
     @endphp
     <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
         <!-- Boshqalar popup overlay -->
@@ -169,6 +169,14 @@
                         </svg>
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Qayta topshirish') }}</span>
+                </a>
+                <a href="{{ route('student.visa-info.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.visa-info.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                    <div class="rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
+                        <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+                        </svg>
+                    </div>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Viza ma\'lumotlarim') }}</span>
                 </a>
             </div>
         </div>

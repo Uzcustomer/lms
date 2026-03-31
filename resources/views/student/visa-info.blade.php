@@ -1,0 +1,107 @@
+<x-student-app-layout>
+    <x-slot name="header">
+        <h2 class="font-semibold text-sm text-gray-800 leading-tight">
+            {{ __('Viza ma\'lumotlarim') }}
+        </h2>
+    </x-slot>
+
+    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 pb-6">
+        @if(session('success'))
+            <div class="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        @if(session('error'))
+            <div class="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                {{ session('error') }}
+            </div>
+        @endif
+
+        @if($errors->any())
+            <div class="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                <ul class="list-disc list-inside">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
+        {{-- Status badge --}}
+        @if($visaInfo)
+            <div class="mb-4">
+                @if($visaInfo->status === 'approved')
+                    <div class="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                        </svg>
+                        <span class="text-sm font-medium text-green-700">{{ __('Ma\'lumotlaringiz tasdiqlangan') }}</span>
+                    </div>
+                @elseif($visaInfo->status === 'rejected')
+                    <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <div class="flex items-center gap-2 mb-1">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            <span class="text-sm font-medium text-red-700">{{ __('Ma\'lumotlaringiz rad etilgan') }}</span>
+                        </div>
+                        @if($visaInfo->rejection_reason)
+                            <p class="text-sm text-red-600 ml-7">{{ __('Sabab') }}: {{ $visaInfo->rejection_reason }}</p>
+                        @endif
+                    </div>
+                @elseif($visaInfo->status === 'pending')
+                    <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
+                        <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span class="text-sm font-medium text-yellow-700">{{ __('Ma\'lumotlaringiz tekshirilmoqda') }}</span>
+                    </div>
+                @endif
+            </div>
+        @endif
+
+        <div class="bg-white shadow rounded-lg p-5 border border-gray-200" x-data="{ showForm: {{ ($errors->any() || !$visaInfo || $visaInfo->status === 'rejected') ? 'true' : 'false' }} }">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z"/>
+                    </svg>
+                    <h4 class="text-lg font-semibold text-gray-800">{{ __('Viza ma\'lumotlarim') }}</h4>
+                </div>
+
+                @if($visaInfo && $visaInfo->status !== 'rejected')
+                    <button @click="showForm = !showForm" type="button" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                        <span x-text="showForm ? 'Yopish' : 'Ko\'rish / Tahrirlash'"></span>
+                    </button>
+                @endif
+            </div>
+
+            {{-- Agar ma'lumotlar tasdiqlangan bo'lsa, faqat ko'rsatish --}}
+            @if($visaInfo && $visaInfo->status === 'approved')
+                <div x-show="showForm" x-transition>
+                    @include('student.partials.visa-info-readonly')
+                </div>
+            @else
+                <div x-show="showForm" x-transition>
+                    @include('student.partials.visa-info-form')
+                </div>
+            @endif
+        </div>
+    </div>
+
+<script>
+function checkPdfSize(input) {
+    var errorEl = input.closest('div').querySelector('[data-file-error]');
+    if (!errorEl) return;
+    if (input.files.length > 0 && input.files[0].size > 5 * 1024 * 1024) {
+        errorEl.textContent = 'Fayl hajmi 5MB dan oshmasligi kerak!';
+        errorEl.classList.remove('hidden');
+        input.value = '';
+    } else {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+}
+</script>
+</x-student-app-layout>

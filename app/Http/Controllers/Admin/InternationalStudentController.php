@@ -23,10 +23,7 @@ class InternationalStudentController extends Controller
      */
     private function internationalStudentsQuery()
     {
-        return Student::where('department_name', 'like', '%alqaro%')
-            ->where('citizenship_code', '!=', 'UZ')
-            ->where('citizenship_code', '!=', '')
-            ->whereNotNull('citizenship_code');
+        return Student::where('group_name', 'like', 'xd%');
     }
 
     public function index(Request $request)

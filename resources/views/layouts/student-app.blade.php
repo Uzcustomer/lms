@@ -104,7 +104,7 @@
         @php
             $visaStudent = auth()->guard('student')->user();
             $visaAlert = null;
-            $isInternational = $visaStudent && $visaStudent->citizenship_code && $visaStudent->citizenship_code !== 'UZ';
+            $isInternational = $visaStudent && str_starts_with(strtolower($visaStudent->group_name ?? ''), 'xd');
             if ($isInternational) {
                 $vi = \App\Models\StudentVisaInfo::where('student_id', $visaStudent->id)->first();
                 if ($vi) {
@@ -250,7 +250,7 @@
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Qayta topshirish') }}</span>
                 </a>
-                @if(auth()->guard('student')->user()?->citizenship_code && auth()->guard('student')->user()->citizenship_code !== 'UZ')
+                @if(str_starts_with(strtolower(auth()->guard('student')->user()?->group_name ?? ''), 'xd'))
                 <a href="{{ route('student.visa-info.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.visa-info.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
                     <div class="rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
                         <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">

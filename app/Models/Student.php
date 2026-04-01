@@ -19,7 +19,7 @@ class Student extends Authenticatable
 
     protected $fillable = [
         'hemis_id', 'full_name', 'short_name', 'first_name', 'second_name', 'third_name',
-        'image', 'student_id_number', 'birth_date', 'avg_gpa', 'avg_grade', 'total_credit',
+        'image', 'student_id_number', 'passport_number', 'passport_serial', 'birth_date', 'avg_gpa', 'avg_grade', 'total_credit',
         'university_code', 'university_name', 'gender_code', 'gender_name',
         'department_id', 'department_name', 'department_code',
         'specialty_id', 'specialty_name', 'specialty_code',

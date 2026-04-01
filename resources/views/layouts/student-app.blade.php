@@ -103,7 +103,7 @@
     @auth('student')
         @php
             $vs = auth()->guard('student')->user();
-            $isXd = $vs && str_starts_with(strtolower($vs->group_name ?? ''), 'xd');
+            $isXd = $vs && (str_starts_with(strtolower($vs->group_name ?? ''), 'xd') || ($vs->citizenship_code && $vs->citizenship_code !== '' && $vs->citizenship_code !== 'UZ'));
             $vi = $isXd ? \App\Models\StudentVisaInfo::where('student_id', $vs->id)->first() : null;
 
             $blockSite = false;      // Saytni to'liq bloklash
@@ -339,7 +339,8 @@
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Qayta topshirish') }}</span>
                 </a>
-                @if(str_starts_with(strtolower(auth()->guard('student')->user()?->group_name ?? ''), 'xd'))
+                @php $mobileStudent = auth()->guard('student')->user(); @endphp
+                @if($mobileStudent && (str_starts_with(strtolower($mobileStudent->group_name ?? ''), 'xd') || ($mobileStudent->citizenship_code && $mobileStudent->citizenship_code !== '' && $mobileStudent->citizenship_code !== 'UZ')))
                 <a href="{{ route('student.visa-info.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.visa-info.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
                     <div class="rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
                         <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">

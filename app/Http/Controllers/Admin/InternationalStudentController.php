@@ -19,11 +19,18 @@ class InternationalStudentController extends Controller
      * "Xalqaro ta'lim" so'zi bo'lgan yoki citizenship_code 'UZ' bo'lmagan talabalar.
      */
     /**
-     * Faqat Xalqaro ta'lim fakulteti talabalari.
+     * Xorijiy fuqarolar: xd guruhlar YOKI citizenship_code O'zbekiston bo'lmagan.
      */
     private function internationalStudentsQuery()
     {
-        return Student::where('group_name', 'like', 'xd%');
+        return Student::where(function ($q) {
+            $q->where('group_name', 'like', 'xd%')
+              ->orWhere(function ($q2) {
+                  $q2->whereNotNull('citizenship_code')
+                      ->where('citizenship_code', '!=', '')
+                      ->where('citizenship_code', '!=', 'UZ');
+              });
+        });
     }
 
     public function index(Request $request)

@@ -34,8 +34,7 @@ class FirmStudentsController extends Controller
             abort(403, 'Sizga firma biriktirilmagan.');
         }
 
-        $query = Student::where('group_name', 'like', 'xd%')
-            ->whereHas('visaInfo', fn($vq) => $vq->where('firm', $assignedFirm))
+        $query = Student::whereHas('visaInfo', fn($vq) => $vq->where('firm', $assignedFirm))
             ->with('visaInfo');
 
         if ($request->filled('search')) {

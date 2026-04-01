@@ -8,6 +8,7 @@ use App\Models\Student;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
 use App\Services\TelegramService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
@@ -352,6 +353,34 @@ class InternationalStudentController extends Controller
         if ($student->telegram_chat_id) {
             app(TelegramService::class)->sendToUser($student->telegram_chat_id, $message);
         }
+    }
+
+    /**
+     * Registratsiya talabnoma PDF yaratish.
+     */
+    public function registrationTalabnoma(Request $request)
+    {
+        $request->validate(['student_ids' => 'required|array|min:1']);
+        $students = Student::whereIn('id', $request->student_ids)->with('visaInfo')->get();
+
+        $pdf = Pdf::loadView('pdf.registration-talabnoma', compact('students'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->download('registratsiya_talabnoma_' . now()->format('Y_m_d') . '.pdf');
+    }
+
+    /**
+     * Viza talabnoma PDF yaratish.
+     */
+    public function visaTalabnoma(Request $request)
+    {
+        $request->validate(['student_ids' => 'required|array|min:1']);
+        $students = Student::whereIn('id', $request->student_ids)->with('visaInfo')->get();
+
+        $pdf = Pdf::loadView('pdf.visa-talabnoma', compact('students'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->download('viza_talabnoma_' . now()->format('Y_m_d') . '.pdf');
     }
 
     /**

@@ -195,7 +195,12 @@
                 error: function(xhr) {
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
-                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    var errMsg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                    try {
+                        var resp = JSON.parse(xhr.responseText);
+                        if (resp.error) errMsg = resp.error;
+                    } catch(e) {}
+                    $('#empty-state').show().find('p:first').text(errMsg);
                 }
             });
         }

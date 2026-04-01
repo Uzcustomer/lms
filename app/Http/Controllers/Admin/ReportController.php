@@ -5251,171 +5251,203 @@ class ReportController extends Controller
      */
     public function gradingTimeStatsData(Request $request)
     {
-        $dekanFacultyIds = get_dekan_faculty_ids();
-        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
-            $request->merge(['faculty' => $dekanFacultyIds[0]]);
-        }
-
-        $dateFrom = $request->filled('date_from') ? $request->date_from : null;
-        $dateTo = $request->filled('date_to') ? $request->date_to : null;
-
-        if (!$dateFrom || !$dateTo) {
-            return response()->json(['error' => 'Sana oralig\'ini tanlang'], 422);
-        }
-
-        // Faculty filter uchun department_hemis_id
-        $facultyDepartmentHemisId = null;
-        if ($request->filled('faculty')) {
-            $faculty = Department::find($request->faculty);
-            if ($faculty) {
-                $facultyDepartmentHemisId = $faculty->department_hemis_id;
+        try {
+            $dekanFacultyIds = get_dekan_faculty_ids();
+            if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+                $request->merge(['faculty' => $dekanFacultyIds[0]]);
             }
-        }
 
-        // Kafedra filter: subject_ids
-        $allowedSubjectIds = null;
-        if ($request->filled('department')) {
-            $allowedSubjectIds = DB::table('curriculum_subjects')
-                ->where('department_id', $request->department)
-                ->pluck('subject_id')
-                ->unique()
+            $dateFrom = $request->filled('date_from') ? $request->date_from : null;
+            $dateTo = $request->filled('date_to') ? $request->date_to : null;
+
+            if (!$dateFrom || !$dateTo) {
+                return response()->json(['error' => 'Sana oralig\'ini tanlang'], 422);
+            }
+
+            // Faculty filter uchun department_hemis_id
+            $facultyDepartmentHemisId = null;
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $facultyDepartmentHemisId = $faculty->department_hemis_id;
+                }
+            }
+
+            // Kafedra filter: subject_ids
+            $allowedSubjectIds = null;
+            if ($request->filled('department')) {
+                $allowedSubjectIds = DB::table('curriculum_subjects')
+                    ->where('department_id', $request->department)
+                    ->pluck('subject_id')
+                    ->unique()
+                    ->toArray();
+            }
+
+            // Fan filter
+            $subjectFilter = $request->filled('subject') ? $request->subject : null;
+
+            // Subject -> kafedra mapping (unique, bitta subject_id uchun bitta kafedra)
+            $subjectKafedraMap = DB::table('curriculum_subjects')
+                ->whereNotNull('department_id')
+                ->whereNotNull('department_name')
+                ->select('subject_id', 'department_id', 'department_name')
+                ->groupBy('subject_id', 'department_id', 'department_name')
+                ->get()
+                ->groupBy('subject_id')
+                ->map(fn($items) => $items->first());
+
+            // ===================== ATTENDANCE =====================
+            $attQuery = DB::table('attendances')
+                ->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
+
+            if ($facultyDepartmentHemisId) {
+                $attQuery->whereIn('student_hemis_id', function ($q) use ($facultyDepartmentHemisId) {
+                    $q->select('hemis_id')->from('students')
+                        ->where('department_id', $facultyDepartmentHemisId);
+                });
+            }
+            if ($allowedSubjectIds !== null) {
+                $attQuery->whereIn('subject_id', $allowedSubjectIds);
+            }
+            if ($subjectFilter) {
+                $attQuery->where('subject_id', $subjectFilter);
+            }
+
+            // Umumiy soat kesimida - attendance
+            $attHourly = (clone $attQuery)
+                ->select(DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
+                ->groupBy('hour')
+                ->orderBy('hour')
+                ->pluck('cnt', 'hour')
                 ->toArray();
+
+            // Fan kesimida - attendance
+            $attBySubject = (clone $attQuery)
+                ->select('subject_id', 'subject_name', DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
+                ->groupBy('subject_id', 'subject_name', 'hour')
+                ->orderBy('subject_name')
+                ->get();
+
+            // Kafedra kesimida - attendance (subject bo'yicha guruhlab, keyin kafedra ga map qilamiz)
+            $attBySubjectForKafedra = (clone $attQuery)
+                ->select('subject_id', DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
+                ->groupBy('subject_id', 'hour')
+                ->get();
+
+            $attByKafedra = $this->mapSubjectDataToKafedra($attBySubjectForKafedra, $subjectKafedraMap);
+
+            // ===================== GRADES =====================
+            $gradeQuery = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
+
+            if ($facultyDepartmentHemisId) {
+                $gradeQuery->whereIn('student_hemis_id', function ($q) use ($facultyDepartmentHemisId) {
+                    $q->select('hemis_id')->from('students')
+                        ->where('department_id', $facultyDepartmentHemisId);
+                });
+            }
+            if ($allowedSubjectIds !== null) {
+                $gradeQuery->whereIn('subject_id', $allowedSubjectIds);
+            }
+            if ($subjectFilter) {
+                $gradeQuery->where('subject_id', $subjectFilter);
+            }
+
+            // Umumiy soat kesimida - grades
+            $gradeHourly = (clone $gradeQuery)
+                ->select(DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
+                ->groupBy('hour')
+                ->orderBy('hour')
+                ->pluck('cnt', 'hour')
+                ->toArray();
+
+            // Fan kesimida - grades
+            $gradeBySubject = (clone $gradeQuery)
+                ->select('subject_id', 'subject_name', DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
+                ->groupBy('subject_id', 'subject_name', 'hour')
+                ->orderBy('subject_name')
+                ->get();
+
+            // Kafedra kesimida - grades
+            $gradeBySubjectForKafedra = (clone $gradeQuery)
+                ->select('subject_id', DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
+                ->groupBy('subject_id', 'hour')
+                ->get();
+
+            $gradeByKafedra = $this->mapSubjectDataToKafedra($gradeBySubjectForKafedra, $subjectKafedraMap);
+
+            // ========== Ma'lumotlarni formatlash ==========
+            $hours = range(0, 23);
+
+            // Umumiy
+            $attTotal = array_sum($attHourly);
+            $gradeTotal = array_sum($gradeHourly);
+
+            $overallAttendance = [];
+            $overallGrades = [];
+            foreach ($hours as $h) {
+                $overallAttendance[$h] = [
+                    'count' => $attHourly[$h] ?? 0,
+                    'percent' => $attTotal > 0 ? round(($attHourly[$h] ?? 0) / $attTotal * 100, 1) : 0,
+                ];
+                $overallGrades[$h] = [
+                    'count' => $gradeHourly[$h] ?? 0,
+                    'percent' => $gradeTotal > 0 ? round(($gradeHourly[$h] ?? 0) / $gradeTotal * 100, 1) : 0,
+                ];
+            }
+
+            // Fan kesimida
+            $subjectData = $this->formatGroupedTimeData($attBySubject, $gradeBySubject, 'subject_id', 'subject_name', $hours);
+
+            // Kafedra kesimida
+            $kafedraData = $this->formatGroupedTimeData($attByKafedra, $gradeByKafedra, 'department_id', 'department_name', $hours);
+
+            // Excel export
+            if ($request->get('export') === 'excel') {
+                return $this->exportGradingTimeStatsExcel(
+                    $overallAttendance, $overallGrades, $attTotal, $gradeTotal,
+                    $kafedraData, $subjectData, $hours, $dateFrom, $dateTo
+                );
+            }
+
+            return response()->json([
+                'overall' => [
+                    'attendance' => $overallAttendance,
+                    'grades' => $overallGrades,
+                    'attendance_total' => $attTotal,
+                    'grades_total' => $gradeTotal,
+                ],
+                'by_subject' => $subjectData,
+                'by_kafedra' => $kafedraData,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Xatolik: ' . $e->getMessage()], 500);
         }
+    }
 
-        // Fan filter
-        $subjectFilter = $request->filled('subject') ? $request->subject : null;
+    /**
+     * Subject bo'yicha guruhlab olingan ma'lumotlarni kafedra ga mapping qilish
+     */
+    private function mapSubjectDataToKafedra($subjectHourlyData, $subjectKafedraMap)
+    {
+        $kafedraData = [];
+        foreach ($subjectHourlyData as $row) {
+            $kafedra = $subjectKafedraMap[$row->subject_id] ?? null;
+            if (!$kafedra) continue;
 
-        // ===================== ATTENDANCE =====================
-        $attQuery = DB::table('attendances')
-            ->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
-
-        if ($facultyDepartmentHemisId) {
-            $attQuery->whereIn('student_hemis_id', function ($q) use ($facultyDepartmentHemisId) {
-                $q->select('hemis_id')->from('students')
-                    ->where('department_id', $facultyDepartmentHemisId);
-            });
+            $key = $kafedra->department_id . '|' . $row->hour;
+            if (!isset($kafedraData[$key])) {
+                $kafedraData[$key] = (object) [
+                    'department_id' => $kafedra->department_id,
+                    'department_name' => $kafedra->department_name,
+                    'hour' => $row->hour,
+                    'cnt' => 0,
+                ];
+            }
+            $kafedraData[$key]->cnt += $row->cnt;
         }
-        if ($allowedSubjectIds !== null) {
-            $attQuery->whereIn('subject_id', $allowedSubjectIds);
-        }
-        if ($subjectFilter) {
-            $attQuery->where('subject_id', $subjectFilter);
-        }
-
-        // Umumiy soat kesimida - attendance
-        $attHourly = (clone $attQuery)
-            ->select(DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
-            ->groupBy('hour')
-            ->orderBy('hour')
-            ->pluck('cnt', 'hour')
-            ->toArray();
-
-        // Fan kesimida - attendance
-        $attBySubject = (clone $attQuery)
-            ->select('subject_id', 'subject_name', DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
-            ->groupBy('subject_id', 'subject_name', 'hour')
-            ->orderBy('subject_name')
-            ->get();
-
-        // Kafedra kesimida - attendance
-        $attByKafedra = (clone $attQuery)
-            ->join('curriculum_subjects as cs', function ($join) {
-                $join->on('cs.subject_id', '=', 'attendances.subject_id');
-            })
-            ->whereNotNull('cs.department_id')
-            ->select('cs.department_id', 'cs.department_name', DB::raw('HOUR(attendances.created_at) as hour'), DB::raw('COUNT(DISTINCT attendances.id) as cnt'))
-            ->groupBy('cs.department_id', 'cs.department_name', 'hour')
-            ->orderBy('cs.department_name')
-            ->get();
-
-        // ===================== GRADES =====================
-        $gradeQuery = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
-
-        if ($facultyDepartmentHemisId) {
-            $gradeQuery->whereIn('student_hemis_id', function ($q) use ($facultyDepartmentHemisId) {
-                $q->select('hemis_id')->from('students')
-                    ->where('department_id', $facultyDepartmentHemisId);
-            });
-        }
-        if ($allowedSubjectIds !== null) {
-            $gradeQuery->whereIn('subject_id', $allowedSubjectIds);
-        }
-        if ($subjectFilter) {
-            $gradeQuery->where('subject_id', $subjectFilter);
-        }
-
-        // Umumiy soat kesimida - grades
-        $gradeHourly = (clone $gradeQuery)
-            ->select(DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
-            ->groupBy('hour')
-            ->orderBy('hour')
-            ->pluck('cnt', 'hour')
-            ->toArray();
-
-        // Fan kesimida - grades
-        $gradeBySubject = (clone $gradeQuery)
-            ->select('subject_id', 'subject_name', DB::raw('HOUR(created_at) as hour'), DB::raw('COUNT(*) as cnt'))
-            ->groupBy('subject_id', 'subject_name', 'hour')
-            ->orderBy('subject_name')
-            ->get();
-
-        // Kafedra kesimida - grades
-        $gradeByKafedra = (clone $gradeQuery)
-            ->join('curriculum_subjects as cs', function ($join) {
-                $join->on('cs.subject_id', '=', 'student_grades.subject_id');
-            })
-            ->whereNotNull('cs.department_id')
-            ->select('cs.department_id', 'cs.department_name', DB::raw('HOUR(student_grades.created_at) as hour'), DB::raw('COUNT(DISTINCT student_grades.id) as cnt'))
-            ->groupBy('cs.department_id', 'cs.department_name', 'hour')
-            ->orderBy('cs.department_name')
-            ->get();
-
-        // ========== Ma'lumotlarni formatlash ==========
-        $hours = range(0, 23);
-
-        // Umumiy
-        $attTotal = array_sum($attHourly);
-        $gradeTotal = array_sum($gradeHourly);
-
-        $overallAttendance = [];
-        $overallGrades = [];
-        foreach ($hours as $h) {
-            $overallAttendance[$h] = [
-                'count' => $attHourly[$h] ?? 0,
-                'percent' => $attTotal > 0 ? round(($attHourly[$h] ?? 0) / $attTotal * 100, 1) : 0,
-            ];
-            $overallGrades[$h] = [
-                'count' => $gradeHourly[$h] ?? 0,
-                'percent' => $gradeTotal > 0 ? round(($gradeHourly[$h] ?? 0) / $gradeTotal * 100, 1) : 0,
-            ];
-        }
-
-        // Fan kesimida
-        $subjectData = $this->formatGroupedTimeData($attBySubject, $gradeBySubject, 'subject_id', 'subject_name', $hours);
-
-        // Kafedra kesimida
-        $kafedraData = $this->formatGroupedTimeData($attByKafedra, $gradeByKafedra, 'department_id', 'department_name', $hours);
-
-        // Excel export
-        if ($request->get('export') === 'excel') {
-            return $this->exportGradingTimeStatsExcel(
-                $overallAttendance, $overallGrades, $attTotal, $gradeTotal,
-                $kafedraData, $subjectData, $hours, $dateFrom, $dateTo
-            );
-        }
-
-        return response()->json([
-            'overall' => [
-                'attendance' => $overallAttendance,
-                'grades' => $overallGrades,
-                'attendance_total' => $attTotal,
-                'grades_total' => $gradeTotal,
-            ],
-            'by_subject' => $subjectData,
-            'by_kafedra' => $kafedraData,
-        ]);
+        return collect(array_values($kafedraData));
     }
 
     private function formatGroupedTimeData($attRows, $gradeRows, $idField, $nameField, $hours)

@@ -34,6 +34,26 @@
                                 <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                                 <input type="text" name="group_name" value="{{ request('group_name') }}" placeholder="Guruh nomi" class="filter-input">
                             </div>
+                            <div class="filter-item" style="min-width:150px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Davlati</label>
+                                <select name="country" class="filter-input" style="padding:0 8px;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($countries as $c)
+                                        <option value="{{ $c }}" {{ request('country') === $c ? 'selected' : '' }}>{{ $c }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="filter-item" style="flex:1;min-width:180px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#047857;"></span> Fakultet</label>
+                                <select name="department" class="filter-input" style="padding:0 8px;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($departments as $d)
+                                        <option value="{{ $d->department_id }}" {{ request('department') == $d->department_id ? 'selected' : '' }}>{{ $d->department_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <div class="filter-row">
                             <div class="filter-item" style="min-width:140px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Firma</label>
                                 <select name="firm" class="filter-input" style="padding:0 8px;">
@@ -121,13 +141,13 @@
                     <table class="student-table">
                         <thead>
                             <tr>
-                                <th style="width:40px;text-align:center;">#</th>
+                                <th>HEMIS ID</th>
                                 <th>F.I.Sh</th>
+                                <th>Davlati</th>
+                                <th>Kurs</th>
                                 <th>Fakultet</th>
                                 <th>Yo'nalish</th>
                                 <th>Guruh</th>
-                                <th>Kurs</th>
-                                <th>Davlati</th>
                                 <th>Ma'lumot</th>
                                 <th>Reg. tugash</th>
                                 <th>Viza tugash</th>
@@ -146,20 +166,20 @@
                                     $isUrgent = ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15);
                                 @endphp
                                 <tr class="{{ $isUrgent ? 'int-row-urgent' : '' }}" onclick="window.location='{{ route('admin.international-students.show', $student) }}'" style="cursor:pointer;">
-                                    <td style="text-align:center;color:#94a3b8;font-size:12px;">{{ $students->firstItem() + $i }}</td>
+                                    <td style="color:#64748b;font-size:12px;">{{ $student->hemis_id }}</td>
                                     <td>
                                         <a href="{{ route('admin.international-students.show', $student) }}" class="student-name-link">{{ $student->full_name }}</a>
                                     </td>
-                                    <td><span class="text-cell text-emerald">{{ $student->department_name }}</span></td>
-                                    <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</span></td>
-                                    <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
-                                    <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
                                     <td>
                                         <span class="text-cell" style="font-weight:600;">{{ $student->country_name ?? '—' }}</span>
                                         @if($student->citizenship_name)
                                             <span style="font-size:10px;color:#94a3b8;">{{ $student->citizenship_name }}</span>
                                         @endif
                                     </td>
+                                    <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
+                                    <td><span class="text-cell text-emerald">{{ $student->department_name }}</span></td>
+                                    <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</span></td>
+                                    <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
                                     <td>
                                         @if($visa)
                                             <span class="int-status-pill int-status-green">

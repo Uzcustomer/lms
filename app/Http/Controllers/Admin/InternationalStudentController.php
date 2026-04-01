@@ -58,6 +58,14 @@ class InternationalStudentController extends Controller
             });
         }
 
+        if ($request->filled('country')) {
+            $query->where('country_name', $request->country);
+        }
+
+        if ($request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+
         if ($request->filled('data_status')) {
             if ($request->data_status === 'filled') {
                 $query->whereHas('visaInfo');
@@ -95,6 +103,11 @@ class InternationalStudentController extends Controller
 
         $firms = StudentVisaInfo::FIRM_OPTIONS;
 
+        // Davlatlar va fakultetlar (filtr uchun)
+        $baseQuery = $this->internationalStudentsQuery();
+        $countries = (clone $baseQuery)->whereNotNull('country_name')->where('country_name', '!=', '')->distinct()->pluck('country_name')->sort()->values();
+        $departments = (clone $baseQuery)->whereNotNull('department_name')->where('department_name', '!=', '')->select('department_id', 'department_name')->distinct()->get()->sortBy('department_name');
+
         // Statistika
         $intStudentIds = $this->internationalStudentsQuery()->pluck('id');
         $allVisas = StudentVisaInfo::whereIn('student_id', $intStudentIds);
@@ -131,7 +144,7 @@ class InternationalStudentController extends Controller
             'visaUrgentCount', 'regUrgentCount', 'expiredVisaCount', 'expiredRegCount'
         );
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments'));
     }
 
     public function show(Student $student)

@@ -485,6 +485,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/lesson-assignment/sync-schedules', [ReportController::class, 'syncSchedulesForReport'])->name('reports.lesson-assignment.sync-schedules');
         Route::get('/reports/lesson-assignment/sync-status', [ReportController::class, 'syncSchedulesStatus'])->name('reports.lesson-assignment.sync-status');
         Route::get('/reports/lesson-assignment/diagnostic', [ReportController::class, 'lessonAssignmentDiagnostic'])->name('reports.lesson-assignment.diagnostic');
+        Route::get('/reports/lesson-assignment/export-status', [ReportController::class, 'lessonAssignmentExportStatus'])->name('reports.lesson-assignment.export-status');
+        Route::get('/reports/lesson-assignment/export-download', [ReportController::class, 'lessonAssignmentExportDownload'])->name('reports.lesson-assignment.export-download');
 
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
         Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');

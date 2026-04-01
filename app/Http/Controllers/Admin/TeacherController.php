@@ -190,6 +190,7 @@ class TeacherController extends Controller
         $roles = $request->input('roles', []);
         $isDean = in_array(ProjectRole::DEAN->value, $roles);
         $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
+        $isFirmResponsible = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $roles);
 
         $request->validate([
             'roles' => 'nullable|array',
@@ -205,6 +206,16 @@ class TeacherController extends Controller
         ]);
 
         $teacher->lavozim = $request->input('lavozim') ?: null;
+        if ($isFirmResponsible) {
+            $firmValue = $request->input('assigned_firm');
+            // Agar "other" tanlangan va yangi firma nomi kiritilgan bo'lsa
+            if ($firmValue === 'other' && $request->filled('firm_custom_name')) {
+                $firmValue = $request->input('firm_custom_name');
+            }
+            $teacher->assigned_firm = $firmValue;
+        } else {
+            $teacher->assigned_firm = null;
+        }
         $teacher->save();
 
         try {

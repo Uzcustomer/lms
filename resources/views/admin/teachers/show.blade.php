@@ -489,6 +489,30 @@
                                 </div>
                             </div>
 
+                            {{-- Javobgar firma bo'limi --}}
+                            @php
+                                $isFirmChecked = in_array('javobgar_firma', $oldRoles);
+                                $firmOptions = \App\Models\StudentVisaInfo::FIRM_OPTIONS;
+                            @endphp
+                            <div id="firm-section" style="display: {{ $isFirmChecked ? 'block' : 'none' }}; margin-top: 10px;">
+                                <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
+                                    <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 6px;">Javobgar firma tanlang:</label>
+                                    <select name="assigned_firm" style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none;">
+                                        <option value="">Tanlang</option>
+                                        @foreach($firmOptions as $key => $label)
+                                            <option value="{{ $key }}" {{ old('assigned_firm', $teacher->assigned_firm) === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                        <option value="other" {{ old('assigned_firm', $teacher->assigned_firm) === 'other' ? 'selected' : '' }}>Boshqa</option>
+                                    </select>
+                                    <div style="margin-top: 8px;">
+                                        <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 4px;">Yangi firma nomi (ro'yxatda yo'q bo'lsa):</label>
+                                        <input type="text" name="firm_custom_name" value="{{ old('firm_custom_name') }}"
+                                               placeholder="Yangi firma nomini kiriting"
+                                               style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none;">
+                                    </div>
+                                </div>
+                            </div>
+
                             <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
                                 <button type="submit" class="btn btn-amber">
                                     <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -720,6 +744,16 @@
                 }
             } catch (e) {
                 console.error('toggleRole subject error:', e);
+            }
+
+            try {
+                var firmCheckbox = document.querySelector('input[value="javobgar_firma"]');
+                var firmSection = document.getElementById('firm-section');
+                if (firmSection && firmCheckbox) {
+                    firmSection.style.display = firmCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole firm error:', e);
             }
         }
 

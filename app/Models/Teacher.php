@@ -52,6 +52,7 @@ class Teacher extends Authenticatable
         'telegram_verified_at',
         'login_code',
         'login_code_expires_at',
+        'assigned_firm',
     ];
 
     protected $hidden = [

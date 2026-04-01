@@ -16,12 +16,13 @@
                 {{-- Filtrlar --}}
                 <form method="GET" action="{{ route('admin.international-students.index') }}">
                     <div class="filter-container">
+                        {{-- 1-qator: F.I.Sh, Kurs, Guruh, Davlati, Fakultet --}}
                         <div class="filter-row">
-                            <div class="filter-item" style="flex:1; min-width:200px;">
+                            <div class="filter-item" style="flex:2; min-width:180px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.Sh</label>
                                 <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism bo'yicha qidirish" class="filter-input">
                             </div>
-                            <div class="filter-item" style="min-width:120px;">
+                            <div class="filter-item" style="min-width:100px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
                                 <select name="level_code" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
@@ -30,11 +31,11 @@
                                     @endfor
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:150px;">
+                            <div class="filter-item" style="min-width:120px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                                 <input type="text" name="group_name" value="{{ request('group_name') }}" placeholder="Guruh nomi" class="filter-input">
                             </div>
-                            <div class="filter-item" style="min-width:150px;">
+                            <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Davlati</label>
                                 <select name="country" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
@@ -43,7 +44,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="filter-item" style="flex:1;min-width:180px;">
+                            <div class="filter-item" style="flex:1; min-width:160px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#047857;"></span> Fakultet</label>
                                 <select name="department" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
@@ -53,8 +54,9 @@
                                 </select>
                             </div>
                         </div>
+                        {{-- 2-qator: Firma, Holati, Viza tugash, Reg. tugash, Qidirish --}}
                         <div class="filter-row">
-                            <div class="filter-item" style="min-width:140px;">
+                            <div class="filter-item" style="min-width:120px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Firma</label>
                                 <select name="firm" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
@@ -64,7 +66,7 @@
                                     <option value="other" {{ request('firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:150px;">
+                            <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Holati</label>
                                 <select name="data_status" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
@@ -75,24 +77,22 @@
                                     <option value="rejected" {{ request('data_status') === 'rejected' ? 'selected' : '' }}>Rad etilgan</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="filter-row">
-                            <div class="filter-item" style="min-width:150px;">
+                            <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash</label>
                                 <select name="visa_expiry" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
-                                    <option value="15" {{ request('visa_expiry') == '15' ? 'selected' : '' }}>15 kun ichida</option>
-                                    <option value="20" {{ request('visa_expiry') == '20' ? 'selected' : '' }}>20 kun ichida</option>
-                                    <option value="30" {{ request('visa_expiry') == '30' ? 'selected' : '' }}>30 kun ichida</option>
+                                    <option value="15" {{ request('visa_expiry') == '15' ? 'selected' : '' }}>15 kun</option>
+                                    <option value="20" {{ request('visa_expiry') == '20' ? 'selected' : '' }}>20 kun</option>
+                                    <option value="30" {{ request('visa_expiry') == '30' ? 'selected' : '' }}>30 kun</option>
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width:160px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Registratsiya tugash</label>
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Reg. tugash</label>
                                 <select name="registration_expiry" class="filter-input" style="padding:0 8px;">
                                     <option value="">Barchasi</option>
-                                    <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun ichida</option>
-                                    <option value="5" {{ request('registration_expiry') == '5' ? 'selected' : '' }}>5 kun ichida</option>
-                                    <option value="7" {{ request('registration_expiry') == '7' ? 'selected' : '' }}>7 kun ichida</option>
+                                    <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun</option>
+                                    <option value="5" {{ request('registration_expiry') == '5' ? 'selected' : '' }}>5 kun</option>
+                                    <option value="7" {{ request('registration_expiry') == '7' ? 'selected' : '' }}>7 kun</option>
                                 </select>
                             </div>
                             <div class="filter-item" style="min-width:120px;">
@@ -256,9 +256,15 @@
                                                 $canAccept = in_array($rp, ['none','done']) && in_array($vp, ['none','done']);
                                             @endphp
                                             @if($vp === 'passport_accepted' || $vp === 'registering')
-                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#fef3c7;color:#92400e;">Viza yangilanmoqda</span>
+                                                <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
+                                                    @csrf <input type="hidden" name="process_type" value="visa">
+                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Viza yangilandi. Pasportni qaytarib, talaba yangi ma\'lumot kiritsinmi?')">Viza yangilandi</button>
+                                                </form>
                                             @elseif($rp === 'passport_accepted' || $rp === 'registering')
-                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#fef3c7;color:#92400e;">Reg. qilinmoqda</span>
+                                                <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
+                                                    @csrf <input type="hidden" name="process_type" value="registration">
+                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Registratsiya yangilandi. Pasportni qaytarib, talaba yangi ma\'lumot kiritsinmi?')">Reg. yangilandi</button>
+                                                </form>
                                             @elseif(!$visa->passport_handed_over && $canAccept)
                                                 <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
                                                     @csrf <input type="hidden" name="process_type" value="visa">

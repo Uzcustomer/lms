@@ -101,12 +101,16 @@
                                         @endif
                                     </td>
                                     <td class="px-4 py-3">
-                                        @if($student->visaInfo->status === 'approved')
-                                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">{{ __('Tasdiqlangan') }}</span>
-                                        @elseif($student->visaInfo->status === 'rejected')
-                                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">{{ __('Rad etilgan') }}</span>
+                                        @if($student->visaInfo)
+                                            @if($student->visaInfo->status === 'approved')
+                                                <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">{{ __('Tasdiqlangan') }}</span>
+                                            @elseif($student->visaInfo->status === 'rejected')
+                                                <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">{{ __('Rad etilgan') }}</span>
+                                            @else
+                                                <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">{{ __('Kutilmoqda') }}</span>
+                                            @endif
                                         @else
-                                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-700">{{ __('Kutilmoqda') }}</span>
+                                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">Kiritilmagan</span>
                                         @endif
                                     </td>
                                 </tr>

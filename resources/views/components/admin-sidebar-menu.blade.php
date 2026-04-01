@@ -587,6 +587,14 @@
             Baho qo'ymaganlar
         </a>
 
+        <a href="{{ route('admin.reports.grading-time-stats') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.grading-time-stats*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Vaqtlar statistikasi
+        </a>
+
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'buxgalteriya']))
         <a href="{{ route('admin.contracts.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.contracts.*') ? 'sidebar-active' : '' }}">

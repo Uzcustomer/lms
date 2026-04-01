@@ -418,11 +418,77 @@
             $('#table-body').html(html);
         }
 
+        var excelExportInterval = null;
+
         function downloadExcel() {
             var params = getFilters();
             params.export = 'excel';
             var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.lesson-assignment.data") }}?' + query;
+
+            // Tugmani disable qilish va yuklanish animatsiyasi
+            var $btn = $('#btn-excel');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;border-width:2px;"></span> <span id="excel-progress-text">Tayyorlanmoqda...</span>');
+
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.data") }}?' + query,
+                method: 'GET',
+                dataType: 'json',
+                success: function(res) {
+                    if (res.export_key) {
+                        // Background export boshlandi — statusni polling qilish
+                        pollExportStatus(res.export_key);
+                    }
+                },
+                error: function(xhr) {
+                    alert('Excel eksport xatosi: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                    resetExcelButton();
+                }
+            });
+        }
+
+        function pollExportStatus(exportKey) {
+            if (excelExportInterval) clearInterval(excelExportInterval);
+
+            excelExportInterval = setInterval(function() {
+                $.ajax({
+                    url: '{{ route("admin.reports.lesson-assignment.export-status") }}',
+                    method: 'GET',
+                    data: { export_key: exportKey },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.status === 'done') {
+                            clearInterval(excelExportInterval);
+                            excelExportInterval = null;
+                            $('#excel-progress-text').text('Yuklab olinmoqda...');
+                            // Faylni yuklab olish
+                            window.location.href = '{{ route("admin.reports.lesson-assignment.export-download") }}?export_key=' + encodeURIComponent(exportKey);
+                            setTimeout(resetExcelButton, 2000);
+                        } else if (res.status === 'failed') {
+                            clearInterval(excelExportInterval);
+                            excelExportInterval = null;
+                            alert('Excel eksport xatosi: ' + (res.message || 'Noma\'lum xato'));
+                            resetExcelButton();
+                        } else {
+                            // Hali ishlanmoqda
+                            var text = res.message || 'Ishlanmoqda...';
+                            if (res.percent > 0) {
+                                text += ' (' + res.percent + '%)';
+                            }
+                            $('#excel-progress-text').text(text);
+                        }
+                    },
+                    error: function() {
+                        clearInterval(excelExportInterval);
+                        excelExportInterval = null;
+                        alert('Eksport statusini tekshirishda xatolik');
+                        resetExcelButton();
+                    }
+                });
+            }, 2000); // Har 2 sekundda tekshirish
+        }
+
+        function resetExcelButton() {
+            $('#btn-excel').prop('disabled', false).html('<svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Excel');
         }
 
         function renderPagination(res) {

@@ -750,6 +750,11 @@ class ReportController extends Controller
 
     public function lessonAssignmentData(Request $request)
     {
+        // Excel export — darhol background job'ga yuborish (og'ir query'siz)
+        if ($request->get('export') === 'excel') {
+            return $this->startLessonAssignmentExport($request);
+        }
+
         // Dekan uchun fakultet majburiy filtr
         $dekanFacultyIds = get_dekan_faculty_ids();
         if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
@@ -1050,11 +1055,6 @@ class ReportController extends Controller
             return $sortDirection === 'desc' ? -$cmp : $cmp;
         });
 
-        // Excel export
-        if ($request->get('export') === 'excel') {
-            return $this->exportLessonAssignmentExcel($results);
-        }
-
         // Pagination
         $page = $request->get('page', 1);
         $perPage = $request->get('per_page', 50);
@@ -1137,6 +1137,100 @@ class ReportController extends Controller
         $spreadsheet->disconnectWorksheets();
 
         return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Excel eksportni background job sifatida boshlash
+     */
+    private function startLessonAssignmentExport(Request $request)
+    {
+        $exportKey = 'lesson_assignment_export_' . auth()->id() . '_' . md5(json_encode($request->all()));
+
+        // Agar allaqachon ishlab turgan export bo'lsa, uning statusini qaytarish
+        $existing = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if ($existing && $existing['status'] === 'running') {
+            return response()->json([
+                'export_key' => $exportKey,
+                'status' => 'running',
+                'message' => $existing['message'] ?? 'Ishlanmoqda...',
+                'percent' => $existing['percent'] ?? 0,
+            ]);
+        }
+
+        $filters = $request->only([
+            'education_type', 'faculty', 'specialty', 'level_code', 'semester_code',
+            'department', 'subject', 'group', 'date_from', 'date_to',
+            'current_semester', 'status_filter', 'sort', 'direction',
+        ]);
+
+        // Dekan uchun fakultet majburiy filtr
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && empty($filters['faculty'])) {
+            $filters['faculty'] = $dekanFacultyIds[0];
+        }
+
+        \Illuminate\Support\Facades\Cache::put($exportKey, [
+            'status' => 'running',
+            'message' => 'Navbatga qo\'shilmoqda...',
+            'percent' => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 1800);
+
+        \App\Jobs\ExportLessonAssignmentJob::dispatch($filters, $exportKey);
+
+        return response()->json([
+            'export_key' => $exportKey,
+            'status' => 'running',
+            'message' => 'Eksport boshlandi',
+        ]);
+    }
+
+    /**
+     * Excel eksport statusini tekshirish
+     */
+    public function lessonAssignmentExportStatus(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['status' => 'error', 'message' => 'Export key topilmadi'], 400);
+        }
+
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data) {
+            return response()->json(['status' => 'error', 'message' => 'Eksport topilmadi yoki muddati tugagan']);
+        }
+
+        return response()->json($data);
+    }
+
+    /**
+     * Tayyor Excel faylni yuklab olish
+     */
+    public function lessonAssignmentExportDownload(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return abort(400, 'Export key topilmadi');
+        }
+
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data || $data['status'] !== 'done' || empty($data['file_path'])) {
+            return abort(404, 'Fayl topilmadi yoki hali tayyor emas');
+        }
+
+        $filePath = $data['file_path'];
+        if (!file_exists($filePath)) {
+            return abort(404, 'Fayl serverda topilmadi');
+        }
+
+        $fileName = basename($filePath);
+
+        // Cache'dan tozalash
+        \Illuminate\Support\Facades\Cache::forget($exportKey);
+
+        return response()->download($filePath, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
     }

@@ -45,6 +45,7 @@ class StudentVisaController extends Controller
         };
 
         $request->validate([
+            'passport_number' => 'required|string|max:50',
             'passport_issued_place' => 'required|string|max:255',
             'passport_issued_date' => 'required|date',
             'passport_expiry_date' => 'required|date|after:passport_issued_date',
@@ -66,6 +67,7 @@ class StudentVisaController extends Controller
             'registration_doc' => $fileRule('registration_doc_path'),
             'agreement_accepted' => 'accepted',
         ], [
+            'passport_number.required' => 'Pasport raqamini kiriting.',
             'passport_issued_place.required' => 'Pasport berilgan joyni kiriting.',
             'passport_issued_date.required' => 'Pasport berilgan sanani kiriting.',
             'passport_expiry_date.required' => 'Pasport muddati tugash sanasini kiriting.',
@@ -98,7 +100,7 @@ class StudentVisaController extends Controller
         ]);
 
         $data = $request->only([
-            'passport_issued_place', 'passport_issued_date', 'passport_expiry_date',
+            'passport_number', 'passport_issued_place', 'passport_issued_date', 'passport_expiry_date',
             'registration_start_date', 'registration_end_date',
             'visa_number', 'visa_type', 'visa_start_date', 'visa_end_date',
             'visa_entries_count', 'visa_stay_days', 'visa_issued_place', 'visa_issued_date',
@@ -110,7 +112,6 @@ class StudentVisaController extends Controller
         $data['birth_region'] = $student->province_name;
         $data['birth_city'] = $student->district_name;
         $data['birth_date'] = $student->birth_date;
-        $data['passport_number'] = trim(($student->passport_serial ?? '') . ($student->passport_number ?? ''));
         $data['agreement_accepted'] = true;
         $data['status'] = 'pending';
         $data['rejection_reason'] = null;

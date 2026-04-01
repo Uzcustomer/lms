@@ -239,7 +239,22 @@
                                         @endif
                                     </td>
                                     <td style="text-align:center;">
-                                        <a href="{{ route('admin.international-students.show', $student) }}" class="btn-action btn-action-blue" style="text-decoration:none;">Ko'rish</a>
+                                        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+                                            <a href="{{ route('admin.international-students.show', $student) }}" class="btn-action btn-action-blue" style="text-decoration:none;">Ko'rish</a>
+                                            @if($visa && !$visa->passport_handed_over)
+                                                @php
+                                                    $rp = $visa->registration_process_status ?? 'none';
+                                                    $vp = $visa->visa_process_status ?? 'none';
+                                                    $canAccept = in_array($rp, ['none','done']) || in_array($vp, ['none','done']);
+                                                @endphp
+                                                @if($canAccept)
+                                                    <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}" onclick="event.stopPropagation();">
+                                                        @csrf <input type="hidden" name="process_type" value="visa">
+                                                        <button type="submit" class="btn-action" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:10px;" onclick="return confirm('Pasportni qabul qilasizmi?')">Pasport olish</button>
+                                                    </form>
+                                                @endif
+                                            @endif
+                                        </div>
                                     </td>
                                 </tr>
                             @empty

@@ -140,8 +140,18 @@
                         if ($regDone && !$vi->registration_end_date) $needFill[] = 'registratsiya';
                         if ($visDone && !$vi->visa_end_date) $needFill[] = 'viza';
                         if (count($needFill) > 0) {
-                            $showFillModal = !$onVisaPage;
-                            $topBanner = ['level' => 'warning', 'msg' => 'Yangi ' . implode(' va ', $needFill) . ' ma\'lumotlaringizni kiriting!'];
+                            // Muddat tekshirish — 3 kun o'tgan bo'lsa bloklash
+                            $deadline = $vi->visa_info_deadline;
+                            $deadlinePassed = $deadline && now()->greaterThan($deadline);
+                            if ($deadlinePassed) {
+                                $blockSite = !$onVisaPage;
+                                $topBanner = ['level' => 'danger', 'msg' => 'Yangi ' . implode(' va ', $needFill) . ' ma\'lumotlaringizni kiritish muddati tugadi! Iltimos, zudlik bilan kiriting.'];
+                            } else {
+                                $showFillModal = !$onVisaPage;
+                                $daysToDeadline = $deadline ? (int) now()->startOfDay()->diffInDays($deadline, false) : null;
+                                $daysText = $daysToDeadline !== null ? " ({$daysToDeadline} kun qoldi)" : '';
+                                $topBanner = ['level' => 'warning', 'msg' => 'Yangi ' . implode(' va ', $needFill) . " ma'lumotlaringizni kiriting!{$daysText}"];
+                            }
                         }
                     }
                     // 3. Muddati tugagan — bloklash

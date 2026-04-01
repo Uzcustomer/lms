@@ -123,10 +123,13 @@
                             <tr>
                                 <th style="width:40px;text-align:center;">#</th>
                                 <th>F.I.Sh</th>
+                                <th>Fakultet</th>
+                                <th>Yo'nalish</th>
                                 <th>Guruh</th>
                                 <th>Kurs</th>
+                                <th>Davlati</th>
                                 <th>Ma'lumot</th>
-                                <th>Registratsiya tugash</th>
+                                <th>Reg. tugash</th>
                                 <th>Viza tugash</th>
                                 <th>Firma</th>
                                 <th>Holat</th>
@@ -147,8 +150,11 @@
                                     <td>
                                         <a href="{{ route('admin.international-students.show', $student) }}" class="student-name-link">{{ $student->full_name }}</a>
                                     </td>
+                                    <td><span class="text-cell text-emerald">{{ $student->department_name }}</span></td>
+                                    <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</span></td>
                                     <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
                                     <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
+                                    <td><span class="text-cell">{{ $student->citizenship_name ?? '—' }}</span></td>
                                     <td>
                                         @if($visa)
                                             <span class="int-status-pill int-status-green">
@@ -245,7 +251,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="11" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">Talabalar topilmadi</td>
+                                    <td colspan="14" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">Talabalar topilmadi</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -305,6 +311,8 @@
     .student-name-link { color: #1e40af; font-weight: 700; text-decoration: none; transition: all 0.15s; }
     .student-name-link:hover { color: #2b5ea7; text-decoration: underline; }
     .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
+    .text-emerald { color: #047857; }
+    .text-cyan { color: #0e7490; max-width: 180px; white-space: normal; word-break: break-word; }
 
     .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
     .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }

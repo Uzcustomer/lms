@@ -131,7 +131,7 @@
                                 <th>Holat</th>
                                 <th style="text-align:center;">Pasport</th>
                                 <th>Jarayon</th>
-                                <th style="text-align:center;">Amallar</th>
+                                <th style="text-align:center;">Amal</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -142,7 +142,7 @@
                                     $visaDays = $visa?->visaDaysLeft();
                                     $isUrgent = ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15);
                                 @endphp
-                                <tr class="{{ $isUrgent ? 'int-row-urgent' : '' }}">
+                                <tr class="{{ $isUrgent ? 'int-row-urgent' : '' }}" onclick="window.location='{{ route('admin.international-students.show', $student) }}'" style="cursor:pointer;">
                                     <td style="text-align:center;color:#94a3b8;font-size:12px;">{{ $students->firstItem() + $i }}</td>
                                     <td>
                                         <a href="{{ route('admin.international-students.show', $student) }}" class="student-name-link">{{ $student->full_name }}</a>
@@ -238,23 +238,22 @@
                                             <span style="color:#cbd5e1;">—</span>
                                         @endif
                                     </td>
-                                    <td style="text-align:center;">
-                                        <div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
-                                            <a href="{{ route('admin.international-students.show', $student) }}" class="btn-action btn-action-blue" style="text-decoration:none;">Ko'rish</a>
-                                            @if($visa && !$visa->passport_handed_over)
-                                                @php
-                                                    $rp = $visa->registration_process_status ?? 'none';
-                                                    $vp = $visa->visa_process_status ?? 'none';
-                                                    $canAccept = in_array($rp, ['none','done']) || in_array($vp, ['none','done']);
-                                                @endphp
-                                                @if($canAccept)
-                                                    <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}" onclick="event.stopPropagation();">
-                                                        @csrf <input type="hidden" name="process_type" value="visa">
-                                                        <button type="submit" class="btn-action" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:10px;" onclick="return confirm('Pasportni qabul qilasizmi?')">Pasport olish</button>
-                                                    </form>
-                                                @endif
+                                    <td style="text-align:center;" onclick="event.stopPropagation();">
+                                        @if($visa && !$visa->passport_handed_over)
+                                            @php
+                                                $canAccept = in_array($visa->registration_process_status ?? 'none', ['none','done']) || in_array($visa->visa_process_status ?? 'none', ['none','done']);
+                                            @endphp
+                                            @if($canAccept)
+                                                <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
+                                                    @csrf <input type="hidden" name="process_type" value="visa">
+                                                    <button type="submit" class="btn-action" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:10px;" onclick="return confirm('Pasportni qabul qilasizmi?')">Pasport olish</button>
+                                                </form>
                                             @endif
-                                        </div>
+                                        @elseif($visa && $visa->passport_handed_over)
+                                            <span style="font-size:10px;color:#16a34a;font-weight:600;">Qabul qilingan</span>
+                                        @else
+                                            <span style="color:#cbd5e1;">—</span>
+                                        @endif
                                     </td>
                                 </tr>
                             @empty

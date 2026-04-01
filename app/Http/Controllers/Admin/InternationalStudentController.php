@@ -227,14 +227,17 @@ class InternationalStudentController extends Controller
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
         $updates = [
-            $field => StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED,
             'passport_handed_over' => true,
             'passport_handed_at' => now(),
             'passport_received_by' => $this->currentUserId(),
         ];
 
-        // Viza ustun: agar viza uchun pasport qabul qilinsa, registratsiya ham birga
-        if ($request->process_type === 'visa') {
+        // Ustun mavjudligini tekshirish
+        $columns = \Schema::getColumnListing('student_visa_infos');
+        if (in_array($field, $columns)) {
+            $updates[$field] = StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED;
+        }
+        if ($request->process_type === 'visa' && in_array('registration_process_status', $columns)) {
             $updates['registration_process_status'] = StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED;
         }
 

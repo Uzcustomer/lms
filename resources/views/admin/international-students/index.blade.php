@@ -141,7 +141,7 @@
                     <table class="student-table">
                         <thead>
                             <tr>
-                                <th>HEMIS ID</th>
+                                <th>Talaba ID</th>
                                 <th>F.I.Sh</th>
                                 <th>Davlati</th>
                                 <th>Kurs</th>
@@ -166,7 +166,7 @@
                                     $isUrgent = ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15);
                                 @endphp
                                 <tr class="{{ $isUrgent ? 'int-row-urgent' : '' }}" onclick="window.location='{{ route('admin.international-students.show', $student) }}'" style="cursor:pointer;">
-                                    <td style="color:#64748b;font-size:12px;">{{ $student->hemis_id }}</td>
+                                    <td style="color:#64748b;font-size:12px;">{{ $student->student_id_number }}</td>
                                     <td>
                                         <a href="{{ route('admin.international-students.show', $student) }}" class="student-name-link">{{ $student->full_name }}</a>
                                     </td>

@@ -5264,8 +5264,10 @@ class ReportController extends Controller
                 return response()->json(['error' => 'Sana oralig\'ini tanlang'], 422);
             }
 
-            // Tashkent UTC+5 uchun soat hisoblash
-            $hourExpr = "HOUR(DATE_ADD(created_at, INTERVAL 5 HOUR))";
+            // student_grades uchun created_at_api (haqiqiy baho qo'yilgan vaqt)
+            // attendances uchun updated_at (oxirgi yangilangan vaqt - import/sinxron paytida)
+            $gradeHourExpr = "HOUR(created_at_api)";
+            $attHourExpr = "HOUR(updated_at)";
 
             // Faculty filter uchun department_hemis_id
             $facultyDepartmentHemisId = null;
@@ -5306,7 +5308,7 @@ class ReportController extends Controller
 
             // ===================== ATTENDANCE =====================
             $attQuery = DB::table('attendances')
-                ->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
+                ->whereBetween('updated_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
 
             if ($facultyDepartmentHemisId) {
                 $attQuery->whereIn('student_hemis_id', function ($q) use ($facultyDepartmentHemisId) {
@@ -5323,7 +5325,7 @@ class ReportController extends Controller
 
             // Umumiy soat kesimida - attendance
             $attHourly = (clone $attQuery)
-                ->select(DB::raw("{$hourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
+                ->select(DB::raw("{$attHourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
                 ->groupBy('hour')
                 ->orderBy('hour')
                 ->pluck('cnt', 'hour')
@@ -5331,14 +5333,14 @@ class ReportController extends Controller
 
             // Fan kesimida - attendance
             $attBySubject = (clone $attQuery)
-                ->select('subject_id', 'subject_name', DB::raw("{$hourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
+                ->select('subject_id', 'subject_name', DB::raw("{$attHourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
                 ->groupBy('subject_id', 'subject_name', 'hour')
                 ->orderBy('subject_name')
                 ->get();
 
             // Kafedra kesimida - attendance
             $attBySubjectForKafedra = (clone $attQuery)
-                ->select('subject_id', DB::raw("{$hourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
+                ->select('subject_id', DB::raw("{$attHourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
                 ->groupBy('subject_id', 'hour')
                 ->get();
 
@@ -5347,7 +5349,7 @@ class ReportController extends Controller
             // ===================== GRADES =====================
             $gradeQuery = DB::table('student_grades')
                 ->whereNull('deleted_at')
-                ->whereBetween('created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
+                ->whereBetween('created_at_api', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
 
             if ($facultyDepartmentHemisId) {
                 $gradeQuery->whereIn('student_hemis_id', function ($q) use ($facultyDepartmentHemisId) {
@@ -5364,7 +5366,7 @@ class ReportController extends Controller
 
             // Umumiy soat kesimida - grades
             $gradeHourly = (clone $gradeQuery)
-                ->select(DB::raw("{$hourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
+                ->select(DB::raw("{$gradeHourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
                 ->groupBy('hour')
                 ->orderBy('hour')
                 ->pluck('cnt', 'hour')
@@ -5372,14 +5374,14 @@ class ReportController extends Controller
 
             // Fan kesimida - grades
             $gradeBySubject = (clone $gradeQuery)
-                ->select('subject_id', 'subject_name', DB::raw("{$hourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
+                ->select('subject_id', 'subject_name', DB::raw("{$gradeHourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
                 ->groupBy('subject_id', 'subject_name', 'hour')
                 ->orderBy('subject_name')
                 ->get();
 
             // Kafedra kesimida - grades
             $gradeBySubjectForKafedra = (clone $gradeQuery)
-                ->select('subject_id', DB::raw("{$hourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
+                ->select('subject_id', DB::raw("{$gradeHourExpr} as hour"), DB::raw('COUNT(*) as cnt'))
                 ->groupBy('subject_id', 'hour')
                 ->get();
 
@@ -5545,7 +5547,7 @@ class ReportController extends Controller
         $gradeQuery = DB::table('student_grades as sg')
             ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
-            ->whereBetween('sg.created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
+            ->whereBetween('sg.created_at_api', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
             ->select(
                 's.full_name',
                 's.department_name as faculty_name',
@@ -5558,10 +5560,10 @@ class ReportController extends Controller
                 'sg.subject_id',
                 'sg.grade',
                 DB::raw("DATE(sg.lesson_date) as lesson_date"),
-                DB::raw("DATE(DATE_ADD(sg.created_at, INTERVAL 5 HOUR)) as graded_date"),
-                DB::raw("TIME(DATE_ADD(sg.created_at, INTERVAL 5 HOUR)) as graded_time")
+                DB::raw("DATE(sg.created_at_api) as graded_date"),
+                DB::raw("TIME(sg.created_at_api) as graded_time")
             )
-            ->orderBy('sg.created_at');
+            ->orderBy('sg.created_at_api');
 
         if ($facultyDepartmentHemisId) {
             $gradeQuery->where('s.department_id', $facultyDepartmentHemisId);
@@ -5618,7 +5620,7 @@ class ReportController extends Controller
 
         $attQuery = DB::table('attendances as a')
             ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
-            ->whereBetween('a.created_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
+            ->whereBetween('a.updated_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
             ->select(
                 's.full_name',
                 's.department_name as faculty_name',
@@ -5630,10 +5632,10 @@ class ReportController extends Controller
                 'a.employee_name',
                 'a.subject_id',
                 DB::raw("DATE(a.lesson_date) as lesson_date"),
-                DB::raw("DATE(DATE_ADD(a.created_at, INTERVAL 5 HOUR)) as att_date"),
-                DB::raw("TIME(DATE_ADD(a.created_at, INTERVAL 5 HOUR)) as att_time")
+                DB::raw("DATE(a.updated_at) as att_date"),
+                DB::raw("TIME(a.updated_at) as att_time")
             )
-            ->orderBy('a.created_at');
+            ->orderBy('a.updated_at');
 
         if ($facultyDepartmentHemisId) {
             $attQuery->where('s.department_id', $facultyDepartmentHemisId);

@@ -41,7 +41,8 @@
                         {{ __('Ishga joylashish') }}
                     </x-nav-link>
                     @endif
-                    @if(str_starts_with(strtolower(Auth::guard('student')->user()->group_name ?? ''), 'xd'))
+                    @php $navStudent = Auth::guard('student')->user(); @endphp
+                    @if(str_starts_with(strtolower($navStudent->group_name ?? ''), 'xd') || ($navStudent->citizenship_code && $navStudent->citizenship_code !== '' && $navStudent->citizenship_code !== 'UZ'))
                     <x-nav-link :href="route('student.visa-info.index')" :active="request()->routeIs('student.visa-info.*')">
                         {{ __('Viza ma\'lumotlarim') }}
                     </x-nav-link>

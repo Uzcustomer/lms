@@ -131,6 +131,9 @@
         </a>
         @endif
 
+        {{-- Javobgar firma roli uchun faqat 'Firma talabalari' ko'rinadi, qolganlar yashiriladi --}}
+        @if(!$hasActiveRole('javobgar_firma'))
+
         @if(($isTeacher || $hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oqituvchi', 'kafedra_mudiri', 'fan_masuli'])) && !$hasActiveRole('oquv_bolimi'))
         <a href="{{ route('admin.journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.journal.*') ? 'sidebar-active' : '' }}">
@@ -685,6 +688,8 @@
             DB ma'lumotlar
         </a>
         @endif
+
+        @endif {{-- end if !javobgar_firma --}}
 
     </nav>
 

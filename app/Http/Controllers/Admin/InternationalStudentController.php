@@ -282,32 +282,43 @@ class InternationalStudentController extends Controller
             'passport_handed_over' => false,
             'passport_handed_at' => null,
             'passport_received_by' => null,
+            'status' => 'pending',
+            'visa_info_deadline' => now()->addDays(3), // 3 kun ichida to'ldirishi kerak
         ];
 
-        if ($type === 'registration') {
+        if ($type === 'visa') {
+            // Viza qaytarilganda registratsiya ham birga yangilanadi
+            $updates['visa_process_status'] = StudentVisaInfo::PROCESS_DONE;
             $updates['registration_process_status'] = StudentVisaInfo::PROCESS_DONE;
-            // Eski registratsiya ma'lumotlarini tozalash — talaba qaytadan kiritadi
+            $updates['visa_start_date'] = null;
+            $updates['visa_end_date'] = null;
+            $updates['visa_number'] = null;
+            $updates['visa_type'] = null;
+            $updates['visa_scan_path'] = null;
             $updates['registration_start_date'] = null;
             $updates['registration_end_date'] = null;
             $updates['registration_doc_path'] = null;
         } else {
-            $updates['visa_process_status'] = StudentVisaInfo::PROCESS_DONE;
-            $updates['visa_start_date'] = null;
-            $updates['visa_end_date'] = null;
-            $updates['visa_number'] = null;
-            $updates['visa_scan_path'] = null;
+            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_DONE;
+            $updates['registration_start_date'] = null;
+            $updates['registration_end_date'] = null;
+            $updates['registration_doc_path'] = null;
         }
 
-        // Status qaytadan pending qilish — talaba yangi ma'lumot kiritishi kerak
-        $updates['status'] = 'pending';
+        // Eski fayllarni diskdan o'chirish
+        foreach (['visa_scan_path', 'registration_doc_path'] as $fileField) {
+            if (isset($updates[$fileField]) && $updates[$fileField] === null && $visaInfo->$fileField) {
+                \Storage::disk('public')->delete($visaInfo->$fileField);
+            }
+        }
 
         $visaInfo->update($updates);
 
-        $label = $type === 'registration' ? 'Registratsiya' : 'Viza';
-        $this->notifyStudent($student, "Pasportingiz qaytarildi. {$label} ma'lumotlaringizni qaytadan kiriting.");
+        $label = $type === 'visa' ? 'Viza va registratsiya' : 'Registratsiya';
+        $this->notifyStudent($student, "Pasportingiz qaytarildi. {$label} ma'lumotlaringizni 3 kun ichida qaytadan kiriting!");
 
         return redirect()->route('admin.international-students.show', $student)
-            ->with('success', 'Pasport qaytarildi. Talaba yangi ma\'lumotlarni kiritishi kerak.');
+            ->with('success', 'Pasport qaytarildi. Talabaga 3 kunlik muddat berildi.');
     }
 
     private function notifyStudent(Student $student, string $message): void

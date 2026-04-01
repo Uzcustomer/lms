@@ -5398,6 +5398,14 @@ class ReportController extends Controller
         // Kafedra kesimida
         $kafedraData = $this->formatGroupedTimeData($attByKafedra, $gradeByKafedra, 'department_id', 'department_name', $hours);
 
+        // Excel export
+        if ($request->get('export') === 'excel') {
+            return $this->exportGradingTimeStatsExcel(
+                $overallAttendance, $overallGrades, $attTotal, $gradeTotal,
+                $kafedraData, $subjectData, $hours, $dateFrom, $dateTo
+            );
+        }
+
         return response()->json([
             'overall' => [
                 'attendance' => $overallAttendance,
@@ -5473,5 +5481,154 @@ class ReportController extends Controller
         usort($result, fn($a, $b) => strcmp($a['name'], $b['name']));
 
         return $result;
+    }
+
+    private function exportGradingTimeStatsExcel($overallAtt, $overallGrades, $attTotal, $gradeTotal, $kafedraData, $subjectData, $hours, $dateFrom, $dateTo)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER, 'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+        ];
+        $borderStyle = [
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+        ];
+
+        // ========== Sheet 1: Umumiy ==========
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Umumiy');
+
+        $sheet->setCellValue('A1', "Davomat va baho qo'yish vaqtlari ({$dateFrom} — {$dateTo})");
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+        $sheet->mergeCells('A1:E1');
+
+        $sheet->setCellValue('A2', "Jami davomat: " . number_format($attTotal));
+        $sheet->setCellValue('C2', "Jami baho: " . number_format($gradeTotal));
+        $sheet->getStyle('A2:E2')->getFont()->setBold(true);
+
+        $row = 4;
+        $headers = ['Soat', 'Davomat soni', 'Davomat %', 'Baho soni', 'Baho %'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, $row], $header);
+        }
+        $sheet->getStyle("A{$row}:E{$row}")->applyFromArray($headerStyle);
+
+        foreach ($hours as $h) {
+            $row++;
+            $att = $overallAtt[$h] ?? ['count' => 0, 'percent' => 0];
+            $gr = $overallGrades[$h] ?? ['count' => 0, 'percent' => 0];
+            $sheet->setCellValue([1, $row], sprintf('%02d:00', $h));
+            $sheet->setCellValue([2, $row], $att['count']);
+            $sheet->setCellValue([3, $row], $att['percent'] . '%');
+            $sheet->setCellValue([4, $row], $gr['count']);
+            $sheet->setCellValue([5, $row], $gr['percent'] . '%');
+        }
+        $lastRow = $row;
+        if ($lastRow > 4) {
+            $sheet->getStyle("A5:E{$lastRow}")->applyFromArray($borderStyle);
+        }
+        foreach ([10, 16, 12, 16, 12] as $i => $w) {
+            $sheet->getColumnDimensionByColumn($i + 1)->setWidth($w);
+        }
+
+        // ========== Sheet 2: Kafedralar ==========
+        $this->writeGroupedExcelSheet($spreadsheet, 'Kafedralar', $kafedraData, $hours, $headerStyle, $borderStyle);
+
+        // ========== Sheet 3: Fanlar ==========
+        $this->writeGroupedExcelSheet($spreadsheet, 'Fanlar', $subjectData, $hours, $headerStyle, $borderStyle);
+
+        $fileName = 'Vaqtlar_statistikasi_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'gts_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    private function writeGroupedExcelSheet($spreadsheet, $title, $data, $hours, $headerStyle, $borderStyle)
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle($title);
+
+        // Summary table
+        $summaryHeaders = ['#', 'Nomi', 'Davomat soni', 'Baho soni', 'Eng ko\'p davomat soati', 'Eng ko\'p baho soati'];
+        foreach ($summaryHeaders as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+        $sheet->getStyle('A1:F1')->applyFromArray($headerStyle);
+
+        $row = 2;
+        foreach ($data as $i => $item) {
+            $peakAtt = $this->findPeakHourServer($item['attendance']);
+            $peakGrade = $this->findPeakHourServer($item['grades']);
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $item['name']);
+            $sheet->setCellValue([3, $row], $item['attendance_total']);
+            $sheet->setCellValue([4, $row], $item['grades_total']);
+            $sheet->setCellValue([5, $row], $peakAtt ? sprintf('%02d:00 (%s%%)', $peakAtt['hour'], $peakAtt['percent']) : '-');
+            $sheet->setCellValue([6, $row], $peakGrade ? sprintf('%02d:00 (%s%%)', $peakGrade['hour'], $peakGrade['percent']) : '-');
+            $row++;
+        }
+        $lastRow = $row - 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:F{$lastRow}")->applyFromArray($borderStyle);
+        }
+
+        // Detail tables below
+        $row += 2;
+        foreach ($data as $item) {
+            $sheet->setCellValue([1, $row], $item['name']);
+            $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(11);
+            $row++;
+
+            $detHeaders = ['Soat', 'Davomat soni', 'Davomat %', 'Baho soni', 'Baho %'];
+            foreach ($detHeaders as $col => $header) {
+                $sheet->setCellValue([$col + 1, $row], $header);
+            }
+            $sheet->getStyle("A{$row}:E{$row}")->applyFromArray($headerStyle);
+            $row++;
+
+            $startRow = $row;
+            foreach ($hours as $h) {
+                $att = $item['attendance'][$h] ?? ['count' => 0, 'percent' => 0];
+                $gr = $item['grades'][$h] ?? ['count' => 0, 'percent' => 0];
+                if ($att['count'] == 0 && $gr['count'] == 0) continue;
+                $sheet->setCellValue([1, $row], sprintf('%02d:00', $h));
+                $sheet->setCellValue([2, $row], $att['count']);
+                $sheet->setCellValue([3, $row], $att['percent'] . '%');
+                $sheet->setCellValue([4, $row], $gr['count']);
+                $sheet->setCellValue([5, $row], $gr['percent'] . '%');
+                $row++;
+            }
+            if ($row > $startRow) {
+                $lr = $row - 1;
+                $sheet->getStyle("A{$startRow}:E{$lr}")->applyFromArray($borderStyle);
+            }
+            $row++;
+        }
+
+        foreach ([6, 40, 16, 12, 22, 22] as $i => $w) {
+            $sheet->getColumnDimensionByColumn($i + 1)->setWidth($w);
+        }
+    }
+
+    private function findPeakHourServer(array $hourData): ?array
+    {
+        $maxH = null;
+        $maxP = 0;
+        foreach (range(0, 23) as $h) {
+            if (isset($hourData[$h]) && $hourData[$h]['percent'] > $maxP) {
+                $maxP = $hourData[$h]['percent'];
+                $maxH = $h;
+            }
+        }
+        return $maxH !== null ? ['hour' => $maxH, 'percent' => $maxP] : null;
     }
 }

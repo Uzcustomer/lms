@@ -136,11 +136,34 @@
                     </a>
                 </div>
 
+                {{-- Bulk action bar --}}
+                <div id="bulkBar" style="display:none;padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:none;" class="flex items-center justify-between">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:13px;font-weight:600;color:#1e40af;"><span id="selectedCount">0</span> ta talaba tanlandi</span>
+                        <button type="button" onclick="clearSelection()" style="font-size:11px;padding:4px 10px;border:1px solid #93c5fd;background:#fff;border-radius:6px;color:#1e40af;cursor:pointer;">Bekor qilish</button>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <form id="regTalabnomaForm" method="POST" action="{{ route('admin.international-students.registration-talabnoma') }}">
+                            @csrf
+                            <div id="regInputs"></div>
+                            <button type="submit" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Registratsiya talabnoma</button>
+                        </form>
+                        <form id="vizaTalabnomaForm" method="POST" action="{{ route('admin.international-students.visa-talabnoma') }}">
+                            @csrf
+                            <div id="vizaInputs"></div>
+                            <button type="submit" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Viza talabnoma</button>
+                        </form>
+                    </div>
+                </div>
+
                 {{-- Jadval --}}
                 <div class="overflow-x-auto">
                     <table class="student-table">
                         <thead>
                             <tr>
+                                <th style="width:36px;text-align:center;">
+                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="accent-color:#2b5ea7;cursor:pointer;">
+                                </th>
                                 <th>Talaba ID</th>
                                 <th>F.I.Sh</th>
                                 <th>Davlati</th>
@@ -166,6 +189,9 @@
                                     $isUrgent = ($regDays !== null && $regDays <= 3) || ($visaDays !== null && $visaDays <= 15);
                                 @endphp
                                 <tr class="{{ $isUrgent ? 'int-row-urgent' : '' }}" onclick="window.location='{{ route('admin.international-students.show', $student) }}'" style="cursor:pointer;">
+                                    <td style="text-align:center;" onclick="event.stopPropagation();">
+                                        <input type="checkbox" class="student-cb" value="{{ $student->id }}" onchange="updateBulkBar()" style="accent-color:#2b5ea7;cursor:pointer;">
+                                    </td>
                                     <td style="color:#64748b;font-size:12px;">{{ $student->student_id_number }}</td>
                                     <td>
                                         <a href="{{ route('admin.international-students.show', $student) }}" class="student-name-link">{{ $student->full_name }}</a>
@@ -396,4 +422,44 @@
     .int-row-urgent { background: #fef2f2 !important; }
     .int-row-urgent:hover { background: #fee2e2 !important; box-shadow: inset 4px 0 0 #dc2626; }
 </style>
+
+<script>
+function toggleSelectAll() {
+    var checked = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.student-cb').forEach(function(cb) { cb.checked = checked; });
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    var checked = document.querySelectorAll('.student-cb:checked');
+    var bar = document.getElementById('bulkBar');
+    var count = document.getElementById('selectedCount');
+    count.textContent = checked.length;
+    bar.style.display = checked.length > 0 ? 'flex' : 'none';
+
+    // Update hidden inputs for forms
+    var regInputs = document.getElementById('regInputs');
+    var vizaInputs = document.getElementById('vizaInputs');
+    regInputs.innerHTML = '';
+    vizaInputs.innerHTML = '';
+    checked.forEach(function(cb) {
+        regInputs.innerHTML += '<input type="hidden" name="student_ids[]" value="' + cb.value + '">';
+        vizaInputs.innerHTML += '<input type="hidden" name="student_ids[]" value="' + cb.value + '">';
+    });
+
+    // selectAll indeterminate
+    var all = document.querySelectorAll('.student-cb');
+    var selectAll = document.getElementById('selectAll');
+    if (checked.length === 0) { selectAll.checked = false; selectAll.indeterminate = false; }
+    else if (checked.length === all.length) { selectAll.checked = true; selectAll.indeterminate = false; }
+    else { selectAll.indeterminate = true; }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.student-cb').forEach(function(cb) { cb.checked = false; });
+    document.getElementById('selectAll').checked = false;
+    document.getElementById('selectAll').indeterminate = false;
+    updateBulkBar();
+}
+</script>
 </x-app-layout>

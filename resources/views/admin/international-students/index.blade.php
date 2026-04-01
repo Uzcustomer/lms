@@ -34,6 +34,26 @@
                                 <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                                 <input type="text" name="group_name" value="{{ request('group_name') }}" placeholder="Guruh nomi" class="filter-input">
                             </div>
+                            <div class="filter-item" style="min-width:150px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Davlati</label>
+                                <select name="country" class="filter-input" style="padding:0 8px;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($countries as $c)
+                                        <option value="{{ $c }}" {{ request('country') === $c ? 'selected' : '' }}>{{ $c }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="filter-item" style="flex:1;min-width:180px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#047857;"></span> Fakultet</label>
+                                <select name="department" class="filter-input" style="padding:0 8px;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($departments as $d)
+                                        <option value="{{ $d->department_id }}" {{ request('department') == $d->department_id ? 'selected' : '' }}>{{ $d->department_name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <div class="filter-row">
                             <div class="filter-item" style="min-width:140px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Firma</label>
                                 <select name="firm" class="filter-input" style="padding:0 8px;">

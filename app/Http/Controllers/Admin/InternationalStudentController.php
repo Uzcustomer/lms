@@ -69,7 +69,7 @@ class InternationalStudentController extends Controller
             }
         }
 
-        if ($request->filled('visa_expiry')) {
+        if ($request->has('visa_expiry') && $request->visa_expiry !== '' && $request->visa_expiry !== null) {
             $days = (int) $request->visa_expiry;
             $query->whereHas('visaInfo', function ($q) use ($days) {
                 $q->whereNotNull('visa_end_date')
@@ -77,7 +77,7 @@ class InternationalStudentController extends Controller
             });
         }
 
-        if ($request->filled('registration_expiry')) {
+        if ($request->has('registration_expiry') && $request->registration_expiry !== '' && $request->registration_expiry !== null) {
             $days = (int) $request->registration_expiry;
             $query->whereHas('visaInfo', function ($q) use ($days) {
                 $q->whereNotNull('registration_end_date')

@@ -87,24 +87,25 @@
                 </form>
 
                 {{-- Statistika --}}
+                @php $baseUrl = route('admin.international-students.index'); @endphp
                 <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        <span class="int-badge int-badge-primary">Jami: {{ $stats['totalIntStudents'] }} ta talaba</span>
-                        <span class="int-badge int-badge-green">{{ $stats['filledCount'] }} kiritgan</span>
-                        <span class="int-badge int-badge-red-light">{{ $stats['notFilledCount'] }} kiritmagan</span>
-                        <span class="int-badge int-badge-green-light">{{ $stats['approvedCount'] }} tasdiqlangan</span>
-                        <span class="int-badge int-badge-yellow">{{ $stats['pendingCount'] }} kutilmoqda</span>
+                        <a href="{{ $baseUrl }}" class="int-badge int-badge-primary" style="text-decoration:none;">Jami: {{ $stats['totalIntStudents'] }}</a>
+                        <a href="{{ $baseUrl }}?data_status=filled" class="int-badge int-badge-green" style="text-decoration:none;">{{ $stats['filledCount'] }} kiritgan</a>
+                        <a href="{{ $baseUrl }}?data_status=not_filled" class="int-badge int-badge-red-light" style="text-decoration:none;">{{ $stats['notFilledCount'] }} kiritmagan</a>
+                        <a href="{{ $baseUrl }}?data_status=approved" class="int-badge int-badge-green-light" style="text-decoration:none;">{{ $stats['approvedCount'] }} tasdiqlangan</a>
+                        <a href="{{ $baseUrl }}?data_status=pending" class="int-badge int-badge-yellow" style="text-decoration:none;">{{ $stats['pendingCount'] }} kutilmoqda</a>
                         @if($stats['expiredVisaCount'] > 0)
-                            <span class="int-badge int-badge-danger">{{ $stats['expiredVisaCount'] }} viza muddati o'tgan!</span>
+                            <a href="{{ $baseUrl }}?visa_expiry=0" class="int-badge int-badge-danger" style="text-decoration:none;">{{ $stats['expiredVisaCount'] }} viza muddati o'tgan!</a>
                         @endif
                         @if($stats['expiredRegCount'] > 0)
-                            <span class="int-badge int-badge-danger-orange">{{ $stats['expiredRegCount'] }} registratsiya muddati o'tgan!</span>
+                            <a href="{{ $baseUrl }}?registration_expiry=0" class="int-badge int-badge-danger-orange" style="text-decoration:none;">{{ $stats['expiredRegCount'] }} registratsiya muddati o'tgan!</a>
                         @endif
                         @if($stats['visaUrgentCount'] > 0)
-                            <span class="int-badge int-badge-warning">{{ $stats['visaUrgentCount'] }} viza yaqin (30k)</span>
+                            <a href="{{ $baseUrl }}?visa_expiry=30" class="int-badge int-badge-warning" style="text-decoration:none;">{{ $stats['visaUrgentCount'] }} viza yaqin (30k)</a>
                         @endif
                         @if($stats['regUrgentCount'] > 0)
-                            <span class="int-badge int-badge-warning">{{ $stats['regUrgentCount'] }} registratsiya yaqin (7k)</span>
+                            <a href="{{ $baseUrl }}?registration_expiry=7" class="int-badge int-badge-warning" style="text-decoration:none;">{{ $stats['regUrgentCount'] }} registratsiya yaqin (7k)</a>
                         @endif
                     </div>
                     <a href="{{ route('admin.international-students.export', request()->all()) }}" class="int-btn-export">
@@ -316,7 +317,8 @@
     .btn-action-blue:hover { box-shadow: 0 2px 8px rgba(59,130,246,0.4); }
 
     /* Statistika badgelar */
-    .int-badge { display: inline-block; padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 8px; white-space: nowrap; }
+    .int-badge { display: inline-block; padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 8px; white-space: nowrap; cursor: pointer; transition: all 0.15s; }
+    .int-badge:hover { opacity: 0.8; transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
     .int-badge-primary { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; }
     .int-badge-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .int-badge-red-light { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }

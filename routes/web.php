@@ -520,6 +520,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/users-without-ratings/send-telegram', [ReportController::class, 'sendUsersWithoutRatingsTelegram'])->name('reports.users-without-ratings.send-telegram');
         Route::post('/reports/users-without-ratings/send-telegram-all', [ReportController::class, 'sendAllUsersWithoutRatingsTelegram'])->name('reports.users-without-ratings.send-telegram-all');
 
+        Route::get('/reports/grading-time-stats', [ReportController::class, 'gradingTimeStats'])->name('reports.grading-time-stats');
+        Route::get('/reports/grading-time-stats/data', [ReportController::class, 'gradingTimeStatsData'])->name('reports.grading-time-stats.data');
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');

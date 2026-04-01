@@ -1664,7 +1664,6 @@ class KtrController extends Controller
         $weekDates = []; // hafta sanalarini saqlash
 
         if ($curriculum) {
-            $educationYear = $curriculum->education_year_name ?? '';
             $educationTypeName = $curriculum->education_type_name ?? '';
             $educationFormName = $curriculum->education_form_name ?? '';
             $semester = DB::table('semesters')
@@ -1672,6 +1671,7 @@ class KtrController extends Controller
                 ->where('code', $cs->semester_code)
                 ->first();
             if ($semester) {
+                $educationYear = $semester->education_year ?? '';
                 $levelName = $semester->level_name ?? '';
                 // Hafta sanalarini curriculum_weeks jadvalidan olish
                 $weeks = CurriculumWeek::where('semester_hemis_id', $semester->semester_hemis_id)
@@ -1682,6 +1682,15 @@ class KtrController extends Controller
                     $start = $week->start_date ? $week->start_date->format('d.m') : '';
                     $end = $week->end_date ? $week->end_date->format('d.m') : '';
                     $weekDates[$weekNum] = $start && $end ? $start . '-' . $end : '';
+                }
+            }
+            // Fakultet nomini curriculum orqali olish (curricula.department_hemis_id -> departments)
+            if ($curriculum->department_hemis_id) {
+                $curriculumFaculty = Department::where('department_hemis_id', $curriculum->department_hemis_id)
+                    ->where('structure_type_code', '11')
+                    ->first();
+                if ($curriculumFaculty) {
+                    $approverInfo['faculty_name'] = $curriculumFaculty->name;
                 }
             }
             $specialty = DB::table('specialties')

@@ -99,6 +99,8 @@ class HemisService
             'third_name' => $data['third_name'] ?? null,
             'image' => $data['image'] ?? null,
             'student_id_number' => $data['student_id_number'] ?? null,
+            'passport_number' => $data['passport_number'] ?? null,
+            'passport_serial' => $data['passport_serial'] ?? null,
             'birth_date' => isset($data['birth_date']) ? date('Y-m-d', $data['birth_date']) : null,
             'avg_gpa' => $data['avg_gpa'] ?? null,
             'avg_grade' => $data['avg_grade'] ?? null,

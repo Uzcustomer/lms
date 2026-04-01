@@ -115,6 +115,10 @@ class StudentVisaController extends Controller
         $data['status'] = 'pending';
         $data['rejection_reason'] = null;
 
+        // Ustunlar mavjudligini tekshirish (migratsiya ishlatilmagan bo'lishi mumkin)
+        $columns = \Schema::getColumnListing('student_visa_infos');
+        $data = array_intersect_key($data, array_flip($columns));
+
         $storagePath = 'student-visa/' . $student->id;
 
         foreach ([
@@ -130,10 +134,16 @@ class StudentVisaController extends Controller
             }
         }
 
-        StudentVisaInfo::updateOrCreate(
-            ['student_id' => $student->id],
-            $data
-        );
+        try {
+            StudentVisaInfo::updateOrCreate(
+                ['student_id' => $student->id],
+                $data
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Viza ma\'lumotlarini saqlashda xato: ' . $e->getMessage());
+            return redirect()->back()->withInput()
+                ->with('error', 'Saqlashda xatolik. Iltimos, administratorga murojaat qiling.');
+        }
 
         return redirect()->route('student.visa-info.index')
             ->with('success', 'Viza ma\'lumotlari saqlandi va tekshirish uchun yuborildi.');

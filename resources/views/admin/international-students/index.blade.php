@@ -130,6 +130,7 @@
                                 <th>Firma</th>
                                 <th>Holat</th>
                                 <th style="text-align:center;">Pasport</th>
+                                <th>Jarayon</th>
                                 <th style="text-align:center;">Amallar</th>
                             </tr>
                         </thead>
@@ -216,13 +217,34 @@
                                             <span class="int-empty">—</span>
                                         @endif
                                     </td>
+                                    <td>
+                                        @if($visa)
+                                            @php
+                                                $rp = $visa->registration_process_status ?? 'none';
+                                                $vp = $visa->visa_process_status ?? 'none';
+                                            @endphp
+                                            <div style="display:flex;flex-direction:column;gap:2px;">
+                                                @if($rp !== 'none')
+                                                    <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap;{{ match($rp) { 'passport_accepted' => 'background:#dbeafe;color:#1e40af;', 'registering' => 'background:#fef3c7;color:#92400e;', 'done' => 'background:#dcfce7;color:#166534;', default => '' } }}">R: {{ match($rp) { 'passport_accepted' => 'Pasport olindi', 'registering' => 'Qilinmoqda', 'done' => 'Tugallandi', default => '' } }}</span>
+                                                @endif
+                                                @if($vp !== 'none')
+                                                    <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap;{{ match($vp) { 'passport_accepted' => 'background:#dbeafe;color:#1e40af;', 'registering' => 'background:#fef3c7;color:#92400e;', 'done' => 'background:#dcfce7;color:#166534;', default => '' } }}">V: {{ match($vp) { 'passport_accepted' => 'Pasport olindi', 'registering' => 'Yangilanmoqda', 'done' => 'Tugallandi', default => '' } }}</span>
+                                                @endif
+                                                @if($rp === 'none' && $vp === 'none')
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <span style="color:#cbd5e1;">—</span>
+                                        @endif
+                                    </td>
                                     <td style="text-align:center;">
                                         <a href="{{ route('admin.international-students.show', $student) }}" class="btn-action btn-action-blue" style="text-decoration:none;">Ko'rish</a>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="11" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">Talabalar topilmadi</td>
+                                    <td colspan="12" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">Talabalar topilmadi</td>
                                 </tr>
                             @endforelse
                         </tbody>

@@ -123,41 +123,49 @@
                     $vDays = $vi->visaDaysLeft();
                     $regActive = $vi->isRegistrationProcessActive();
                     $visActive = $vi->isVisaProcessActive();
+                    $anyProcessActive = $regActive || $visActive;
+                    $regDone = ($vi->registration_process_status ?? 'none') === 'done';
+                    $visDone = ($vi->visa_process_status ?? 'none') === 'done';
 
-                    // Registratsiya: 5 kun — pasport topshirish modali, 3 kun — bloklash (agar jarayon boshlanmagan bo'lsa)
-                    if ($rDays !== null && $rDays <= 5 && !$regActive) {
-                        if ($rDays <= 3 && !$vi->passport_handed_over) {
-                            $blockSite = !$onVisaPage;
-                            $topBanner = ['level' => 'danger', 'msg' => "Registratsiya muddati tugashiga {$rDays} kun! Pasportingizni topshiring!"];
-                        } else {
-                            $showPassportModal = !$vi->passport_handed_over && !$onVisaPage;
-                            $topBanner = ['level' => 'warning', 'msg' => "Registratsiya tugashiga {$rDays} kun. Pasportingizni firmaga yoki registrator ofisiga topshiring."];
+                    // 1. Jarayon davom etmoqda — ogohlantirish o'rniga info xabar
+                    if ($anyProcessActive) {
+                        $processParts = [];
+                        if ($visActive) $processParts[] = 'Vizangiz yangilanmoqda';
+                        elseif ($regActive) $processParts[] = 'Registratsiyangiz yangilanmoqda';
+                        $topBanner = ['level' => 'info', 'msg' => implode('. ', $processParts) . '. Jarayon tugashini kuting.'];
+                    }
+                    // 2. Jarayon tugallandi, pasport qaytarildi — ma'lumotlarni qayta to'ldirish kerak
+                    elseif ($regDone || $visDone) {
+                        $needFill = [];
+                        if ($regDone && !$vi->registration_end_date) $needFill[] = 'registratsiya';
+                        if ($visDone && !$vi->visa_end_date) $needFill[] = 'viza';
+                        if (count($needFill) > 0) {
+                            $showFillModal = !$onVisaPage;
+                            $topBanner = ['level' => 'warning', 'msg' => 'Yangi ' . implode(' va ', $needFill) . ' ma\'lumotlaringizni kiriting!'];
                         }
                     }
-
-                    // Viza: 20 kun — pasport topshirish, 15 kun — bloklash
-                    if ($vDays !== null && $vDays <= 20 && !$visActive && !$blockSite) {
-                        if ($vDays <= 15 && !$vi->passport_handed_over) {
-                            $blockSite = !$onVisaPage;
-                            $topBanner = ['level' => 'danger', 'msg' => "Viza muddati tugashiga {$vDays} kun! Pasportingizni topshiring!"];
-                        } elseif (!$showPassportModal) {
-                            $showPassportModal = !$vi->passport_handed_over && !$onVisaPage;
-                            if (!$topBanner) {
-                                $topBanner = ['level' => 'warning', 'msg' => "Viza tugashiga {$vDays} kun. Pasportingizni firmaga yoki registrator ofisiga topshiring."];
-                            }
-                        }
-                    }
-
-                    // Muddati tugagan
-                    if (($rDays !== null && $rDays <= 0 && !$regActive) || ($vDays !== null && $vDays <= 0 && !$visActive)) {
+                    // 3. Muddati tugagan — bloklash
+                    elseif (($rDays !== null && $rDays <= 0) || ($vDays !== null && $vDays <= 0)) {
                         $blockSite = !$onVisaPage;
                         $expired = [];
-                        if ($rDays !== null && $rDays <= 0 && !$regActive) $expired[] = 'Registratsiya muddati tugagan!';
-                        if ($vDays !== null && $vDays <= 0 && !$visActive) $expired[] = 'Viza muddati tugagan!';
+                        if ($rDays !== null && $rDays <= 0) $expired[] = 'Registratsiya muddati tugagan!';
+                        if ($vDays !== null && $vDays <= 0) $expired[] = 'Viza muddati tugagan!';
                         $topBanner = ['level' => 'danger', 'msg' => implode(' ', $expired) . ' Registrator ofisiga murojaat qiling.'];
                     }
+                    // 4. Registratsiya 3 kun / Viza 15 kun — bloklash
+                    elseif (($rDays !== null && $rDays <= 3 && !$vi->passport_handed_over) || ($vDays !== null && $vDays <= 15 && !$vi->passport_handed_over)) {
+                        $blockSite = !$onVisaPage;
+                        $msg = ($vDays !== null && $vDays <= 15) ? "Viza muddati tugashiga {$vDays} kun!" : "Registratsiya muddati tugashiga {$rDays} kun!";
+                        $topBanner = ['level' => 'danger', 'msg' => $msg . ' Pasportingizni topshiring!'];
+                    }
+                    // 5. Registratsiya 5 kun / Viza 20 kun — pasport topshirish modali
+                    elseif (($rDays !== null && $rDays <= 5 && !$vi->passport_handed_over) || ($vDays !== null && $vDays <= 20 && !$vi->passport_handed_over)) {
+                        $showPassportModal = !$onVisaPage;
+                        $msg = ($vDays !== null && $vDays <= 20) ? "Viza tugashiga {$vDays} kun" : "Registratsiya tugashiga {$rDays} kun";
+                        $topBanner = ['level' => 'warning', 'msg' => $msg . '. Pasportingizni firmaga yoki registrator ofisiga topshiring.'];
+                    }
 
-                    // Yashil/sariq ogohlantirish (muddati yaqin lekin hali bloklash emas)
+                    // 6. Yashil/sariq ogohlantirish (hali bloklash emas)
                     if (!$topBanner) {
                         $parts = [];
                         if ($rDays !== null && $rDays <= 7) $parts[] = "Registratsiya tugashiga {$rDays} kun";

@@ -226,14 +226,22 @@ class InternationalStudentController extends Controller
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
-        $visaInfo->update([
+        $updates = [
             $field => StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED,
             'passport_handed_over' => true,
             'passport_handed_at' => now(),
             'passport_received_by' => $this->currentUserId(),
-        ]);
+        ];
 
-        $this->notifyStudent($student, 'Pasportingiz qabul qilindi. Registratsiya jarayoni boshlandi.');
+        // Viza ustun: agar viza uchun pasport qabul qilinsa, registratsiya ham birga
+        if ($request->process_type === 'visa') {
+            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED;
+        }
+
+        $visaInfo->update($updates);
+
+        $label = $request->process_type === 'visa' ? 'Viza' : 'Registratsiya';
+        $this->notifyStudent($student, "Pasportingiz qabul qilindi. {$label} jarayoni boshlandi.");
 
         return redirect()->route('admin.international-students.show', $student)
             ->with('success', 'Pasport qabul qilindi. Jarayon boshlandi.');
@@ -248,9 +256,14 @@ class InternationalStudentController extends Controller
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
-        $visaInfo->update([$field => StudentVisaInfo::PROCESS_REGISTERING]);
+        $updates = [$field => StudentVisaInfo::PROCESS_REGISTERING];
+        if ($request->process_type === 'visa') {
+            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_REGISTERING;
+        }
+        $visaInfo->update($updates);
 
-        $this->notifyStudent($student, 'Registratsiya jarayoni davom etmoqda.');
+        $label = $request->process_type === 'visa' ? 'Viza' : 'Registratsiya';
+        $this->notifyStudent($student, "{$label} jarayoni davom etmoqda.");
 
         return redirect()->route('admin.international-students.show', $student)
             ->with('success', 'Holat yangilandi: Registratsiya qilinmoqda.');

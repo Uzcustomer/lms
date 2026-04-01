@@ -355,6 +355,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('firm-students')->name('firm-students.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'index'])->name('index');
             Route::get('/{student}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'show'])->name('show');
+            Route::post('/{student}/accept-passport', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'acceptPassport'])->name('accept-passport');
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'showFile'])->name('file');
         });
 

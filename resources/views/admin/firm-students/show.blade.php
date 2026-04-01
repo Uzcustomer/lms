@@ -46,16 +46,54 @@
                 </div>
             </div>
 
-            {{-- Holat --}}
+            @if(!$visaInfo)
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center mb-4">
+                    <p class="text-sm text-yellow-700 font-medium">Talaba hali viza ma'lumotlarini kiritmagan.</p>
+                </div>
+            @else
+
+            {{-- Holat + Pasport qabul qilish --}}
             <div class="bg-white shadow rounded-lg p-5 mb-4 border border-gray-200">
-                <div class="flex items-center gap-3 mb-4">
-                    <h4 class="text-sm font-semibold text-gray-700">{{ __('Holat') }}</h4>
-                    @if($visaInfo->status === 'approved')
-                        <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">{{ __('Tasdiqlangan') }}</span>
-                    @elseif($visaInfo->status === 'rejected')
-                        <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">{{ __('Rad etilgan') }}</span>
-                    @else
-                        <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">{{ __('Tekshirilmoqda') }}</span>
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <h4 class="text-sm font-semibold text-gray-700">Holat</h4>
+                        @if($visaInfo->status === 'approved')
+                            <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Tasdiqlangan</span>
+                        @elseif($visaInfo->status === 'rejected')
+                            <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">Rad etilgan</span>
+                        @else
+                            <span class="inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">Tekshirilmoqda</span>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Pasport qabul qilish --}}
+                @php
+                    $rps = $visaInfo->registration_process_status ?? 'none';
+                    $vps = $visaInfo->visa_process_status ?? 'none';
+                @endphp
+                <div class="mt-3 pt-3 border-t border-gray-200">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <span class="text-xs font-semibold text-gray-500">Registratsiya:</span>
+                            <span class="ml-1 px-2 py-0.5 text-xs font-semibold rounded-full {{ match($rps) { 'passport_accepted' => 'bg-blue-100 text-blue-700', 'registering' => 'bg-yellow-100 text-yellow-700', 'done' => 'bg-green-100 text-green-700', default => 'bg-gray-100 text-gray-600' } }}">{{ match($rps) { 'passport_accepted' => 'Pasport qabul qilindi', 'registering' => 'Registratsiya qilinmoqda', 'done' => 'Tugallangan', default => 'Kutilmoqda' } }}</span>
+                        </div>
+                        <div>
+                            <span class="text-xs font-semibold text-gray-500">Viza:</span>
+                            <span class="ml-1 px-2 py-0.5 text-xs font-semibold rounded-full {{ match($vps) { 'passport_accepted' => 'bg-blue-100 text-blue-700', 'registering' => 'bg-yellow-100 text-yellow-700', 'done' => 'bg-green-100 text-green-700', default => 'bg-gray-100 text-gray-600' } }}">{{ match($vps) { 'passport_accepted' => 'Pasport qabul qilindi', 'registering' => 'Viza yangilanmoqda', 'done' => 'Tugallangan', default => 'Kutilmoqda' } }}</span>
+                        </div>
+                    </div>
+                    @if(!$visaInfo->passport_handed_over && ($rps === 'none' || $rps === 'done' || $vps === 'none' || $vps === 'done'))
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <form method="POST" action="{{ route('admin.firm-students.accept-passport', $student) }}">
+                            @csrf <input type="hidden" name="process_type" value="registration">
+                            <button type="submit" class="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition" onclick="return confirm('Registratsiya uchun pasportni qabul qilasizmi?')">Registratsiya uchun pasport qabul qilish</button>
+                        </form>
+                        <form method="POST" action="{{ route('admin.firm-students.accept-passport', $student) }}">
+                            @csrf <input type="hidden" name="process_type" value="visa">
+                            <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition" onclick="return confirm('Viza uchun pasportni qabul qilasizmi? Registratsiya ham birga yangilanadi.')">Viza uchun pasport qabul qilish</button>
+                        </form>
+                    </div>
                     @endif
                 </div>
 
@@ -228,6 +266,7 @@
                     @endif
                 </div>
             </div>
+            @endif {{-- end if visaInfo --}}
         </div>
     </div>
 </x-app-layout>

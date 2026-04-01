@@ -1671,7 +1671,14 @@ class KtrController extends Controller
                 ->where('code', $cs->semester_code)
                 ->first();
             if ($semester) {
-                $educationYear = $semester->education_year ?? '';
+                // Semestrning education_year kodi (masalan "2025") orqali to'liq nomni olish ("2025-2026")
+                $semesterYearCode = $semester->education_year ?? '';
+                if ($semesterYearCode) {
+                    $educationYear = DB::table('curricula')
+                        ->where('education_year_code', $semesterYearCode)
+                        ->whereNotNull('education_year_name')
+                        ->value('education_year_name') ?: $semesterYearCode;
+                }
                 $levelName = $semester->level_name ?? '';
                 // Hafta sanalarini curriculum_weeks jadvalidan olish
                 $weeks = CurriculumWeek::where('semester_hemis_id', $semester->semester_hemis_id)

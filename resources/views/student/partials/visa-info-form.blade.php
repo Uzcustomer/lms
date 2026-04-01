@@ -12,7 +12,7 @@
 
     {{-- HEMIS ma'lumotlari (faqat ko'rish) --}}
     <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Shaxsiy ma\'lumotlar (HEMIS)') }}</h5>
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div>
             <span class="block text-xs text-gray-500 mb-1">{{ __('F.I.Sh') }}</span>
             <span class="text-sm font-semibold text-gray-800">{{ $student->full_name }}</span>
@@ -29,22 +29,20 @@
             <span class="block text-xs text-gray-500 mb-1">{{ __('Davlat') }}</span>
             <span class="text-sm font-semibold text-gray-800">{{ $student->country_name ?? '—' }}</span>
         </div>
+        <div>
+            <span class="block text-xs text-gray-500 mb-1">{{ __('Pasport raqami') }}</span>
+            <span class="text-sm font-semibold text-gray-800">{{ $student->passport_serial }}{{ $student->passport_number ?? '—' }}</span>
+        </div>
     </div>
 
     {{-- Pasport ma'lumotlari --}}
     <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Pasport ma\'lumotlari') }}</h5>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="grid grid-cols-1 md:grid-cols-1 gap-4 mb-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport berilgan joy') }} <span class="text-red-500">*</span></label>
             <input type="text" name="passport_issued_place" value="{{ old('passport_issued_place', $visaInfo?->passport_issued_place ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('passport_issued_place') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport raqami') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="passport_number" value="{{ old('passport_number', $visaInfo?->passport_number ?? '') }}" required
-                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-            @error('passport_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

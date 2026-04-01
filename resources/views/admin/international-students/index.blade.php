@@ -256,9 +256,15 @@
                                                 $canAccept = in_array($rp, ['none','done']) && in_array($vp, ['none','done']);
                                             @endphp
                                             @if($vp === 'passport_accepted' || $vp === 'registering')
-                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#fef3c7;color:#92400e;">Viza yangilanmoqda</span>
+                                                <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
+                                                    @csrf <input type="hidden" name="process_type" value="visa">
+                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Viza yangilandi. Pasportni qaytarib, talaba yangi ma\'lumot kiritsinmi?')">Viza yangilandi</button>
+                                                </form>
                                             @elseif($rp === 'passport_accepted' || $rp === 'registering')
-                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#fef3c7;color:#92400e;">Reg. qilinmoqda</span>
+                                                <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
+                                                    @csrf <input type="hidden" name="process_type" value="registration">
+                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Registratsiya yangilandi. Pasportni qaytarib, talaba yangi ma\'lumot kiritsinmi?')">Reg. yangilandi</button>
+                                                </form>
                                             @elseif(!$visa->passport_handed_over && $canAccept)
                                                 <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
                                                     @csrf <input type="hidden" name="process_type" value="visa">

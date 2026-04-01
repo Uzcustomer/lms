@@ -46,40 +46,36 @@
                             <label class="block text-gray-700 text-sm font-bold mb-2">Rollar:</label>
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-2 p-3 border rounded bg-gray-50">
                                 @foreach($roles as $role)
-                                    <label class="flex items-center gap-2 cursor-pointer text-sm py-1 px-2 rounded hover:bg-white transition">
-                                        <input type="checkbox" name="roles[]" value="{{ $role->value }}"
-                                               class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                               onchange="toggleFirmSelect()"
-                                               {{ in_array($role->value, old('roles', [])) ? 'checked' : '' }}>
-                                        <span>{{ $role->label() }}</span>
-                                    </label>
+                                    <div>
+                                        <label class="flex items-center gap-2 cursor-pointer text-sm py-1 px-2 rounded hover:bg-white transition">
+                                            <input type="checkbox" name="roles[]" value="{{ $role->value }}"
+                                                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                   {{ $role->value === 'javobgar_firma' ? 'id=firmCheckbox onchange=toggleFirmSelect()' : '' }}
+                                                   {{ in_array($role->value, old('roles', [])) ? 'checked' : '' }}>
+                                            <span>{{ $role->label() }}</span>
+                                        </label>
+                                        @if($role->value === 'javobgar_firma')
+                                            <div id="firm-section" class="mt-2 ml-6 p-3 bg-blue-50 border border-blue-200 rounded-lg" style="display: none;">
+                                                <div class="mb-2">
+                                                    <label class="block text-gray-700 text-xs font-bold mb-1">Firma: <span class="text-red-500">*</span></label>
+                                                    <select name="assigned_firm" class="w-full border rounded py-1.5 px-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                                        <option value="">Tanlang</option>
+                                                        @foreach($firmOptions as $key => $label)
+                                                            <option value="{{ $key }}" {{ old('assigned_firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                                        @endforeach
+                                                        <option value="other" {{ old('assigned_firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-gray-700 text-xs font-bold mb-1">Telegram Chat ID:</label>
+                                                    <input type="text" name="telegram_chat_id" value="{{ old('telegram_chat_id') }}"
+                                                           class="w-full border rounded py-1.5 px-2 text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                           placeholder="123456789">
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
                                 @endforeach
-                            </div>
-                        </div>
-
-                        {{-- Firma bo'limi --}}
-                        <div id="firm-section" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg" style="display: none;">
-                            <div class="flex items-center gap-2 mb-3">
-                                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3H21m-3.75 3H21"/></svg>
-                                <span class="text-sm font-bold text-blue-800">Javobgar firma sozlamalari</span>
-                            </div>
-                            <div class="mb-3">
-                                <label for="assigned_firm" class="block text-gray-700 text-sm font-bold mb-2">Firma: <span class="text-red-500">*</span></label>
-                                <select name="assigned_firm" id="assigned_firm"
-                                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
-                                    <option value="">Tanlang</option>
-                                    @foreach($firmOptions as $key => $label)
-                                        <option value="{{ $key }}" {{ old('assigned_firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
-                                    @endforeach
-                                    <option value="other" {{ old('assigned_firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="telegram_chat_id" class="block text-gray-700 text-sm font-bold mb-2">Telegram Chat ID:</label>
-                                <input type="text" name="telegram_chat_id" id="telegram_chat_id" value="{{ old('telegram_chat_id') }}"
-                                       class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                                       placeholder="Masalan: 123456789">
-                                <p class="text-gray-500 text-xs mt-1">Telegram orqali ogohlantirish yuborish uchun</p>
                             </div>
                         </div>
 
@@ -101,9 +97,11 @@
 
     <script>
     function toggleFirmSelect() {
-        var checkboxes = document.querySelectorAll('input[name="roles[]"]:checked');
-        var selected = Array.from(checkboxes).map(function(cb) { return cb.value; });
-        document.getElementById('firm-section').style.display = selected.includes('javobgar_firma') ? 'block' : 'none';
+        var cb = document.getElementById('firmCheckbox');
+        var section = document.getElementById('firm-section');
+        if (cb && section) {
+            section.style.display = cb.checked ? 'block' : 'none';
+        }
     }
     toggleFirmSelect();
     </script>

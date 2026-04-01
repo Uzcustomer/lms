@@ -172,9 +172,15 @@ class CheckVisaExpiryCommand extends Command
             ]);
         }
 
-        // Firma javobgariga (assigned_firm bo'yicha)
+        // Firma javobgariga (assigned_firm bo'yicha) — User va Teacher jadvallaridan
         if ($info->firm) {
+            // User jadvalidan
             $firmUsers = User::where('assigned_firm', $info->firm)
+                ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
+                ->get();
+
+            // Teacher jadvalidan
+            $firmTeachers = \App\Models\Teacher::where('assigned_firm', $info->firm)
                 ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
                 ->get();
 
@@ -192,9 +198,15 @@ class CheckVisaExpiryCommand extends Command
                     'sent_at' => now(),
                 ]);
 
-                // Firma javobgariga Telegram xabar
                 if ($firmUser->telegram_chat_id) {
                     $telegram->sendToUser($firmUser->telegram_chat_id, $message);
+                }
+            }
+
+            // Teacher firmalardan Telegram xabar
+            foreach ($firmTeachers as $firmTeacher) {
+                if ($firmTeacher->telegram_chat_id) {
+                    $telegram->sendToUser($firmTeacher->telegram_chat_id, $message);
                 }
             }
         }

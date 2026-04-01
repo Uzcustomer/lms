@@ -17,8 +17,13 @@ class FirmStudentsController extends Controller
                 ->with('error', 'Iltimos, avval migratsiyani bajaring: php artisan migrate');
         }
 
-        $user = auth()->user();
-        $assignedFirm = $user->assigned_firm;
+        // Web yoki Teacher guarddan firmani aniqlash
+        $assignedFirm = null;
+        if (auth()->guard('web')->check()) {
+            $assignedFirm = auth()->guard('web')->user()->assigned_firm;
+        } elseif (auth()->guard('teacher')->check()) {
+            $assignedFirm = auth()->guard('teacher')->user()->assigned_firm;
+        }
 
         if (!$assignedFirm) {
             abort(403, 'Sizga firma biriktirilmagan.');
@@ -61,10 +66,19 @@ class FirmStudentsController extends Controller
         return view('admin.firm-students.index', compact('students', 'firmName', 'assignedFirm'));
     }
 
+    private function getAssignedFirm(): ?string
+    {
+        if (auth()->guard('web')->check()) {
+            return auth()->guard('web')->user()->assigned_firm;
+        } elseif (auth()->guard('teacher')->check()) {
+            return auth()->guard('teacher')->user()->assigned_firm;
+        }
+        return null;
+    }
+
     public function show(Student $student)
     {
-        $user = auth()->user();
-        $assignedFirm = $user->assigned_firm;
+        $assignedFirm = $this->getAssignedFirm();
 
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
 
@@ -78,8 +92,7 @@ class FirmStudentsController extends Controller
 
     public function showFile(Student $student, string $field)
     {
-        $user = auth()->user();
-        $assignedFirm = $user->assigned_firm;
+        $assignedFirm = $this->getAssignedFirm();
 
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
 

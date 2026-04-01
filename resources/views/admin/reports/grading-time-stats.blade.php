@@ -44,12 +44,18 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanagacha</label>
                             <input type="text" id="date_to" class="date-input" placeholder="Sanani tanlang" autocomplete="off" />
                         </div>
-                        <div class="filter-item" style="min-width: 120px;">
+                        <div class="filter-item" style="min-width: 260px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport()">
-                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                                Hisoblash
-                            </button>
+                            <div style="display:flex;gap:8px;">
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    Excel
+                                </button>
+                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport()">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                    Hisoblash
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -68,6 +74,10 @@
                     </div>
                     <div id="report-area" style="display:none; padding: 20px;">
 
+                        <div style="padding:10px 20px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                            <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                        </div>
+
                         <!-- Tab buttons -->
                         <div class="tab-buttons">
                             <button class="tab-btn active" onclick="switchTab('overall')">Umumiy</button>
@@ -80,11 +90,15 @@
                             <div class="stats-summary" id="overall-summary"></div>
                             <div class="chart-section">
                                 <h3 class="chart-title">Davomat belgilash vaqtlari (soat kesimida)</h3>
-                                <canvas id="chart-att-overall" height="260"></canvas>
+                                <div style="position:relative;height:280px;">
+                                    <canvas id="chart-att-overall"></canvas>
+                                </div>
                             </div>
                             <div class="chart-section" style="margin-top:24px;">
                                 <h3 class="chart-title">Baho qo'yish vaqtlari (soat kesimida)</h3>
-                                <canvas id="chart-grade-overall" height="260"></canvas>
+                                <div style="position:relative;height:280px;">
+                                    <canvas id="chart-grade-overall"></canvas>
+                                </div>
                             </div>
                             <div style="margin-top:24px;">
                                 <h3 class="chart-title">Soatlar bo'yicha tafsilot</h3>
@@ -152,12 +166,15 @@
             $('#loading-state').show();
             $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
 
+            var startTime = performance.now();
+
             $.ajax({
                 url: '{{ route("admin.reports.grading-time-stats.data") }}',
                 type: 'GET',
                 data: params,
-                timeout: 120000,
+                timeout: 300000,
                 success: function(res) {
+                    var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
@@ -168,10 +185,12 @@
                     }
 
                     reportData = res;
+                    $('#time-badge').text(elapsed + ' soniyada hisoblandi');
                     renderOverall(res.overall);
                     renderGroupedData(res.by_kafedra, 'kafedra');
                     renderGroupedData(res.by_subject, 'subject');
                     $('#report-area').show();
+                    $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -179,6 +198,13 @@
                     $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
                 }
             });
+        }
+
+        function downloadExcel() {
+            var params = getFilters();
+            params.export = 'excel';
+            var query = $.param(params);
+            window.location.href = '{{ route("admin.reports.grading-time-stats.data") }}?' + query;
         }
 
         function switchTab(tab) {
@@ -404,11 +430,9 @@
                 matcher: fuzzyMatcher
             });
 
-            // Date picker init
-            if (typeof ScrollCalendar !== 'undefined') {
-                new ScrollCalendar('#date_from', { format: 'Y-m-d' });
-                new ScrollCalendar('#date_to', { format: 'Y-m-d' });
-            }
+            // ScrollCalendar - id ni # siz berish kerak
+            new ScrollCalendar('date_from');
+            new ScrollCalendar('date_to');
 
             $('#department').change(function() { loadSubjects(); });
         });
@@ -429,6 +453,10 @@
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+
+        .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
+        .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
+        .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }

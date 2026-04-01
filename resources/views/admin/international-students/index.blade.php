@@ -130,8 +130,7 @@
                                 <th>Firma</th>
                                 <th>Holat</th>
                                 <th style="text-align:center;">Pasport</th>
-                                <th>Jarayon</th>
-                                <th style="text-align:center;">Amal</th>
+                                <th style="text-align:center;">Jarayon</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -217,40 +216,27 @@
                                             <span class="int-empty">—</span>
                                         @endif
                                     </td>
-                                    <td>
+                                    <td style="text-align:center;" onclick="event.stopPropagation();">
                                         @if($visa)
                                             @php
                                                 $rp = $visa->registration_process_status ?? 'none';
                                                 $vp = $visa->visa_process_status ?? 'none';
+                                                $canAccept = in_array($rp, ['none','done']) && in_array($vp, ['none','done']);
                                             @endphp
-                                            <div style="display:flex;flex-direction:column;gap:2px;">
-                                                @if($rp !== 'none')
-                                                    <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap;{{ match($rp) { 'passport_accepted' => 'background:#dbeafe;color:#1e40af;', 'registering' => 'background:#fef3c7;color:#92400e;', 'done' => 'background:#dcfce7;color:#166534;', default => '' } }}">R: {{ match($rp) { 'passport_accepted' => 'Pasport olindi', 'registering' => 'Qilinmoqda', 'done' => 'Tugallandi', default => '' } }}</span>
-                                                @endif
-                                                @if($vp !== 'none')
-                                                    <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap;{{ match($vp) { 'passport_accepted' => 'background:#dbeafe;color:#1e40af;', 'registering' => 'background:#fef3c7;color:#92400e;', 'done' => 'background:#dcfce7;color:#166534;', default => '' } }}">V: {{ match($vp) { 'passport_accepted' => 'Pasport olindi', 'registering' => 'Yangilanmoqda', 'done' => 'Tugallandi', default => '' } }}</span>
-                                                @endif
-                                                @if($rp === 'none' && $vp === 'none')
-                                                    <span style="color:#cbd5e1;">—</span>
-                                                @endif
-                                            </div>
-                                        @else
-                                            <span style="color:#cbd5e1;">—</span>
-                                        @endif
-                                    </td>
-                                    <td style="text-align:center;" onclick="event.stopPropagation();">
-                                        @if($visa && !$visa->passport_handed_over)
-                                            @php
-                                                $canAccept = in_array($visa->registration_process_status ?? 'none', ['none','done']) || in_array($visa->visa_process_status ?? 'none', ['none','done']);
-                                            @endphp
-                                            @if($canAccept)
+                                            @if($vp === 'passport_accepted' || $vp === 'registering')
+                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#fef3c7;color:#92400e;">Viza yangilanmoqda</span>
+                                            @elseif($rp === 'passport_accepted' || $rp === 'registering')
+                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#fef3c7;color:#92400e;">Reg. qilinmoqda</span>
+                                            @elseif(!$visa->passport_handed_over && $canAccept)
                                                 <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
                                                     @csrf <input type="hidden" name="process_type" value="visa">
                                                     <button type="submit" class="btn-action" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:10px;" onclick="return confirm('Pasportni qabul qilasizmi?')">Pasport olish</button>
                                                 </form>
+                                            @elseif($rp === 'done' || $vp === 'done')
+                                                <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#dcfce7;color:#166534;">Tugallandi</span>
+                                            @else
+                                                <span style="color:#cbd5e1;">—</span>
                                             @endif
-                                        @elseif($visa && $visa->passport_handed_over)
-                                            <span style="font-size:10px;color:#16a34a;font-weight:600;">Qabul qilingan</span>
                                         @else
                                             <span style="color:#cbd5e1;">—</span>
                                         @endif
@@ -258,7 +244,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="12" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">Talabalar topilmadi</td>
+                                    <td colspan="11" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:14px;">Talabalar topilmadi</td>
                                 </tr>
                             @endforelse
                         </tbody>

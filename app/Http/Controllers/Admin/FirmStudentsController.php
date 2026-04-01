@@ -35,14 +35,8 @@ class FirmStudentsController extends Controller
         }
 
         $query = Student::where('group_name', 'like', 'xd%')
+            ->whereHas('visaInfo', fn($vq) => $vq->where('firm', $assignedFirm))
             ->with('visaInfo');
-
-        // Faqat o'z firmasidagi va ma'lumot kiritgan talabalarni ko'rsatish
-        // Ma'lumot kiritmaganlarni ham ko'rsatish (firma bo'yicha guruhdan)
-        $query->where(function ($q) use ($assignedFirm) {
-            $q->whereHas('visaInfo', fn($vq) => $vq->where('firm', $assignedFirm))
-              ->orWhereDoesntHave('visaInfo');
-        });
 
         if ($request->filled('search')) {
             $query->where('full_name', 'like', '%' . $request->search . '%');

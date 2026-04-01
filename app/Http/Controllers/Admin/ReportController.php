@@ -5264,8 +5264,8 @@ class ReportController extends Controller
                 return response()->json(['error' => 'Sana oralig\'ini tanlang'], 422);
             }
 
-            // student_grades uchun created_at_api (haqiqiy baho qo'yilgan vaqt)
-            // attendances uchun updated_at (oxirgi yangilangan vaqt - import/sinxron paytida)
+            // student_grades: created_at_api - HEMIS da baho qo'yilgan haqiqiy vaqt
+            // attendances: updated_at - sinxronizatsiya vaqti (HEMIS API da davomat belgilangan vaqt saqlanmaydi)
             $gradeHourExpr = "HOUR(created_at_api)";
             $attHourExpr = "HOUR(updated_at)";
 

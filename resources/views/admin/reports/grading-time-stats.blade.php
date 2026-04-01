@@ -89,13 +89,13 @@
                         <div id="tab-overall" class="tab-content active">
                             <div class="stats-summary" id="overall-summary"></div>
                             <div class="chart-section">
-                                <h3 class="chart-title">Davomat belgilash vaqtlari (soat kesimida)</h3>
+                                <h3 class="chart-title">Davomat sinxronizatsiya vaqtlari (soat kesimida) <span style="font-size:11px;font-weight:400;color:#94a3b8;">* HEMIS API da davomat belgilangan vaqt saqlanmaydi</span></h3>
                                 <div style="position:relative;height:280px;">
                                     <canvas id="chart-att-overall"></canvas>
                                 </div>
                             </div>
                             <div class="chart-section" style="margin-top:24px;">
-                                <h3 class="chart-title">Baho qo'yish vaqtlari (soat kesimida)</h3>
+                                <h3 class="chart-title">Baho qo'yish vaqtlari (soat kesimida) <span style="font-size:11px;font-weight:400;color:#16a34a;">* HEMIS dagi haqiqiy vaqt</span></h3>
                                 <div style="position:relative;height:280px;">
                                     <canvas id="chart-grade-overall"></canvas>
                                 </div>

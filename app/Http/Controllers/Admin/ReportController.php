@@ -5265,9 +5265,9 @@ class ReportController extends Controller
             }
 
             // student_grades: created_at_api - HEMIS da baho qo'yilgan haqiqiy vaqt
-            // attendances: updated_at - sinxronizatsiya vaqti (HEMIS API da davomat belgilangan vaqt saqlanmaydi)
+            // attendances: lesson_pair_start_time - dars boshlanish vaqti (HEMIS API da davomat belgilangan vaqt yo'q)
             $gradeHourExpr = "HOUR(created_at_api)";
-            $attHourExpr = "HOUR(updated_at)";
+            $attHourExpr = "CAST(SUBSTRING_INDEX(lesson_pair_start_time, ':', 1) AS UNSIGNED)";
 
             // Faculty filter uchun department_hemis_id
             $facultyDepartmentHemisId = null;
@@ -5308,7 +5308,7 @@ class ReportController extends Controller
 
             // ===================== ATTENDANCE =====================
             $attQuery = DB::table('attendances')
-                ->whereBetween('updated_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
+                ->whereBetween('lesson_date', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59']);
 
             if ($facultyDepartmentHemisId) {
                 $attQuery->whereIn('student_hemis_id', function ($q) use ($facultyDepartmentHemisId) {

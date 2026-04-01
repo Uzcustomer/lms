@@ -154,7 +154,12 @@
                                     <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</span></td>
                                     <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
                                     <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
-                                    <td><span class="text-cell">{{ $student->citizenship_name ?? '—' }}</span></td>
+                                    <td>
+                                        <span class="text-cell" style="font-weight:600;">{{ $student->country_name ?? '—' }}</span>
+                                        @if($student->citizenship_name)
+                                            <span style="font-size:10px;color:#94a3b8;">{{ $student->citizenship_name }}</span>
+                                        @endif
+                                    </td>
                                     <td>
                                         @if($visa)
                                             <span class="int-status-pill int-status-green">

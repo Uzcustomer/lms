@@ -94,6 +94,10 @@ class StudentController extends Controller
             $query->where('education_type_code', $request->education_type);
         }
 
+        if ($request->filled('country')) {
+            $query->where('country_name', $request->country);
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->paginate($perPage)->appends($request->query());
 
@@ -103,7 +107,13 @@ class StudentController extends Controller
             ->orderBy('education_type_name')
             ->get();
 
-        return view('admin.students.index', compact('students', 'educationTypes'));
+        $countries = Student::whereNotNull('country_name')
+            ->where('country_name', '!=', '')
+            ->distinct()
+            ->orderBy('country_name')
+            ->pluck('country_name');
+
+        return view('admin.students.index', compact('students', 'educationTypes', 'countries'));
     }
 
     public function getFilterDepartments(Request $request)
@@ -239,13 +249,17 @@ class StudentController extends Controller
 
         // Tyutor tarixi
         $tutorHistory = collect();
+
+        // Viza ma'lumotlari (firma belgilash uchun)
+        $visaInfo = \App\Models\StudentVisaInfo::where('student_id', $student->id)->first();
+
         if (\Illuminate\Support\Facades\Schema::hasTable('tutor_history')) {
             $tutorHistory = TutorHistory::where('student_id', $student->id)
                 ->orderBy('assigned_at', 'desc')
                 ->get();
         }
 
-        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory'));
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)

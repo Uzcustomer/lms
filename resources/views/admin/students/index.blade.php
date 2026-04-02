@@ -101,6 +101,17 @@
                                 <input type="text" name="student_id_number" id="student_id_number" value="{{ request('student_id_number') }}"
                                        placeholder="1234" class="filter-input">
                             </div>
+                            @if(isset($countries) && $countries->count() > 1)
+                            <div class="filter-item" style="min-width: 140px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Davlati</label>
+                                <select name="country" class="filter-input" style="padding:0 8px;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($countries as $c)
+                                        <option value="{{ $c }}" {{ request('country') === $c ? 'selected' : '' }}>{{ $c }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            @endif
                             <div class="filter-item" style="min-width: 120px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <button type="submit" class="btn-calc">

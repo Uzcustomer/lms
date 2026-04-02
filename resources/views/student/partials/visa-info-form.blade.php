@@ -27,9 +27,14 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Davlat') }} <span class="text-red-500">*</span></label>
-                <input type="text" name="birth_country" value="{{ old('birth_country', $visaInfo?->birth_country ?? '') }}" required
+                <input type="text" name="birth_country" list="countries-list" value="{{ old('birth_country', $visaInfo?->birth_country ?? '') }}" required
                        placeholder="{{ __('Masalan: Hindiston') }}"
-                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" autocomplete="off">
+                <datalist id="countries-list">
+                    @foreach(['Afghanistan','Albania','Algeria','Angola','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahrain','Bangladesh','Belarus','Belgium','Bhutan','Bolivia','Bosnia','Brazil','Brunei','Bulgaria','Cambodia','Cameroon','Canada','Chad','Chile','China','Colombia','Congo','Croatia','Cuba','Cyprus','Czech Republic','Denmark','Ecuador','Egypt','Eritrea','Estonia','Ethiopia','Finland','France','Georgia','Germany','Ghana','Greece','Guatemala','Guinea','Haiti','Honduras','Hungary','India','Hindiston','Indonesia','Iran','Iraq','Ireland','Israel','Italy','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Korea','Kuwait','Kyrgyzstan','Laos','Latvia','Lebanon','Libya','Lithuania','Madagascar','Malaysia','Maldives','Mali','Mexico','Moldova','Mongolia','Morocco','Mozambique','Myanmar','Nepal','Netherlands','New Zealand','Nicaragua','Niger','Nigeria','Norway','Oman','Pakistan','Palestine','Panama','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Rossiya','Saudi Arabia','Senegal','Serbia','Singapore','Slovakia','Slovenia','Somalia','South Africa','Spain','Sri Lanka','Sudan','Sweden','Switzerland','Syria','Tajikistan','Tojikiston','Tanzania','Thailand','Tunisia','Turkey','Turkmenistan','UAE','Uganda','Ukraine','United Kingdom','United States','Uruguay','Uzbekistan','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'] as $c)
+                        <option value="{{ $c }}">
+                    @endforeach
+                </datalist>
                 @error('birth_country') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
             <div>
@@ -84,7 +89,8 @@
     {{-- Registratsiya + Viza yonma-yon --}}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="p-4 bg-white rounded-lg border border-gray-200">
-            <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:10px;">{{ __('Vaqtinchalik ro\'yxatga qo\'yish (registratsiya)') }}</div>
+            <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px;">{{ __('Vaqtinchalik ro\'yxatga qo\'yish (registratsiya)') }} / Temporary Registration</div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:10px;font-style:italic;">{{ __("Vaqtinchalik registratsiya — pasportingizning orqasida yopishtirilgan qog'ozda") }}</div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Boshlanish sanasi') }} <span class="text-red-500">*</span></label>

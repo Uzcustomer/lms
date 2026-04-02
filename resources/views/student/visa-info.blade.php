@@ -104,4 +104,40 @@ function checkPdfSize(input) {
     }
 }
 </script>
+
+{{-- Flatpickr for nice date display --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var locale = '{{ app()->getLocale() }}';
+    var months = locale === 'uz'
+        ? ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
+        : ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    document.querySelectorAll('input[type="date"]').forEach(function(el) {
+        var hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = el.name;
+        hiddenInput.value = el.value;
+        el.parentNode.insertBefore(hiddenInput, el);
+
+        el.removeAttribute('name');
+        el.type = 'text';
+        el.readOnly = true;
+        el.style.cursor = 'pointer';
+
+        flatpickr(el, {
+            dateFormat: 'Y-m-d',
+            defaultDate: hiddenInput.value || null,
+            formatDate: function(date) {
+                return date.getDate() + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
+            },
+            onChange: function(selectedDates, dateStr) {
+                hiddenInput.value = dateStr;
+            }
+        });
+    });
+});
+</script>
 </x-student-app-layout>

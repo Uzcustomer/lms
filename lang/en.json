@@ -440,5 +440,8 @@
     "Vaqtinchalik registratsiya — pasportingizning orqasida yopishtirilgan qog'ozda": "Temporary registration — the paper attached to the back of your passport",
     "Qidiring...": "Search...",
     "Viloyat nomini kiriting": "Enter region name",
-    "Shahar nomini kiriting": "Enter city name"
+    "Shahar nomini kiriting": "Enter city name",
+    "Hozirgi yashash manzili": "Current residential address",
+    "Boshqa manzil": "Other address",
+    "To'liq manzilni kiriting": "Enter full address"
 }

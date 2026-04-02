@@ -57,6 +57,8 @@ class StudentVisaController extends Controller
             'passport_expiry_date' => 'required|date|after:passport_issued_date',
             'registration_start_date' => 'required|date',
             'registration_end_date' => 'required|date|after:registration_start_date',
+            'address_type' => 'required|in:dormitory,other',
+            'current_address' => 'nullable|required_if:address_type,other|string|max:500',
             'visa_number' => 'required|string|max:50',
             'visa_type' => 'required|string|in:' . implode(',', array_keys(StudentVisaInfo::VISA_TYPES)),
             'visa_start_date' => 'required|date',
@@ -107,7 +109,7 @@ class StudentVisaController extends Controller
         $data = $request->only([
             'birth_country', 'birth_region', 'birth_city',
             'passport_number', 'passport_issued_place', 'passport_issued_date', 'passport_expiry_date',
-            'registration_start_date', 'registration_end_date',
+            'registration_start_date', 'registration_end_date', 'address_type', 'current_address',
             'visa_number', 'visa_type', 'visa_start_date', 'visa_end_date',
             'visa_entries_count', 'visa_stay_days', 'visa_issued_place', 'visa_issued_date',
             'entry_date',

@@ -18,6 +18,8 @@ class StudentVisaInfo extends Model
         'birth_date',
         'registration_start_date',
         'registration_end_date',
+        'address_type',
+        'current_address',
         'registration_process_status',
         'visa_number',
         'visa_type',

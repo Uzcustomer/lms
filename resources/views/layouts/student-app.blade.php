@@ -130,27 +130,27 @@
                     // 1. Jarayon davom etmoqda — ogohlantirish o'rniga info xabar
                     if ($anyProcessActive) {
                         $processParts = [];
-                        if ($visActive) $processParts[] = 'Vizangiz yangilanmoqda';
-                        elseif ($regActive) $processParts[] = 'Registratsiyangiz yangilanmoqda';
-                        $topBanner = ['level' => 'info', 'msg' => implode('. ', $processParts) . '. Jarayon tugashini kuting.'];
+                        if ($visActive) $processParts[] = __('Vizangiz yangilanmoqda');
+                        elseif ($regActive) $processParts[] = __('Registratsiyangiz yangilanmoqda');
+                        $topBanner = ['level' => 'info', 'msg' => implode('. ', $processParts) . '. ' . __('Jarayon tugashini kuting.')];
                     }
                     // 2. Jarayon tugallandi, pasport qaytarildi — ma'lumotlarni qayta to'ldirish kerak
                     elseif ($regDone || $visDone) {
                         $needFill = [];
-                        if ($regDone && !$vi->registration_end_date) $needFill[] = 'registratsiya';
-                        if ($visDone && !$vi->visa_end_date) $needFill[] = 'viza';
+                        if ($regDone && !$vi->registration_end_date) $needFill[] = __('registratsiya');
+                        if ($visDone && !$vi->visa_end_date) $needFill[] = __('viza');
                         if (count($needFill) > 0) {
-                            // Muddat tekshirish — 3 kun o'tgan bo'lsa bloklash
                             $deadline = $vi->visa_info_deadline;
                             $deadlinePassed = $deadline && now()->greaterThan($deadline);
+                            $label = implode(' ' . __('va') . ' ', $needFill);
                             if ($deadlinePassed) {
                                 $blockSite = !$onVisaPage;
-                                $topBanner = ['level' => 'danger', 'msg' => 'Yangi ' . implode(' va ', $needFill) . ' ma\'lumotlaringizni kiritish muddati tugadi! Iltimos, zudlik bilan kiriting.'];
+                                $topBanner = ['level' => 'danger', 'msg' => __('Yangi') . ' ' . $label . ' ' . __("ma'lumotlaringizni kiritish muddati tugadi!")];
                             } else {
                                 $showFillModal = !$onVisaPage;
                                 $daysToDeadline = $deadline ? (int) now()->startOfDay()->diffInDays($deadline, false) : null;
-                                $daysText = $daysToDeadline !== null ? " ({$daysToDeadline} kun qoldi)" : '';
-                                $topBanner = ['level' => 'warning', 'msg' => 'Yangi ' . implode(' va ', $needFill) . " ma'lumotlaringizni kiriting!{$daysText}"];
+                                $daysText = $daysToDeadline !== null ? " ({$daysToDeadline} " . __('kun qoldi') . ")" : '';
+                                $topBanner = ['level' => 'warning', 'msg' => __('Yangi') . ' ' . $label . " " . __("ma'lumotlaringizni kiriting!") . $daysText];
                             }
                         }
                     }
@@ -158,28 +158,28 @@
                     elseif (($rDays !== null && $rDays <= 0) || ($vDays !== null && $vDays <= 0)) {
                         $blockSite = !$onVisaPage;
                         $expired = [];
-                        if ($rDays !== null && $rDays <= 0) $expired[] = 'Registratsiya muddati tugagan!';
-                        if ($vDays !== null && $vDays <= 0) $expired[] = 'Viza muddati tugagan!';
-                        $topBanner = ['level' => 'danger', 'msg' => implode(' ', $expired) . ' Registrator ofisiga murojaat qiling.'];
+                        if ($rDays !== null && $rDays <= 0) $expired[] = __('Registratsiya muddati tugagan!');
+                        if ($vDays !== null && $vDays <= 0) $expired[] = __('Viza muddati tugagan!');
+                        $topBanner = ['level' => 'danger', 'msg' => implode(' ', $expired) . ' ' . __('Registrator ofisiga murojaat qiling.')];
                     }
                     // 4. Registratsiya 3 kun / Viza 15 kun — bloklash
                     elseif (($rDays !== null && $rDays <= 3 && !$vi->passport_handed_over) || ($vDays !== null && $vDays <= 15 && !$vi->passport_handed_over)) {
                         $blockSite = !$onVisaPage;
-                        $msg = ($vDays !== null && $vDays <= 15) ? "Viza muddati tugashiga {$vDays} kun!" : "Registratsiya muddati tugashiga {$rDays} kun!";
-                        $topBanner = ['level' => 'danger', 'msg' => $msg . ' Pasportingizni topshiring!'];
+                        $msg = ($vDays !== null && $vDays <= 15) ? __('Viza muddati tugashiga') . " {$vDays} " . __('kun') . "!" : __('Registratsiya muddati tugashiga') . " {$rDays} " . __('kun') . "!";
+                        $topBanner = ['level' => 'danger', 'msg' => $msg . ' ' . __('Pasportingizni topshiring!')];
                     }
                     // 5. Registratsiya 5 kun / Viza 20 kun — pasport topshirish modali
                     elseif (($rDays !== null && $rDays <= 5 && !$vi->passport_handed_over) || ($vDays !== null && $vDays <= 20 && !$vi->passport_handed_over)) {
                         $showPassportModal = !$onVisaPage;
-                        $msg = ($vDays !== null && $vDays <= 20) ? "Viza tugashiga {$vDays} kun" : "Registratsiya tugashiga {$rDays} kun";
-                        $topBanner = ['level' => 'warning', 'msg' => $msg . '. Pasportingizni firmaga yoki registrator ofisiga topshiring.'];
+                        $msg = ($vDays !== null && $vDays <= 20) ? __('Viza muddati tugashiga') . " {$vDays} " . __('kun') : __('Registratsiya muddati tugashiga') . " {$rDays} " . __('kun');
+                        $topBanner = ['level' => 'warning', 'msg' => $msg . '. ' . __('Pasportingizni firmaga yoki registrator ofisiga topshiring.')];
                     }
 
                     // 6. Yashil/sariq ogohlantirish (hali bloklash emas)
                     if (!$topBanner) {
                         $parts = [];
-                        if ($rDays !== null && $rDays <= 7) $parts[] = "Registratsiya tugashiga {$rDays} kun";
-                        if ($vDays !== null && $vDays <= 30) $parts[] = "Viza tugashiga {$vDays} kun";
+                        if ($rDays !== null && $rDays <= 7) $parts[] = __('Registratsiya muddati tugashiga') . " {$rDays} " . __('kun');
+                        if ($vDays !== null && $vDays <= 30) $parts[] = __('Viza muddati tugashiga') . " {$vDays} " . __('kun');
                         if (count($parts) > 0) {
                             $isDanger = ($rDays !== null && $rDays <= 3) || ($vDays !== null && $vDays <= 15);
                             $isWarn = ($rDays !== null && $rDays <= 5) || ($vDays !== null && $vDays <= 20);
@@ -199,7 +199,7 @@
                             <svg class="w-5 h-5 flex-shrink-0 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
                             <span class="text-sm font-bold">{{ $topBanner['msg'] }}</span>
                         </div>
-                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-white text-red-700 text-xs font-bold rounded hover:bg-red-50 transition flex-shrink-0">Viza ma'lumotlarim</a>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-white text-red-700 text-xs font-bold rounded hover:bg-red-50 transition flex-shrink-0">{{ __("Viza ma'lumotlarim") }}</a>
                     </div>
                 </div>
             @elseif($topBanner['level'] === 'warning')
@@ -209,7 +209,7 @@
                             <svg class="w-5 h-5 text-yellow-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
                             <span class="text-sm font-semibold text-yellow-800">{{ $topBanner['msg'] }}</span>
                         </div>
-                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-yellow-600 text-white text-xs font-bold rounded hover:bg-yellow-700 transition flex-shrink-0">Viza ma'lumotlarim</a>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-yellow-600 text-white text-xs font-bold rounded hover:bg-yellow-700 transition flex-shrink-0">{{ __("Viza ma'lumotlarim") }}</a>
                     </div>
                 </div>
             @else
@@ -219,7 +219,7 @@
                             <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
                             <span class="text-sm font-medium text-green-800">{{ $topBanner['msg'] }}</span>
                         </div>
-                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 transition flex-shrink-0">Viza ma'lumotlarim</a>
+                        <a href="{{ route('student.visa-info.index') }}" class="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 transition flex-shrink-0">{{ __("Viza ma'lumotlarim") }}</a>
                     </div>
                 </div>
             @endif
@@ -230,11 +230,11 @@
             <div x-data="{ show: true }" x-show="show" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
                 <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 text-center">
                     <svg class="w-16 h-16 text-yellow-500 mx-auto mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
-                    <h3 class="text-lg font-bold text-gray-800 mb-2">Viza ma'lumotlaringizni to'ldiring!</h3>
-                    <p class="text-sm text-gray-600 mb-6">Platformadan to'liq foydalanish uchun viza, registratsiya va pasport ma'lumotlaringizni kiritishingiz kerak.</p>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">{{ __('Viza ma\'lumotlaringizni to\'ldiring!') }}</h3>
+                    <p class="text-sm text-gray-600 mb-6">{{ __('Platformadan to\'liq foydalanish uchun viza, registratsiya va pasport ma\'lumotlaringizni kiritishingiz kerak.') }}</p>
                     <div class="flex gap-3">
-                        <button @click="show = false" class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">Keyinroq</button>
-                        <a href="{{ route('student.visa-info.index') }}" class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition text-center">To'ldirish</a>
+                        <button @click="show = false" class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">{{ __('Keyinroq') }}</button>
+                        <a href="{{ route('student.visa-info.index') }}" class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition text-center">{{ __('To\'ldirish') }}</a>
                     </div>
                 </div>
             </div>
@@ -245,9 +245,9 @@
             <div x-data="{ show: true }" x-show="show" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);">
                 <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6 text-center">
                     <svg class="w-16 h-16 text-orange-500 mx-auto mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z"/></svg>
-                    <h3 class="text-lg font-bold text-gray-800 mb-2">Pasportingizni topshiring!</h3>
-                    <p class="text-sm text-gray-600 mb-6">Pasportingizni o'zingizning firmaga yoki registrator ofisiga topshiring. Muddati yaqinlashmoqda!</p>
-                    <button @click="show = false" class="w-full px-4 py-2.5 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">Tushundim</button>
+                    <h3 class="text-lg font-bold text-gray-800 mb-2">{{ __('Pasportingizni topshiring!') }}</h3>
+                    <p class="text-sm text-gray-600 mb-6">{{ __('Pasportingizni o\'zingizning firmaga yoki registrator ofisiga topshiring. Muddati yaqinlashmoqda!') }}</p>
+                    <button @click="show = false" class="w-full px-4 py-2.5 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition">{{ __('Tushundim') }}</button>
                 </div>
             </div>
         @endif
@@ -259,10 +259,10 @@
                     <div style="width:80px;height:80px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
                         <svg class="w-10 h-10 text-red-600 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
                     </div>
-                    <h3 class="text-xl font-bold text-red-700 mb-3">Platformadan foydalanish cheklangan!</h3>
+                    <h3 class="text-xl font-bold text-red-700 mb-3">{{ __('Platformadan foydalanish cheklangan!') }}</h3>
                     <p class="text-sm text-gray-600 mb-2">{{ $topBanner['msg'] ?? '' }}</p>
-                    <p class="text-sm text-gray-600 mb-6">Pasportingizni registrator ofisiga yoki firmangizga topshiring. Platformadan foydalanish uchun registratsiya jarayoni boshlanishi kerak.</p>
-                    <a href="{{ route('student.visa-info.index') }}" class="inline-block px-6 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition">Viza ma'lumotlarim</a>
+                    <p class="text-sm text-gray-600 mb-6">{{ __('Pasportingizni registrator ofisiga yoki firmangizga topshiring. Platformadan foydalanish uchun registratsiya jarayoni boshlanishi kerak.') }}</p>
+                    <a href="{{ route('student.visa-info.index') }}" class="inline-block px-6 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition">{{ __("Viza ma'lumotlarim") }}</a>
                 </div>
             </div>
         @endif

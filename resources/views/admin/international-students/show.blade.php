@@ -55,11 +55,32 @@
                                     <div><span class="text-xs text-gray-400">Fuqaroligi</span><br>{{ $student->citizenship_name ?? '-' }}</div>
                                 </div>
                                 <div><span class="text-xs text-gray-400">Fakultet</span><br>{{ $student->department_name }}</div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div><span class="text-xs text-gray-400">Telefon</span><br>{{ $student->phone ?? '-' }}</div>
-                                    <div><span class="text-xs text-gray-400">Firma</span><br><b>{{ $visaInfo->firm_display }}</b></div>
-                                </div>
+                                <div><span class="text-xs text-gray-400">Telefon</span><br>{{ $student->phone ?? '-' }}</div>
                             </div>
+                        </div>
+
+                        {{-- Firma biriktirish --}}
+                        <div class="bg-white shadow rounded-lg p-4 border border-gray-200 text-sm">
+                            <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Firma</h4>
+                            @if($visaInfo->firm)
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-semibold text-gray-800">{{ $visaInfo->firm_display }}</span>
+                                </div>
+                            @endif
+                            <form method="POST" action="{{ route('admin.international-students.assign-firm', $student) }}">
+                                @csrf
+                                <div class="flex gap-2">
+                                    <select name="firm" class="flex-1 text-xs border-gray-300 rounded py-1.5 px-2 focus:ring-1 focus:ring-blue-500" onchange="this.form.querySelector('.firm-other').style.display=this.value==='other'?'block':'none'">
+                                        <option value="">Tanlang</option>
+                                        @foreach(\App\Models\StudentVisaInfo::FIRM_OPTIONS as $key => $label)
+                                            <option value="{{ $key }}" {{ $visaInfo->firm === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                        <option value="other" {{ $visaInfo->firm === 'other' ? 'selected' : '' }}>Boshqa</option>
+                                    </select>
+                                    <button type="submit" class="px-3 py-1.5 bg-blue-600 text-white text-[10px] font-medium rounded hover:bg-blue-700">Saqlash</button>
+                                </div>
+                                <input type="text" name="firm_custom" value="{{ $visaInfo->firm_custom }}" placeholder="Firma nomi" class="firm-other w-full mt-2 text-xs border-gray-300 rounded py-1.5 px-2" style="display:{{ $visaInfo->firm === 'other' ? 'block' : 'none' }};">
+                            </form>
                         </div>
 
                         {{-- Holat + amallar --}}

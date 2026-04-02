@@ -528,6 +528,35 @@ class InternationalStudentController extends Controller
     }
 
     /**
+     * Talabaga firma biriktirish (dekan yoki admin).
+     */
+    public function assignFirm(Request $request, Student $student)
+    {
+        $request->validate([
+            'firm' => 'required|string|max:255',
+            'firm_custom' => 'nullable|string|max:255',
+        ]);
+
+        $visaInfo = StudentVisaInfo::firstOrCreate(
+            ['student_id' => $student->id],
+            ['birth_country' => $student->country_name, 'birth_region' => $student->province_name, 'birth_city' => $student->district_name, 'birth_date' => $student->birth_date]
+        );
+
+        $firm = $request->firm;
+        $firmCustom = null;
+        if ($firm === 'other' && $request->filled('firm_custom')) {
+            $firmCustom = $request->firm_custom;
+        }
+
+        $visaInfo->update([
+            'firm' => $firm,
+            'firm_custom' => $firmCustom,
+        ]);
+
+        return redirect()->back()->with('success', $student->full_name . ' uchun firma biriktirildi.');
+    }
+
+    /**
      * Admin talaba viza ma'lumotlarini o'chiradi.
      */
     public function destroyVisaInfo(Request $request, Student $student)

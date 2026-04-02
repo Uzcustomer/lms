@@ -1,6 +1,6 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">Firma talabalari — {{ $firmName }}</h2>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">Viza va registratsiya — {{ $firmName }}</h2>
     </x-slot>
 
     @if(session('success'))

@@ -137,26 +137,23 @@ document.addEventListener('DOMContentLoaded', function() {
         ? ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
         : ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-    document.querySelectorAll('input[type="date"]').forEach(function(el) {
-        var hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = el.name;
-        hiddenInput.value = el.value;
-        el.parentNode.insertBefore(hiddenInput, el);
-
-        el.removeAttribute('name');
-        el.type = 'text';
-        el.readOnly = true;
+    document.querySelectorAll('[data-datepicker]').forEach(function(el) {
         el.style.cursor = 'pointer';
+        el.style.backgroundColor = '#fff';
 
         flatpickr(el, {
             dateFormat: 'Y-m-d',
-            defaultDate: hiddenInput.value || null,
-            formatDate: function(date) {
-                return date.getDate() + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
-            },
-            onChange: function(selectedDates, dateStr) {
-                hiddenInput.value = dateStr;
+            defaultDate: el.value || null,
+            altInput: true,
+            altFormat: 'j F Y',
+            formatDate: function(date, format) {
+                if (format === 'j F Y') {
+                    return date.getDate() + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
+                }
+                var y = date.getFullYear();
+                var m = String(date.getMonth() + 1).padStart(2, '0');
+                var d = String(date.getDate()).padStart(2, '0');
+                return y + '-' + m + '-' + d;
             }
         });
     });

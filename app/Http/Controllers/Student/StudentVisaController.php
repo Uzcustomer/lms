@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use App\Models\Notification;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
+use App\Models\User;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
@@ -142,8 +145,85 @@ class StudentVisaController extends Controller
                 ->with('error', 'Saqlashda xatolik. Iltimos, administratorga murojaat qiling.');
         }
 
+        // Registrator ofisi xodimlariga va firma javobgariga xabar yuborish
+        $this->notifyStaffAboutSubmission($student);
+
         return redirect()->route('student.visa-info.index')
             ->with('success', __('Viza ma\'lumotlari saqlandi va tekshirish uchun yuborildi.'));
+    }
+
+    /**
+     * Registrator ofisi va firma javobgariga talaba ma'lumot kiritgani haqida xabar.
+     */
+    private function notifyStaffAboutSubmission($student): void
+    {
+        $message = "📋 {$student->full_name} ({$student->group_name}) viza ma'lumotlarini kiritdi. Tekshirish kerak.";
+
+        // Registrator Telegram guruhiga
+        $registrarGroupId = config('services.telegram.registrar_group_id');
+        if ($registrarGroupId) {
+            try {
+                app(TelegramService::class)->sendToUser($registrarGroupId, $message);
+            } catch (\Throwable $e) {
+                \Log::warning('Telegram registrar group xabar yuborishda xato: ' . $e->getMessage());
+            }
+        }
+
+        // Registrator ofisi xodimlariga sayt bildirishnomasi
+        $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
+        foreach ($registrarUsers as $user) {
+            Notification::create([
+                'sender_id' => $student->id,
+                'sender_type' => get_class($student),
+                'recipient_id' => $user->id,
+                'recipient_type' => User::class,
+                'subject' => 'Yangi viza ma\'lumotlari kiritildi',
+                'body' => $message,
+                'type' => 'info',
+                'is_read' => false,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        }
+
+        // Firma javobgariga (agar firma belgilangan bo'lsa)
+        $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
+        if ($visaInfo?->firm) {
+            $firmUsers = User::where('assigned_firm', $visaInfo->firm)
+                ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
+                ->get();
+            foreach ($firmUsers as $firmUser) {
+                Notification::create([
+                    'sender_id' => $student->id,
+                    'sender_type' => get_class($student),
+                    'recipient_id' => $firmUser->id,
+                    'recipient_type' => User::class,
+                    'subject' => 'Talaba viza ma\'lumotlarini kiritdi',
+                    'body' => $message,
+                    'type' => 'info',
+                    'is_read' => false,
+                    'is_draft' => false,
+                    'sent_at' => now(),
+                ]);
+                if ($firmUser->telegram_chat_id) {
+                    try {
+                        app(TelegramService::class)->sendToUser($firmUser->telegram_chat_id, $message);
+                    } catch (\Throwable $e) {}
+                }
+            }
+
+            // Teacher firmalardan ham
+            $firmTeachers = \App\Models\Teacher::where('assigned_firm', $visaInfo->firm)
+                ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
+                ->get();
+            foreach ($firmTeachers as $teacher) {
+                if ($teacher->telegram_chat_id) {
+                    try {
+                        app(TelegramService::class)->sendToUser($teacher->telegram_chat_id, $message);
+                    } catch (\Throwable $e) {}
+                }
+            }
+        }
     }
 
     public function showFile(string $field)

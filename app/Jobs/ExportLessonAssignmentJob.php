@@ -371,20 +371,14 @@ class ExportLessonAssignmentJob implements ShouldQueue
         }
 
         $fileName = 'Dars_belgilash_' . date('Y-m-d_H-i') . '.xlsx';
-        $filePath = 'exports/' . $fileName;
 
         // exports papkasini yaratish
-        Storage::disk('local')->makeDirectory('exports');
-
-        $fullPath = storage_path('app/private/' . $filePath);
-
-        // Agar private papka yo'q bo'lsa, oddiy app/ papkasiga yozish
-        if (!is_dir(dirname($fullPath))) {
-            $fullPath = storage_path('app/' . $filePath);
-            if (!is_dir(dirname($fullPath))) {
-                mkdir(dirname($fullPath), 0755, true);
-            }
+        $exportDir = storage_path('app/exports');
+        if (!is_dir($exportDir)) {
+            mkdir($exportDir, 0755, true);
         }
+
+        $fullPath = $exportDir . '/' . $fileName;
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($fullPath);

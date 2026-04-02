@@ -426,6 +426,8 @@
     "Faqat PDF formatida, aniq va o'qilishi mumkin bo'lgan skaner yuklang. Sifatsiz yoki xiralashgan fayllar rad etiladi. Telefon kamerasi bilan suratga olganda yaxshi yorug'likda, to'g'ri burchakda oling.": "Upload only clear, readable PDF scans. Low quality or blurry files will be rejected. When photographing with a phone camera, use good lighting and correct angle.",
     "Viza ma'lumotlaringizni to'ldiring!": "Please fill in your visa information!",
     "Vaqtinchalik ro'yxatga qo'yish (registratsiya)": "Temporary Registration",
+    "Ma'lumotlaringiz rad etilgan": "Your information was rejected",
+    "Qaytadan to'ldiring.": "Please fill in again.",
     "Registratsiya muddati tugashiga": "Registration expires in",
     "Viza muddati tugashiga": "Visa expires in"
 }

@@ -66,11 +66,24 @@
             </div>
 
             {{-- Viloyat --}}
-            <div>
+            <div x-data="regionSelect({ value: '{{ old('birth_region', $visaInfo?->birth_region ?? '') }}' })" x-effect="updateRegions($store.birthCountry)">
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viloyat') }} <span class="text-red-500">*</span></label>
-                <input type="text" name="birth_region" value="{{ old('birth_region', $visaInfo?->birth_region ?? '') }}" required
-                       placeholder="{{ __('Viloyat nomini kiriting') }}"
-                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                <div class="relative">
+                    <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true"
+                           placeholder="{{ __('Qidiring...') }}"
+                           class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" autocomplete="off">
+                    <input type="hidden" name="birth_region" :value="value" required>
+                    <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition
+                         class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <template x-for="item in filtered" :key="item">
+                            <div @click="selectItem(item)" x-text="item"
+                                 class="px-3 py-2 text-sm cursor-pointer hover:bg-indigo-50 hover:text-indigo-700 transition"></div>
+                        </template>
+                    </div>
+                    <template x-if="value && !open">
+                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-semibold" x-text="value"></span>
+                    </template>
+                </div>
                 @error('birth_region') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
@@ -138,6 +151,35 @@
             @error('registration_end_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
+
+    {{-- Yashash manzili --}}
+    <div class="mt-4" x-data="{ addressType: '{{ old('address_type', $visaInfo?->address_type ?? 'dormitory') }}' }">
+        <label class="block text-sm font-medium text-gray-700 mb-2">{{ __('Hozirgi yashash manzili') }} <span class="text-red-500">*</span></label>
+        <div class="flex gap-3 mb-3">
+            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition"
+                   :class="addressType === 'dormitory' ? 'bg-green-50 border-green-300 text-green-700 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'">
+                <input type="radio" name="address_type" value="dormitory" x-model="addressType" class="hidden">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75"/></svg>
+                Talabalar yotoqxonasi / Dormitory
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border text-sm transition"
+                   :class="addressType === 'other' ? 'bg-blue-50 border-blue-300 text-blue-700 font-semibold' : 'border-gray-200 text-gray-600 hover:bg-gray-50'">
+                <input type="radio" name="address_type" value="other" x-model="addressType" class="hidden">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 21v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21m0 0h4.5V3.545M12.75 21h7.5V10.75M2.25 21h1.5m18 0h-18M2.25 9l4.5-1.636M18.75 3l-1.5.545m0 6.205l3 1m1.5.5l-1.5-.5M6.75 7.364V3h-3v18m3-13.636l10.5-3.819"/></svg>
+                {{ __('Boshqa manzil') }} / Other address
+            </label>
+        </div>
+        <div x-show="addressType === 'dormitory'" style="padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;color:#166534;">
+            Toshkent davlat tibbiyot universiteti Termiz filiali talabalar yotoqxonasi, Termiz shahar, I.Karimov ko'chasi 64-uy
+        </div>
+        <div x-show="addressType === 'other'" x-transition>
+            <input type="text" name="current_address" value="{{ old('current_address', $visaInfo?->current_address ?? '') }}"
+                   placeholder="{{ __('To\'liq manzilni kiriting') }}"
+                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        @error('current_address') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+    </div>
+
     </div>
 
     {{-- Viza --}}

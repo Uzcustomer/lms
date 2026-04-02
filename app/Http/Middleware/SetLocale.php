@@ -12,17 +12,33 @@ class SetLocale
 {
     public function handle(Request $request, Closure $next)
     {
-        $locale = Session::get('locale', $request->cookie('locale'));
-
-        // Agar til tanlanmagan bo'lsa, xalqaro talabalar uchun default inglizcha
+        // 1. Avval session yoki cookie'dan olishga harakat
+        $locale = Session::get('locale');
         if (!$locale) {
-            $student = Auth::guard('student')->user();
-            if ($student && (
-                str_starts_with(strtolower($student->group_name ?? ''), 'xd') ||
-                str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy')
-            )) {
-                $locale = 'en';
-            } else {
+            $cookieLocale = $request->cookie('locale');
+            if ($cookieLocale && in_array($cookieLocale, ['uz', 'ru', 'en'])) {
+                $locale = $cookieLocale;
+            }
+        }
+
+        // 2. Agar hali til aniqlanmagan bo'lsa
+        if (!$locale) {
+            // Xalqaro talabalar uchun default inglizcha
+            try {
+                $student = Auth::guard('student')->user();
+                if ($student && (
+                    str_starts_with(strtolower($student->group_name ?? ''), 'xd') ||
+                    str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy')
+                )) {
+                    $locale = 'en';
+                    // Session ga saqlash — keyingi so'rovlarda qayta tekshirmasligi uchun
+                    Session::put('locale', 'en');
+                }
+            } catch (\Throwable $e) {
+                // Auth guard xatosi bo'lsa e'tiborsiz qoldirish
+            }
+
+            if (!$locale) {
                 $locale = 'uz';
             }
         }

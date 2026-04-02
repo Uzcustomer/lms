@@ -760,10 +760,20 @@ class JournalController extends Controller
         // Agar student_subjects jadvalida shu fan uchun biriktirishlar bo'lsa — faqat biriktirilganlarni ko'rsatish
         // Aks holda (import qilinmagan) — guruhdagi barcha talabalarni ko'rsatish (eski logika)
         // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
+        // Joriy o'quv yilini aniqlash (eski yil biriktirishlarini chiqarib tashlash)
+        $currentEducationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
+
         $hasSubjectAssignments = DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->where('st.group_id', $group->group_hemis_id)
             ->where('ss.subject_id', $subjectId)
+            ->where(function ($q) use ($currentEducationYear) {
+                $q->where('ss.education_year', $currentEducationYear)
+                  ->orWhereNull('ss.education_year');
+            })
             ->exists();
 
         $studentsQuery = DB::table('students')
@@ -771,19 +781,23 @@ class JournalController extends Controller
 
         if ($hasSubjectAssignments) {
             // student_subjects da ma'lumot bor — faqat fanga biriktirilgan talabalarni ko'rsatish
-            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
+            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId, $currentEducationYear) {
                 $query
                     // Fanga biriktirilgan faol talabalar
-                    ->where(function ($q) use ($subjectId) {
+                    ->where(function ($q) use ($subjectId, $currentEducationYear) {
                         $q->where(function ($q2) {
                             $q2->where('student_status_code', '!=', '60')
                                ->orWhereNull('student_status_code');
                         })
-                        ->whereExists(function ($sub) use ($subjectId) {
+                        ->whereExists(function ($sub) use ($subjectId, $currentEducationYear) {
                             $sub->select(DB::raw(1))
                                 ->from('student_subjects')
                                 ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
-                                ->where('student_subjects.subject_id', $subjectId);
+                                ->where('student_subjects.subject_id', $subjectId)
+                                ->where(function ($q) use ($currentEducationYear) {
+                                    $q->where('student_subjects.education_year', $currentEducationYear)
+                                      ->orWhereNull('student_subjects.education_year');
+                                });
                         });
                     })
                     // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)

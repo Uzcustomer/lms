@@ -57,7 +57,7 @@
             @if($regDays !== null && $regDays <= 7)
                 <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full mt-1
                     {{ $regDays <= 3 ? 'bg-red-100 text-red-700' : ($regDays <= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
-                    {{ $regDays <= 0 ? 'Muddati tugagan!' : $regDays . ' kun qoldi' }}
+                    {{ $regDays <= 0 ? __('Muddati tugagan!') : $regDays . ' ' . __('kun qoldi') }}
                 </span>
             @endif
         </div>
@@ -91,7 +91,7 @@
             @if($visaDays !== null && $visaDays <= 30)
                 <span class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full mt-1
                     {{ $visaDays <= 15 ? 'bg-red-100 text-red-700' : ($visaDays <= 20 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
-                    {{ $visaDays <= 0 ? 'Muddati tugagan!' : $visaDays . ' kun qoldi' }}
+                    {{ $visaDays <= 0 ? __('Muddati tugagan!') : $visaDays . ' ' . __('kun qoldi') }}
                 </span>
             @endif
         </div>

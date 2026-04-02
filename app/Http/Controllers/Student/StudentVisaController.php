@@ -33,7 +33,7 @@ class StudentVisaController extends Controller
         // Agar tasdiqlangan bo'lsa, tahrirlash mumkin emas
         if ($existing && $existing->status === 'approved') {
             return redirect()->route('student.visa-info.index')
-                ->with('error', 'Ma\'lumotlaringiz allaqachon tasdiqlangan. Tahrirlash mumkin emas.');
+                ->with('error', __('Ma\'lumotlaringiz allaqachon tasdiqlangan. Tahrirlash mumkin emas.'));
         }
 
         $fileRule = function (string $pathField) use ($existing) {
@@ -143,7 +143,7 @@ class StudentVisaController extends Controller
         }
 
         return redirect()->route('student.visa-info.index')
-            ->with('success', 'Viza ma\'lumotlari saqlandi va tekshirish uchun yuborildi.');
+            ->with('success', __('Viza ma\'lumotlari saqlandi va tekshirish uchun yuborildi.'));
     }
 
     public function showFile(string $field)

@@ -16,110 +16,111 @@
                 {{-- Filtrlar --}}
                 <form id="filterForm" method="GET" action="{{ route('admin.international-students.index') }}">
                     <div class="filter-container">
-                        {{-- Aktiv filtrlar --}}
-                        @php
-                            $activeFilters = collect([
-                                'search' => request('search') ? 'Ism: '.request('search') : null,
-                                'level_code' => request('level_code') ? 'Kurs: '.request('level_code') : null,
-                                'group_name' => request('group_name') ? 'Guruh: '.request('group_name') : null,
-                                'country' => request('country') ? 'Davlat: '.request('country') : null,
-                                'department' => request('department') ? 'Fakultet' : null,
-                                'firm' => request('firm') ? 'Firma: '.request('firm') : null,
-                                'data_status' => request('data_status') ? 'Holat: '.request('data_status') : null,
-                                'visa_expiry' => request('visa_expiry') !== null && request('visa_expiry') !== '' ? 'Viza: '.request('visa_expiry').'k' : null,
-                                'registration_expiry' => request('registration_expiry') !== null && request('registration_expiry') !== '' ? 'Reg: '.request('registration_expiry').'k' : null,
-                            ])->filter();
-                        @endphp
-                        @if($activeFilters->count() > 0)
-                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-                            @foreach($activeFilters as $key => $label)
-                                <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:11px;font-weight:600;background:#eff6ff;color:#1e40af;border-radius:6px;border:1px solid #bfdbfe;">
-                                    {{ $label }}
-                                    <a href="javascript:void(0)" onclick="clearFilter('{{ $key }}')" style="color:#dc2626;font-weight:bold;font-size:14px;line-height:1;text-decoration:none;margin-left:2px;">&times;</a>
-                                </span>
-                            @endforeach
-                            <a href="{{ route('admin.international-students.index') }}" style="font-size:11px;color:#dc2626;font-weight:600;text-decoration:none;">Barchasini tozalash</a>
-                        </div>
-                        @endif
-
                         {{-- 1-qator --}}
                         <div class="filter-row">
                             <div class="filter-item" style="flex:2; min-width:180px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.Sh</label>
-                                <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism bo'yicha qidirish" class="filter-input" onkeydown="if(event.key==='Enter'){document.getElementById('filterForm').submit();}">
+                                <div class="filter-wrap">
+                                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism bo'yicha qidirish" class="filter-input" style="padding-right:28px;" onkeydown="if(event.key==='Enter'){document.getElementById('filterForm').submit();}">
+                                    @if(request('search'))<button type="button" class="filter-clear" onclick="clearFilter('search')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="min-width:100px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
-                                <select name="level_code" class="filter-input auto-submit" style="padding:0 8px;">
-                                    <option value="">Barchasi</option>
-                                    @for($i = 1; $i <= 6; $i++)
-                                        <option value="{{ $i }}" {{ request('level_code') == $i ? 'selected' : '' }}>{{ $i }}-kurs</option>
-                                    @endfor
-                                </select>
+                                <div class="filter-wrap">
+                                    <select name="level_code" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Barchasi</option>
+                                        @for($i = 1; $i <= 6; $i++)
+                                            <option value="{{ $i }}" {{ request('level_code') == $i ? 'selected' : '' }}>{{ $i }}-kurs</option>
+                                        @endfor
+                                    </select>
+                                    @if(request('level_code'))<button type="button" class="filter-clear" onclick="clearFilter('level_code')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="min-width:120px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                                <input type="text" name="group_name" value="{{ request('group_name') }}" placeholder="Guruh nomi" class="filter-input" onkeydown="if(event.key==='Enter'){document.getElementById('filterForm').submit();}">
+                                <div class="filter-wrap">
+                                    <input type="text" name="group_name" value="{{ request('group_name') }}" placeholder="Guruh nomi" class="filter-input" style="padding-right:28px;" onkeydown="if(event.key==='Enter'){document.getElementById('filterForm').submit();}">
+                                    @if(request('group_name'))<button type="button" class="filter-clear" onclick="clearFilter('group_name')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Davlati</label>
-                                <select name="country" class="filter-input auto-submit" style="padding:0 8px;">
-                                    <option value="">Barchasi</option>
-                                    @foreach($countries as $c)
-                                        <option value="{{ $c }}" {{ request('country') === $c ? 'selected' : '' }}>{{ $c }}</option>
-                                    @endforeach
-                                </select>
+                                <div class="filter-wrap">
+                                    <select name="country" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Barchasi</option>
+                                        @foreach($countries as $c)
+                                            <option value="{{ $c }}" {{ request('country') === $c ? 'selected' : '' }}>{{ $c }}</option>
+                                        @endforeach
+                                    </select>
+                                    @if(request('country'))<button type="button" class="filter-clear" onclick="clearFilter('country')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="flex:1; min-width:160px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#047857;"></span> Fakultet</label>
-                                <select name="department" class="filter-input auto-submit" style="padding:0 8px;">
-                                    <option value="">Barchasi</option>
-                                    @foreach($departments as $d)
-                                        <option value="{{ $d->department_id }}" {{ request('department') == $d->department_id ? 'selected' : '' }}>{{ $d->department_name }}</option>
-                                    @endforeach
-                                </select>
+                                <div class="filter-wrap">
+                                    <select name="department" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Barchasi</option>
+                                        @foreach($departments as $d)
+                                            <option value="{{ $d->department_id }}" {{ request('department') == $d->department_id ? 'selected' : '' }}>{{ $d->department_name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @if(request('department'))<button type="button" class="filter-clear" onclick="clearFilter('department')">&times;</button>@endif
+                                </div>
                             </div>
                         </div>
                         {{-- 2-qator --}}
                         <div class="filter-row">
                             <div class="filter-item" style="min-width:120px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Firma</label>
-                                <select name="firm" class="filter-input auto-submit" style="padding:0 8px;">
-                                    <option value="">Barchasi</option>
-                                    @foreach($firms as $key => $label)
-                                        <option value="{{ $key }}" {{ request('firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
-                                    @endforeach
-                                    <option value="other" {{ request('firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
-                                </select>
+                                <div class="filter-wrap">
+                                    <select name="firm" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Barchasi</option>
+                                        @foreach($firms as $key => $label)
+                                            <option value="{{ $key }}" {{ request('firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                        <option value="other" {{ request('firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
+                                    </select>
+                                    @if(request('firm'))<button type="button" class="filter-clear" onclick="clearFilter('firm')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Holati</label>
-                                <select name="data_status" class="filter-input auto-submit" style="padding:0 8px;">
+                                <div class="filter-wrap">
+                                    <select name="data_status" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
                                     <option value="">Barchasi</option>
                                     <option value="filled" {{ request('data_status') === 'filled' ? 'selected' : '' }}>Kiritilgan</option>
                                     <option value="not_filled" {{ request('data_status') === 'not_filled' ? 'selected' : '' }}>Kiritilmagan</option>
                                     <option value="approved" {{ request('data_status') === 'approved' ? 'selected' : '' }}>Tasdiqlangan</option>
                                     <option value="pending" {{ request('data_status') === 'pending' ? 'selected' : '' }}>Kutilmoqda</option>
                                     <option value="rejected" {{ request('data_status') === 'rejected' ? 'selected' : '' }}>Rad etilgan</option>
-                                </select>
+                                    </select>
+                                    @if(request('data_status'))<button type="button" class="filter-clear" onclick="clearFilter('data_status')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash</label>
-                                <select name="visa_expiry" class="filter-input auto-submit" style="padding:0 8px;">
-                                    <option value="">Barchasi</option>
-                                    <option value="15" {{ request('visa_expiry') == '15' ? 'selected' : '' }}>15 kun</option>
-                                    <option value="20" {{ request('visa_expiry') == '20' ? 'selected' : '' }}>20 kun</option>
-                                    <option value="30" {{ request('visa_expiry') == '30' ? 'selected' : '' }}>30 kun</option>
-                                </select>
+                                <div class="filter-wrap">
+                                    <select name="visa_expiry" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Barchasi</option>
+                                        <option value="15" {{ request('visa_expiry') == '15' ? 'selected' : '' }}>15 kun</option>
+                                        <option value="20" {{ request('visa_expiry') == '20' ? 'selected' : '' }}>20 kun</option>
+                                        <option value="30" {{ request('visa_expiry') == '30' ? 'selected' : '' }}>30 kun</option>
+                                    </select>
+                                    @if(request('visa_expiry') !== null && request('visa_expiry') !== '')<button type="button" class="filter-clear" onclick="clearFilter('visa_expiry')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Reg. tugash</label>
-                                <select name="registration_expiry" class="filter-input auto-submit" style="padding:0 8px;">
-                                    <option value="">Barchasi</option>
-                                    <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun</option>
-                                    <option value="5" {{ request('registration_expiry') == '5' ? 'selected' : '' }}>5 kun</option>
-                                    <option value="7" {{ request('registration_expiry') == '7' ? 'selected' : '' }}>7 kun</option>
-                                </select>
+                                <div class="filter-wrap">
+                                    <select name="registration_expiry" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Barchasi</option>
+                                        <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun</option>
+                                        <option value="5" {{ request('registration_expiry') == '5' ? 'selected' : '' }}>5 kun</option>
+                                        <option value="7" {{ request('registration_expiry') == '7' ? 'selected' : '' }}>7 kun</option>
+                                    </select>
+                                    @if(request('registration_expiry') !== null && request('registration_expiry') !== '')<button type="button" class="filter-clear" onclick="clearFilter('registration_expiry')">&times;</button>@endif
+                                </div>
                             </div>
                             <div class="filter-item" style="min-width:120px;">
                                 <label class="filter-label">&nbsp;</label>
@@ -372,6 +373,9 @@
     .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
     .filter-row:last-child { margin-bottom: 0; }
     .filter-item { display: flex; flex-direction: column; }
+    .filter-wrap { position: relative; }
+    .filter-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border-radius: 50%; border: none; background: #94a3b8; color: #fff; font-size: 13px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: background 0.15s; }
+    .filter-clear:hover { background: #ef4444; }
     .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
     .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
     .filter-input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 0.8rem; font-weight: 500; color: #1e293b; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: all 0.2s; box-sizing: border-box; }

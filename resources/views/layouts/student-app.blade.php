@@ -117,7 +117,7 @@
                 if (!$vi) {
                     // Ma'lumotlar umuman kiritilmagan
                     $showFillModal = !$onVisaPage;
-                    $topBanner = ['level' => 'warning', 'msg' => 'Viza ma\'lumotlaringizni to\'ldiring!'];
+                    $topBanner = ['level' => 'warning', 'msg' => __('Viza ma\'lumotlaringizni to\'ldiring!')];
                 } elseif ($vi) {
                     $rDays = $vi->registrationDaysLeft();
                     $vDays = $vi->visaDaysLeft();

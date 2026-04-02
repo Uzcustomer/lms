@@ -66,11 +66,24 @@
             </div>
 
             {{-- Viloyat --}}
-            <div>
+            <div x-data="regionSelect({ value: '{{ old('birth_region', $visaInfo?->birth_region ?? '') }}' })" x-effect="updateRegions($store.birthCountry)">
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viloyat') }} <span class="text-red-500">*</span></label>
-                <input type="text" name="birth_region" value="{{ old('birth_region', $visaInfo?->birth_region ?? '') }}" required
-                       placeholder="{{ __('Viloyat nomini kiriting') }}"
-                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                <div class="relative">
+                    <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true"
+                           placeholder="{{ __('Qidiring...') }}"
+                           class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" autocomplete="off">
+                    <input type="hidden" name="birth_region" :value="value" required>
+                    <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition
+                         class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <template x-for="item in filtered" :key="item">
+                            <div @click="selectItem(item)" x-text="item"
+                                 class="px-3 py-2 text-sm cursor-pointer hover:bg-indigo-50 hover:text-indigo-700 transition"></div>
+                        </template>
+                    </div>
+                    <template x-if="value && !open">
+                        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-green-600 font-semibold" x-text="value"></span>
+                    </template>
+                </div>
                 @error('birth_region') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 

@@ -105,8 +105,40 @@ function checkPdfSize(input) {
 }
 </script>
 
-{{-- Alpine searchable select component --}}
+{{-- Alpine store + searchable select components --}}
 <script>
+document.addEventListener('alpine:init', function() {
+    Alpine.store('birthCountry', '{{ old('birth_country', $visaInfo?->birth_country ?? '') }}');
+});
+
+var countryRegions = {
+    'India': ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Delhi','Goa','Gujarat','Haryana','Himachal Pradesh','Jammu and Kashmir','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal'],
+    'Pakistan': ['Balochistan','Islamabad','Khyber Pakhtunkhwa','Punjab','Sindh','Azad Kashmir','Gilgit-Baltistan'],
+    'Bangladesh': ['Barishal','Chattogram','Dhaka','Khulna','Mymensingh','Rajshahi','Rangpur','Sylhet'],
+    'Afghanistan': ['Badakhshan','Badghis','Baghlan','Balkh','Bamyan','Daykundi','Farah','Faryab','Ghazni','Ghor','Helmand','Herat','Jowzjan','Kabul','Kandahar','Kapisa','Khost','Kunar','Kunduz','Laghman','Logar','Nangarhar','Nimroz','Nuristan','Paktia','Paktika','Panjshir','Parwan','Samangan','Sar-e Pol','Takhar','Uruzgan','Wardak','Zabul'],
+    'Tajikistan': ['Dushanbe','Sughd','Khatlon','Gorno-Badakhshan','Districts of Republican Subordination'],
+    'Tojikiston': ['Dushanbe','Sughd','Khatlon','Gorno-Badakhshan','Districts of Republican Subordination'],
+    'Turkmenistan': ['Ahal','Balkan','Dashoguz','Lebap','Mary','Ashgabat'],
+    'Kyrgyzstan': ['Batken','Chuy','Issyk-Kul','Jalal-Abad','Naryn','Osh','Talas','Bishkek'],
+    'Kazakhstan': ['Almaty','Astana','Shymkent','Akmola','Aktobe','Almaty Region','Atyrau','East Kazakhstan','Jambyl','Karaganda','Kostanay','Kyzylorda','Mangystau','North Kazakhstan','Pavlodar','Turkistan','West Kazakhstan'],
+    'China': ['Anhui','Beijing','Chongqing','Fujian','Gansu','Guangdong','Guangxi','Guizhou','Hainan','Hebei','Heilongjiang','Henan','Hubei','Hunan','Inner Mongolia','Jiangsu','Jiangxi','Jilin','Liaoning','Ningxia','Qinghai','Shaanxi','Shandong','Shanghai','Shanxi','Sichuan','Tianjin','Tibet','Xinjiang','Yunnan','Zhejiang'],
+    'Russia': ['Moscow','Saint Petersburg','Krasnodar','Novosibirsk','Sverdlovsk','Tatarstan','Bashkortostan','Chelyabinsk','Samara','Rostov','Dagestan'],
+    'Rossiya': ['Moscow','Saint Petersburg','Krasnodar','Novosibirsk','Sverdlovsk','Tatarstan','Bashkortostan','Chelyabinsk','Samara','Rostov','Dagestan'],
+    'Turkey': ['Adana','Ankara','Antalya','Bursa','Denizli','Diyarbakir','Erzurum','Gaziantep','Istanbul','Izmir','Kayseri','Konya','Malatya','Mersin','Mugla','Samsun','Trabzon','Van'],
+    'Iran': ['Alborz','Ardabil','Bushehr','Chaharmahal','East Azerbaijan','Esfahan','Fars','Gilan','Golestan','Hamadan','Hormozgan','Ilam','Kerman','Kermanshah','Khorasan','Khuzestan','Kurdistan','Lorestan','Markazi','Mazandaran','Qazvin','Qom','Semnan','Tehran','West Azerbaijan','Yazd','Zanjan'],
+    'Iraq': ['Al Anbar','Babil','Baghdad','Basra','Dhi Qar','Diyala','Duhok','Erbil','Karbala','Kirkuk','Maysan','Muthanna','Najaf','Nineveh','Qadisiyyah','Saladin','Sulaymaniyah','Wasit'],
+    'Nepal': ['Province No. 1','Madhesh','Bagmati','Gandaki','Lumbini','Karnali','Sudurpashchim'],
+    'Sri Lanka': ['Central','Eastern','North Central','Northern','North Western','Sabaragamuwa','Southern','Uva','Western'],
+    'Indonesia': ['Bali','Banten','Central Java','East Java','Jakarta','West Java','Yogyakarta','North Sumatra','South Sulawesi','West Kalimantan'],
+    'Malaysia': ['Johor','Kedah','Kelantan','Kuala Lumpur','Melaka','Negeri Sembilan','Pahang','Penang','Perak','Perlis','Sabah','Sarawak','Selangor','Terengganu'],
+    'Uzbekistan': ['Toshkent','Samarqand','Buxoro','Farg\'ona','Andijon','Namangan','Qashqadaryo','Surxondaryo','Xorazm','Navoiy','Jizzax','Sirdaryo','Qoraqalpog\'iston'],
+    'Egypt': ['Alexandria','Aswan','Asyut','Cairo','Dakahlia','Damietta','Faiyum','Gharbia','Giza','Ismailia','Luxor','Minya','Port Said','Qalyubia','Sharqia','Sohag','Suez'],
+    'Nigeria': ['Abia','Abuja','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara'],
+    'Ghana': ['Ashanti','Brong-Ahafo','Central','Eastern','Greater Accra','Northern','Upper East','Upper West','Volta','Western'],
+    'Kenya': ['Baringo','Bomet','Bungoma','Busia','Elgeyo-Marakwet','Embu','Garissa','Homa Bay','Isiolo','Kajiado','Kakamega','Kericho','Kiambu','Kilifi','Kirinyaga','Kisii','Kisumu','Kitui','Kwale','Laikipia','Lamu','Machakos','Makueni','Mandera','Marsabit','Meru','Migori','Mombasa','Nairobi','Nakuru','Nandi','Narok','Nyamira','Nyandarua','Nyeri','Samburu','Siaya','Taita-Taveta','Tana River','Tharaka-Nithi','Trans-Nzoia','Turkana','Uasin Gishu','Vihiga','Wajir','West Pokot'],
+    'South Africa': ['Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo','Mpumalanga','North West','Northern Cape','Western Cape'],
+};
+
 function searchSelect(config) {
     return {
         items: config.items || [],
@@ -122,6 +154,32 @@ function searchSelect(config) {
             this.value = item;
             this.search = item;
             this.open = false;
+            // Davlat tanlanganda store'ga saqlash
+            Alpine.store('birthCountry', item);
+        }
+    };
+}
+
+function regionSelect(config) {
+    return {
+        regions: [],
+        value: config.value || '',
+        search: config.value || '',
+        open: false,
+        get filtered() {
+            if (this.regions.length === 0) return [];
+            if (!this.search) return this.regions;
+            var q = this.search.toLowerCase();
+            return this.regions.filter(function(i) { return i.toLowerCase().includes(q); });
+        },
+        selectItem(item) {
+            this.value = item;
+            this.search = item;
+            this.open = false;
+        },
+        updateRegions(country) {
+            if (!country) { this.regions = []; return; }
+            this.regions = countryRegions[country] || [];
         }
     };
 }

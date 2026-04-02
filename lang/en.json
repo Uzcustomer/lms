@@ -429,5 +429,12 @@
     "Ma'lumotlaringiz rad etilgan": "Your information was rejected",
     "Qaytadan to'ldiring.": "Please fill in again.",
     "Registratsiya muddati tugashiga": "Registration expires in",
-    "Saytdan foydalanish uchun viza va registratsiya ma'lumotlaringizni to'ldiring.": "Please fill in your visa and registration information to use the platform."
+    "Saytdan foydalanish uchun viza va registratsiya ma'lumotlaringizni to'ldiring.": "Please fill in your visa and registration information to use the platform.",
+    "Tug'ilgan joy": "Place of Birth",
+    "Viloyat": "Region",
+    "Shahar": "City",
+    "Masalan: Hindiston": "e.g. India",
+    "Tug'ilgan davlatni kiriting.": "Enter birth country.",
+    "Tug'ilgan viloyatni kiriting.": "Enter birth region.",
+    "Tug'ilgan shaharni kiriting.": "Enter birth city."
 }

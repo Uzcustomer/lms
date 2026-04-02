@@ -48,6 +48,9 @@ class StudentVisaController extends Controller
         };
 
         $request->validate([
+            'birth_country' => 'required|string|max:255',
+            'birth_region' => 'required|string|max:255',
+            'birth_city' => 'required|string|max:255',
             'passport_number' => 'required|string|max:50',
             'passport_issued_place' => 'required|string|max:255',
             'passport_issued_date' => 'required|date',
@@ -68,6 +71,9 @@ class StudentVisaController extends Controller
             'registration_doc' => $fileRule('registration_doc_path'),
             'agreement_accepted' => 'accepted',
         ], [
+            'birth_country.required' => __('Tug\'ilgan davlatni kiriting.'),
+            'birth_region.required' => __('Tug\'ilgan viloyatni kiriting.'),
+            'birth_city.required' => __('Tug\'ilgan shaharni kiriting.'),
             'passport_number.required' => 'Pasport raqamini kiriting.',
             'passport_issued_place.required' => 'Pasport berilgan joyni kiriting.',
             'passport_issued_date.required' => 'Pasport berilgan sanani kiriting.',
@@ -99,6 +105,7 @@ class StudentVisaController extends Controller
         ]);
 
         $data = $request->only([
+            'birth_country', 'birth_region', 'birth_city',
             'passport_number', 'passport_issued_place', 'passport_issued_date', 'passport_expiry_date',
             'registration_start_date', 'registration_end_date',
             'visa_number', 'visa_type', 'visa_start_date', 'visa_end_date',
@@ -106,10 +113,6 @@ class StudentVisaController extends Controller
             'entry_date',
         ]);
 
-        // HEMIS ma'lumotlarini avtomatik qo'shish
-        $data['birth_country'] = $student->country_name;
-        $data['birth_region'] = $student->province_name;
-        $data['birth_city'] = $student->district_name;
         $data['birth_date'] = $student->birth_date;
         $data['agreement_accepted'] = true;
         $data['status'] = 'pending';

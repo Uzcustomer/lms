@@ -106,6 +106,15 @@ class StudentAuthController extends Controller
 
         Auth::guard('student')->login($student);
         $request->session()->regenerate();
+
+        // Xalqaro talabalar uchun default ingliz tili
+        if (!$request->session()->has('locale')) {
+            if (str_starts_with(strtolower($student->group_name ?? ''), 'xd') ||
+                str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy')) {
+                $request->session()->put('locale', 'en');
+            }
+        }
+
         ActivityLogService::logLogin('student');
 
         Log::channel('student_auth')->info('[LOGIN SUCCESS] Talaba lokal parol bilan kirdi', [
@@ -235,6 +244,15 @@ class StudentAuthController extends Controller
 
         Auth::guard('student')->login($student);
         $request->session()->regenerate();
+
+        // Xalqaro talabalar uchun default ingliz tili
+        if (!$request->session()->has('locale')) {
+            if (str_starts_with(strtolower($student->group_name ?? ''), 'xd') ||
+                str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy')) {
+                $request->session()->put('locale', 'en');
+            }
+        }
+
         ActivityLogService::logLogin('student');
 
         if ($student->must_change_password) {

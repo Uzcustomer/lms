@@ -100,6 +100,9 @@ class InternationalStudentController extends Controller
             });
         }
 
+        // Filtrlangan query klon — statistika uchun
+        $filteredIds = (clone $query)->pluck('students.id');
+
         $students = $query->with('visaInfo')
             ->orderBy('full_name')
             ->paginate(25)
@@ -112,36 +115,35 @@ class InternationalStudentController extends Controller
         $countries = (clone $baseQuery)->whereNotNull('country_name')->where('country_name', '!=', '')->distinct()->pluck('country_name')->sort()->values();
         $departments = (clone $baseQuery)->whereNotNull('department_name')->where('department_name', '!=', '')->select('department_id', 'department_name')->distinct()->get()->sortBy('department_name');
 
-        // Statistika
-        $intStudentIds = $this->internationalStudentsQuery()->pluck('id');
-        $allVisas = StudentVisaInfo::whereIn('student_id', $intStudentIds);
-        $totalIntStudents = $intStudentIds->count();
+        // Statistika — filtrlangan natijaga asoslangan
+        $totalFiltered = $filteredIds->count();
+        $allVisas = StudentVisaInfo::whereIn('student_id', $filteredIds);
         $filledCount = (clone $allVisas)->count();
-        $notFilledCount = $totalIntStudents - $filledCount;
+        $notFilledCount = $totalFiltered - $filledCount;
         $approvedCount = (clone $allVisas)->where('status', 'approved')->count();
         $pendingCount = (clone $allVisas)->where('status', 'pending')->count();
         $rejectedCount = (clone $allVisas)->where('status', 'rejected')->count();
 
-        // Muddati yaqin talabalar
-        $visaUrgentCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+        $visaUrgentCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
             ->whereNotNull('visa_end_date')
             ->whereDate('visa_end_date', '<=', now()->addDays(30))
             ->whereDate('visa_end_date', '>=', now())
             ->count();
-        $regUrgentCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+        $regUrgentCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
             ->whereNotNull('registration_end_date')
             ->whereDate('registration_end_date', '<=', now()->addDays(7))
             ->whereDate('registration_end_date', '>=', now())
             ->count();
-        $expiredVisaCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+        $expiredVisaCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
             ->whereNotNull('visa_end_date')
             ->whereDate('visa_end_date', '<', now())
             ->count();
-        $expiredRegCount = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+        $expiredRegCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
             ->whereNotNull('registration_end_date')
             ->whereDate('registration_end_date', '<', now())
             ->count();
 
+        $totalIntStudents = $totalFiltered;
         $stats = compact(
             'totalIntStudents', 'filledCount', 'notFilledCount',
             'approvedCount', 'pendingCount', 'rejectedCount',

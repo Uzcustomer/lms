@@ -21,6 +21,32 @@
         </div>
     </div>
 
+    {{-- Tug'ilgan joy --}}
+    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+        <div style="font-size:11px;font-weight:700;color:#0f766e;margin-bottom:10px;">{{ __("Tug'ilgan joy") }}</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Davlat') }} <span class="text-red-500">*</span></label>
+                <input type="text" name="birth_country" value="{{ old('birth_country', $visaInfo?->birth_country ?? '') }}" required
+                       placeholder="{{ __('Masalan: Hindiston') }}"
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                @error('birth_country') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viloyat') }} <span class="text-red-500">*</span></label>
+                <input type="text" name="birth_region" value="{{ old('birth_region', $visaInfo?->birth_region ?? '') }}" required
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                @error('birth_region') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Shahar') }} <span class="text-red-500">*</span></label>
+                <input type="text" name="birth_city" value="{{ old('birth_city', $visaInfo?->birth_city ?? '') }}" required
+                       class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
+                @error('birth_city') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+            </div>
+        </div>
+    </div>
+
     {{-- Pasport --}}
     <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
         <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:10px;">{{ __('Pasport ma\'lumotlari') }}</div>

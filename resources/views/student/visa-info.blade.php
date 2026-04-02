@@ -105,6 +105,28 @@ function checkPdfSize(input) {
 }
 </script>
 
+{{-- Alpine searchable select component --}}
+<script>
+function searchSelect(config) {
+    return {
+        items: config.items || [],
+        value: config.value || '',
+        search: config.value || '',
+        open: false,
+        get filtered() {
+            if (!this.search) return this.items;
+            var q = this.search.toLowerCase();
+            return this.items.filter(function(i) { return i.toLowerCase().includes(q); });
+        },
+        select(item) {
+            this.value = item;
+            this.search = item;
+            this.open = false;
+        }
+    };
+}
+</script>
+
 {{-- Flatpickr for nice date display --}}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

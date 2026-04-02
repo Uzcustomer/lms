@@ -41,6 +41,14 @@ class ExportLessonAssignmentJob implements ShouldQueue
 
             $filePath = $this->generateExcel($results);
 
+            Log::info("[ExportLessonAssignmentJob] Tayyor", [
+                'export_key' => $this->exportKey,
+                'file_path' => $filePath,
+                'file_exists' => file_exists($filePath),
+                'file_size' => file_exists($filePath) ? filesize($filePath) : 0,
+                'results_count' => count($results),
+            ]);
+
             $this->updateProgress('Tayyor', 100, 'done', $filePath);
 
         } catch (\Throwable $e) {

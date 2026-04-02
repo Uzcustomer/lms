@@ -162,17 +162,7 @@ class StudentVisaController extends Controller
     {
         $message = "📋 {$student->full_name} ({$student->group_name}) viza ma'lumotlarini kiritdi. Tekshirish kerak.";
 
-        // Registrator Telegram guruhiga
-        $registrarGroupId = config('services.telegram.registrar_group_id');
-        if ($registrarGroupId) {
-            try {
-                app(TelegramService::class)->sendToUser($registrarGroupId, $message);
-            } catch (\Throwable $e) {
-                \Log::warning('Telegram registrar group xabar yuborishda xato: ' . $e->getMessage());
-            }
-        }
-
-        // Registrator ofisi xodimlariga sayt bildirishnomasi
+        // Registrator ofisi xodimlariga sayt bildirishnomasi + Telegram
         $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
         foreach ($registrarUsers as $user) {
             Notification::create([
@@ -187,6 +177,17 @@ class StudentVisaController extends Controller
                 'is_draft' => false,
                 'sent_at' => now(),
             ]);
+            if ($user->telegram_chat_id) {
+                try { app(TelegramService::class)->sendToUser($user->telegram_chat_id, $message); } catch (\Throwable $e) {}
+            }
+        }
+
+        // Registrator ofisi xodimlari (Teacher jadvalidan ham)
+        $registrarTeachers = \App\Models\Teacher::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
+        foreach ($registrarTeachers as $teacher) {
+            if ($teacher->telegram_chat_id) {
+                try { app(TelegramService::class)->sendToUser($teacher->telegram_chat_id, $message); } catch (\Throwable $e) {}
+            }
         }
 
         // Firma javobgariga (agar firma belgilangan bo'lsa)

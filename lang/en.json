@@ -437,5 +437,8 @@
     "Tug'ilgan davlatni kiriting.": "Enter birth country.",
     "Tug'ilgan viloyatni kiriting.": "Enter birth region.",
     "Tug'ilgan shaharni kiriting.": "Enter birth city.",
-    "Vaqtinchalik registratsiya — pasportingizning orqasida yopishtirilgan qog'ozda": "Temporary registration — the paper attached to the back of your passport"
+    "Vaqtinchalik registratsiya — pasportingizning orqasida yopishtirilgan qog'ozda": "Temporary registration — the paper attached to the back of your passport",
+    "Qidiring...": "Search...",
+    "Viloyat nomini kiriting": "Enter region name",
+    "Shahar nomini kiriting": "Enter city name"
 }

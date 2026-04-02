@@ -12,6 +12,7 @@ class StudentSubject extends Model
         'subject_id',
         'semester_id',
         'subject_name',
+        'education_year',
     ];
 
     public function student()

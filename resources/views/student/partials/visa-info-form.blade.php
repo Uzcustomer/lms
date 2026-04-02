@@ -1,5 +1,5 @@
 <form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm"
-      x-data="{ showAgreementModal: false, firm: '{{ old('firm', $visaInfo?->firm ?? '') }}' }">
+      x-data="{ showAgreementModal: false }">
     @csrf
 
     {{-- Ogohlantirish --}}
@@ -155,28 +155,6 @@
             <input type="date" name="entry_date" value="{{ old('entry_date', $visaInfo?->entry_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('entry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-        </div>
-    </div>
-
-    {{-- Firma --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Qaysi firma orqali kelgan') }}</h5>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Firma') }} <span class="text-red-500">*</span></label>
-            <select name="firm" x-model="firm" required class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-                <option value="">{{ __('Tanlang') }}</option>
-                @foreach(\App\Models\StudentVisaInfo::FIRM_OPTIONS as $key => $label)
-                    <option value="{{ $key }}">{{ $label }}</option>
-                @endforeach
-                <option value="other">{{ __('Boshqa (o\'zim yozaman)') }}</option>
-            </select>
-            @error('firm') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-        </div>
-        <div x-show="firm === 'other'" x-transition>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Firma nomi') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="firm_custom" value="{{ old('firm_custom', $visaInfo?->firm_custom ?? '') }}"
-                   class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-            @error('firm_custom') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
 

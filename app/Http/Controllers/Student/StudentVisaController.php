@@ -60,8 +60,6 @@ class StudentVisaController extends Controller
             'visa_issued_place' => 'required|string|max:255',
             'visa_issued_date' => 'required|date',
             'entry_date' => 'required|date',
-            'firm' => 'required|string',
-            'firm_custom' => 'nullable|required_if:firm,other|string|max:255',
             'passport_scan' => $fileRule('passport_scan_path'),
             'visa_scan' => $fileRule('visa_scan_path'),
             'registration_doc' => $fileRule('registration_doc_path'),
@@ -85,8 +83,6 @@ class StudentVisaController extends Controller
             'visa_issued_place.required' => 'Viza berilgan joyni kiriting.',
             'visa_issued_date.required' => 'Viza berilgan vaqtni kiriting.',
             'entry_date.required' => 'Chegaradan kirgan sanani kiriting.',
-            'firm.required' => 'Firmani tanlang.',
-            'firm_custom.required_if' => 'Firma nomini kiriting.',
             'passport_scan.required' => 'Pasport skanerini yuklang.',
             'passport_scan.mimes' => 'Pasport skaneri faqat PDF formatida bo\'lishi kerak.',
             'passport_scan.max' => 'Fayl hajmi 5MB dan oshmasligi kerak.',
@@ -104,7 +100,7 @@ class StudentVisaController extends Controller
             'registration_start_date', 'registration_end_date',
             'visa_number', 'visa_type', 'visa_start_date', 'visa_end_date',
             'visa_entries_count', 'visa_stay_days', 'visa_issued_place', 'visa_issued_date',
-            'entry_date', 'firm', 'firm_custom',
+            'entry_date',
         ]);
 
         // HEMIS ma'lumotlarini avtomatik qo'shish

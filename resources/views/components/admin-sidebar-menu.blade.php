@@ -631,7 +631,7 @@
         @endif
 
         {{-- ============ TALABA ARIZALARI SECTION ============ --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <div class="sidebar-section">Talaba arizalari</div>
 
         <a href="{{ route('admin.absence-excuses.index') }}"

@@ -260,7 +260,7 @@
                     </div>
                     <h3 class="text-xl font-bold text-red-700 mb-3">{{ __('Platformadan foydalanish cheklangan!') }}</h3>
                     <p class="text-sm text-gray-600 mb-2">{{ $topBanner['msg'] ?? '' }}</p>
-                    <p class="text-sm text-gray-600 mb-6">{{ __('Pasportingizni registrator ofisiga yoki firmangizga topshiring. Platformadan foydalanish uchun registratsiya jarayoni boshlanishi kerak.') }}</p>
+                    <p class="text-sm text-gray-600 mb-6">{{ __("Saytdan foydalanish uchun viza va registratsiya ma'lumotlaringizni to'ldiring.") }}</p>
                     <a href="{{ route('student.visa-info.index') }}" class="inline-block px-6 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition">{{ __("Viza ma'lumotlarim") }}</a>
                 </div>
             </div>

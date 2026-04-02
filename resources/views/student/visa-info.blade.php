@@ -185,11 +185,12 @@ function regionSelect(config) {
 }
 </script>
 
-{{-- Flatpickr for nice date display --}}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+{{-- Flatpickr --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    if (typeof flatpickr === 'undefined') { console.error('Flatpickr not loaded!'); return; }
     var locale = '{{ app()->getLocale() }}';
     var months = locale === 'uz'
         ? ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr']
@@ -222,6 +223,8 @@ document.addEventListener('DOMContentLoaded', function() {
         flatpickr(el, {
             dateFormat: 'Y-m-d',
             defaultDate: origValue || null,
+            allowInput: false,
+            clickOpens: true,
             onChange: function(selectedDates, dateStr) {
                 hidden.value = dateStr;
                 if (selectedDates[0]) {

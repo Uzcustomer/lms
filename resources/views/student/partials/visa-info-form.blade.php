@@ -119,13 +119,13 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport berilgan sana') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="passport_issued_date" value="{{ old('passport_issued_date', $visaInfo?->passport_issued_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="passport_issued_date" value="{{ old('passport_issued_date', $visaInfo?->passport_issued_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('passport_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport muddati tugash sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="passport_expiry_date" value="{{ old('passport_expiry_date', $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="passport_expiry_date" value="{{ old('passport_expiry_date', $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('passport_expiry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -140,13 +140,13 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Boshlanish sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="registration_start_date" value="{{ old('registration_start_date', $visaInfo?->registration_start_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="registration_start_date" value="{{ old('registration_start_date', $visaInfo?->registration_start_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('registration_start_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Tugash sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="registration_end_date" value="{{ old('registration_end_date', $visaInfo?->registration_end_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="registration_end_date" value="{{ old('registration_end_date', $visaInfo?->registration_end_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('registration_end_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -217,13 +217,13 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza boshlanish sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="visa_start_date" value="{{ old('visa_start_date', $visaInfo?->visa_start_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="visa_start_date" value="{{ old('visa_start_date', $visaInfo?->visa_start_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_start_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza tugash sanasi') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="visa_end_date" value="{{ old('visa_end_date', $visaInfo?->visa_end_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="visa_end_date" value="{{ old('visa_end_date', $visaInfo?->visa_end_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_end_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -244,7 +244,7 @@
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza berilgan vaqti') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="visa_issued_date" value="{{ old('visa_issued_date', $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="visa_issued_date" value="{{ old('visa_issued_date', $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -258,7 +258,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Chegaradan kirgan sana') }} <span class="text-red-500">*</span></label>
-            <input type="text" data-datepicker="true" readonly name="entry_date" value="{{ old('entry_date', $visaInfo?->entry_date?->format('Y-m-d') ?? '') }}" required
+            <input type="text" data-datepicker="1" name="entry_date" value="{{ old('entry_date', $visaInfo?->entry_date?->format('Y-m-d') ?? '') }}" required
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('entry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>

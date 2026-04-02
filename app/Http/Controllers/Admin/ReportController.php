@@ -1217,11 +1217,21 @@ class ReportController extends Controller
 
         $data = \Illuminate\Support\Facades\Cache::get($exportKey);
         if (!$data || $data['status'] !== 'done' || empty($data['file_path'])) {
+            \Illuminate\Support\Facades\Log::warning("[ExportDownload] Cache topilmadi yoki tayyor emas", [
+                'export_key' => $exportKey,
+                'cache_data' => $data,
+            ]);
             return abort(404, 'Fayl topilmadi yoki hali tayyor emas');
         }
 
         $filePath = $data['file_path'];
         if (!file_exists($filePath)) {
+            \Illuminate\Support\Facades\Log::warning("[ExportDownload] Fayl mavjud emas", [
+                'export_key' => $exportKey,
+                'file_path' => $filePath,
+                'dir_exists' => is_dir(dirname($filePath)),
+                'dir_contents' => is_dir(dirname($filePath)) ? scandir(dirname($filePath)) : 'dir not found',
+            ]);
             return abort(404, 'Fayl serverda topilmadi');
         }
 

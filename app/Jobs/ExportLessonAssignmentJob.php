@@ -92,9 +92,6 @@ class ExportLessonAssignmentJob implements ShouldQueue
             if ($faculty) {
                 $scheduleQuery->where('sch.faculty_id', $faculty->department_hemis_id);
             }
-        } elseif (!empty($filters['dekan_faculty_ids'])) {
-            $dekanHemisIds = Department::whereIn('id', $filters['dekan_faculty_ids'])->pluck('department_hemis_id')->toArray();
-            $scheduleQuery->whereIn('sch.faculty_id', $dekanHemisIds);
         }
 
         if (!empty($filters['specialty'])) {
@@ -374,14 +371,20 @@ class ExportLessonAssignmentJob implements ShouldQueue
         }
 
         $fileName = 'Dars_belgilash_' . date('Y-m-d_H-i') . '.xlsx';
+        $filePath = 'exports/' . $fileName;
 
         // exports papkasini yaratish
-        $exportDir = storage_path('app/exports');
-        if (!is_dir($exportDir)) {
-            mkdir($exportDir, 0755, true);
-        }
+        Storage::disk('local')->makeDirectory('exports');
 
-        $fullPath = $exportDir . '/' . $fileName;
+        $fullPath = storage_path('app/private/' . $filePath);
+
+        // Agar private papka yo'q bo'lsa, oddiy app/ papkasiga yozish
+        if (!is_dir(dirname($fullPath))) {
+            $fullPath = storage_path('app/' . $filePath);
+            if (!is_dir(dirname($fullPath))) {
+                mkdir(dirname($fullPath), 0755, true);
+            }
+        }
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($fullPath);

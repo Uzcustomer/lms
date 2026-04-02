@@ -27,7 +27,9 @@
                         <div class="filter-item" style="flex: 1; min-width: 170px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
                             <select id="faculty" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
+                                @if(!isset($dekanFacultyIds) || empty($dekanFacultyIds))
+                                    <option value="">Barchasi</option>
+                                @endif
                                 @foreach($faculties as $faculty)
                                     <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
                                 @endforeach

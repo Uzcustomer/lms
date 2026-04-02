@@ -115,9 +115,16 @@
                 $onVisaPage = request()->routeIs('student.visa-info.*');
 
                 if (!$vi) {
-                    // Ma'lumotlar umuman kiritilmagan
-                    $showFillModal = !$onVisaPage;
-                    $topBanner = ['level' => 'warning', 'msg' => __('Viza ma\'lumotlaringizni to\'ldiring!')];
+                    // Ma'lumotlar umuman kiritilmagan — 3 kun o'tgan bo'lsa bloklash
+                    $studentCreated = $vs->created_at ?? $vs->hemis_created_at;
+                    $daysSinceCreated = $studentCreated ? (int) $studentCreated->diffInDays(now()) : 0;
+                    if ($daysSinceCreated >= 3) {
+                        $blockSite = !$onVisaPage;
+                        $topBanner = ['level' => 'danger', 'msg' => __('Viza ma\'lumotlaringizni to\'ldiring!') . ' ' . __('Platformadan foydalanish cheklangan!')];
+                    } else {
+                        $showFillModal = !$onVisaPage;
+                        $topBanner = ['level' => 'warning', 'msg' => __('Viza ma\'lumotlaringizni to\'ldiring!')];
+                    }
                 } elseif ($vi) {
                     $rDays = $vi->registrationDaysLeft();
                     $vDays = $vi->visaDaysLeft();

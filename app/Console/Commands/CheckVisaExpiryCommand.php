@@ -67,14 +67,10 @@ class CheckVisaExpiryCommand extends Command
         // Talabaga bildirishnoma
         $this->notifyStudent($student, $telegram, $message, $level, 'registratsiya');
 
-        // Qizil holatda — firma javobgariga va registrator ofisiga ham
-        if ($level === 'danger') {
-            $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — registratsiya muddati tugashiga {$daysLeft} kun qoldi!";
-            if ($daysLeft <= 0) {
-                $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — registratsiya muddati TUGAGAN!";
-            }
-            $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
-        }
+        // Registrator guruhiga va firma javobgariga ham yuborish (barcha darajalar)
+        $staffMsg = "{$emoji} {$student->full_name} ({$student->group_name}) — ";
+        $staffMsg .= $daysLeft <= 0 ? "registratsiya muddati TUGAGAN!" : "registratsiya muddati tugashiga {$daysLeft} kun qoldi!";
+        $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
 
         return 1;
     }
@@ -104,14 +100,10 @@ class CheckVisaExpiryCommand extends Command
 
         $this->notifyStudent($student, $telegram, $message, $level, 'visa');
 
-        // Qizil holatda — firma javobgariga va registrator ofisiga ham
-        if ($level === 'danger') {
-            $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — viza muddati tugashiga {$daysLeft} kun qoldi!";
-            if ($daysLeft <= 0) {
-                $staffMsg = "🔴 {$student->full_name} ({$student->group_name}) — viza muddati TUGAGAN!";
-            }
-            $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
-        }
+        // Registrator guruhiga va firma javobgariga ham yuborish (barcha darajalar)
+        $staffMsg = "{$emoji} {$student->full_name} ({$student->group_name}) — ";
+        $staffMsg .= $daysLeft <= 0 ? "viza muddati TUGAGAN!" : "viza muddati tugashiga {$daysLeft} kun qoldi!";
+        $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
 
         return 1;
     }
@@ -155,6 +147,12 @@ class CheckVisaExpiryCommand extends Command
      */
     private function notifyFirmAndRegistrar(StudentVisaInfo $info, TelegramService $telegram, string $message): void
     {
+        // Registrator ofisi Telegram guruhiga
+        $registrarGroupId = config('services.telegram.registrar_group_id');
+        if ($registrarGroupId) {
+            $telegram->sendToUser($registrarGroupId, $message);
+        }
+
         // Registrator ofisi xodimlariga sayt bildirishnomasi
         $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
         foreach ($registrarUsers as $regUser) {

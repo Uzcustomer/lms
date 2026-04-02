@@ -757,9 +757,6 @@ class ReportController extends Controller
 
         // Dekan uchun fakultet majburiy filtr
         $dekanFacultyIds = get_dekan_faculty_ids();
-        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
-            $request->merge(['faculty' => $dekanFacultyIds[0]]);
-        }
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
@@ -801,6 +798,10 @@ class ReportController extends Controller
             if ($faculty) {
                 $scheduleQuery->where('sch.faculty_id', $faculty->department_hemis_id);
             }
+        } elseif (!empty($dekanFacultyIds)) {
+            // Dekan fakultet tanlamagan bo'lsa, barcha o'z fakultetlari bo'yicha filtr
+            $dekanHemisIds = Department::whereIn('id', $dekanFacultyIds)->pluck('department_hemis_id')->toArray();
+            $scheduleQuery->whereIn('sch.faculty_id', $dekanHemisIds);
         }
 
         if ($request->filled('specialty')) {
@@ -1168,7 +1169,7 @@ class ReportController extends Controller
         // Dekan uchun fakultet majburiy filtr
         $dekanFacultyIds = get_dekan_faculty_ids();
         if (!empty($dekanFacultyIds) && empty($filters['faculty'])) {
-            $filters['faculty'] = $dekanFacultyIds[0];
+            $filters['dekan_faculty_ids'] = $dekanFacultyIds;
         }
 
         \Illuminate\Support\Facades\Cache::put($exportKey, [

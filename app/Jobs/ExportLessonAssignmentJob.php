@@ -392,6 +392,9 @@ class ExportLessonAssignmentJob implements ShouldQueue
         $writer->save($fullPath);
         $spreadsheet->disconnectWorksheets();
 
+        // Web server o'qishi uchun ruxsat berish
+        chmod($fullPath, 0644);
+
         return $fullPath;
     }
 

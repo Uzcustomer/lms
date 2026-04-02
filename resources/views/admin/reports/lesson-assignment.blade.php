@@ -491,7 +491,9 @@
             fetch(url)
                 .then(function(response) {
                     if (!response.ok) {
-                        throw new Error('Fayl yuklab olinmadi (status: ' + response.status + ')');
+                        return response.json().catch(function() { return { error: 'Server xatosi (status: ' + response.status + ')' }; }).then(function(data) {
+                            throw new Error(data.error || 'Fayl yuklab olinmadi (status: ' + response.status + ')');
+                        });
                     }
                     var disposition = response.headers.get('Content-Disposition');
                     var fileName = 'Dars_belgilash.xlsx';

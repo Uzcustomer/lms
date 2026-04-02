@@ -108,7 +108,13 @@ class SendUnratedRegistrationsReport extends Command
 
         // Fanga biriktirilgan faol talabalar soni (student_subjects jadvalidan)
         // Chetlashganlar (status_code=60) hisobga olinmaydi
+        // Eski o'quv yili biriktirishlarini chiqarib tashlash
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+
+        $currentEducationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
 
         $subjectStudentCounts = DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
@@ -117,6 +123,10 @@ class SendUnratedRegistrationsReport extends Command
             ->where(function ($q) {
                 $q->where('st.student_status_code', '!=', '60')
                   ->orWhereNull('st.student_status_code');
+            })
+            ->where(function ($q) use ($currentEducationYear) {
+                $q->where('ss.education_year', $currentEducationYear)
+                  ->orWhereNull('ss.education_year');
             })
             ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))

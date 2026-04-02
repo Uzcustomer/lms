@@ -916,14 +916,24 @@ class ReportController extends Controller
         // 3-QADAM: Fanga biriktirilgan faol talabalar sonini hisoblash
         // student_subjects jadvalidan — HEMIS da fanga biriktirilgan talabalarni olish
         // Chetlashtirilgan talabalar (student_status_code != 11) hisobga olinmaydi
+        // Eski o'quv yili biriktirishlarini chiqarib tashlash
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+
+        $currentEducationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
 
         $subjectStudentCounts = DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->whereIn('st.group_id', $groupIds)
             ->whereIn('ss.subject_id', $subjectIds)
             ->where('st.student_status_code', 11) // Faqat faol talabalar
+            ->where(function ($q) use ($currentEducationYear) {
+                $q->where('ss.education_year', $currentEducationYear)
+                  ->orWhereNull('ss.education_year');
+            })
             ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
             ->pluck('cnt', 'gs_key');

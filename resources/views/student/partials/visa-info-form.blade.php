@@ -10,29 +10,20 @@
         <p class="text-sm text-blue-800 font-medium">{{ __('Barcha ma\'lumotlarni to\'g\'ri va aniq kiriting. Bu ma\'lumotlar registrator ofisi tomonidan tekshiriladi.') }}</p>
     </div>
 
-    {{-- HEMIS ma'lumotlari (faqat ko'rish) --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Shaxsiy ma\'lumotlar (HEMIS)') }}</h5>
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div>
-            <span class="block text-xs text-gray-500 mb-1">{{ __('F.I.Sh') }}</span>
-            <span class="text-sm font-semibold text-gray-800">{{ $student->full_name }}</span>
-        </div>
-        <div>
-            <span class="block text-xs text-gray-500 mb-1">{{ __('Tug\'ilgan sana') }}</span>
-            <span class="text-sm font-semibold text-gray-800">{{ $student->birth_date?->format('d.m.Y') ?? '—' }}</span>
-        </div>
-        <div>
-            <span class="block text-xs text-gray-500 mb-1">{{ __('Fuqaroligi') }}</span>
-            <span class="text-sm font-semibold text-gray-800">{{ $student->citizenship_name ?? '—' }}</span>
-        </div>
-        <div>
-            <span class="block text-xs text-gray-500 mb-1">{{ __('Davlat') }}</span>
-            <span class="text-sm font-semibold text-gray-800">{{ $student->country_name ?? '—' }}</span>
+    {{-- HEMIS --}}
+    <div class="mb-5 p-3 rounded-lg border border-gray-200" style="background:linear-gradient(135deg,#f0f4f8,#e8edf5);">
+        <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">{{ __('Shaxsiy ma\'lumotlar (HEMIS)') }}</div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div><span class="text-[10px] text-gray-400">{{ __('F.I.Sh') }}</span><br><b class="text-sm text-gray-800">{{ $student->full_name }}</b></div>
+            <div><span class="text-[10px] text-gray-400">{{ __('Tug\'ilgan sana') }}</span><br><span class="text-sm text-gray-800">{{ $student->birth_date?->format('d.m.Y') ?? '—' }}</span></div>
+            <div><span class="text-[10px] text-gray-400">{{ __('Fuqaroligi') }}</span><br><span class="text-sm text-gray-800">{{ $student->citizenship_name ?? '—' }}</span></div>
+            <div><span class="text-[10px] text-gray-400">{{ __('Davlat') }}</span><br><span class="text-sm text-gray-800">{{ $student->country_name ?? '—' }}</span></div>
         </div>
     </div>
 
-    {{-- Pasport ma'lumotlari --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Pasport ma\'lumotlari') }}</h5>
+    {{-- Pasport --}}
+    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+        <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:10px;">{{ __('Pasport ma\'lumotlari') }}</div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Pasport raqami') }} <span class="text-red-500">*</span></label>
@@ -62,9 +53,12 @@
             @error('passport_expiry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
+    </div>
 
-    {{-- Vaqtinchalik ro'yxatga qo'yish --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Vaqtinchalik ro\'yxatga qo\'yish (registratsiya)') }}</h5>
+    {{-- Registratsiya + Viza yonma-yon --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="p-4 bg-white rounded-lg border border-gray-200">
+            <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:10px;">{{ __('Vaqtinchalik ro\'yxatga qo\'yish (registratsiya)') }}</div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Boshlanish sanasi') }} <span class="text-red-500">*</span></label>
@@ -79,9 +73,11 @@
             @error('registration_end_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
+    </div>
 
-    {{-- Viza ma'lumotlari --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Viza ma\'lumotlari') }}</h5>
+    {{-- Viza --}}
+    <div class="p-4 bg-white rounded-lg border border-gray-200">
+        <div style="font-size:11px;font-weight:700;color:#d97706;margin-bottom:10px;">{{ __('Viza ma\'lumotlari') }}</div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viza raqami') }} <span class="text-red-500">*</span></label>
@@ -146,10 +142,13 @@
             @error('visa_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
+    </div>
+    </div>
 
     {{-- Chegaradan kirish --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Chegaradan kirish') }}</h5>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+        <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:10px;">{{ __('Chegaradan kirish') }}</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Chegaradan kirgan sana') }} <span class="text-red-500">*</span></label>
             <input type="date" name="entry_date" value="{{ old('entry_date', $visaInfo?->entry_date?->format('Y-m-d') ?? '') }}" required
@@ -157,9 +156,11 @@
             @error('entry_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
     </div>
+    </div>
 
-    {{-- Hujjatlar yuklash --}}
-    <h5 class="text-sm font-semibold text-gray-700 mb-3 border-b pb-2">{{ __('Hujjatlar yuklash') }}</h5>
+    {{-- Hujjatlar --}}
+    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
+        <div style="font-size:11px;font-weight:700;color:#dc2626;margin-bottom:10px;">{{ __('Hujjatlar yuklash') }}</div>
     <div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
         <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
         <div class="text-xs text-amber-800">
@@ -204,6 +205,7 @@
             <p data-file-error class="text-xs text-red-600 mt-1 hidden"></p>
             @error('registration_doc') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
+    </div>
     </div>
 
     {{-- Saqlash tugmasi --}}

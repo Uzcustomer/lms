@@ -196,22 +196,44 @@ document.addEventListener('DOMContentLoaded', function() {
         : ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
     document.querySelectorAll('[data-datepicker]').forEach(function(el) {
+        var origValue = el.value;
+        var origName = el.name;
+
+        // Hidden input serverga Y-m-d yuboradi
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = origName;
+        hidden.value = origValue;
+        el.parentNode.insertBefore(hidden, el.nextSibling);
+
+        // Ko'rinadigan input — faqat chiroyli sana
+        el.removeAttribute('name');
         el.style.cursor = 'pointer';
         el.style.backgroundColor = '#fff';
 
+        // Agar qiymat bor bo'lsa, chiroyli ko'rsatish
+        if (origValue) {
+            var d = new Date(origValue);
+            if (!isNaN(d)) {
+                el.value = d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+            }
+        }
+
         flatpickr(el, {
             dateFormat: 'Y-m-d',
-            defaultDate: el.value || null,
-            altInput: true,
-            altFormat: 'j F Y',
-            formatDate: function(date, format) {
-                if (format === 'j F Y') {
-                    return date.getDate() + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
+            defaultDate: origValue || null,
+            onChange: function(selectedDates, dateStr) {
+                hidden.value = dateStr;
+                if (selectedDates[0]) {
+                    var dt = selectedDates[0];
+                    el.value = dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
                 }
-                var y = date.getFullYear();
-                var m = String(date.getMonth() + 1).padStart(2, '0');
-                var d = String(date.getDate()).padStart(2, '0');
-                return y + '-' + m + '-' + d;
+            },
+            onReady: function(selectedDates) {
+                if (selectedDates[0]) {
+                    var dt = selectedDates[0];
+                    el.value = dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+                }
             }
         });
     });

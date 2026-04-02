@@ -95,7 +95,7 @@ function checkPdfSize(input) {
     var errorEl = input.closest('div').querySelector('[data-file-error]');
     if (!errorEl) return;
     if (input.files.length > 0 && input.files[0].size > 5 * 1024 * 1024) {
-        errorEl.textContent = 'Fayl hajmi 5MB dan oshmasligi kerak!';
+        errorEl.textContent = '{{ __("Fayl hajmi 5MB dan oshmasligi kerak!") }}';
         errorEl.classList.remove('hidden');
         input.value = '';
     } else {

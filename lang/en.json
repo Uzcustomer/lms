@@ -419,5 +419,13 @@
     "Keyinroq": "Later",
     "To'ldirish": "Fill In",
     "Tushundim": "Understood",
-    "Fayl hajmi 5MB dan oshmasligi kerak!": "File size must not exceed 5MB!"
+    "Fayl hajmi 5MB dan oshmasligi kerak!": "File size must not exceed 5MB!",
+    "Viza ma'lumotlari saqlandi va tekshirish uchun yuborildi.": "Visa information saved and submitted for review.",
+    "Ma'lumotlaringiz allaqachon tasdiqlangan. Tahrirlash mumkin emas.": "Your information has already been approved. Editing is not allowed.",
+    "Hujjatlarni sifatli skaner qiling!": "Scan documents with high quality!",
+    "Faqat PDF formatida, aniq va o'qilishi mumkin bo'lgan skaner yuklang. Sifatsiz yoki xiralashgan fayllar rad etiladi. Telefon kamerasi bilan suratga olganda yaxshi yorug'likda, to'g'ri burchakda oling.": "Upload only clear, readable PDF scans. Low quality or blurry files will be rejected. When photographing with a phone camera, use good lighting and correct angle.",
+    "Viza ma'lumotlaringizni to'ldiring!": "Please fill in your visa information!",
+    "Vaqtinchalik ro'yxatga qo'yish (registratsiya)": "Temporary Registration",
+    "Registratsiya muddati tugashiga": "Registration expires in",
+    "Viza muddati tugashiga": "Visa expires in"
 }

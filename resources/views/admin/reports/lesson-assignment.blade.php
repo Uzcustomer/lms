@@ -460,9 +460,8 @@
                             clearInterval(excelExportInterval);
                             excelExportInterval = null;
                             $('#excel-progress-text').text('Yuklab olinmoqda...');
-                            // Faylni yuklab olish
-                            window.location.href = '{{ route("admin.reports.lesson-assignment.export-download") }}?export_key=' + encodeURIComponent(exportKey);
-                            setTimeout(resetExcelButton, 2000);
+                            // Faylni fetch orqali yuklab olish (sahifadan chiqmasdan)
+                            downloadExcelFile(exportKey);
                         } else if (res.status === 'failed') {
                             clearInterval(excelExportInterval);
                             excelExportInterval = null;
@@ -485,6 +484,37 @@
                     }
                 });
             }, 2000); // Har 2 sekundda tekshirish
+        }
+
+        function downloadExcelFile(exportKey) {
+            var url = '{{ route("admin.reports.lesson-assignment.export-download") }}?export_key=' + encodeURIComponent(exportKey);
+            fetch(url)
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('Fayl yuklab olinmadi (status: ' + response.status + ')');
+                    }
+                    var disposition = response.headers.get('Content-Disposition');
+                    var fileName = 'Dars_belgilash.xlsx';
+                    if (disposition) {
+                        var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (match && match[1]) fileName = match[1].replace(/['"]/g, '');
+                    }
+                    return response.blob().then(function(blob) { return { blob: blob, fileName: fileName }; });
+                })
+                .then(function(result) {
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(result.blob);
+                    a.download = result.fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                    resetExcelButton();
+                })
+                .catch(function(err) {
+                    alert('Excel faylni yuklab olishda xatolik: ' + err.message);
+                    resetExcelButton();
+                });
         }
 
         function resetExcelButton() {

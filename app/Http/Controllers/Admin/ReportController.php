@@ -1227,9 +1227,6 @@ class ReportController extends Controller
 
         $fileName = basename($filePath);
 
-        // Cache'dan tozalash
-        \Illuminate\Support\Facades\Cache::forget($exportKey);
-
         return response()->download($filePath, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);

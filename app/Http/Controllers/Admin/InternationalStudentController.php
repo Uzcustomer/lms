@@ -150,7 +150,17 @@ class InternationalStudentController extends Controller
             'visaUrgentCount', 'regUrgentCount', 'expiredVisaCount', 'expiredRegCount'
         );
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments'));
+        // Obuna holati
+        $isSubscribed = false;
+        $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+        if ($user && \Schema::hasTable('visa_notification_subscribers')) {
+            $isSubscribed = \DB::table('visa_notification_subscribers')
+                ->where('subscribable_type', get_class($user))
+                ->where('subscribable_id', $user->id)
+                ->exists();
+        }
+
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed'));
     }
 
     public function show(Student $student)
@@ -586,5 +596,31 @@ class InternationalStudentController extends Controller
             new InternationalStudentsExport($request->all()),
             'xalqaro_talabalar_' . now()->format('Y_m_d') . '.xlsx'
         );
+    }
+
+    public function subscribe()
+    {
+        $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+        if (!$user) return redirect()->back();
+
+        \DB::table('visa_notification_subscribers')->updateOrInsert(
+            ['subscribable_type' => get_class($user), 'subscribable_id' => $user->id],
+            ['telegram_chat_id' => $user->telegram_chat_id ?? null, 'updated_at' => now(), 'created_at' => now()]
+        );
+
+        return redirect()->back()->with('success', 'Bildirishnomaga obuna bo\'ldingiz.');
+    }
+
+    public function unsubscribe()
+    {
+        $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+        if (!$user) return redirect()->back();
+
+        \DB::table('visa_notification_subscribers')
+            ->where('subscribable_type', get_class($user))
+            ->where('subscribable_id', $user->id)
+            ->delete();
+
+        return redirect()->back()->with('success', 'Obunadan chiqarildi.');
     }
 }

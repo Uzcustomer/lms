@@ -155,12 +155,31 @@
                             <a href="{{ $baseUrl }}?registration_expiry=7" class="int-badge int-badge-warning" style="text-decoration:none;">{{ $stats['regUrgentCount'] }} registratsiya yaqin (7k)</a>
                         @endif
                     </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        @if($isSubscribed)
+                            <form method="POST" action="{{ route('admin.international-students.unsubscribe') }}" style="margin:0;">
+                                @csrf
+                                <button type="submit" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;font-size:12px;font-weight:600;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;cursor:pointer;white-space:nowrap;transition:all 0.15s;" onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='#fef2f2'">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.143 17.082a24.248 24.248 0 005.714 0m-7.03-2.198a24.01 24.01 0 01-.758-.378 2.25 2.25 0 01-1.069-1.982V8.25a.75.75 0 01.75-.75h.006c.166 0 .33.01.493.028l.006.001a24.096 24.096 0 0115.318 0l.006-.001c.163-.018.327-.028.493-.028h.006a.75.75 0 01.75.75v4.272a2.25 2.25 0 01-1.069 1.982c-.252.155-.508.303-.758.378"/></svg>
+                                    Obunadan chiqish
+                                </button>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('admin.international-students.subscribe') }}" style="margin:0;">
+                                @csrf
+                                <button type="submit" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;font-size:12px;font-weight:600;color:#4f46e5;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;cursor:pointer;white-space:nowrap;transition:all 0.15s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='#eef2ff'">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+                                    Bildirishnomaga obuna
+                                </button>
+                            </form>
+                        @endif
                     <a href="{{ route('admin.international-students.export', request()->all()) }}" class="int-btn-export">
                         <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                         </svg>
                         Excel yuklab olish
                     </a>
+                    </div>
                 </div>
 
                 {{-- Bulk action bar --}}

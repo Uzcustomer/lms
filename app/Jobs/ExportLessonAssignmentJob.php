@@ -338,7 +338,7 @@ class ExportLessonAssignmentJob implements ShouldQueue
         return $results;
     }
 
-    private function generateExcel(array $data): string
+    private function generateExcel(array $data): array
     {
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();

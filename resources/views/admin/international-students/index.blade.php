@@ -183,21 +183,68 @@
                 </div>
 
                 {{-- Bulk action bar --}}
-                <div id="bulkBar" style="display:none;padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:none;" class="flex items-center justify-between">
+                <div id="bulkBar" style="display:none;padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;" class="flex items-center justify-between">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span style="font-size:13px;font-weight:600;color:#1e40af;"><span id="selectedCount">0</span> ta talaba tanlandi</span>
                         <button type="button" onclick="clearSelection()" style="font-size:11px;padding:4px 10px;border:1px solid #93c5fd;background:#fff;border-radius:6px;color:#1e40af;cursor:pointer;">Bekor qilish</button>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
+                        <button type="button" onclick="openRegModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Registratsiya talabnoma</button>
+                        <button type="button" onclick="openVizaModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Viza talabnoma</button>
+                    </div>
+                </div>
+
+                {{-- Registratsiya talabnoma modal --}}
+                <div id="regModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
+                    <div style="background:#fff;border-radius:12px;padding:24px;max-width:400px;width:90%;margin:auto;">
+                        <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:16px;">Registratsiya talabnoma</h3>
                         <form id="regTalabnomaForm" method="POST" action="{{ route('admin.international-students.registration-talabnoma') }}">
                             @csrf
                             <div id="regInputs"></div>
-                            <button type="submit" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Registratsiya talabnoma</button>
+                            <div style="margin-bottom:12px;">
+                                <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Registratsiya muddati (oylarda)</label>
+                                <select name="reg_months" required style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                                    <option value="3">3 oy</option>
+                                    <option value="6">6 oy</option>
+                                    <option value="12">12 oy</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                <button type="button" onclick="closeRegModal()" style="padding:8px 16px;font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;">Bekor</button>
+                                <button type="submit" style="padding:8px 16px;font-size:12px;background:#2b5ea7;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Yaratish</button>
+                            </div>
                         </form>
+                    </div>
+                </div>
+
+                {{-- Viza talabnoma modal --}}
+                <div id="vizaModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
+                    <div style="background:#fff;border-radius:12px;padding:24px;max-width:400px;width:90%;margin:auto;">
+                        <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:16px;">Viza talabnoma</h3>
                         <form id="vizaTalabnomaForm" method="POST" action="{{ route('admin.international-students.visa-talabnoma') }}">
                             @csrf
                             <div id="vizaInputs"></div>
-                            <button type="submit" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Viza talabnoma</button>
+                            <div style="margin-bottom:12px;">
+                                <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Viza muddati (oylarda)</label>
+                                <select name="visa_months" required style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                                    <option value="3">3 oy</option>
+                                    <option value="6">6 oy</option>
+                                    <option value="12">12 oy</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom:12px;">
+                                <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Necha martalik</label>
+                                <select name="visa_entries" required style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                                    <option value="1">1 martalik (ONE)</option>
+                                    <option value="2" selected>2 martalik (TWO)</option>
+                                    <option value="3">3 martalik (THREE)</option>
+                                    <option value="99">Ko'p martalik (MULTIPLE)</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                <button type="button" onclick="closeVizaModal()" style="padding:8px 16px;font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;">Bekor</button>
+                                <button type="submit" style="padding:8px 16px;font-size:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Yaratish</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -529,6 +576,24 @@ function clearSelection() {
     document.getElementById('selectAll').checked = false;
     document.getElementById('selectAll').indeterminate = false;
     updateBulkBar();
+}
+
+function openRegModal() {
+    syncInputs('regInputs');
+    document.getElementById('regModal').style.display = 'flex';
+}
+function closeRegModal() { document.getElementById('regModal').style.display = 'none'; }
+function openVizaModal() {
+    syncInputs('vizaInputs');
+    document.getElementById('vizaModal').style.display = 'flex';
+}
+function closeVizaModal() { document.getElementById('vizaModal').style.display = 'none'; }
+function syncInputs(containerId) {
+    var c = document.getElementById(containerId);
+    c.innerHTML = '';
+    document.querySelectorAll('.student-cb:checked').forEach(function(cb) {
+        c.innerHTML += '<input type="hidden" name="student_ids[]" value="' + cb.value + '">';
+    });
 }
 </script>
 </x-app-layout>

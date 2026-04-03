@@ -39,17 +39,24 @@ class ExportLessonAssignmentJob implements ShouldQueue
 
             $this->updateProgress('Excel fayl yaratilmoqda...', 60);
 
-            $filePath = $this->generateExcel($results);
+            $fileData = $this->generateExcel($results);
 
             Log::info("[ExportLessonAssignmentJob] Tayyor", [
                 'export_key' => $this->exportKey,
-                'file_path' => $filePath,
-                'file_exists' => file_exists($filePath),
-                'file_size' => file_exists($filePath) ? filesize($filePath) : 0,
+                'file_name' => $fileData['file_name'],
+                'file_size' => strlen($fileData['content']),
                 'results_count' => count($results),
             ]);
 
-            $this->updateProgress('Tayyor', 100, 'done', $filePath);
+            // Fayl kontentini cache ga saqlash (diskka emas)
+            Cache::put($this->exportKey, [
+                'status' => 'done',
+                'message' => 'Tayyor',
+                'percent' => 100,
+                'file_name' => $fileData['file_name'],
+                'file_content' => $fileData['content'],
+                'updated_at' => now()->toDateTimeString(),
+            ], 1800);
 
         } catch (\Throwable $e) {
             Log::error("[ExportLessonAssignmentJob] Xato: {$e->getMessage()}", [
@@ -380,22 +387,19 @@ class ExportLessonAssignmentJob implements ShouldQueue
 
         $fileName = 'Dars_belgilash_' . date('Y-m-d_H-i') . '.xlsx';
 
-        // exports papkasini yaratish
-        $exportDir = storage_path('app/exports');
-        if (!is_dir($exportDir)) {
-            mkdir($exportDir, 0755, true);
-        }
-
-        $fullPath = $exportDir . '/' . $fileName;
-
+        // Vaqtinchalik faylga yozib, kontentini olish
+        $temp = tempnam(sys_get_temp_dir(), 'la_export_');
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-        $writer->save($fullPath);
+        $writer->save($temp);
         $spreadsheet->disconnectWorksheets();
 
-        // Web server o'qishi uchun ruxsat berish
-        chmod($fullPath, 0644);
+        $content = base64_encode(file_get_contents($temp));
+        @unlink($temp);
 
-        return $fullPath;
+        return [
+            'file_name' => $fileName,
+            'content' => $content,
+        ];
     }
 
     private function updateProgress(string $message, int $percent, string $status = 'running', ?string $filePath = null): void

@@ -3579,6 +3579,7 @@ class ReportController extends Controller
      */
     public function sababliCheckData(Request $request)
     {
+      try {
         // Filtrlar
         $groupIds = [];
         if ($request->filled('education_type')) {
@@ -3835,11 +3836,13 @@ class ReportController extends Controller
                     'total_absent_on' => 0,
                     'total_absent_off' => 0,
                     'pairs' => [],
-                    'journal_url' => route('admin.journal.show', [
-                        'groupId' => $att->group_pk,
-                        'subjectId' => $att->subject_id,
-                        'semesterCode' => $att->semester_code,
-                    ]),
+                    'journal_url' => ($att->group_pk && $att->subject_id && $att->semester_code)
+                        ? route('admin.journal.show', [
+                            'groupId' => $att->group_pk,
+                            'subjectId' => $att->subject_id,
+                            'semesterCode' => $att->semester_code,
+                        ])
+                        : '#',
                 ];
             }
 
@@ -4129,6 +4132,17 @@ class ReportController extends Controller
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
         ]);
+      } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error('SababliCheck xatolik: ' . $e->getMessage(), [
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+            'filters' => $request->all(),
+        ]);
+        return response()->json([
+            'error' => 'Serverda xatolik yuz berdi: ' . $e->getMessage(),
+        ], 500);
+      }
     }
 
     /**

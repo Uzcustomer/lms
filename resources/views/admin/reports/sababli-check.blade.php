@@ -287,7 +287,15 @@
                 error: function(xhr) {
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
-                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    var errorMsg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMsg = xhr.responseJSON.error;
+                    } else if (xhr.status === 0) {
+                        errorMsg = "Server bilan ulanish uzildi. Internetni tekshiring.";
+                    } else if (xhr.status === 504 || xhr.status === 408) {
+                        errorMsg = "So'rov vaqti tugadi. Filtrlarni toraytirib qayta urinib ko'ring.";
+                    }
+                    $('#empty-state').show().find('p:first').text(errorMsg);
                 }
             });
         }

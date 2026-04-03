@@ -163,6 +163,7 @@ class StudentVisaController extends Controller
     private function notifyStaffAboutSubmission($student): void
     {
         $message = "📋 {$student->full_name} ({$student->group_name}) viza ma'lumotlarini kiritdi. Tekshirish kerak.";
+        $sentChatIds = []; // Duplikat xabar yuborishni oldini olish
 
         // Registrator ofisi xodimlariga sayt bildirishnomasi + Telegram
         $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
@@ -179,16 +180,18 @@ class StudentVisaController extends Controller
                 'is_draft' => false,
                 'sent_at' => now(),
             ]);
-            if ($user->telegram_chat_id) {
+            if ($user->telegram_chat_id && !in_array($user->telegram_chat_id, $sentChatIds)) {
                 try { app(TelegramService::class)->sendToUser($user->telegram_chat_id, $message); } catch (\Throwable $e) {}
+                $sentChatIds[] = $user->telegram_chat_id;
             }
         }
 
-        // Registrator ofisi xodimlari (Teacher jadvalidan ham)
+        // Registrator ofisi xodimlari (Teacher jadvalidan ham — faqat Telegram)
         $registrarTeachers = \App\Models\Teacher::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
         foreach ($registrarTeachers as $teacher) {
-            if ($teacher->telegram_chat_id) {
+            if ($teacher->telegram_chat_id && !in_array($teacher->telegram_chat_id, $sentChatIds)) {
                 try { app(TelegramService::class)->sendToUser($teacher->telegram_chat_id, $message); } catch (\Throwable $e) {}
+                $sentChatIds[] = $teacher->telegram_chat_id;
             }
         }
 
@@ -211,10 +214,9 @@ class StudentVisaController extends Controller
                     'is_draft' => false,
                     'sent_at' => now(),
                 ]);
-                if ($firmUser->telegram_chat_id) {
-                    try {
-                        app(TelegramService::class)->sendToUser($firmUser->telegram_chat_id, $message);
-                    } catch (\Throwable $e) {}
+                if ($firmUser->telegram_chat_id && !in_array($firmUser->telegram_chat_id, $sentChatIds)) {
+                    try { app(TelegramService::class)->sendToUser($firmUser->telegram_chat_id, $message); } catch (\Throwable $e) {}
+                    $sentChatIds[] = $firmUser->telegram_chat_id;
                 }
             }
 
@@ -223,10 +225,9 @@ class StudentVisaController extends Controller
                 ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
                 ->get();
             foreach ($firmTeachers as $teacher) {
-                if ($teacher->telegram_chat_id) {
-                    try {
-                        app(TelegramService::class)->sendToUser($teacher->telegram_chat_id, $message);
-                    } catch (\Throwable $e) {}
+                if ($teacher->telegram_chat_id && !in_array($teacher->telegram_chat_id, $sentChatIds)) {
+                    try { app(TelegramService::class)->sendToUser($teacher->telegram_chat_id, $message); } catch (\Throwable $e) {}
+                    $sentChatIds[] = $teacher->telegram_chat_id;
                 }
             }
         }

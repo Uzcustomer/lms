@@ -1226,56 +1226,31 @@ class ReportController extends Controller
         }
 
         $data = \Illuminate\Support\Facades\Cache::get($exportKey);
-        if (!$data || $data['status'] !== 'done' || empty($data['file_path'])) {
-            \Illuminate\Support\Facades\Log::warning("[ExportDownload] Cache topilmadi yoki tayyor emas", [
-                'export_key' => $exportKey,
-                'cache_data' => $data,
-            ]);
+        if (!$data || $data['status'] !== 'done') {
             return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
         }
 
-        $filePath = $data['file_path'];
+        // Yangi usul: cache dan kontentni olish
+        if (!empty($data['file_content'])) {
+            $content = base64_decode($data['file_content']);
+            $fileName = $data['file_name'] ?? 'Dars_belgilash.xlsx';
 
-        // Eski yo'lda yaratilgan fayllarni ham tekshirish
-        if (!file_exists($filePath)) {
-            $altPaths = [
-                storage_path('app/private/exports/' . basename($filePath)),
-                storage_path('app/exports/' . basename($filePath)),
-            ];
-            $found = false;
-            foreach ($altPaths as $alt) {
-                if (file_exists($alt)) {
-                    $filePath = $alt;
-                    $found = true;
-                    break;
-                }
-            }
-            if (!$found) {
-                \Illuminate\Support\Facades\Log::warning("[ExportDownload] Fayl mavjud emas", [
-                    'export_key' => $exportKey,
-                    'file_path' => $data['file_path'],
-                    'alt_paths_checked' => $altPaths,
-                ]);
-                return response()->json(['error' => 'Fayl serverda topilmadi'], 404);
-            }
-        }
-
-        $fileName = basename($filePath);
-
-        try {
-            return response()->download($filePath, $fileName, [
+            return response($content, 200, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ])->deleteFileAfterSend(true);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error("[ExportDownload] Download xatosi", [
-                'export_key' => $exportKey,
-                'file_path' => $filePath,
-                'error' => $e->getMessage(),
-                'is_readable' => is_readable($filePath),
-                'file_size' => file_exists($filePath) ? filesize($filePath) : 'not found',
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                'Content-Length' => strlen($content),
             ]);
-            return response()->json(['error' => 'Faylni yuklashda xatolik: ' . $e->getMessage()], 500);
         }
+
+        // Eski usul (orqaga moslik): disk dan faylni olish
+        $filePath = $data['file_path'] ?? '';
+        if (!$filePath || !file_exists($filePath)) {
+            return response()->json(['error' => 'Fayl serverda topilmadi'], 404);
+        }
+
+        return response()->download($filePath, basename($filePath), [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     /**

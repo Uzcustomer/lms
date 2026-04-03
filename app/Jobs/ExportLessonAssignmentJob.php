@@ -32,6 +32,9 @@ class ExportLessonAssignmentJob implements ShouldQueue
 
     public function handle(): void
     {
+        // Excel generatsiya uchun xotira limitini oshirish
+        ini_set('memory_limit', '512M');
+
         try {
             $this->updateProgress('Ma\'lumotlar olinmoqda...', 10);
 

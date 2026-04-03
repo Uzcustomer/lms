@@ -198,21 +198,14 @@ class ExportLessonAssignmentJob implements ShouldQueue
 
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
-
-        $currentEducationYear = DB::table('semesters')
-            ->where('current', true)
-            ->orderByDesc('education_year')
-            ->value('education_year');
+        $semesterCodes = $schedules->pluck('semester_code')->unique()->values()->toArray();
 
         $subjectStudentCounts = DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->whereIn('st.group_id', $groupIds)
             ->whereIn('ss.subject_id', $subjectIds)
+            ->whereIn('ss.semester_id', $semesterCodes)
             ->where('st.student_status_code', 11)
-            ->where(function ($q) use ($currentEducationYear) {
-                $q->where('ss.education_year', $currentEducationYear)
-                  ->orWhereNull('ss.education_year');
-            })
             ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
             ->pluck('cnt', 'gs_key');

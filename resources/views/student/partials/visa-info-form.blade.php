@@ -207,8 +207,9 @@
             <select name="visa_entries_count" required class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="">{{ __('Tanlang') }}</option>
                 @for($i = 1; $i <= 10; $i++)
-                    <option value="{{ $i }}" {{ (int) old('visa_entries_count', $visaInfo?->visa_entries_count ?? '') === $i ? 'selected' : '' }}>{{ $i }}</option>
+                    <option value="{{ $i }}" {{ old('visa_entries_count', $visaInfo?->visa_entries_count ?? '') == $i ? 'selected' : '' }}>{{ $i }}</option>
                 @endfor
+                <option value="99" {{ old('visa_entries_count', $visaInfo?->visa_entries_count ?? '') == 99 ? 'selected' : '' }}>{{ __('Ko\'p marta') }} / Multiple</option>
             </select>
             @error('visa_entries_count') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
@@ -317,7 +318,23 @@
 
     {{-- Saqlash tugmasi --}}
     <div class="flex justify-end mt-6">
-        <button type="button" @click="showAgreementModal = true"
+        <button type="button" @click="
+            var form = document.getElementById('visaForm');
+            var missing = [];
+            form.querySelectorAll('[required]').forEach(function(el) {
+                if (el.type === 'hidden') return;
+                if (!el.value || el.value.trim() === '') missing.push(el);
+            });
+            if (missing.length > 0) {
+                missing[0].focus();
+                missing[0].scrollIntoView({behavior:'smooth', block:'center'});
+                missing[0].style.borderColor='#ef4444';
+                setTimeout(function(){missing[0].style.borderColor='';}, 3000);
+                alert('Iltimos, barcha majburiy maydonlarni to\'ldiring! / Please fill in all required fields!');
+                return;
+            }
+            showAgreementModal = true;
+        "
                 class="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 transition">
             {{ __('Saqlash') }}
         </button>

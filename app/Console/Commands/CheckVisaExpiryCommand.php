@@ -208,5 +208,25 @@ class CheckVisaExpiryCommand extends Command
                 }
             }
         }
+
+        // Obunachilarga ham yuborish
+        if (\Schema::hasTable('visa_notification_subscribers')) {
+            $subscribers = \DB::table('visa_notification_subscribers')->get();
+            foreach ($subscribers as $sub) {
+                // Sayt bildirishnomasi
+                \App\Models\Notification::create([
+                    'sender_id' => null, 'sender_type' => null,
+                    'recipient_id' => $sub->subscribable_id,
+                    'recipient_type' => $sub->subscribable_type,
+                    'subject' => 'Viza/Registratsiya ogohlantirish',
+                    'body' => $message, 'type' => 'alert',
+                    'is_read' => false, 'is_draft' => false, 'sent_at' => now(),
+                ]);
+                // Telegram
+                if ($sub->telegram_chat_id) {
+                    $telegram->sendToUser($sub->telegram_chat_id, $message);
+                }
+            }
+        }
     }
 }

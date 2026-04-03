@@ -100,6 +100,14 @@ class InternationalStudentController extends Controller
             });
         }
 
+        if ($request->filled('hemis_status')) {
+            if ($request->hemis_status === 'inactive') {
+                $query->where('student_status_code', '60');
+            } elseif ($request->hemis_status === 'active') {
+                $query->where('student_status_code', '!=', '60');
+            }
+        }
+
         // Filtrlangan query klon — statistika uchun
         $filteredIds = (clone $query)->pluck('students.id');
 

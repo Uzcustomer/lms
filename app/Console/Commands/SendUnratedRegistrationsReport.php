@@ -89,6 +89,7 @@ class SendUnratedRegistrationsReport extends Command
                 'g.department_hemis_id as group_department_hemis_id',
                 'g.specialty_hemis_id as group_specialty_hemis_id',
                 'sem.level_code',
+                'sch.semester_code',
                 DB::raw('DATE(sch.lesson_date) as lesson_date_str'),
                 DB::raw('EXISTS (SELECT 1 FROM lesson_openings lo WHERE lo.group_hemis_id = sch.group_id AND lo.subject_id = sch.subject_id AND lo.semester_code = sch.semester_code AND DATE(lo.lesson_date) = DATE(sch.lesson_date)) as has_opening')
             )
@@ -108,25 +109,18 @@ class SendUnratedRegistrationsReport extends Command
 
         // Fanga biriktirilgan faol talabalar soni (student_subjects jadvalidan)
         // Chetlashganlar (status_code=60) hisobga olinmaydi
-        // Eski o'quv yili biriktirishlarini chiqarib tashlash
+        // Joriy semestrga tegishli biriktirishlarni aniqlash
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
-
-        $currentEducationYear = DB::table('semesters')
-            ->where('current', true)
-            ->orderByDesc('education_year')
-            ->value('education_year');
+        $semesterCodes = $schedules->pluck('semester_code')->unique()->values()->toArray();
 
         $subjectStudentCounts = DB::table('student_subjects as ss')
             ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereIn('ss.subject_id', $subjectIds)
+            ->whereIn('ss.semester_id', $semesterCodes)
             ->where(function ($q) {
                 $q->where('st.student_status_code', '!=', '60')
                   ->orWhereNull('st.student_status_code');
-            })
-            ->where(function ($q) use ($currentEducationYear) {
-                $q->where('ss.education_year', $currentEducationYear)
-                  ->orWhereNull('ss.education_year');
             })
             ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))

@@ -122,8 +122,18 @@
                                     @if(request('registration_expiry') !== null && request('registration_expiry') !== '')<button type="button" class="filter-clear" onclick="clearFilter('registration_expiry')">&times;</button>@endif
                                 </div>
                             </div>
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> HEMIS</label>
+                                <div class="filter-wrap">
+                                    <select name="hemis_status" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                        <option value="">Barchasi</option>
+                                        <option value="active" {{ request('hemis_status') === 'active' ? 'selected' : '' }}>Faol</option>
+                                        <option value="inactive" {{ request('hemis_status') === 'inactive' ? 'selected' : '' }}>HEMIS'da yo'q</option>
+                                    </select>
+                                    @if(request('hemis_status'))<button type="button" class="filter-clear" onclick="clearFilter('hemis_status')">&times;</button>@endif
+                                </div>
+                            </div>
                             <div class="filter-item" style="min-width:120px;">
-                                <label class="filter-label">&nbsp;</label>
                                 <button type="submit" class="btn-calc">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                     Qidirish
@@ -288,6 +298,9 @@
                                     <td style="color:#64748b;font-size:12px;">{{ $student->student_id_number }}</td>
                                     <td>
                                         <a href="{{ route('admin.international-students.show', $student) }}" class="student-name-link">{{ $student->full_name }}</a>
+                                        @if($student->student_status_code == '60')
+                                            <span style="display:inline-block;margin-left:4px;padding:1px 6px;font-size:9px;font-weight:700;border-radius:4px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;">HEMIS'da yo'q</span>
+                                        @endif
                                     </td>
                                     <td>
                                         <span class="text-cell" style="font-weight:600;">{{ $student->country_name ?? '—' }}</span>

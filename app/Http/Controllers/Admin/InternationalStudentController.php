@@ -259,9 +259,6 @@ class InternationalStudentController extends Controller
         if (in_array($field, $columns)) {
             $updates[$field] = StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED;
         }
-        if ($request->process_type === 'visa' && in_array('registration_process_status', $columns)) {
-            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED;
-        }
 
         $visaInfo->update($updates);
 
@@ -281,11 +278,7 @@ class InternationalStudentController extends Controller
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
-        $updates = [$field => StudentVisaInfo::PROCESS_REGISTERING];
-        if ($request->process_type === 'visa') {
-            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_REGISTERING;
-        }
-        $visaInfo->update($updates);
+        $visaInfo->update([$field => StudentVisaInfo::PROCESS_REGISTERING]);
 
         $label = $request->process_type === 'visa' ? 'Viza' : 'Registratsiya';
         $this->notifyStudent($student, "{$label} jarayoni davom etmoqda.");
@@ -312,17 +305,12 @@ class InternationalStudentController extends Controller
         ];
 
         if ($type === 'visa') {
-            // Viza qaytarilganda registratsiya ham birga yangilanadi
             $updates['visa_process_status'] = StudentVisaInfo::PROCESS_DONE;
-            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_DONE;
             $updates['visa_start_date'] = null;
             $updates['visa_end_date'] = null;
             $updates['visa_number'] = null;
             $updates['visa_type'] = null;
             $updates['visa_scan_path'] = null;
-            $updates['registration_start_date'] = null;
-            $updates['registration_end_date'] = null;
-            $updates['registration_doc_path'] = null;
         } else {
             $updates['registration_process_status'] = StudentVisaInfo::PROCESS_DONE;
             $updates['registration_start_date'] = null;

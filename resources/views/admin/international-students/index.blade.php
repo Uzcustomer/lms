@@ -302,21 +302,31 @@
                                                 $vp = $visa->visa_process_status ?? 'none';
                                                 $canAccept = in_array($rp, ['none','done']) && in_array($vp, ['none','done']);
                                             @endphp
-                                            @if($vp === 'passport_accepted' || $vp === 'registering')
+                                            @if($vp === 'passport_accepted')
+                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#dbeafe;color:#1e40af;">V: Pasport olindi</span>
+                                            @elseif($vp === 'registering')
                                                 <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
                                                     @csrf <input type="hidden" name="process_type" value="visa">
-                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Viza yangilandi. Pasportni qaytarib, talaba yangi ma\'lumot kiritsinmi?')">Viza yangilandi</button>
+                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Viza yangilandi?')">Viza yangilandi</button>
                                                 </form>
-                                            @elseif($rp === 'passport_accepted' || $rp === 'registering')
+                                            @elseif($rp === 'passport_accepted')
+                                                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#dbeafe;color:#1e40af;">R: Pasport olindi</span>
+                                            @elseif($rp === 'registering')
                                                 <form method="POST" action="{{ route('admin.international-students.return-passport', $student) }}">
                                                     @csrf <input type="hidden" name="process_type" value="registration">
-                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Registratsiya yangilandi. Pasportni qaytarib, talaba yangi ma\'lumot kiritsinmi?')">Reg. yangilandi</button>
+                                                    <button type="submit" class="btn-action" style="background:#fef3c7;color:#92400e;font-size:10px;border:1px solid #fde68a;" onclick="return confirm('Reg. yangilandi?')">Reg. yangilandi</button>
                                                 </form>
                                             @elseif(!$visa->passport_handed_over && $canAccept)
-                                                <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
-                                                    @csrf <input type="hidden" name="process_type" value="visa">
-                                                    <button type="submit" class="btn-action" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:10px;" onclick="return confirm('Pasportni qabul qilasizmi?')">Pasport olish</button>
-                                                </form>
+                                                <div style="display:flex;flex-direction:column;gap:3px;">
+                                                    <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
+                                                        @csrf <input type="hidden" name="process_type" value="registration">
+                                                        <button type="submit" class="btn-action" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;font-size:9px;width:100%;" onclick="return confirm('Reg. uchun pasport?')">Reg. pasport</button>
+                                                    </form>
+                                                    <form method="POST" action="{{ route('admin.international-students.accept-passport', $student) }}">
+                                                        @csrf <input type="hidden" name="process_type" value="visa">
+                                                        <button type="submit" class="btn-action" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;font-size:9px;width:100%;" onclick="return confirm('Viza uchun pasport?')">Viza pasport</button>
+                                                    </form>
+                                                </div>
                                             @elseif($rp === 'done' || $vp === 'done')
                                                 <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;background:#dcfce7;color:#166534;">Tugallandi</span>
                                             @else

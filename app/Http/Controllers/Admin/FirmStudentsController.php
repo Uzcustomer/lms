@@ -83,18 +83,11 @@ class FirmStudentsController extends Controller
 
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
-        $updates = [
+        $visaInfo->update([
             $field => StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED,
             'passport_handed_over' => true,
             'passport_handed_at' => now(),
-        ];
-
-        // Viza ustun: agar viza uchun pasport qabul qilinsa, registratsiya ham birga yangilanadi
-        if ($request->process_type === 'visa') {
-            $updates['registration_process_status'] = StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED;
-        }
-
-        $visaInfo->update($updates);
+        ]);
 
         StudentNotification::create([
             'student_id' => $student->id,

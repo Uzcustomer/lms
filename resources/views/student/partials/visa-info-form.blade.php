@@ -1,5 +1,5 @@
 <form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm"
-      x-data="{ showAgreementModal: false }">
+      x-data="{ showAgreementModal: false }" @open-agreement.window="showAgreementModal = true">
     @csrf
 
     {{-- Ogohlantirish --}}
@@ -318,22 +318,22 @@
 
     {{-- Saqlash tugmasi --}}
     <div class="flex justify-end mt-6">
-        <button type="button" @click="
+        <button type="button" onclick="
             var form = document.getElementById('visaForm');
             var missing = [];
-            form.querySelectorAll('[required]').forEach(function(el) {
-                if (el.type === 'hidden') return;
+            form.querySelectorAll('input[required], select[required]').forEach(function(el) {
+                if (el.type === 'hidden' || !el.name || el.offsetParent === null) return;
                 if (!el.value || el.value.trim() === '') missing.push(el);
             });
             if (missing.length > 0) {
-                missing[0].focus();
                 missing[0].scrollIntoView({behavior:'smooth', block:'center'});
                 missing[0].style.borderColor='#ef4444';
-                setTimeout(function(){missing[0].style.borderColor='';}, 3000);
-                alert('Iltimos, barcha majburiy maydonlarni to\'ldiring! / Please fill in all required fields!');
+                missing[0].focus();
+                setTimeout(function(){if(missing[0])missing[0].style.borderColor='';}, 3000);
                 return;
             }
-            showAgreementModal = true;
+            var evt = new CustomEvent('open-agreement');
+            document.dispatchEvent(evt);
         "
                 class="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 transition">
             {{ __('Saqlash') }}

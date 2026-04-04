@@ -163,73 +163,49 @@ class StudentVisaController extends Controller
     private function notifyStaffAboutSubmission($student): void
     {
         $message = "📋 {$student->full_name} ({$student->group_name}) viza ma'lumotlarini kiritdi. Tekshirish kerak.";
-        $sentChatIds = []; // Duplikat xabar yuborishni oldini olish
+        $sentTelegramIds = [];
 
-        // Registrator ofisi xodimlariga sayt bildirishnomasi + Telegram
-        $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
-        foreach ($registrarUsers as $user) {
-            Notification::create([
-                'sender_id' => $student->id,
-                'sender_type' => get_class($student),
-                'recipient_id' => $user->id,
-                'recipient_type' => User::class,
-                'subject' => 'Yangi viza ma\'lumotlari kiritildi',
-                'body' => $message,
-                'type' => 'info',
-                'is_read' => false,
-                'is_draft' => false,
-                'sent_at' => now(),
-            ]);
-            if ($user->telegram_chat_id && !in_array($user->telegram_chat_id, $sentChatIds)) {
-                try { app(TelegramService::class)->sendToUser($user->telegram_chat_id, $message); } catch (\Throwable $e) {}
-                $sentChatIds[] = $user->telegram_chat_id;
-            }
+        // Barcha telegram_chat_id larni yig'ib, faqat unique larga yuborish
+        $telegramTargets = [];
+
+        // 1. Registrator ofisi — User jadvalidan
+        $regUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
+        foreach ($regUsers as $u) {
+            if ($u->telegram_chat_id) $telegramTargets[$u->telegram_chat_id] = true;
         }
 
-        // Registrator ofisi xodimlari (Teacher jadvalidan ham — faqat Telegram)
-        $registrarTeachers = \App\Models\Teacher::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
-        foreach ($registrarTeachers as $teacher) {
-            if ($teacher->telegram_chat_id && !in_array($teacher->telegram_chat_id, $sentChatIds)) {
-                try { app(TelegramService::class)->sendToUser($teacher->telegram_chat_id, $message); } catch (\Throwable $e) {}
-                $sentChatIds[] = $teacher->telegram_chat_id;
-            }
+        // 2. Registrator ofisi — Teacher jadvalidan
+        $regTeachers = \App\Models\Teacher::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
+        foreach ($regTeachers as $t) {
+            if ($t->telegram_chat_id) $telegramTargets[$t->telegram_chat_id] = true;
         }
 
-        // Firma javobgariga (agar firma belgilangan bo'lsa)
+        // 3. Firma javobgarlari
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
         if ($visaInfo?->firm) {
-            $firmUsers = User::where('assigned_firm', $visaInfo->firm)
-                ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
-                ->get();
-            foreach ($firmUsers as $firmUser) {
-                Notification::create([
-                    'sender_id' => $student->id,
-                    'sender_type' => get_class($student),
-                    'recipient_id' => $firmUser->id,
-                    'recipient_type' => User::class,
-                    'subject' => 'Talaba viza ma\'lumotlarini kiritdi',
-                    'body' => $message,
-                    'type' => 'info',
-                    'is_read' => false,
-                    'is_draft' => false,
-                    'sent_at' => now(),
-                ]);
-                if ($firmUser->telegram_chat_id && !in_array($firmUser->telegram_chat_id, $sentChatIds)) {
-                    try { app(TelegramService::class)->sendToUser($firmUser->telegram_chat_id, $message); } catch (\Throwable $e) {}
-                    $sentChatIds[] = $firmUser->telegram_chat_id;
-                }
+            $firmUsers = User::where('assigned_firm', $visaInfo->firm)->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))->get();
+            foreach ($firmUsers as $fu) {
+                if ($fu->telegram_chat_id) $telegramTargets[$fu->telegram_chat_id] = true;
             }
+            $firmTeachers = \App\Models\Teacher::where('assigned_firm', $visaInfo->firm)->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))->get();
+            foreach ($firmTeachers as $ft) {
+                if ($ft->telegram_chat_id) $telegramTargets[$ft->telegram_chat_id] = true;
+            }
+        }
 
-            // Teacher firmalardan ham
-            $firmTeachers = \App\Models\Teacher::where('assigned_firm', $visaInfo->firm)
-                ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
-                ->get();
-            foreach ($firmTeachers as $teacher) {
-                if ($teacher->telegram_chat_id && !in_array($teacher->telegram_chat_id, $sentChatIds)) {
-                    try { app(TelegramService::class)->sendToUser($teacher->telegram_chat_id, $message); } catch (\Throwable $e) {}
-                    $sentChatIds[] = $teacher->telegram_chat_id;
-                }
-            }
+        // Unique chat_id larga Telegram yuborish
+        foreach (array_keys($telegramTargets) as $chatId) {
+            try { app(TelegramService::class)->sendToUser($chatId, $message); } catch (\Throwable $e) {}
+        }
+
+        // Sayt bildirishnomasi — faqat registrator User larga
+        foreach ($regUsers as $u) {
+            Notification::create([
+                'sender_id' => $student->id, 'sender_type' => get_class($student),
+                'recipient_id' => $u->id, 'recipient_type' => User::class,
+                'subject' => 'Yangi viza ma\'lumotlari kiritildi', 'body' => $message,
+                'type' => 'info', 'is_read' => false, 'is_draft' => false, 'sent_at' => now(),
+            ]);
         }
     }
 

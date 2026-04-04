@@ -1,5 +1,4 @@
-<form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm"
-      x-data="{ showAgreementModal: false }" @open-agreement.window="showAgreementModal = true">
+<form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm">
     @csrf
 
     {{-- Ogohlantirish --}}
@@ -318,36 +317,44 @@
 
     {{-- Saqlash tugmasi --}}
     <div class="flex justify-end mt-6">
-        <button type="button" onclick="document.dispatchEvent(new CustomEvent('open-agreement'));"
+        <input type="hidden" name="agreement_accepted" id="agreement_input" value="0">
+        <button type="button" id="saveBtn"
                 class="px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-300 transition">
             {{ __('Saqlash') }}
         </button>
     </div>
+</form>
 
-    {{-- Javobgarlik modali --}}
-    <div x-show="showAgreementModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" style="display: none;">
-        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 p-6" @click.away="showAgreementModal = false">
-            <div class="text-center mb-4">
-                <svg class="w-12 h-12 text-yellow-500 mx-auto mb-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-                </svg>
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">{{ __('Javobgarlik') }}</h3>
-                <p class="text-sm text-gray-600">
-                    {{ __('Men taqdim etgan barcha ma\'lumotlar va yuklangan hujjatlarning haqiqiyligi hamda to\'g\'riligiga shaxsan javobgarlikni o\'z zimnamga olaman') }}
-                </p>
-            </div>
-            <input type="hidden" name="agreement_accepted" id="agreement_input" value="0">
-            <div class="flex gap-3 mt-6">
-                <button type="button" @click="showAgreementModal = false"
-                        class="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">
-                    {{ __('Bekor qilish') }}
-                </button>
-                <button type="button"
-                        @click="document.getElementById('agreement_input').value = '1'; document.getElementById('visaForm').submit();"
-                        class="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition">
-                    {{ __('Qabul qilaman') }}
-                </button>
-            </div>
+{{-- Javobgarlik modali (form tashqarisida, Alpine'siz) --}}
+<div id="agreementModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:12px;max-width:420px;width:90%;margin:auto;padding:24px;text-align:center;">
+        <svg style="width:48px;height:48px;color:#f59e0b;margin:0 auto 12px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+        </svg>
+        <h3 style="font-size:18px;font-weight:600;color:#1e293b;margin-bottom:8px;">{{ __('Javobgarlik') }}</h3>
+        <p style="font-size:13px;color:#64748b;margin-bottom:20px;">
+            {{ __('Men taqdim etgan barcha ma\'lumotlar va yuklangan hujjatlarning haqiqiyligi hamda to\'g\'riligiga shaxsan javobgarlikni o\'z zimnamga olaman') }}
+        </p>
+        <div style="display:flex;gap:10px;">
+            <button type="button" id="cancelAgreement" style="flex:1;padding:10px;font-size:13px;font-weight:500;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;">
+                {{ __('Bekor qilish') }}
+            </button>
+            <button type="button" id="acceptAgreement" style="flex:1;padding:10px;font-size:13px;font-weight:600;background:#4f46e5;color:#fff;border:none;border-radius:8px;cursor:pointer;">
+                {{ __('Qabul qilaman') }}
+            </button>
         </div>
     </div>
-</form>
+</div>
+
+<script>
+document.getElementById('saveBtn').addEventListener('click', function() {
+    document.getElementById('agreementModal').style.display = 'flex';
+});
+document.getElementById('cancelAgreement').addEventListener('click', function() {
+    document.getElementById('agreementModal').style.display = 'none';
+});
+document.getElementById('acceptAgreement').addEventListener('click', function() {
+    document.getElementById('agreement_input').value = '1';
+    document.getElementById('visaForm').submit();
+});
+</script>

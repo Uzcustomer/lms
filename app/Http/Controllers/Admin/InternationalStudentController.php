@@ -434,7 +434,7 @@ class InternationalStudentController extends Controller
             $this->addField($section, "14. Hujjatlarni rasmiylashtirish va taqdim etishga mas'ul bo'lgan shaxsning F.I.O: ", '');
             $section->addText('      Temirov Shukrullo Xonimqulovich', $n);
             $section->addText('      Passport harakatlanish hujjat seriyasi va raqami:  AC 2275461', $n);
-            $section->addText('      Xizmat tel raqami_______________ uvali tel. raqami +998995721774', $n);
+            $section->addText('      Xizmat tel raqami_______________ uyali tel. raqami +998995721774', $n);
 
             $section->addTextBreak(2);
             $st = $section->addTable(); $st->addRow();

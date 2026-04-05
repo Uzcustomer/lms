@@ -217,12 +217,12 @@
                 </div>
 
                 {{-- Tahrirlash --}}
-                <div class="sv-card" style="margin-top:16px;padding:0;overflow:hidden;" x-data="{editOpen:false}">
-                    <button @click="editOpen=!editOpen" type="button" style="width:100%;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;font-size:13px;font-weight:600;color:#4f46e5;">
-                        <span>Ma'lumotlarni tahrirlash</span>
-                        <svg :style="editOpen?'transform:rotate(180deg)':''" style="width:16px;height:16px;transition:transform 0.2s;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                <div class="sv-card" style="margin-top:16px;overflow:hidden;" x-data="{editOpen:false}">
+                    <button @click="editOpen=!editOpen" type="button" style="width:100%;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;">
+                        <span style="font-size:12px;font-weight:600;color:#4f46e5;">Ma'lumotlarni tahrirlash</span>
+                        <svg :style="editOpen?'transform:rotate(180deg)':''" style="width:14px;height:14px;color:#4f46e5;transition:transform 0.2s;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
                     </button>
-                    <div x-show="editOpen" x-transition style="padding:0 20px 20px;border-top:1px solid #f1f5f9;">
+                    <div x-show="editOpen" x-transition style="padding:0 20px 16px;border-top:1px solid #f1f5f9;">
                         @include('admin.international-students._visa-form', ['student' => $student, 'visaInfo' => $visaInfo])
                     </div>
                 </div>

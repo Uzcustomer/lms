@@ -21,26 +21,26 @@
 
     <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Tug'ilgan joy</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-        <div x-data="adminCountrySelect({ value: '{{ $visaInfo?->birth_country ?? '' }}' })">
+        <div x-data="adminCountrySelect({ value: '{{ $visaInfo?->birth_country ?? 'India' }}' })">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Davlat</label>
             <div style="position:relative;">
                 <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
                 <input type="hidden" name="birth_country" :value="value">
                 <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition style="position:absolute;z-index:50;width:100%;margin-top:2px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;">
                     <template x-for="item in filtered" :key="item">
-                        <div @click="value=item;search=item;open=false;" x-text="item" style="padding:6px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#fff'"></div>
+                        <div @click="value=item;search=item;open=false;$dispatch('country-changed',{country:item})" x-text="item" style="padding:6px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#fff'"></div>
                     </template>
                 </div>
             </div>
         </div>
-        <div x-data="adminRegionSelect({ value: '{{ $visaInfo?->birth_region ?? '' }}' })">
+        <div x-data="adminRegionSelect({ value: '{{ $visaInfo?->birth_region ?? '' }}', country: '{{ $visaInfo?->birth_country ?? 'India' }}' })" @country-changed.window="country=$event.detail.country;search='';value=''">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Viloyat</label>
             <div style="position:relative;">
                 <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
                 <input type="hidden" name="birth_region" :value="value">
                 <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition style="position:absolute;z-index:50;width:100%;margin-top:2px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;">
                     <template x-for="item in filtered" :key="item">
-                        <div @click="value=item;search=item;open=false;" x-text="item" style="padding:6px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#fff'"></div>
+                        <div @click="value=item;search=item;open=false;$dispatch('country-changed',{country:item})" x-text="item" style="padding:6px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#fff'"></div>
                     </template>
                 </div>
             </div>
@@ -78,7 +78,7 @@
             <select name="visa_type" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
                 <option value="">-</option>
                 @foreach(\App\Models\StudentVisaInfo::VISA_TYPES as $k => $l)
-                    <option value="{{ $k }}" {{ ($visaInfo?->visa_type ?? '') === $k ? 'selected' : '' }}>{{ $l }}</option>
+                    <option value="{{ $k }}" {{ ($visaInfo?->visa_type ?? 'A-1') === $k ? 'selected' : '' }}>{{ $l }}</option>
                 @endforeach
             </select>
         </div>
@@ -177,13 +177,12 @@ if (typeof adminRegionSelect === 'undefined') {
     };
     window.adminRegionSelect = function(config) {
         return {
+            country: config.country || '',
             value: config.value || '',
             search: config.value || '',
             open: false,
             get regions() {
-                var countryEl = document.querySelector('[name="birth_country"]');
-                var country = countryEl ? countryEl.value : '';
-                return adminCountryRegions[country] || [];
+                return adminCountryRegions[this.country] || [];
             },
             get filtered() {
                 var r = this.regions;

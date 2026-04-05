@@ -206,9 +206,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         flatpickr(el, {
             dateFormat: 'd/m/Y',
-            defaultDate: origVal || null,
+            defaultDate: origVal ? new Date(origVal) : null,
             allowInput: true,
             parseDate: function(datestr) {
+                if (/^\d{4}[\-\/]\d{1,2}[\-\/]\d{1,2}$/.test(datestr)) {
+                    return new Date(datestr);
+                }
                 var parts = datestr.split(/[\/\.\,\-]/);
                 if (parts.length === 3) {
                     var d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);

@@ -212,9 +212,16 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.cursor = 'pointer';
         el.style.backgroundColor = '#fff';
 
+        // origValue = '2026-04-05' formatda
+        var defDate = null;
+        if (origValue && /^\d{4}-\d{2}-\d{2}$/.test(origValue)) {
+            var p = origValue.split('-');
+            defDate = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]));
+        }
+
         flatpickr(el, {
             dateFormat: 'd/m/Y',
-            defaultDate: origValue ? new Date(origValue) : null,
+            defaultDate: defDate,
             allowInput: true,
             clickOpens: true,
             parseDate: function(datestr) {

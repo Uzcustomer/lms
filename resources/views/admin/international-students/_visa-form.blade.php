@@ -11,11 +11,11 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport berilgan sana</label>
-            <input type="text" name="passport_issued_date" data-admin-date="1" value="{{ $visaInfo?->passport_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="passport_issued_date" value="{{ $visaInfo?->passport_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport tugash sanasi</label>
-            <input type="text" name="passport_expiry_date" data-admin-date="1" value="{{ $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="passport_expiry_date" value="{{ $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -55,15 +55,15 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Boshlanish</label>
-            <input type="text" name="registration_start_date" data-admin-date="1" value="{{ $visaInfo?->registration_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="registration_start_date" value="{{ $visaInfo?->registration_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Tugash</label>
-            <input type="text" name="registration_end_date" data-admin-date="1" value="{{ $visaInfo?->registration_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="registration_end_date" value="{{ $visaInfo?->registration_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Kirish sanasi</label>
-            <input type="text" name="entry_date" data-admin-date="1" value="{{ $visaInfo?->entry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="entry_date" value="{{ $visaInfo?->entry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -94,11 +94,11 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-top:10px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Boshlanish</label>
-            <input type="text" name="visa_start_date" data-admin-date="1" value="{{ $visaInfo?->visa_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="visa_start_date" value="{{ $visaInfo?->visa_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Tugash</label>
-            <input type="text" name="visa_end_date" data-admin-date="1" value="{{ $visaInfo?->visa_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="visa_end_date" value="{{ $visaInfo?->visa_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan joy</label>
@@ -106,7 +106,7 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan sana</label>
-            <input type="text" name="visa_issued_date" data-admin-date="1" value="{{ $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="date" name="visa_issued_date" value="{{ $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -140,8 +140,6 @@
     </div>
 </form>
 
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 <script>
 if (typeof adminCountrySelect === 'undefined') {
     var adminCountryItems = ['Afghanistan','Albania','Algeria','Angola','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahrain','Bangladesh','Belarus','Belgium','Bhutan','Bolivia','Bosnia','Brazil','Brunei','Bulgaria','Cambodia','Cameroon','Canada','Chad','Chile','China','Colombia','Congo','Croatia','Cuba','Cyprus','Czech Republic','Denmark','Ecuador','Egypt','Eritrea','Estonia','Ethiopia','Finland','France','Georgia','Germany','Ghana','Greece','Guatemala','Guinea','Haiti','Honduras','Hungary','India','Indonesia','Iran','Iraq','Ireland','Israel','Italy','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Korea','Kuwait','Kyrgyzstan','Laos','Latvia','Lebanon','Libya','Lithuania','Madagascar','Malaysia','Maldives','Mali','Mexico','Moldova','Mongolia','Morocco','Mozambique','Myanmar','Nepal','Netherlands','New Zealand','Nicaragua','Niger','Nigeria','Norway','Oman','Pakistan','Palestine','Panama','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Saudi Arabia','Senegal','Serbia','Singapore','Slovakia','Slovenia','Somalia','South Africa','Spain','Sri Lanka','Sudan','Sweden','Switzerland','Syria','Tajikistan','Tanzania','Thailand','Tunisia','Turkey','Turkmenistan','UAE','Uganda','Ukraine','United Kingdom','United States','Uruguay','Uzbekistan','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'];
@@ -194,51 +192,4 @@ if (typeof adminRegionSelect === 'undefined') {
         };
     };
 }
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('[data-admin-date]').forEach(function(el) {
-        var origVal = el.value;
-        var hidden = document.createElement('input');
-        hidden.type = 'hidden';
-        hidden.name = el.name;
-        hidden.value = origVal;
-        el.parentNode.insertBefore(hidden, el.nextSibling);
-        el.removeAttribute('name');
-
-        var defDate = null;
-        if (origVal && /^\d{4}-\d{2}-\d{2}$/.test(origVal)) {
-            var p = origVal.split('-');
-            defDate = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]));
-        }
-
-        flatpickr(el, {
-            dateFormat: 'd/m/Y',
-            defaultDate: defDate,
-            allowInput: true,
-            parseDate: function(datestr) {
-                if (/^\d{4}[\-\/]\d{1,2}[\-\/]\d{1,2}$/.test(datestr)) {
-                    return new Date(datestr);
-                }
-                var parts = datestr.split(/[\/\.\,\-]/);
-                if (parts.length === 3) {
-                    var d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
-                    if (y < 100) y += 2000;
-                    return new Date(y, m, d);
-                }
-                return new Date(datestr);
-            },
-            onChange: function(dates) {
-                if (dates[0]) {
-                    var d = dates[0];
-                    hidden.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-                }
-            },
-            onClose: function(dates, dateStr, instance) {
-                if (dateStr && dates.length === 0) {
-                    var parsed = instance.parseDate(dateStr);
-                    if (parsed) { instance.setDate(parsed, true); }
-                }
-            }
-        });
-    });
-});
 </script>

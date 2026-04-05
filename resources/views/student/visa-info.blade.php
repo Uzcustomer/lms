@@ -189,7 +189,7 @@ function regionSelect(config) {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+function initDatepickers() {
     if (typeof flatpickr === 'undefined') { console.error('Flatpickr not loaded!'); return; }
     var locale = '{{ app()->getLocale() }}';
     var months = locale === 'uz'
@@ -252,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-});
+}
+document.addEventListener('DOMContentLoaded', function() { setTimeout(initDatepickers, 100); });
 </script>
 </x-student-app-layout>

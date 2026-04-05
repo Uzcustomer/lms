@@ -340,6 +340,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Xalqaro talabalar (registrator ofisi)
         Route::prefix('international-students')->name('international-students.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'index'])->name('index');
+            Route::get('/statistics', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'statistics'])->name('statistics');
             Route::get('/export', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'export'])->name('export');
             Route::post('/subscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'subscribe'])->name('subscribe');
             Route::post('/unsubscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'unsubscribe'])->name('unsubscribe');

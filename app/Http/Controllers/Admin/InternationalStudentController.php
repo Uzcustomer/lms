@@ -171,6 +171,52 @@ class InternationalStudentController extends Controller
         return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed'));
     }
 
+    public function statistics()
+    {
+        $query = $this->internationalStudentsQuery();
+        $total = $query->count();
+
+        // Ma'lumot holati
+        $allIds = (clone $query)->pluck('id');
+        $filled = StudentVisaInfo::whereIn('student_id', $allIds)->count();
+        $notFilled = $total - $filled;
+        $approved = StudentVisaInfo::whereIn('student_id', $allIds)->where('status', 'approved')->count();
+        $pending = StudentVisaInfo::whereIn('student_id', $allIds)->where('status', 'pending')->count();
+        $rejected = StudentVisaInfo::whereIn('student_id', $allIds)->where('status', 'rejected')->count();
+
+        // Davlat bo'yicha
+        $byCountry = (clone $query)->whereNotNull('country_name')->where('country_name', '!=', '')
+            ->selectRaw('country_name, count(*) as cnt')->groupBy('country_name')->orderByDesc('cnt')->limit(15)->pluck('cnt', 'country_name');
+
+        // Kurs bo'yicha
+        $byLevel = (clone $query)->whereNotNull('level_name')
+            ->selectRaw('level_name, count(*) as cnt')->groupBy('level_name')->orderBy('level_name')->pluck('cnt', 'level_name');
+
+        // Fakultet bo'yicha
+        $byDept = (clone $query)->whereNotNull('department_name')->where('department_name', '!=', '')
+            ->selectRaw('department_name, count(*) as cnt')->groupBy('department_name')->orderByDesc('cnt')->limit(10)->pluck('cnt', 'department_name');
+
+        // Firma bo'yicha
+        $byFirm = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('firm')->where('firm', '!=', '')
+            ->selectRaw('firm, count(*) as cnt')->groupBy('firm')->orderByDesc('cnt')->pluck('cnt', 'firm');
+
+        // Viza muddati
+        $visaExpired = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '<', now())->count();
+        $visa30 = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '>=', now())->whereDate('visa_end_date', '<=', now()->addDays(30))->count();
+        $visaOk = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('visa_end_date')->whereDate('visa_end_date', '>', now()->addDays(30))->count();
+
+        // Registratsiya muddati
+        $regExpired = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '<', now())->count();
+        $reg7 = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '>=', now())->whereDate('registration_end_date', '<=', now()->addDays(7))->count();
+        $regOk = StudentVisaInfo::whereIn('student_id', $allIds)->whereNotNull('registration_end_date')->whereDate('registration_end_date', '>', now()->addDays(7))->count();
+
+        return view('admin.international-students.statistics', compact(
+            'total', 'filled', 'notFilled', 'approved', 'pending', 'rejected',
+            'byCountry', 'byLevel', 'byDept', 'byFirm',
+            'visaExpired', 'visa30', 'visaOk', 'regExpired', 'reg7', 'regOk'
+        ));
+    }
+
     public function show(Student $student)
     {
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();

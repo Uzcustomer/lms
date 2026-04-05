@@ -533,6 +533,52 @@ class InternationalStudentController extends Controller
     /**
      * Talabaga firma biriktirish (dekan yoki admin).
      */
+    /**
+     * Admin/Registrator talaba viza ma'lumotlarini to'ldirish/tahrirlash.
+     */
+    public function storeVisa(Request $request, Student $student)
+    {
+        $request->validate([
+            'passport_number' => 'nullable|string|max:50',
+            'passport_issued_place' => 'nullable|string|max:255',
+            'passport_issued_date' => 'nullable|date',
+            'passport_expiry_date' => 'nullable|date',
+            'birth_country' => 'nullable|string|max:255',
+            'birth_region' => 'nullable|string|max:255',
+            'birth_city' => 'nullable|string|max:255',
+            'registration_start_date' => 'nullable|date',
+            'registration_end_date' => 'nullable|date',
+            'visa_number' => 'nullable|string|max:50',
+            'visa_type' => 'nullable|string',
+            'visa_start_date' => 'nullable|date',
+            'visa_end_date' => 'nullable|date',
+            'visa_entries_count' => 'nullable|integer',
+            'visa_stay_days' => 'nullable|integer',
+            'visa_issued_place' => 'nullable|string|max:255',
+            'visa_issued_date' => 'nullable|date',
+            'entry_date' => 'nullable|date',
+        ]);
+
+        $data = $request->only([
+            'passport_number', 'passport_issued_place', 'passport_issued_date', 'passport_expiry_date',
+            'birth_country', 'birth_region', 'birth_city',
+            'registration_start_date', 'registration_end_date',
+            'visa_number', 'visa_type', 'visa_start_date', 'visa_end_date',
+            'visa_entries_count', 'visa_stay_days', 'visa_issued_place', 'visa_issued_date',
+            'entry_date',
+        ]);
+        $data['birth_date'] = $student->birth_date;
+        $data['status'] = $request->input('status', 'pending');
+
+        $columns = \Schema::getColumnListing('student_visa_infos');
+        $data = array_intersect_key($data, array_flip($columns));
+
+        StudentVisaInfo::updateOrCreate(['student_id' => $student->id], $data);
+
+        return redirect()->route('admin.international-students.show', $student)
+            ->with('success', 'Viza ma\'lumotlari saqlandi.');
+    }
+
     public function assignFirm(Request $request, Student $student)
     {
         $request->validate([

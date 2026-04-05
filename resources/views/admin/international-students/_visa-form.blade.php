@@ -40,7 +40,7 @@
                 <input type="hidden" name="birth_region" :value="value">
                 <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition style="position:absolute;z-index:50;width:100%;margin-top:2px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;">
                     <template x-for="item in filtered" :key="item">
-                        <div @click="value=item;search=item;open=false;$dispatch('country-changed',{country:item})" x-text="item" style="padding:6px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#fff'"></div>
+                        <div @click="value=item;search=item;open=false;" x-text="item" style="padding:6px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#fff'"></div>
                     </template>
                 </div>
             </div>
@@ -209,7 +209,7 @@ document.addEventListener('DOMContentLoaded', function() {
             defaultDate: origVal || null,
             allowInput: true,
             parseDate: function(datestr) {
-                var parts = datestr.split('/');
+                var parts = datestr.split(/[\/\.\,\-]/);
                 if (parts.length === 3) {
                     var d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
                     if (y < 100) y += 2000;

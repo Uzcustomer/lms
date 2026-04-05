@@ -218,7 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
             allowInput: true,
             clickOpens: true,
             parseDate: function(datestr) {
-                var parts = datestr.split('/');
+                var parts = datestr.split(/[\/\.\,\-]/);
                 if (parts.length === 3) {
                     var d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
                     if (y < 100) y += 2000;

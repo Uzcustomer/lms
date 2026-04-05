@@ -212,30 +212,30 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.cursor = 'pointer';
         el.style.backgroundColor = '#fff';
 
-        // Agar qiymat bor bo'lsa, chiroyli ko'rsatish
-        if (origValue) {
-            var d = new Date(origValue);
-            if (!isNaN(d)) {
-                el.value = d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
-            }
-        }
-
         flatpickr(el, {
-            dateFormat: 'Y-m-d',
+            dateFormat: 'd/m/Y',
             defaultDate: origValue || null,
-            allowInput: false,
+            allowInput: true,
             clickOpens: true,
-            onChange: function(selectedDates, dateStr) {
-                hidden.value = dateStr;
-                if (selectedDates[0]) {
-                    var dt = selectedDates[0];
-                    el.value = dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+            parseDate: function(datestr) {
+                var parts = datestr.split('/');
+                if (parts.length === 3) {
+                    var d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
+                    if (y < 100) y += 2000;
+                    return new Date(y, m, d);
+                }
+                return new Date(datestr);
+            },
+            onChange: function(dates) {
+                if (dates[0]) {
+                    var d = dates[0];
+                    hidden.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
                 }
             },
-            onReady: function(selectedDates) {
-                if (selectedDates[0]) {
-                    var dt = selectedDates[0];
-                    el.value = dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+            onClose: function(dates, dateStr, instance) {
+                if (dateStr && dates.length === 0) {
+                    var parsed = instance.parseDate(dateStr);
+                    if (parsed) { instance.setDate(parsed, true); }
                 }
             }
         });

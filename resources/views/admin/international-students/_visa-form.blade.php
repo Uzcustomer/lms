@@ -33,9 +33,17 @@
                 </div>
             </div>
         </div>
-        <div>
+        <div x-data="adminRegionSelect({ value: '{{ $visaInfo?->birth_region ?? '' }}' })">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Viloyat</label>
-            <input type="text" name="birth_region" value="{{ $visaInfo?->birth_region ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+            <div style="position:relative;">
+                <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
+                <input type="hidden" name="birth_region" :value="value">
+                <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition style="position:absolute;z-index:50;width:100%;margin-top:2px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;">
+                    <template x-for="item in filtered" :key="item">
+                        <div @click="value=item;search=item;open=false;" x-text="item" style="padding:6px 10px;font-size:11px;cursor:pointer;" onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#fff'"></div>
+                    </template>
+                </div>
+            </div>
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Shahar</label>
@@ -151,13 +159,77 @@ if (typeof adminCountrySelect === 'undefined') {
         };
     };
 }
+if (typeof adminRegionSelect === 'undefined') {
+    var adminCountryRegions = {
+        'India':['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Delhi','Goa','Gujarat','Haryana','Himachal Pradesh','Jammu and Kashmir','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal'],
+        'Pakistan':['Balochistan','Islamabad','Khyber Pakhtunkhwa','Punjab','Sindh','Azad Kashmir','Gilgit-Baltistan'],
+        'Bangladesh':['Barishal','Chattogram','Dhaka','Khulna','Mymensingh','Rajshahi','Rangpur','Sylhet'],
+        'Afghanistan':['Badakhshan','Balkh','Bamyan','Herat','Kabul','Kandahar','Kunduz','Nangarhar','Takhar'],
+        'Tajikistan':['Dushanbe','Sughd','Khatlon','Gorno-Badakhshan'],
+        'Turkmenistan':['Ahal','Balkan','Dashoguz','Lebap','Mary','Ashgabat'],
+        'Kyrgyzstan':['Batken','Chuy','Issyk-Kul','Jalal-Abad','Naryn','Osh','Talas','Bishkek'],
+        'Kazakhstan':['Almaty','Astana','Shymkent','Akmola','Aktobe','Atyrau','East Kazakhstan','Karaganda','Kostanay','Turkistan'],
+        'China':['Beijing','Guangdong','Jiangsu','Shandong','Shanghai','Sichuan','Zhejiang'],
+        'Nepal':['Province No. 1','Madhesh','Bagmati','Gandaki','Lumbini','Karnali','Sudurpashchim'],
+        'Sri Lanka':['Central','Eastern','Northern','Southern','Western'],
+        'Indonesia':['Bali','Jakarta','West Java','East Java','Central Java'],
+        'Nigeria':['Abuja','Lagos','Kano','Kaduna','Rivers'],
+    };
+    window.adminRegionSelect = function(config) {
+        return {
+            value: config.value || '',
+            search: config.value || '',
+            open: false,
+            get regions() {
+                var countryEl = document.querySelector('[name="birth_country"]');
+                var country = countryEl ? countryEl.value : '';
+                return adminCountryRegions[country] || [];
+            },
+            get filtered() {
+                var r = this.regions;
+                if (r.length === 0) return [];
+                if (!this.search) return r;
+                var q = this.search.toLowerCase();
+                return r.filter(function(i) { return i.toLowerCase().includes(q); });
+            }
+        };
+    };
+}
 document.addEventListener('DOMContentLoaded', function() {
-    var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.querySelectorAll('[data-admin-date]').forEach(function(el) {
+        var origVal = el.value;
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = el.name;
+        hidden.value = origVal;
+        el.parentNode.insertBefore(hidden, el.nextSibling);
+        el.removeAttribute('name');
+
         flatpickr(el, {
-            dateFormat: 'Y-m-d',
-            defaultDate: el.value || null,
-            allowInput: false,
+            dateFormat: 'd/m/Y',
+            defaultDate: origVal || null,
+            allowInput: true,
+            parseDate: function(datestr) {
+                var parts = datestr.split('/');
+                if (parts.length === 3) {
+                    var d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
+                    if (y < 100) y += 2000;
+                    return new Date(y, m, d);
+                }
+                return new Date(datestr);
+            },
+            onChange: function(dates) {
+                if (dates[0]) {
+                    var d = dates[0];
+                    hidden.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+                }
+            },
+            onClose: function(dates, dateStr, instance) {
+                if (dateStr && dates.length === 0) {
+                    var parsed = instance.parseDate(dateStr);
+                    if (parsed) { instance.setDate(parsed, true); }
+                }
+            }
         });
     });
 });

@@ -28,7 +28,7 @@
                             <div class="filter-item" style="min-width:100px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
                                 <div class="filter-wrap">
-                                    <select name="level_code" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="level_code" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
                                         @for($i = 1; $i <= 6; $i++)
                                             <option value="{{ $i }}" {{ request('level_code') == $i ? 'selected' : '' }}>{{ $i }}-kurs</option>
@@ -47,7 +47,7 @@
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Davlati</label>
                                 <div class="filter-wrap">
-                                    <select name="country" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="country" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
                                         @foreach($countries as $c)
                                             <option value="{{ $c }}" {{ request('country') === $c ? 'selected' : '' }}>{{ $c }}</option>
@@ -59,7 +59,7 @@
                             <div class="filter-item" style="flex:1; min-width:160px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#047857;"></span> Fakultet</label>
                                 <div class="filter-wrap">
-                                    <select name="department" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="department" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
                                         @foreach($departments as $d)
                                             <option value="{{ $d->department_id }}" {{ request('department') == $d->department_id ? 'selected' : '' }}>{{ $d->department_name }}</option>
@@ -74,7 +74,7 @@
                             <div class="filter-item" style="min-width:120px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Firma</label>
                                 <div class="filter-wrap">
-                                    <select name="firm" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="firm" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
                                         @foreach($firms as $key => $label)
                                             <option value="{{ $key }}" {{ request('firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
@@ -87,7 +87,7 @@
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Holati</label>
                                 <div class="filter-wrap">
-                                    <select name="data_status" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="data_status" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                     <option value="">Barchasi</option>
                                     <option value="filled" {{ request('data_status') === 'filled' ? 'selected' : '' }}>Kiritilgan</option>
                                     <option value="not_filled" {{ request('data_status') === 'not_filled' ? 'selected' : '' }}>Kiritilmagan</option>
@@ -101,7 +101,7 @@
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash</label>
                                 <div class="filter-wrap">
-                                    <select name="visa_expiry" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="visa_expiry" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
                                         <option value="15" {{ request('visa_expiry') == '15' ? 'selected' : '' }}>15 kun</option>
                                         <option value="20" {{ request('visa_expiry') == '20' ? 'selected' : '' }}>20 kun</option>
@@ -113,7 +113,7 @@
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Reg. tugash</label>
                                 <div class="filter-wrap">
-                                    <select name="registration_expiry" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="registration_expiry" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
                                         <option value="3" {{ request('registration_expiry') == '3' ? 'selected' : '' }}>3 kun</option>
                                         <option value="5" {{ request('registration_expiry') == '5' ? 'selected' : '' }}>5 kun</option>
@@ -125,7 +125,7 @@
                             <div class="filter-item" style="min-width:130px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> HEMIS</label>
                                 <div class="filter-wrap">
-                                    <select name="hemis_status" class="filter-input auto-submit" style="padding:0 8px;padding-right:28px;">
+                                    <select name="hemis_status" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
                                         <option value="active" {{ request('hemis_status') === 'active' ? 'selected' : '' }}>Faol</option>
                                         <option value="inactive" {{ request('hemis_status') === 'inactive' ? 'selected' : '' }}>HEMIS'da yo'q</option>

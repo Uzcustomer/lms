@@ -204,9 +204,15 @@ document.addEventListener('DOMContentLoaded', function() {
         el.parentNode.insertBefore(hidden, el.nextSibling);
         el.removeAttribute('name');
 
+        var defDate = null;
+        if (origVal && /^\d{4}-\d{2}-\d{2}$/.test(origVal)) {
+            var p = origVal.split('-');
+            defDate = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]));
+        }
+
         flatpickr(el, {
             dateFormat: 'd/m/Y',
-            defaultDate: origVal ? new Date(origVal) : null,
+            defaultDate: defDate,
             allowInput: true,
             parseDate: function(datestr) {
                 if (/^\d{4}[\-\/]\d{1,2}[\-\/]\d{1,2}$/.test(datestr)) {

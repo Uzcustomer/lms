@@ -1,4 +1,4 @@
-<form method="POST" action="{{ route('admin.international-students.store-visa', $student) }}">
+<form method="POST" action="{{ route('admin.international-students.store-visa', $student) }}" enctype="multipart/form-data">
     @csrf
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
         <div>
@@ -91,6 +91,31 @@
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan sana</label>
             <input type="date" name="visa_issued_date" value="{{ $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+        </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Hujjatlar (PDF)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport skaneri</label>
+            @if($visaInfo?->passport_scan_path)
+                <div style="margin-bottom:4px;"><a href="{{ route('admin.international-students.file', [$student, 'passport_scan_path']) }}" target="_blank" style="font-size:10px;color:#4f46e5;">Yuklangan faylni ko'rish</a></div>
+            @endif
+            <input type="file" name="passport_scan" accept=".pdf" style="width:100%;font-size:11px;">
+        </div>
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Viza skaneri</label>
+            @if($visaInfo?->visa_scan_path)
+                <div style="margin-bottom:4px;"><a href="{{ route('admin.international-students.file', [$student, 'visa_scan_path']) }}" target="_blank" style="font-size:10px;color:#4f46e5;">Yuklangan faylni ko'rish</a></div>
+            @endif
+            <input type="file" name="visa_scan" accept=".pdf" style="width:100%;font-size:11px;">
+        </div>
+        <div>
+            <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Registratsiya hujjati</label>
+            @if($visaInfo?->registration_doc_path)
+                <div style="margin-bottom:4px;"><a href="{{ route('admin.international-students.file', [$student, 'registration_doc_path']) }}" target="_blank" style="font-size:10px;color:#4f46e5;">Yuklangan faylni ko'rish</a></div>
+            @endif
+            <input type="file" name="registration_doc" accept=".pdf" style="width:100%;font-size:11px;">
         </div>
     </div>
 

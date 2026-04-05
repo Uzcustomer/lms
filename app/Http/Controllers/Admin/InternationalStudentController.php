@@ -573,7 +573,23 @@ class InternationalStudentController extends Controller
         $columns = \Schema::getColumnListing('student_visa_infos');
         $data = array_intersect_key($data, array_flip($columns));
 
-        StudentVisaInfo::updateOrCreate(['student_id' => $student->id], $data);
+        $visaInfo = StudentVisaInfo::updateOrCreate(['student_id' => $student->id], $data);
+
+        // PDF fayllar
+        $storagePath = 'student-visa/' . $student->id;
+        foreach ([
+            'passport_scan' => 'passport_scan_path',
+            'visa_scan' => 'visa_scan_path',
+            'registration_doc' => 'registration_doc_path',
+        ] as $inputName => $dbField) {
+            if ($request->hasFile($inputName)) {
+                if ($visaInfo->$dbField) {
+                    \Storage::disk('public')->delete($visaInfo->$dbField);
+                }
+                $visaInfo->$dbField = $request->file($inputName)->store($storagePath, 'public');
+            }
+        }
+        $visaInfo->save();
 
         return redirect()->route('admin.international-students.show', $student)
             ->with('success', 'Viza ma\'lumotlari saqlandi.');

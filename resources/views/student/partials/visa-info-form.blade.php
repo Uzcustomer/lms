@@ -1,4 +1,4 @@
-<form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm">
+<form method="POST" action="{{ route('student.visa-info.store') }}" enctype="multipart/form-data" id="visaForm" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='BUTTON'){event.preventDefault();}">
     @csrf
 
     {{-- Ogohlantirish --}}
@@ -47,6 +47,7 @@
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Davlat') }} <span class="text-red-500">*</span></label>
                 <div class="relative">
                     <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true"
+                           @keydown.enter.prevent="if(filtered.length>0){select(filtered[0])}"
                            placeholder="{{ __('Qidiring...') }}"
                            class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" autocomplete="off">
                     <input type="hidden" name="birth_country" :value="value" required>
@@ -69,6 +70,7 @@
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viloyat') }} <span class="text-red-500">*</span></label>
                 <div class="relative">
                     <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true"
+                           @keydown.enter.prevent="if(filtered.length>0){selectItem(filtered[0])}"
                            placeholder="{{ __('Qidiring...') }}"
                            class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500" autocomplete="off">
                     <input type="hidden" name="birth_region" :value="value" required>

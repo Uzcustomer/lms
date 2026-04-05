@@ -1,4 +1,4 @@
-<form method="POST" action="{{ route('admin.international-students.store-visa', $student) }}" enctype="multipart/form-data">
+<form method="POST" action="{{ route('admin.international-students.store-visa', $student) }}" enctype="multipart/form-data" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='BUTTON'){event.preventDefault();}">
     @csrf
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
         <div>
@@ -24,7 +24,7 @@
         <div x-data="adminCountrySelect({ value: '{{ $visaInfo?->birth_country ?? 'India' }}' })">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Davlat</label>
             <div style="position:relative;">
-                <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
+                <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" @keydown.enter.prevent="if(filtered.length>0){value=filtered[0];search=filtered[0];open=false;$dispatch('country-changed',{country:filtered[0]})}" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
                 <input type="hidden" name="birth_country" :value="value">
                 <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition style="position:absolute;z-index:50;width:100%;margin-top:2px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;">
                     <template x-for="item in filtered" :key="item">
@@ -36,7 +36,7 @@
         <div x-data="adminRegionSelect({ value: '{{ $visaInfo?->birth_region ?? '' }}', country: '{{ $visaInfo?->birth_country ?? 'India' }}' })" @country-changed.window="country=$event.detail.country;search='';value=''">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Viloyat</label>
             <div style="position:relative;">
-                <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
+                <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" @keydown.enter.prevent="if(filtered.length>0){value=filtered[0];search=filtered[0];open=false}" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
                 <input type="hidden" name="birth_region" :value="value">
                 <div x-show="open && filtered.length > 0" @click.away="open=false" x-transition style="position:absolute;z-index:50;width:100%;margin-top:2px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:180px;overflow-y:auto;">
                     <template x-for="item in filtered" :key="item">

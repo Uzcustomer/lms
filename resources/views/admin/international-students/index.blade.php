@@ -30,9 +30,14 @@
                                 <div class="filter-wrap">
                                     <select name="level_code" class="filter-input" onchange="document.getElementById('filterForm').submit();" style="padding:0 8px;padding-right:28px;">
                                         <option value="">Barchasi</option>
-                                        @for($i = 1; $i <= 6; $i++)
-                                            <option value="{{ $i }}" {{ request('level_code') == $i ? 'selected' : '' }}>{{ $i }}-kurs</option>
-                                        @endfor
+                                        @php
+                                            $levelCodes = \App\Models\Student::where(function($q){
+                                                $q->where('group_name','like','xd%')->orWhere('citizenship_name','like','%orijiy%');
+                                            })->whereNotNull('level_code')->select('level_code','level_name')->distinct()->orderBy('level_code')->get();
+                                        @endphp
+                                        @foreach($levelCodes as $lc)
+                                            <option value="{{ $lc->level_code }}" {{ request('level_code') == $lc->level_code ? 'selected' : '' }}>{{ $lc->level_name }}</option>
+                                        @endforeach
                                     </select>
                                     @if(request('level_code'))<button type="button" class="filter-clear" onclick="clearFilter('level_code')">&times;</button>@endif
                                 </div>

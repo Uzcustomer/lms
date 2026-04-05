@@ -344,6 +344,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'export'])->name('export');
             Route::post('/subscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'subscribe'])->name('subscribe');
             Route::post('/unsubscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'unsubscribe'])->name('unsubscribe');
+            Route::post('/toggle-false-show', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'toggleFalseShow'])->name('toggle-false-show');
+            Route::post('/bulk-assign-firm', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'bulkAssignFirm'])->name('bulk-assign-firm');
             Route::post('/registration-talabnoma', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'registrationTalabnoma'])->name('registration-talabnoma');
             Route::post('/visa-talabnoma', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'visaTalabnoma'])->name('visa-talabnoma');
             Route::get('/{student}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'show'])->name('show');

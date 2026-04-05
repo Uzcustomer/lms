@@ -6,6 +6,28 @@
                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
                 Statistika
             </a>
+            @php $userRoles = (auth()->user() ?? auth()->guard('teacher')->user())?->getRoleNames()->toArray() ?? []; $isAdmin = count(array_intersect(['superadmin','admin'], $userRoles)) > 0; @endphp
+            @if($isAdmin)
+            <div x-data="{fsOpen:false}" style="position:relative;">
+                <button @click="fsOpen=!fsOpen" type="button" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;font-size:12px;font-weight:600;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;cursor:pointer;">
+                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    False Show
+                </button>
+                <div x-show="fsOpen" @click.away="fsOpen=false" x-transition style="position:absolute;right:0;top:100%;margin-top:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999;width:320px;max-height:400px;overflow-y:auto;padding:12px;">
+                    <div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:8px;text-transform:uppercase;">Kafedra bo'yicha False Show</div>
+                    @foreach($allDepartments as $dept)
+                        <form method="POST" action="{{ route('admin.international-students.toggle-false-show') }}" style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f8fafc;">
+                            @csrf
+                            <input type="hidden" name="department_hemis_id" value="{{ $dept->department_hemis_id }}">
+                            <span style="font-size:11px;color:#334155;flex:1;">{{ $dept->name }}</span>
+                            <button type="submit" style="font-size:10px;padding:2px 10px;border-radius:10px;border:none;cursor:pointer;font-weight:600;{{ ($falseShowStatus[$dept->department_hemis_id] ?? false) ? 'background:#dcfce7;color:#166534;' : 'background:#f1f5f9;color:#94a3b8;' }}">
+                                {{ ($falseShowStatus[$dept->department_hemis_id] ?? false) ? 'ON' : 'OFF' }}
+                            </button>
+                        </form>
+                    @endforeach
+                </div>
+            </div>
+            @endif
         </div>
     </x-slot>
 
@@ -91,6 +113,7 @@
                                             <option value="{{ $key }}" {{ request('firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
                                         @endforeach
                                         <option value="other" {{ request('firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
+                                        <option value="none" {{ request('firm') === 'none' ? 'selected' : '' }}>Belgilanmagan</option>
                                     </select>
                                     @if(request('firm'))<button type="button" class="filter-clear" onclick="clearFilter('firm')">&times;</button>@endif
                                 </div>
@@ -210,7 +233,8 @@
                         <button type="button" onclick="clearSelection()" style="font-size:11px;padding:4px 10px;border:1px solid #93c5fd;background:#fff;border-radius:6px;color:#1e40af;cursor:pointer;">Bekor qilish</button>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button type="button" onclick="openRegModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Registratsiya talabnoma</button>
+                        <button type="button" onclick="openFirmModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Firma biriktirish</button>
+                        <button type="button" onclick="openRegModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Reg. talabnoma</button>
                         <button type="button" onclick="openVizaModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Viza talabnoma</button>
                     </div>
                 </div>
@@ -270,6 +294,30 @@
                     </div>
                 </div>
 
+                {{-- Firma biriktirish modal --}}
+                <div id="firmModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
+                    <div style="background:#fff;border-radius:12px;padding:24px;max-width:400px;width:90%;margin:auto;">
+                        <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:16px;">Firma biriktirish</h3>
+                        <form id="firmAssignForm" method="POST" action="{{ route('admin.international-students.bulk-assign-firm') }}">
+                            @csrf
+                            <div id="firmInputs"></div>
+                            <div style="margin-bottom:12px;">
+                                <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Firma tanlang</label>
+                                <select name="firm" required style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                                    @foreach($firms as $key => $label)
+                                        <option value="{{ $key }}">{{ $label }}</option>
+                                    @endforeach
+                                    <option value="other">Boshqa</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                <button type="button" onclick="closeFirmModal()" style="padding:8px 16px;font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;">Bekor</button>
+                                <button type="submit" style="padding:8px 16px;font-size:12px;background:#d97706;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Biriktirish</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
                 {{-- Jadval --}}
                 <div class="overflow-x-auto">
                     <table class="student-table">
@@ -324,7 +372,7 @@
                                     <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</span></td>
                                     <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
                                     <td>
-                                        @if($visa)
+                                        @if($visa || in_array($student->department_id, $falseShowDepts))
                                             <span class="int-status-pill int-status-green">Kiritilgan</span>
                                         @else
                                             <span class="int-status-pill int-status-red">Kiritilmagan</span>
@@ -612,6 +660,8 @@ function openVizaModal() {
     document.getElementById('vizaModal').style.display = 'flex';
 }
 function closeVizaModal() { document.getElementById('vizaModal').style.display = 'none'; }
+function openFirmModal() { syncInputs('firmInputs'); document.getElementById('firmModal').style.display = 'flex'; }
+function closeFirmModal() { document.getElementById('firmModal').style.display = 'none'; }
 function syncInputs(containerId) {
     var c = document.getElementById(containerId);
     c.innerHTML = '';

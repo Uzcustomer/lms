@@ -57,9 +57,14 @@ class InternationalStudentController extends Controller
         }
 
         if ($request->filled('firm')) {
-            $query->whereHas('visaInfo', function ($q) use ($request) {
-                $q->where('firm', $request->firm);
-            });
+            if ($request->firm === 'none') {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('visaInfo')
+                      ->orWhereHas('visaInfo', fn($vq) => $vq->whereNull('firm')->orWhere('firm', ''));
+                });
+            } else {
+                $query->whereHas('visaInfo', fn($q) => $q->where('firm', $request->firm));
+            }
         }
 
         if ($request->filled('country')) {
@@ -111,6 +116,11 @@ class InternationalStudentController extends Controller
         // Filtrlangan query klon — statistika uchun
         $filteredIds = (clone $query)->pluck('students.id');
 
+        // False show talabalarni oxirga tushirish
+        if (!empty($falseShowDepts)) {
+            $query->orderByRaw("CASE WHEN department_id IN ('" . implode("','", $falseShowDepts) . "') AND id NOT IN (SELECT student_id FROM student_visa_infos) THEN 1 ELSE 0 END");
+        }
+
         $students = $query->with('visaInfo')
             ->orderBy('full_name')
             ->paginate(25)
@@ -126,7 +136,16 @@ class InternationalStudentController extends Controller
         // Statistika — filtrlangan natijaga asoslangan
         $totalFiltered = $filteredIds->count();
         $allVisas = StudentVisaInfo::whereIn('student_id', $filteredIds);
-        $filledCount = (clone $allVisas)->count();
+        $realFilledCount = (clone $allVisas)->count();
+        // False show: kiritmaganlarni ham kiritgan deb hisoblash
+        $falseShowExtra = 0;
+        if (!empty($falseShowDepts)) {
+            $falseShowExtra = $filteredIds->filter(function($id) use ($falseShowDepts) {
+                $student = Student::find($id);
+                return $student && in_array($student->department_id, $falseShowDepts) && !StudentVisaInfo::where('student_id', $id)->exists();
+            })->count();
+        }
+        $filledCount = $realFilledCount + $falseShowExtra;
         $notFilledCount = $totalFiltered - $filledCount;
         $approvedCount = (clone $allVisas)->where('status', 'approved')->count();
         $pendingCount = (clone $allVisas)->where('status', 'pending')->count();
@@ -159,6 +178,19 @@ class InternationalStudentController extends Controller
         );
 
         // Obuna holati
+        // False show departments
+        $falseShowDepts = [];
+        if (\Schema::hasTable('false_show_departments')) {
+            $falseShowDepts = \DB::table('false_show_departments')->where('enabled', true)->pluck('department_hemis_id')->toArray();
+        }
+
+        // False show departments list (admin uchun)
+        $allDepartments = \App\Models\Department::where('active', true)->orderBy('name')->get();
+        $falseShowStatus = [];
+        if (\Schema::hasTable('false_show_departments')) {
+            $falseShowStatus = \DB::table('false_show_departments')->pluck('enabled', 'department_hemis_id')->toArray();
+        }
+
         $isSubscribed = false;
         $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
         if ($user && \Schema::hasTable('visa_notification_subscribers')) {
@@ -168,7 +200,25 @@ class InternationalStudentController extends Controller
                 ->exists();
         }
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowDepts', 'allDepartments', 'falseShowStatus'));
+    }
+
+    /**
+     * False show: kafedra uchun yoqish/o'chirish.
+     */
+    public function toggleFalseShow(Request $request)
+    {
+        $request->validate(['department_hemis_id' => 'required|string']);
+        if (!\Schema::hasTable('false_show_departments')) {
+            return redirect()->back()->with('error', 'Migratsiya ishlatilmagan.');
+        }
+        $existing = \DB::table('false_show_departments')->where('department_hemis_id', $request->department_hemis_id)->first();
+        if ($existing) {
+            \DB::table('false_show_departments')->where('department_hemis_id', $request->department_hemis_id)->update(['enabled' => !$existing->enabled, 'updated_at' => now()]);
+        } else {
+            \DB::table('false_show_departments')->insert(['department_hemis_id' => $request->department_hemis_id, 'enabled' => true, 'created_at' => now(), 'updated_at' => now()]);
+        }
+        return redirect()->back()->with('success', 'False show holati o\'zgartirildi.');
     }
 
     public function statistics()
@@ -642,6 +692,25 @@ class InternationalStudentController extends Controller
 
         return redirect()->route('admin.international-students.show', $student)
             ->with('success', 'Viza ma\'lumotlari saqlandi.');
+    }
+
+    /**
+     * Bir nechta talabaga firma biriktirish.
+     */
+    public function bulkAssignFirm(Request $request)
+    {
+        $request->validate(['student_ids' => 'required|array|min:1', 'firm' => 'required|string']);
+        $students = Student::whereIn('id', $request->student_ids)->get();
+
+        foreach ($students as $student) {
+            $visaInfo = StudentVisaInfo::firstOrCreate(
+                ['student_id' => $student->id],
+                ['birth_date' => $student->birth_date, 'birth_country' => $student->country_name]
+            );
+            $visaInfo->update(['firm' => $request->firm]);
+        }
+
+        return redirect()->back()->with('success', count($students) . ' ta talabaga firma biriktirildi.');
     }
 
     public function assignFirm(Request $request, Student $student)

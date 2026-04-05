@@ -568,8 +568,10 @@ class InternationalStudentController extends Controller
             'entry_date',
         ]);
         $data['birth_date'] = $student->birth_date;
-        $data['status'] = 'approved';
         $data['agreement_accepted'] = true;
+        // Mavjud statusni saqlab qolish — faqat approve tugmasi bilan tasdiqlanadi
+        $existing = StudentVisaInfo::where('student_id', $student->id)->first();
+        $data['status'] = $existing?->status ?? 'pending';
 
         $columns = \Schema::getColumnListing('student_visa_infos');
         $data = array_intersect_key($data, array_flip($columns));

@@ -49,7 +49,7 @@ class InternationalStudentController extends Controller
         }
 
         if ($request->filled('level_code')) {
-            $query->where('level_code', $request->level_code);
+            $query->where('level_code', (string) $request->level_code);
         }
 
         if ($request->filled('group_name')) {

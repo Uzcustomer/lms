@@ -3,11 +3,11 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport raqami</label>
-            <input type="text" name="passport_number" value="{{ $visaInfo?->passport_number ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+            <input type="text" name="passport_number" value="{{ $visaInfo?->passport_number ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport berilgan joy</label>
-            <input type="text" name="passport_issued_place" value="{{ $visaInfo?->passport_issued_place ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+            <input type="text" name="passport_issued_place" value="{{ $visaInfo?->passport_issued_place ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport berilgan sana</label>
@@ -47,7 +47,7 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Shahar</label>
-            <input type="text" name="birth_city" value="{{ $visaInfo?->birth_city ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+            <input type="text" name="birth_city" value="{{ $visaInfo?->birth_city ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
         </div>
     </div>
 
@@ -102,7 +102,7 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan joy</label>
-            <input type="text" name="visa_issued_place" value="{{ $visaInfo?->visa_issued_place ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+            <input type="text" name="visa_issued_place" value="{{ $visaInfo?->visa_issued_place ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan sana</label>

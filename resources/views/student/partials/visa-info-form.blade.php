@@ -180,9 +180,10 @@
     </div>
 
     </div>
+    </div>
 
     {{-- Viza --}}
-    <div class="p-4 bg-white rounded-lg border border-gray-200">
+    <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
         <div style="font-size:11px;font-weight:700;color:#d97706;margin-bottom:10px;">{{ __('Viza ma\'lumotlari') }}</div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
@@ -248,7 +249,6 @@
                    class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
             @error('visa_issued_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
-    </div>
     </div>
     </div>
 

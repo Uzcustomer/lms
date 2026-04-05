@@ -11,11 +11,11 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport berilgan sana</label>
-            <input type="text" name="passport_issued_date" data-admin-date="1" value="{{ $visaInfo?->passport_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="passport_issued_date" data-admin-date="1" value="{{ $visaInfo?->passport_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport tugash sanasi</label>
-            <input type="text" name="passport_expiry_date" data-admin-date="1" value="{{ $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="passport_expiry_date" data-admin-date="1" value="{{ $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -55,15 +55,15 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Boshlanish</label>
-            <input type="text" name="registration_start_date" data-admin-date="1" value="{{ $visaInfo?->registration_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="registration_start_date" data-admin-date="1" value="{{ $visaInfo?->registration_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Tugash</label>
-            <input type="text" name="registration_end_date" data-admin-date="1" value="{{ $visaInfo?->registration_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="registration_end_date" data-admin-date="1" value="{{ $visaInfo?->registration_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Kirish sanasi</label>
-            <input type="text" name="entry_date" data-admin-date="1" value="{{ $visaInfo?->entry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="entry_date" data-admin-date="1" value="{{ $visaInfo?->entry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -94,11 +94,11 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-top:10px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Boshlanish</label>
-            <input type="text" name="visa_start_date" data-admin-date="1" value="{{ $visaInfo?->visa_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="visa_start_date" data-admin-date="1" value="{{ $visaInfo?->visa_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Tugash</label>
-            <input type="text" name="visa_end_date" data-admin-date="1" value="{{ $visaInfo?->visa_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="visa_end_date" data-admin-date="1" value="{{ $visaInfo?->visa_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan joy</label>
@@ -106,7 +106,7 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan sana</label>
-            <input type="text" name="visa_issued_date" data-admin-date="1" value="{{ $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;" readonly>
+            <input type="text" name="visa_issued_date" data-admin-date="1" value="{{ $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 

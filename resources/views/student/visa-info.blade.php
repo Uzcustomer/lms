@@ -212,30 +212,18 @@ document.addEventListener('DOMContentLoaded', function() {
         el.style.cursor = 'pointer';
         el.style.backgroundColor = '#fff';
 
-        // Agar qiymat bor bo'lsa, chiroyli ko'rsatish
-        if (origValue) {
-            var d = new Date(origValue);
-            if (!isNaN(d)) {
-                el.value = d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
-            }
-        }
-
         flatpickr(el, {
-            dateFormat: 'Y-m-d',
+            dateFormat: 'd/m/Y',
             defaultDate: origValue || null,
             allowInput: false,
             clickOpens: true,
             onChange: function(selectedDates, dateStr) {
-                hidden.value = dateStr;
                 if (selectedDates[0]) {
-                    var dt = selectedDates[0];
-                    el.value = dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
-                }
-            },
-            onReady: function(selectedDates) {
-                if (selectedDates[0]) {
-                    var dt = selectedDates[0];
-                    el.value = dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+                    var d = selectedDates[0];
+                    var y = d.getFullYear();
+                    var m = String(d.getMonth()+1).padStart(2,'0');
+                    var dd = String(d.getDate()).padStart(2,'0');
+                    hidden.value = y+'-'+m+'-'+dd;
                 }
             }
         });

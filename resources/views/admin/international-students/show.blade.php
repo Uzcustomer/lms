@@ -217,12 +217,13 @@
                 </div>
 
                 {{-- Tahrirlash --}}
-                <div class="sv-card" style="margin-top:16px;overflow:hidden;" x-data="{editOpen:false}">
-                    <button @click="editOpen=!editOpen" type="button" style="width:100%;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;">
-                        <span style="font-size:12px;font-weight:600;color:#4f46e5;">Ma'lumotlarni tahrirlash</span>
-                        <svg :style="editOpen?'transform:rotate(180deg)':''" style="width:14px;height:14px;color:#4f46e5;transition:transform 0.2s;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
-                    </button>
-                    <div x-show="editOpen" x-transition style="padding:0 20px 16px;border-top:1px solid #f1f5f9;">
+                <div style="margin-top:16px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;" x-data="{editOpen:false}">
+                    <div @click="editOpen=!editOpen" style="padding:8px 16px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                        <svg style="width:12px;height:12px;flex-shrink:0;color:#4f46e5;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                        <span style="font-size:12px;font-weight:600;color:#4f46e5;">Tahrirlash</span>
+                        <svg :style="editOpen && 'transform:rotate(180deg)'" style="width:10px;height:10px;margin-left:auto;color:#94a3b8;transition:transform 0.2s;flex-shrink:0;" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div x-show="editOpen" x-transition style="padding:0 16px 14px;border-top:1px solid #f1f5f9;">
                         @include('admin.international-students._visa-form', ['student' => $student, 'visaInfo' => $visaInfo])
                     </div>
                 </div>

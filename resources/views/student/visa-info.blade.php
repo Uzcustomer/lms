@@ -215,15 +215,27 @@ document.addEventListener('DOMContentLoaded', function() {
         flatpickr(el, {
             dateFormat: 'd/m/Y',
             defaultDate: origValue || null,
-            allowInput: false,
+            allowInput: true,
             clickOpens: true,
-            onChange: function(selectedDates, dateStr) {
-                if (selectedDates[0]) {
-                    var d = selectedDates[0];
-                    var y = d.getFullYear();
-                    var m = String(d.getMonth()+1).padStart(2,'0');
-                    var dd = String(d.getDate()).padStart(2,'0');
-                    hidden.value = y+'-'+m+'-'+dd;
+            parseDate: function(datestr) {
+                var parts = datestr.split('/');
+                if (parts.length === 3) {
+                    var d = parseInt(parts[0]), m = parseInt(parts[1]) - 1, y = parseInt(parts[2]);
+                    if (y < 100) y += 2000;
+                    return new Date(y, m, d);
+                }
+                return new Date(datestr);
+            },
+            onChange: function(dates) {
+                if (dates[0]) {
+                    var d = dates[0];
+                    hidden.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+                }
+            },
+            onClose: function(dates, dateStr, instance) {
+                if (dateStr && dates.length === 0) {
+                    var parsed = instance.parseDate(dateStr);
+                    if (parsed) { instance.setDate(parsed, true); }
                 }
             }
         });

@@ -229,6 +229,7 @@
                                         <th>Semestr</th>
                                         <th>Guruh</th>
                                         <th>Fan</th>
+                                        <th>Fan ID</th>
                                         <th>YN turi</th>
                                         <th>Shakl</th>
                                         <th>Baho</th>
@@ -246,6 +247,7 @@
                                         <th><select class="col-filter" data-col="semester"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="group"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
+                                        <th><input type="text" class="col-filter-input" data-col="fan_id" placeholder="Fan ID..."></th>
                                         <th><select class="col-filter" data-col="yn_turi"><option value="">Barchasi</option></select></th>
                                         <th><select class="col-filter" data-col="shakl"><option value="">Barchasi</option></select></th>
                                         <th>
@@ -597,6 +599,7 @@
                 html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td>' + fanCell + '</td>';
+                html += '<td><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;">' + esc(r.fan_id || '-') + '</span></td>';
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
@@ -645,12 +648,12 @@
         function downloadXulosaExcel() {
             if (!filteredData || filteredData.length === 0) return;
 
-            var headers = ['#', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'Fan', 'YN turi', 'Shakl', 'Baho', 'Sana', 'Xulosa', 'JN o\'rtacha', 'MT o\'rtacha', 'OSKI baho'];
+            var headers = ['#', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'Fan', 'Fan ID', 'YN turi', 'Shakl', 'Baho', 'Sana', 'Xulosa', 'JN o\'rtacha', 'MT o\'rtacha', 'OSKI baho'];
             var rows = [headers];
             filteredData.forEach(function(r, i) {
                 rows.push([
                     i + 1, r.student_id, r.full_name, r.faculty, r.direction,
-                    r.kurs, r.semester, r.group, r.fan_name, r.yn_turi,
+                    r.kurs, r.semester, r.group, r.fan_name, r.fan_id || '', r.yn_turi,
                     r.shakl, r.grade, r.date, r.xulosa,
                     r.jn_avg !== null ? r.jn_avg : '',
                     r.mt_avg !== null ? r.mt_avg : '',

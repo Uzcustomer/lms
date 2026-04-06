@@ -121,7 +121,7 @@ class InternationalStudentController extends Controller
 
         // False show: kiritmaganlarni oxirga tushirish
         if ($falseShowEnabled) {
-            $query->orderByRaw("CASE WHEN id NOT IN (SELECT student_id FROM student_visa_infos) THEN 1 ELSE 0 END");
+            $query->orderByRaw("CASE WHEN id NOT IN (SELECT student_id FROM student_visa_infos WHERE passport_number IS NOT NULL OR visa_number IS NOT NULL OR registration_end_date IS NOT NULL) THEN 1 ELSE 0 END");
         }
 
         $students = $query->with('visaInfo')

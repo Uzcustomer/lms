@@ -564,6 +564,30 @@
                 </div>
             </a>
 
+            {{-- SECTION: FALSE SHOW --}}
+            @if(auth()->user()?->hasRole(['superadmin', 'admin']))
+            @php $fse = \App\Models\Setting::get('false_show_enabled', '0') === '1'; @endphp
+            <div style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <div style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, {{ $fse ? '#f0fdf4, #dcfce7' : '#f8fafc, #f1f5f9' }}); border-bottom: 1px solid {{ $fse ? '#bbf7d0' : '#e2e8f0' }};">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, {{ $fse ? '#16a34a, #22c55e' : '#94a3b8, #cbd5e1' }}); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+                            <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 17px; font-weight: 700; color: {{ $fse ? '#166534' : '#475569' }};">False Show</div>
+                            <div style="font-size: 13px; color: {{ $fse ? '#16a34a' : '#94a3b8' }}; margin-top: 2px;">{{ $fse ? 'Yoqilgan — barcha talabalar kiritilgan ko\'rinadi' : 'O\'chirilgan — normal ko\'rinish' }}</div>
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ route('admin.international-students.toggle-false-show') }}">
+                        @csrf
+                        <button type="submit" style="padding: 8px 24px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; transition: all 0.15s; {{ $fse ? 'background:#dcfce7;color:#166534;border:1px solid #bbf7d0;' : 'background:#f1f5f9;color:#94a3b8;border:1px solid #e2e8f0;' }}" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''">
+                            {{ $fse ? 'ON' : 'OFF' }}
+                        </button>
+                    </form>
+                </div>
+            </div>
+            @endif
+
         </div>
     </div>
 </x-app-layout>

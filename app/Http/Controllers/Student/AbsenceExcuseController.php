@@ -185,11 +185,12 @@ class AbsenceExcuseController extends Controller
         // Har bir makeup uchun sana mavjudligini tekshirish
         $makeupDates = $request->input('makeup_dates', []);
         foreach ($makeupDates as $i => $makeup) {
+            // Topshirilgan bo'lsa (barcha nazorat turlari uchun), sana talab qilinmaydi
+            if (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1') {
+                continue;
+            }
+
             if (($makeup['assessment_type'] ?? '') === 'jn') {
-                // JN topshirilgan bo'lsa, sana talab qilinmaydi
-                if (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1') {
-                    continue;
-                }
                 if (empty($makeup['makeup_start']) || empty($makeup['makeup_end'])) {
                     return back()->withErrors([
                         "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang yoki "Topshirilgan" tugmasini bosing',
@@ -198,7 +199,7 @@ class AbsenceExcuseController extends Controller
             } else {
                 if (empty($makeup['makeup_date'])) {
                     return back()->withErrors([
-                        "makeup_dates.{$i}.makeup_date" => ($makeup['subject_name'] ?? 'Nazorat') . ' uchun qayta topshirish sanasini tanlang',
+                        "makeup_dates.{$i}.makeup_date" => ($makeup['subject_name'] ?? 'Nazorat') . ' uchun qayta topshirish sanasini tanlang yoki "Topshirilgan" tugmasini bosing',
                     ])->withInput();
                 }
             }
@@ -228,14 +229,14 @@ class AbsenceExcuseController extends Controller
             // Makeup sanalarni saqlash
             foreach ($makeupDates as $makeup) {
                 $isJn = ($makeup['assessment_type'] ?? '') === 'jn';
-                $isJnSubmitted = $isJn && !empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1';
+                $isSubmitted = !empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1';
 
-                // JN topshirilgan bo'lsa, sanasiz saqlaymiz
+                // Topshirilgan bo'lsa, sanasiz saqlaymiz
                 $dateToSave = null;
                 $makeupEndDate = null;
 
-                if ($isJnSubmitted) {
-                    // Topshirilgan JN — sana kerak emas, original_date ni saqlaymiz
+                if ($isSubmitted) {
+                    // Topshirilgan — sana kerak emas, original_date ni saqlaymiz
                     $dateToSave = $makeup['original_date'];
                 } elseif ($isJn) {
                     $dateToSave = $makeup['makeup_start'] ?? $makeup['makeup_date'];
@@ -246,7 +247,7 @@ class AbsenceExcuseController extends Controller
                     $dateToSave = $makeup['makeup_date'];
                 }
 
-                if (!$isJnSubmitted) {
+                if (!$isSubmitted) {
                     $parsedDate = Carbon::parse($dateToSave);
                     if ($parsedDate->isSunday()) {
                         throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
@@ -274,8 +275,8 @@ class AbsenceExcuseController extends Controller
                     'original_date' => $makeup['original_date'],
                     'makeup_date' => $dateToSave,
                     'makeup_end_date' => $makeupEndDate,
-                    'jn_submitted' => $isJnSubmitted,
-                    'status' => $isJnSubmitted ? 'completed' : 'scheduled',
+                    'jn_submitted' => $isSubmitted,
+                    'status' => $isSubmitted ? 'completed' : 'scheduled',
                 ]);
             }
 

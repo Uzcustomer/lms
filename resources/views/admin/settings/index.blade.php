@@ -574,7 +574,7 @@
                             <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         </div>
                         <div style="text-align: left;">
-                            <div style="font-size: 17px; font-weight: 700; color: {{ $fse ? '#166534' : '#475569' }};">False Show</div>
+                            <div style="font-size: 17px; font-weight: 700; color: {{ $fse ? '#166534' : '#475569' }};">Kafedra</div>
                             <div style="font-size: 13px; color: {{ $fse ? '#16a34a' : '#94a3b8' }}; margin-top: 2px;">{{ $fse ? 'Yoqilgan — barcha talabalar kiritilgan ko\'rinadi' : 'O\'chirilgan — normal ko\'rinish' }}</div>
                         </div>
                     </div>

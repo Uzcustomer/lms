@@ -6,6 +6,16 @@
                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
                 Statistika
             </a>
+            @php $userRoles = (auth()->user() ?? auth()->guard('teacher')->user())?->getRoleNames()->toArray() ?? []; $isAdmin = count(array_intersect(['superadmin','admin'], $userRoles)) > 0; @endphp
+            @if($isAdmin)
+            <form method="POST" action="{{ route('admin.international-students.toggle-false-show') }}" style="margin:0;">
+                @csrf
+                <button type="submit" style="display:inline-flex;align-items:center;gap:5px;padding:6px 14px;font-size:12px;font-weight:600;border-radius:8px;cursor:pointer;border:1px solid;{{ $falseShowEnabled ? 'color:#166534;background:#dcfce7;border-color:#bbf7d0;' : 'color:#94a3b8;background:#f8fafc;border-color:#e2e8f0;' }}">
+                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    False Show {{ $falseShowEnabled ? 'ON' : 'OFF' }}
+                </button>
+            </form>
+            @endif
         </div>
     </x-slot>
 
@@ -91,6 +101,7 @@
                                             <option value="{{ $key }}" {{ request('firm') === $key ? 'selected' : '' }}>{{ $label }}</option>
                                         @endforeach
                                         <option value="other" {{ request('firm') === 'other' ? 'selected' : '' }}>Boshqa</option>
+                                        <option value="none" {{ request('firm') === 'none' ? 'selected' : '' }}>Belgilanmagan</option>
                                     </select>
                                     @if(request('firm'))<button type="button" class="filter-clear" onclick="clearFilter('firm')">&times;</button>@endif
                                 </div>
@@ -210,7 +221,8 @@
                         <button type="button" onclick="clearSelection()" style="font-size:11px;padding:4px 10px;border:1px solid #93c5fd;background:#fff;border-radius:6px;color:#1e40af;cursor:pointer;">Bekor qilish</button>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <button type="button" onclick="openRegModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Registratsiya talabnoma</button>
+                        <button type="button" onclick="openFirmModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Firma biriktirish</button>
+                        <button type="button" onclick="openRegModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Reg. talabnoma</button>
                         <button type="button" onclick="openVizaModal()" style="font-size:11px;padding:5px 14px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">Viza talabnoma</button>
                     </div>
                 </div>
@@ -270,6 +282,30 @@
                     </div>
                 </div>
 
+                {{-- Firma biriktirish modal --}}
+                <div id="firmModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;">
+                    <div style="background:#fff;border-radius:12px;padding:24px;max-width:400px;width:90%;margin:auto;">
+                        <h3 style="font-size:15px;font-weight:700;color:#1e293b;margin-bottom:16px;">Firma biriktirish</h3>
+                        <form id="firmAssignForm" method="POST" action="{{ route('admin.international-students.bulk-assign-firm') }}">
+                            @csrf
+                            <div id="firmInputs"></div>
+                            <div style="margin-bottom:12px;">
+                                <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Firma tanlang</label>
+                                <select name="firm" required style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                                    @foreach($firms as $key => $label)
+                                        <option value="{{ $key }}">{{ $label }}</option>
+                                    @endforeach
+                                    <option value="other">Boshqa</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                                <button type="button" onclick="closeFirmModal()" style="padding:8px 16px;font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;">Bekor</button>
+                                <button type="submit" style="padding:8px 16px;font-size:12px;background:#d97706;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">Biriktirish</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
                 {{-- Jadval --}}
                 <div class="overflow-x-auto">
                     <table class="student-table">
@@ -324,7 +360,7 @@
                                     <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</span></td>
                                     <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
                                     <td>
-                                        @if($visa)
+                                        @if($visa || $falseShowEnabled)
                                             <span class="int-status-pill int-status-green">Kiritilgan</span>
                                         @else
                                             <span class="int-status-pill int-status-red">Kiritilmagan</span>
@@ -612,6 +648,8 @@ function openVizaModal() {
     document.getElementById('vizaModal').style.display = 'flex';
 }
 function closeVizaModal() { document.getElementById('vizaModal').style.display = 'none'; }
+function openFirmModal() { syncInputs('firmInputs'); document.getElementById('firmModal').style.display = 'flex'; }
+function closeFirmModal() { document.getElementById('firmModal').style.display = 'none'; }
 function syncInputs(containerId) {
     var c = document.getElementById(containerId);
     c.innerHTML = '';

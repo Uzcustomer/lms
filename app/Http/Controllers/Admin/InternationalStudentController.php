@@ -57,9 +57,14 @@ class InternationalStudentController extends Controller
         }
 
         if ($request->filled('firm')) {
-            $query->whereHas('visaInfo', function ($q) use ($request) {
-                $q->where('firm', $request->firm);
-            });
+            if ($request->firm === 'none') {
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('visaInfo')
+                      ->orWhereHas('visaInfo', fn($vq) => $vq->whereNull('firm')->orWhere('firm', ''));
+                });
+            } else {
+                $query->whereHas('visaInfo', fn($q) => $q->where('firm', $request->firm));
+            }
         }
 
         if ($request->filled('country')) {
@@ -111,6 +116,11 @@ class InternationalStudentController extends Controller
         // Filtrlangan query klon — statistika uchun
         $filteredIds = (clone $query)->pluck('students.id');
 
+        // False show: kiritmaganlarni oxirga tushirish
+        if ($falseShowEnabled) {
+            $query->orderByRaw("CASE WHEN id NOT IN (SELECT student_id FROM student_visa_infos) THEN 1 ELSE 0 END");
+        }
+
         $students = $query->with('visaInfo')
             ->orderBy('full_name')
             ->paginate(25)
@@ -126,8 +136,14 @@ class InternationalStudentController extends Controller
         // Statistika — filtrlangan natijaga asoslangan
         $totalFiltered = $filteredIds->count();
         $allVisas = StudentVisaInfo::whereIn('student_id', $filteredIds);
-        $filledCount = (clone $allVisas)->count();
-        $notFilledCount = $totalFiltered - $filledCount;
+        $realFilledCount = (clone $allVisas)->count();
+        if ($falseShowEnabled) {
+            $filledCount = $totalFiltered; // Hammasi kiritgan ko'rinadi
+            $notFilledCount = 0;
+        } else {
+            $filledCount = $realFilledCount;
+            $notFilledCount = $totalFiltered - $filledCount;
+        }
         $approvedCount = (clone $allVisas)->where('status', 'approved')->count();
         $pendingCount = (clone $allVisas)->where('status', 'pending')->count();
         $rejectedCount = (clone $allVisas)->where('status', 'rejected')->count();
@@ -159,6 +175,9 @@ class InternationalStudentController extends Controller
         );
 
         // Obuna holati
+        // False show global
+        $falseShowEnabled = \App\Models\Setting::get('false_show_enabled', '0') === '1';
+
         $isSubscribed = false;
         $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
         if ($user && \Schema::hasTable('visa_notification_subscribers')) {
@@ -168,7 +187,17 @@ class InternationalStudentController extends Controller
                 ->exists();
         }
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled'));
+    }
+
+    /**
+     * False show: global yoqish/o'chirish.
+     */
+    public function toggleFalseShow()
+    {
+        $current = \App\Models\Setting::get('false_show_enabled', '0');
+        \App\Models\Setting::set('false_show_enabled', $current === '1' ? '0' : '1');
+        return redirect()->back()->with('success', 'False show ' . ($current === '1' ? "o'chirildi" : 'yoqildi'));
     }
 
     public function statistics()
@@ -642,6 +671,25 @@ class InternationalStudentController extends Controller
 
         return redirect()->route('admin.international-students.show', $student)
             ->with('success', 'Viza ma\'lumotlari saqlandi.');
+    }
+
+    /**
+     * Bir nechta talabaga firma biriktirish.
+     */
+    public function bulkAssignFirm(Request $request)
+    {
+        $request->validate(['student_ids' => 'required|array|min:1', 'firm' => 'required|string']);
+        $students = Student::whereIn('id', $request->student_ids)->get();
+
+        foreach ($students as $student) {
+            $visaInfo = StudentVisaInfo::firstOrCreate(
+                ['student_id' => $student->id],
+                ['birth_date' => $student->birth_date, 'birth_country' => $student->country_name]
+            );
+            $visaInfo->update(['firm' => $request->firm]);
+        }
+
+        return redirect()->back()->with('success', count($students) . ' ta talabaga firma biriktirildi.');
     }
 
     public function assignFirm(Request $request, Student $student)

@@ -709,6 +709,9 @@ class InternationalStudentController extends Controller
         $columns = \Schema::getColumnListing('student_visa_infos');
         $data = array_intersect_key($data, array_flip($columns));
 
+        // Bo'sh qiymatlarni olib tashlash — eski ma'lumotni o'chirmasligi uchun
+        $data = array_filter($data, fn($v) => $v !== null && $v !== '');
+
         $visaInfo = StudentVisaInfo::updateOrCreate(['student_id' => $student->id], $data);
 
         // PDF fayllar

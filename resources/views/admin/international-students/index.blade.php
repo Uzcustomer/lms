@@ -350,7 +350,8 @@
                                     <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 25) }}</span></td>
                                     <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
                                     <td>
-                                        @if($visa || $falseShowEnabled)
+                                        @php $hasRealData = $visa && ($visa->passport_number || $visa->visa_number || $visa->registration_end_date); @endphp
+                                        @if($hasRealData || $falseShowEnabled)
                                             <span class="int-status-pill int-status-green">Kiritilgan</span>
                                         @else
                                             <span class="int-status-pill int-status-red">Kiritilmagan</span>

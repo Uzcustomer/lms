@@ -147,11 +147,6 @@ class CheckVisaExpiryCommand extends Command
      */
     private function notifyFirmAndRegistrar(StudentVisaInfo $info, TelegramService $telegram, string $message): void
     {
-        // Registrator ofisi Telegram guruhiga
-        $registrarGroupId = config('services.telegram.registrar_group_id');
-        if ($registrarGroupId) {
-            $telegram->sendToUser($registrarGroupId, $message);
-        }
 
         // Registrator ofisi xodimlariga sayt bildirishnomasi
         $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();

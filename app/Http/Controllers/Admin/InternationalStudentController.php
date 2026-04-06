@@ -682,11 +682,17 @@ class InternationalStudentController extends Controller
         $students = Student::whereIn('id', $request->student_ids)->get();
 
         foreach ($students as $student) {
-            $visaInfo = StudentVisaInfo::firstOrCreate(
-                ['student_id' => $student->id],
-                ['birth_date' => $student->birth_date, 'birth_country' => $student->country_name]
-            );
-            $visaInfo->update(['firm' => $request->firm]);
+            $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
+            if ($visaInfo) {
+                $visaInfo->update(['firm' => $request->firm]);
+            } else {
+                StudentVisaInfo::create([
+                    'student_id' => $student->id,
+                    'firm' => $request->firm,
+                    'birth_date' => $student->birth_date,
+                    'status' => 'pending',
+                ]);
+            }
         }
 
         return redirect()->back()->with('success', count($students) . ' ta talabaga firma biriktirildi.');
@@ -699,21 +705,25 @@ class InternationalStudentController extends Controller
             'firm_custom' => 'nullable|string|max:255',
         ]);
 
-        $visaInfo = StudentVisaInfo::firstOrCreate(
-            ['student_id' => $student->id],
-            ['birth_country' => $student->country_name, 'birth_region' => $student->province_name, 'birth_city' => $student->district_name, 'birth_date' => $student->birth_date]
-        );
-
         $firm = $request->firm;
         $firmCustom = null;
         if ($firm === 'other' && $request->filled('firm_custom')) {
             $firmCustom = $request->firm_custom;
         }
 
-        $visaInfo->update([
-            'firm' => $firm,
-            'firm_custom' => $firmCustom,
-        ]);
+        $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
+        if ($visaInfo) {
+            $visaInfo->update(['firm' => $firm, 'firm_custom' => $firmCustom]);
+        } else {
+            // visaInfo yo'q — faqat firma bilan yaratish, status kiritilmagan qoladi
+            StudentVisaInfo::create([
+                'student_id' => $student->id,
+                'firm' => $firm,
+                'firm_custom' => $firmCustom,
+                'birth_date' => $student->birth_date,
+                'status' => 'pending',
+            ]);
+        }
 
         return redirect()->back()->with('success', $student->full_name . ' uchun firma biriktirildi.');
     }

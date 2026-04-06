@@ -575,7 +575,7 @@
                         </div>
                         <div style="text-align: left;">
                             <div style="font-size: 17px; font-weight: 700; color: {{ $fse ? '#166534' : '#475569' }};">Kafedra</div>
-                            <div style="font-size: 13px; color: {{ $fse ? '#16a34a' : '#94a3b8' }}; margin-top: 2px;">{{ $fse ? 'Yoqilgan — barcha talabalar kiritilgan ko\'rinadi' : 'O\'chirilgan — normal ko\'rinish' }}</div>
+                            <div style="font-size: 13px; color: {{ $fse ? '#16a34a' : '#94a3b8' }}; margin-top: 2px;">{{ $fse ? 'Yoqilgan' : 'O\'chirilgan' }}</div>
                         </div>
                     </div>
                     <form method="POST" action="{{ route('admin.international-students.toggle-false-show') }}">

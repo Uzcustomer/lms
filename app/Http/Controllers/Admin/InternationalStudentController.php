@@ -43,6 +43,9 @@ class InternationalStudentController extends Controller
 
         $query = $this->internationalStudentsQuery();
 
+        // False show global
+        $falseShowEnabled = \App\Models\Setting::get('false_show_enabled', '0') === '1';
+
         // Filterlash
         if ($request->filled('search')) {
             $query->where('full_name', 'like', '%' . $request->search . '%');
@@ -175,9 +178,6 @@ class InternationalStudentController extends Controller
         );
 
         // Obuna holati
-        // False show global
-        $falseShowEnabled = \App\Models\Setting::get('false_show_enabled', '0') === '1';
-
         $isSubscribed = false;
         $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
         if ($user && \Schema::hasTable('visa_notification_subscribers')) {

@@ -497,7 +497,7 @@
                                 <p class="text-sm text-gray-500 mt-0.5">{{ __('Har bir nazorat uchun qayta topshirish sanasini tanlang') }}</p>
                             </div>
                             <div class="flex items-center gap-2">
-                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.assessment_type === 'jn' ? (a.jn_submitted || (a.makeup_start && a.makeup_end)) : !!a.makeup_date).length + '/' + assessments.length"></span>
+                                <span class="text-lg font-bold text-indigo-600" x-text="assessments.filter(a => a.jn_submitted || (a.assessment_type === 'jn' ? (a.makeup_start && a.makeup_end) : !!a.makeup_date)).length + '/' + assessments.length"></span>
                                 <span class="text-gray-400 text-sm">{{ __('tanlangan') }}</span>
                             </div>
                         </div>
@@ -643,7 +643,8 @@
             },
             get allDatesSelected() {
                 return this.assessments.length > 0 && this.assessments.every(a => {
-                    if (a.assessment_type === 'jn') return a.jn_submitted || (a.makeup_start && a.makeup_end);
+                    if (a.jn_submitted) return true;
+                    if (a.assessment_type === 'jn') return a.makeup_start && a.makeup_end;
                     return !!a.makeup_date;
                 });
             },

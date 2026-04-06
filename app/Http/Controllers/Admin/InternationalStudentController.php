@@ -193,6 +193,64 @@ class InternationalStudentController extends Controller
     /**
      * False show: global yoqish/o'chirish.
      */
+    /**
+     * Qizil holatdagi talabalarga bildirishnoma yuborish.
+     */
+    public function notifyDanger()
+    {
+        $telegram = app(TelegramService::class);
+        $sent = 0;
+
+        $visaInfos = StudentVisaInfo::with('student')
+            ->where(function ($q) {
+                $q->where(function ($q2) {
+                    $q2->whereNotNull('registration_end_date')
+                       ->whereDate('registration_end_date', '<=', now()->addDays(3));
+                })->orWhere(function ($q2) {
+                    $q2->whereNotNull('visa_end_date')
+                       ->whereDate('visa_end_date', '<=', now()->addDays(15));
+                });
+            })->get();
+
+        foreach ($visaInfos as $info) {
+            $student = $info->student;
+            if (!$student) continue;
+
+            $parts = [];
+            $regDays = $info->registrationDaysLeft();
+            $visaDays = $info->visaDaysLeft();
+
+            if ($regDays !== null && $regDays <= 3) {
+                $parts[] = $regDays <= 0 ? "Registratsiya muddati tugagan!" : "Registratsiya muddati tugashiga {$regDays} kun!";
+            }
+            if ($visaDays !== null && $visaDays <= 15) {
+                $parts[] = $visaDays <= 0 ? "Viza muddati tugagan!" : "Viza muddati tugashiga {$visaDays} kun!";
+            }
+
+            if (empty($parts)) continue;
+
+            $message = "🔴 " . implode(' ', $parts) . " Pasportingizni registrator ofisiga topshiring!";
+
+            // Sayt bildirishnoma
+            StudentNotification::create([
+                'student_id' => $student->id,
+                'type' => 'system',
+                'title' => 'Muddati yaqinlashmoqda!',
+                'message' => $message,
+                'data' => ['level' => 'danger'],
+            ]);
+
+            // Telegram
+            if ($student->telegram_chat_id) {
+                try { $telegram->sendToUser($student->telegram_chat_id, $message); } catch (\Throwable $e) {}
+            }
+
+            $sent++;
+        }
+
+        return redirect()->back()->with('success', "{$sent} ta talabaga ogohlantirish yuborildi.");
+    }
+
     public function toggleFalseShow()
     {
         $current = \App\Models\Setting::get('false_show_enabled', '0');

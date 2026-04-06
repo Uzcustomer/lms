@@ -2356,6 +2356,12 @@
                         <div class="sidebar-label">Talabalar soni</div>
                         <div class="sidebar-value" style="font-weight: 700; color: #2563eb; border-color: #bfdbfe;">{{ $students->count() }}</div>
                     </div>
+
+                    <!-- Fan ID -->
+                    <div class="sidebar-field" style="background: #f1f5f9; padding: 6px 12px;">
+                        <div class="sidebar-label">Fan ID</div>
+                        <div class="sidebar-value" style="font-weight: 600; color: #475569; border-color: #cbd5e1; font-size: 12px; user-select: all;">{{ $subjectId }}</div>
+                    </div>
                     </div><!-- /.sidebar-collapsible -->
                 </div>
 

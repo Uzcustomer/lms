@@ -116,9 +116,9 @@ class InternationalStudentController extends Controller
         // Filtrlangan query klon — statistika uchun
         $filteredIds = (clone $query)->pluck('students.id');
 
-        // False show talabalarni oxirga tushirish
-        if (!empty($falseShowDepts)) {
-            $query->orderByRaw("CASE WHEN department_id IN ('" . implode("','", $falseShowDepts) . "') AND id NOT IN (SELECT student_id FROM student_visa_infos) THEN 1 ELSE 0 END");
+        // False show: kiritmaganlarni oxirga tushirish
+        if ($falseShowEnabled) {
+            $query->orderByRaw("CASE WHEN id NOT IN (SELECT student_id FROM student_visa_infos) THEN 1 ELSE 0 END");
         }
 
         $students = $query->with('visaInfo')
@@ -137,16 +137,13 @@ class InternationalStudentController extends Controller
         $totalFiltered = $filteredIds->count();
         $allVisas = StudentVisaInfo::whereIn('student_id', $filteredIds);
         $realFilledCount = (clone $allVisas)->count();
-        // False show: kiritmaganlarni ham kiritgan deb hisoblash
-        $falseShowExtra = 0;
-        if (!empty($falseShowDepts)) {
-            $falseShowExtra = $filteredIds->filter(function($id) use ($falseShowDepts) {
-                $student = Student::find($id);
-                return $student && in_array($student->department_id, $falseShowDepts) && !StudentVisaInfo::where('student_id', $id)->exists();
-            })->count();
+        if ($falseShowEnabled) {
+            $filledCount = $totalFiltered; // Hammasi kiritgan ko'rinadi
+            $notFilledCount = 0;
+        } else {
+            $filledCount = $realFilledCount;
+            $notFilledCount = $totalFiltered - $filledCount;
         }
-        $filledCount = $realFilledCount + $falseShowExtra;
-        $notFilledCount = $totalFiltered - $filledCount;
         $approvedCount = (clone $allVisas)->where('status', 'approved')->count();
         $pendingCount = (clone $allVisas)->where('status', 'pending')->count();
         $rejectedCount = (clone $allVisas)->where('status', 'rejected')->count();
@@ -178,18 +175,8 @@ class InternationalStudentController extends Controller
         );
 
         // Obuna holati
-        // False show departments
-        $falseShowDepts = [];
-        if (\Schema::hasTable('false_show_departments')) {
-            $falseShowDepts = \DB::table('false_show_departments')->where('enabled', true)->pluck('department_hemis_id')->toArray();
-        }
-
-        // False show departments list (admin uchun)
-        $allDepartments = \App\Models\Department::where('active', true)->orderBy('name')->get();
-        $falseShowStatus = [];
-        if (\Schema::hasTable('false_show_departments')) {
-            $falseShowStatus = \DB::table('false_show_departments')->pluck('enabled', 'department_hemis_id')->toArray();
-        }
+        // False show global
+        $falseShowEnabled = \App\Models\Setting::get('false_show_enabled', '0') === '1';
 
         $isSubscribed = false;
         $user = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
@@ -200,25 +187,17 @@ class InternationalStudentController extends Controller
                 ->exists();
         }
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowDepts', 'allDepartments', 'falseShowStatus'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled'));
     }
 
     /**
-     * False show: kafedra uchun yoqish/o'chirish.
+     * False show: global yoqish/o'chirish.
      */
-    public function toggleFalseShow(Request $request)
+    public function toggleFalseShow()
     {
-        $request->validate(['department_hemis_id' => 'required|string']);
-        if (!\Schema::hasTable('false_show_departments')) {
-            return redirect()->back()->with('error', 'Migratsiya ishlatilmagan.');
-        }
-        $existing = \DB::table('false_show_departments')->where('department_hemis_id', $request->department_hemis_id)->first();
-        if ($existing) {
-            \DB::table('false_show_departments')->where('department_hemis_id', $request->department_hemis_id)->update(['enabled' => !$existing->enabled, 'updated_at' => now()]);
-        } else {
-            \DB::table('false_show_departments')->insert(['department_hemis_id' => $request->department_hemis_id, 'enabled' => true, 'created_at' => now(), 'updated_at' => now()]);
-        }
-        return redirect()->back()->with('success', 'False show holati o\'zgartirildi.');
+        $current = \App\Models\Setting::get('false_show_enabled', '0');
+        \App\Models\Setting::set('false_show_enabled', $current === '1' ? '0' : '1');
+        return redirect()->back()->with('success', 'False show ' . ($current === '1' ? "o'chirildi" : 'yoqildi'));
     }
 
     public function statistics()

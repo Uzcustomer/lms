@@ -6245,7 +6245,8 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
     }
 
     /**
-     * Talabaning joriy semestrdagi barcha fanlardan olgan baholarini Excel ga eksport qilish.
+     * Talabaning joriy semestrdagi barcha baholarini Excel ga eksport qilish.
+     * student_grades jadvalidagi har bir yozuv alohida qator bo'lib chiqadi.
      * Faqat admin/superadmin uchun.
      */
     public function exportStudentGrades(Request $request)
@@ -6265,92 +6266,17 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             abort(404, 'Talaba topilmadi');
         }
 
-        $group = Group::where('group_hemis_id', $student->group_id)->first();
         $semesterCode = $student->semester_code;
 
-        // Joriy semestrdagi barcha fanlarni olish
-        $subjects = collect();
-        if ($group) {
-            $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
-                ->where('semester_code', $semesterCode)
-                ->orderBy('subject_name')
-                ->get();
-        }
-
-        if ($subjects->isEmpty()) {
-            abort(404, 'Joriy semestrda fan topilmadi');
-        }
-
-        $subjectIds = $subjects->pluck('subject_id')->toArray();
-
-        // Barcha baholarni olish
+        // student_grades dan barcha yozuvlarni olish (joriy semestr)
         $grades = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->where('student_hemis_id', $studentHemisId)
-            ->whereIn('subject_id', $subjectIds)
             ->where('semester_code', $semesterCode)
-            ->select('subject_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->orderBy('subject_name')
+            ->orderBy('training_type_code')
+            ->orderBy('lesson_date')
             ->get();
-
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
-
-        // Fan bo'yicha baholarni guruhlash
-        $subjectGrades = [];
-        foreach ($subjects as $subj) {
-            $subjectGrades[$subj->subject_id] = [
-                'name' => $subj->subject_name,
-                'jn_grades' => [],
-                'mt_grades' => [],
-                'on' => null, 'on_count' => 0,
-                'oski' => null,
-                'test' => null,
-            ];
-        }
-
-        foreach ($grades as $g) {
-            if ($g->status === 'pending') continue;
-
-            $effGrade = null;
-            if ($g->reason === 'absent' && $g->grade === null) {
-                $effGrade = $g->retake_grade;
-            } elseif ($g->status === 'closed' && $g->reason === 'teacher_victim' && $g->grade == 0 && $g->retake_grade === null) {
-                continue;
-            } elseif (in_array($g->status, ['recorded', 'closed'])) {
-                $effGrade = $g->grade;
-            } elseif ($g->retake_grade !== null) {
-                $effGrade = $g->retake_grade;
-            }
-            if ($effGrade === null) continue;
-
-            $sid = $g->subject_id;
-            if (!isset($subjectGrades[$sid])) continue;
-            $code = $g->training_type_code;
-
-            if ($code == 100) {
-                $subjectGrades[$sid]['on'] = ($subjectGrades[$sid]['on'] ?? 0) + $effGrade;
-                $subjectGrades[$sid]['on_count']++;
-            } elseif ($code == 101) {
-                if ($subjectGrades[$sid]['oski'] === null || $effGrade > $subjectGrades[$sid]['oski']) {
-                    $subjectGrades[$sid]['oski'] = $effGrade;
-                }
-            } elseif ($code == 102) {
-                if ($subjectGrades[$sid]['test'] === null || $effGrade > $subjectGrades[$sid]['test']) {
-                    $subjectGrades[$sid]['test'] = $effGrade;
-                }
-            } elseif ($code == 99) {
-                $subjectGrades[$sid]['mt_grades'][] = $effGrade;
-            } elseif (!in_array($code, $excludedCodes)) {
-                $subjectGrades[$sid]['jn_grades'][] = $effGrade;
-            }
-        }
-
-        // O'rtachalar
-        foreach ($subjectGrades as &$sg) {
-            $sg['jn_avg'] = count($sg['jn_grades']) > 0 ? round(array_sum($sg['jn_grades']) / count($sg['jn_grades']), 1) : null;
-            $sg['mt_avg'] = count($sg['mt_grades']) > 0 ? round(array_sum($sg['mt_grades']) / count($sg['mt_grades']), 1) : null;
-            if ($sg['on_count'] > 0) $sg['on'] = round($sg['on'] / $sg['on_count'], 1);
-        }
-        unset($sg);
 
         // Excel yaratish
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -6358,12 +6284,14 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
         $sheet->setTitle('Baholar');
 
         $sheet->setCellValue('A1', 'Talaba: ' . $student->full_name);
-        $sheet->setCellValue('A2', 'Guruh: ' . ($student->group_name ?? ''));
+        $sheet->setCellValue('A2', 'HEMIS ID: ' . $studentHemisId);
+        $sheet->setCellValue('D1', 'Guruh: ' . ($student->group_name ?? ''));
         $sheet->setCellValue('D2', 'Semestr: ' . ($student->semester_name ?? $semesterCode));
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('A1:D1')->getFont()->setBold(true)->setSize(11);
         $sheet->getStyle('A2:D2')->getFont()->setBold(true);
 
-        $headers = ['#', 'Fan nomi', 'Subject ID', 'JN %', 'MT %', 'ON %', 'OSKI', 'Test'];
+        // Jadval sarlavhasi
+        $headers = ['#', 'Fan nomi', 'Subject ID', 'Turi', 'Training code', 'Baho', 'Retake', 'Status', 'Reason', 'Sana', 'Quiz result ID'];
         $col = 'A';
         foreach ($headers as $h) {
             $sheet->setCellValue($col . '4', $h);
@@ -6372,29 +6300,49 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             $col++;
         }
 
+        // Training type nomlari
+        $typeNames = [
+            99 => 'MT', 100 => 'ON', 101 => 'OSKI', 102 => 'Test', 103 => 'Quiz',
+        ];
+
         $row = 5;
         $num = 1;
-        foreach ($subjectGrades as $sid => $sg) {
+        foreach ($grades as $g) {
+            $typeName = $typeNames[$g->training_type_code] ?? ($g->training_type_name ?? 'JN');
+            $lessonDate = $g->lesson_date ? \Carbon\Carbon::parse($g->lesson_date)->format('d.m.Y') : '';
+
             $sheet->setCellValue('A' . $row, $num);
-            $sheet->setCellValue('B' . $row, $sg['name']);
-            $sheet->setCellValue('C' . $row, $sid);
-            $sheet->setCellValue('D' . $row, $sg['jn_avg'] ?? '');
-            $sheet->setCellValue('E' . $row, $sg['mt_avg'] ?? '');
-            $sheet->setCellValue('F' . $row, $sg['on'] !== null ? round($sg['on'], 0) : '');
-            $sheet->setCellValue('G' . $row, $sg['oski'] !== null ? round($sg['oski'], 0) : '');
-            $sheet->setCellValue('H' . $row, $sg['test'] !== null ? round($sg['test'], 0) : '');
+            $sheet->setCellValue('B' . $row, $g->subject_name ?? '');
+            $sheet->setCellValue('C' . $row, $g->subject_id ?? '');
+            $sheet->setCellValue('D' . $row, $typeName);
+            $sheet->setCellValue('E' . $row, $g->training_type_code);
+            $sheet->setCellValue('F' . $row, $g->grade);
+            $sheet->setCellValue('G' . $row, $g->retake_grade);
+            $sheet->setCellValue('H' . $row, $g->status ?? '');
+            $sheet->setCellValue('I' . $row, $g->reason ?? '');
+            $sheet->setCellValue('J' . $row, $lessonDate);
+            $sheet->setCellValue('K' . $row, $g->quiz_result_id ?? '');
+
+            // OSKI/Test qatorlarini ranglash
+            if (in_array($g->training_type_code, [101, 102])) {
+                $sheet->getStyle('A' . $row . ':K' . $row)->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setARGB($g->training_type_code == 101 ? 'FFFFF3CD' : 'FFDBEAFE');
+            }
+
             $row++;
             $num++;
         }
 
-        $sheet->getColumnDimension('A')->setWidth(5);
-        $sheet->getColumnDimension('B')->setWidth(40);
-        $sheet->getColumnDimension('C')->setWidth(14);
-        foreach (['D', 'E', 'F', 'G', 'H'] as $c) $sheet->getColumnDimension($c)->setWidth(10);
+        // Ustun kengliklari
+        $widths = ['A' => 5, 'B' => 35, 'C' => 14, 'D' => 8, 'E' => 14, 'F' => 8, 'G' => 8, 'H' => 10, 'I' => 14, 'J' => 12, 'K' => 14];
+        foreach ($widths as $c => $w) $sheet->getColumnDimension($c)->setWidth($w);
 
+        // Chegaralar
         $lastRow = $row - 1;
         if ($lastRow >= 4) {
-            $sheet->getStyle('A4:H' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+            $sheet->getStyle('A4:K' . $lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
         }
 
         $fileName = 'Baholar_' . preg_replace('/[^a-zA-Z0-9_\x{0400}-\x{04FF}]/u', '_', $student->full_name) . '_' . date('Y-m-d') . '.xlsx';

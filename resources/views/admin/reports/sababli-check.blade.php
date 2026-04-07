@@ -162,14 +162,17 @@
                                     <thead style="background:#e0e7ff;position:sticky;top:0;z-index:1;">
                                         <tr>
                                             <th class="dlog-th">#</th>
+                                            <th class="dlog-th">Holat</th>
                                             <th class="dlog-th">Talaba</th>
                                             <th class="dlog-th">Guruh</th>
                                             <th class="dlog-th">Ariza fan nomi</th>
                                             <th class="dlog-th" style="text-align:center;">Ariza fan ID</th>
-                                            <th class="dlog-th" style="text-align:center;">Topildimi?</th>
                                             <th class="dlog-th">Qanday topildi</th>
                                             <th class="dlog-th">HEMIS fan nomi</th>
                                             <th class="dlog-th" style="text-align:center;">HEMIS fan ID</th>
+                                            <th class="dlog-th">Ariza sanasi</th>
+                                            <th class="dlog-th">HEMIS nb sanalari</th>
+                                            <th class="dlog-th" style="text-align:center;">Oraliqda</th>
                                             <th class="dlog-th">HEMIS dagi mavjud fanlar</th>
                                         </tr>
                                     </thead>
@@ -382,6 +385,8 @@
             if (val === 'Sababli') return '<span class="badge badge-hemis-ok">Sababli</span>';
             if (val === 'Sababsiz') return '<span class="badge badge-hemis-bad">Sababsiz</span>';
             if (val === 'Aralash') return '<span class="badge badge-hemis-mixed">Aralash</span>';
+            if (val === 'Fan topilmadi') return '<span class="badge badge-hemis-none" title="HEMIS da bu fan uchun nb yozuvi umuman yo\'q">Fan topilmadi</span>';
+            if (val && val.indexOf('Sana mos emas') === 0) return '<span class="badge badge-hemis-warn" title="' + esc(val) + '">Sana mos emas</span>';
             if (val === 'Davomat topilmadi') return '<span class="badge badge-hemis-none">Topilmadi</span>';
             return '<span class="badge badge-hemis-none">' + esc(val) + '</span>';
         }
@@ -446,11 +451,12 @@
                 $('#debug-log-area').hide();
                 return;
             }
-            var foundCount = allDebugLogs.filter(function(l) { return l.found; }).length;
-            var notFoundCount = allDebugLogs.length - foundCount;
+            var foundCount = allDebugLogs.filter(function(l) { return l.debug_status === 'topildi'; }).length;
+            var dateIssueCount = allDebugLogs.filter(function(l) { return l.debug_status === 'sana_mos_emas'; }).length;
+            var notFoundCount = allDebugLogs.length - foundCount - dateIssueCount;
             $('#debug-log-count').text(allDebugLogs.length);
             $('#debug-found-count').text(foundCount);
-            $('#debug-notfound-count').text(notFoundCount);
+            $('#debug-notfound-count').text(notFoundCount + (dateIssueCount > 0 ? ' + ' + dateIssueCount + ' sana mos emas' : ''));
             $('#debug-search').val('');
             $('#debug-search-count').hide();
             renderDebugRows(allDebugLogs);
@@ -488,22 +494,33 @@
             return '<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">' + esc(method) + '</span>';
         }
 
+        function statusBadge(status) {
+            if (status === 'topildi') return '<span style="background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;">TOPILDI</span>';
+            if (status === 'sana_mos_emas') return '<span style="background:#fef9c3;color:#a16207;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;">SANA MOS EMAS</span>';
+            return '<span style="background:#fee2e2;color:#dc2626;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;">FAN TOPILMADI</span>';
+        }
+
         function renderDebugRows(logs) {
             var html = '';
             for (var i = 0; i < logs.length; i++) {
                 var l = logs[i];
-                var foundIcon = l.found ? '<span style="color:#16a34a;font-weight:700;font-size:14px;">&#10004;</span>' : '<span style="color:#dc2626;font-weight:700;font-size:14px;">&#10008;</span>';
-                var rowBg = l.found ? (i % 2 === 0 ? '#f0fdf4' : '#fff') : (i % 2 === 0 ? '#fef2f2' : '#fff5f5');
+                var st = l.debug_status || (l.found ? 'topildi' : 'fan_topilmadi');
+                var rowBg = st === 'topildi' ? (i % 2 === 0 ? '#f0fdf4' : '#fff')
+                          : st === 'sana_mos_emas' ? (i % 2 === 0 ? '#fefce8' : '#fffbeb')
+                          : (i % 2 === 0 ? '#fef2f2' : '#fff5f5');
                 html += '<tr style="background:' + rowBg + ';border-bottom:1px solid #e2e8f0;">';
                 html += '<td style="padding:6px;color:#64748b;font-weight:600;">' + (i + 1) + '</td>';
+                html += '<td style="padding:6px;">' + statusBadge(st) + '</td>';
                 html += '<td style="padding:6px;">' + esc(l.full_name) + ' <span style="color:#94a3b8;font-size:10px;">(' + l.student_hemis_id + ')</span></td>';
                 html += '<td style="padding:6px;">' + esc(l.group_name) + '</td>';
                 html += '<td style="padding:6px;font-weight:600;color:#0f172a;">' + esc(l.ariza_subject_name) + '</td>';
                 html += '<td style="padding:6px;text-align:center;color:#64748b;font-size:11px;">' + (l.ariza_subject_id || '-') + '</td>';
-                html += '<td style="padding:6px;text-align:center;">' + foundIcon + '</td>';
                 html += '<td style="padding:6px;">' + methodBadge(l.match_method) + '</td>';
                 html += '<td style="padding:6px;color:' + (l.found ? '#15803d' : '#94a3b8') + ';font-weight:' + (l.found ? '600' : '400') + ';">' + esc(l.hemis_subject_name || '-') + '</td>';
                 html += '<td style="padding:6px;text-align:center;color:' + (l.found ? '#15803d' : '#94a3b8') + ';font-weight:600;">' + (l.hemis_subject_id || '-') + '</td>';
+                html += '<td style="padding:6px;font-size:11px;color:#4338ca;">' + esc(l.ariza_dates || '-') + '</td>';
+                html += '<td style="padding:6px;font-size:11px;color:' + (st === 'sana_mos_emas' ? '#a16207' : '#64748b') + ';">' + esc(l.hemis_date_range || '-') + '</td>';
+                html += '<td style="padding:6px;text-align:center;font-weight:700;color:' + (l.hemis_in_range > 0 ? '#15803d' : '#dc2626') + ';">' + (l.hemis_in_range || 0) + '/' + (l.hemis_total_records || 0) + '</td>';
                 html += '<td style="padding:6px;font-size:10px;color:#64748b;max-width:300px;word-break:break-all;">' + esc(l.hemis_available || '-') + '</td>';
                 html += '</tr>';
             }
@@ -742,6 +759,7 @@
         .badge-hemis-ok { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
         .badge-hemis-bad { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
         .badge-hemis-none { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+        .badge-hemis-warn { background: #fef9c3; color: #a16207; border: 1px solid #fde68a; }
         .badge-match { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-weight: 700; }
         .badge-mismatch { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-weight: 700; }
 

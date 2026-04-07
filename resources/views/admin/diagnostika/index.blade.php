@@ -954,6 +954,8 @@
                     return;
                 }
 
+                if (!confirm(uploadedIds.length + ' ta natijaning bahosini sistemadan o\'chirishni tasdiqlaysizmi?\n\nO\'chirilgan baholar jurnaldan ham yo\'qoladi.')) return;
+
                 sendDeleteRequest(uploadedIds, []);
             });
 

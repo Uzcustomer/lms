@@ -3808,20 +3808,6 @@ class ReportController extends Controller
                 }
             }
 
-            // Debug log yozuv
-            $debugLog[] = [
-                'student_hemis_id' => $exc->student_hemis_id,
-                'full_name' => $exc->full_name ?? '-',
-                'group_name' => $exc->group_name ?? '-',
-                'ariza_subject_name' => $exc->subject_name ?? '-',
-                'ariza_subject_id' => $exc->subject_id,
-                'match_method' => $matchMethod,
-                'hemis_subject_id' => $matchedHemisSubjectId,
-                'hemis_subject_name' => $matchedHemisSubjectName,
-                'found' => !empty($hemisRecords),
-                'hemis_available' => implode(' | ', array_slice($hemsiAvailableSubjects, 0, 15)),
-            ];
-
             // Ariza sanalar oralig'idagi HEMIS yozuvlarini filtrlash
             $matchingRecords = [];
             $totalAbsentOn = 0;
@@ -3849,10 +3835,48 @@ class ReportController extends Controller
                 }
             }
 
+            // HEMIS dagi sana oraliqlarini aniqlash (debug uchun)
+            $hemisDateRange = '';
+            $hemisTotalRecords = count($hemisRecords);
+            $hemisInRangeRecords = count($matchingRecords);
+            if (!empty($hemisRecords)) {
+                $dates = array_map(fn($r) => substr($r->lesson_date, 0, 10), (array) $hemisRecords);
+                sort($dates);
+                $hemisDateRange = date('d.m.Y', strtotime(reset($dates))) . ' — ' . date('d.m.Y', strtotime(end($dates)));
+            }
+
+            // Debug log holat
+            $debugStatus = 'fan_topilmadi';
+            if (!empty($hemisRecords) && !empty($matchingRecords)) {
+                $debugStatus = 'topildi';
+            } elseif (!empty($hemisRecords) && empty($matchingRecords)) {
+                $debugStatus = 'sana_mos_emas';
+            }
+
+            // Debug log yozuv
+            $debugLog[] = [
+                'student_hemis_id' => $exc->student_hemis_id,
+                'full_name' => $exc->full_name ?? '-',
+                'group_name' => $exc->group_name ?? '-',
+                'ariza_subject_name' => $exc->subject_name ?? '-',
+                'ariza_subject_id' => $exc->subject_id,
+                'match_method' => $matchMethod,
+                'hemis_subject_id' => $matchedHemisSubjectId,
+                'hemis_subject_name' => $matchedHemisSubjectName,
+                'found' => !empty($hemisRecords),
+                'debug_status' => $debugStatus,
+                'ariza_dates' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
+                'hemis_date_range' => $hemisDateRange ?: '-',
+                'hemis_total_records' => $hemisTotalRecords,
+                'hemis_in_range' => $hemisInRangeRecords,
+                'hemis_available' => implode(' | ', array_slice($hemsiAvailableSubjects, 0, 15)),
+            ];
+
             // HEMIS holati
             $totalHours = $totalAbsentOn + $totalAbsentOff;
             if (count($matchingRecords) === 0) {
-                $hemisStatus = 'Davomat topilmadi';
+                // Fan topildi, lekin sana oralig'ida nb yozuvi yo'q / Fan umuman topilmadi
+                $hemisStatus = empty($hemisRecords) ? 'Fan topilmadi' : 'Sana mos emas (' . $hemisTotalRecords . ' yozuv bor)';
                 $match = 'mismatch';
                 $pairs = [[
                     'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),

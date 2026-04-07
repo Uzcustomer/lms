@@ -3579,6 +3579,7 @@ class ReportController extends Controller
      */
     public function sababliCheckData(Request $request)
     {
+        try {
         // Filtrlar
         $groupIds = [];
         if ($request->filled('education_type')) {
@@ -4094,6 +4095,17 @@ class ReportController extends Controller
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
         ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'data' => [],
+                'total' => 0,
+                'match_count' => 0,
+                'mismatch_count' => 0,
+                'debug_log' => [],
+                'error' => $e->getMessage(),
+                'error_line' => $e->getFile() . ':' . $e->getLine(),
+            ], 200);
+        }
     }
 
     /**

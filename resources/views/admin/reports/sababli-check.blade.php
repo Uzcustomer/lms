@@ -281,6 +281,14 @@
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
+                    if (res.error) {
+                        allData = [];
+                        $('#empty-state').show().find('p:first').html('Xatolik: ' + res.error + '<br><small style="color:#94a3b8;">' + (res.error_line || '') + '</small>');
+                        $('#table-area').hide();
+                        $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
+                        return;
+                    }
+
                     if (!res.data || res.data.length === 0) {
                         allData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");

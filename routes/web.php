@@ -280,8 +280,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-sidebar-options', [JournalController::class, 'getSidebarOptions'])->name('get-sidebar-options');
             Route::get('/get-topics', [JournalController::class, 'getTopics'])->name('get-topics');
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
-            Route::delete('/delete-mt-submission/{submissionId}', [JournalController::class, 'deleteMtSubmission'])->name('delete-mt-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
+            Route::get('/export-student-grades', [JournalController::class, 'exportStudentGrades'])->name('export-student-grades');
+            Route::post('/delete-mt-submission', [JournalController::class, 'deleteMtSubmission'])->name('delete-mt-submission');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
@@ -588,6 +589,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
             Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
@@ -752,6 +754,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/independents/download/{submissionId}', [StudentController::class, 'downloadSubmission'])->name('independents.download');
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
+        Route::post('/profile-my/update-contact', [StudentController::class, 'updateContact'])->name('profile.update-contact');
         Route::get('/exam-schedule', [StudentController::class, 'examSchedule'])->name('exam-schedule');
 
         // Xizmatlar sahifasi
@@ -984,6 +987,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
             Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });

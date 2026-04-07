@@ -1759,6 +1759,84 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Tanlangan quiz natijalarning baholarini student_grades dan o'chirish.
+     * Agar bir xil subject_id da turli fan nomlari bo'lsa — conflict qaytaradi.
+     */
+    public function deleteGrades(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+            'confirmed_fan_names' => 'nullable|array', // conflict tasdiqlanganda yuboriladi
+        ]);
+
+        $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+
+        // Subject ID bo'yicha fan nomlarini guruhlash
+        $subjectFanNames = [];
+        foreach ($results as $result) {
+            if ($result->fan_id) {
+                $subjectFanNames[$result->fan_id][$result->fan_name] = true;
+            }
+        }
+
+        // Bir xil subject_id da ikki xil fan_name bormi tekshirish
+        $conflicts = [];
+        foreach ($subjectFanNames as $fanId => $names) {
+            if (count($names) > 1) {
+                $conflicts[$fanId] = array_keys($names);
+            }
+        }
+
+        // Agar conflict bor va hali tasdiqlanmagan bo'lsa — modal uchun qaytarish
+        if (!empty($conflicts) && !$request->has('confirmed_fan_names')) {
+            return response()->json([
+                'status' => 'conflict',
+                'conflicts' => $conflicts,
+                'message' => 'Bir xil subject_id da turli fan nomlari topildi. Qaysi fanlarni o\'chirmoqchisiz?',
+            ]);
+        }
+
+        // O'chirilishi kerak bo'lgan fan nomlarini aniqlash
+        $confirmedFanNames = $request->input('confirmed_fan_names', []);
+
+        $deletedCount = 0;
+        $errors = [];
+
+        foreach ($results as $result) {
+            // Agar conflict bor va foydalanuvchi faqat ma'lum fan nomlarini tanlagan bo'lsa
+            if (!empty($confirmedFanNames) && isset($conflicts[$result->fan_id])) {
+                if (!in_array($result->fan_name, $confirmedFanNames)) {
+                    continue; // Bu fan nomi tanlanmagan — o'tkazib yuborish
+                }
+            }
+
+            // student_grades dan o'chirish (quiz_result_id bo'yicha)
+            $deleted = StudentGrade::where('quiz_result_id', $result->id)
+                ->where('reason', 'quiz_result')
+                ->delete();
+
+            if ($deleted > 0) {
+                $deletedCount += $deleted;
+            } else {
+                $errors[] = [
+                    'id' => $result->id,
+                    'student_name' => $result->student_name,
+                    'fan_name' => $result->fan_name,
+                    'error' => 'Sistemada baho topilmadi (yuklangan emas yoki allaqachon o\'chirilgan)',
+                ];
+            }
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'deleted_count' => $deletedCount,
+            'error_count' => count($errors),
+            'errors' => $errors,
+        ]);
+    }
+
+    /**
      * Bitta quiz natijani o'chirish (is_active = 0).
      */
     public function destroy($id)

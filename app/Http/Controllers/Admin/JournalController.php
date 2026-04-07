@@ -2094,11 +2094,13 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Sizda tahrirlash huquqi yo\'q'], 403);
         }
 
+        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+
         $request->validate([
             'student_hemis_id' => 'required',
             'subject_id' => 'required',
             'semester_code' => 'required',
-            'grade' => 'required|numeric|min:0|max:100',
+            'grade' => $isAdminRole ? 'nullable|numeric|min:0|max:100' : 'required|numeric|min:0|max:100',
         ]);
 
         $studentHemisId = $request->student_hemis_id;
@@ -2202,6 +2204,18 @@ class JournalController extends Controller
 
         // Admin edit: directly update existing grade, bypass all locks
         if ($isAdminEdit && $isAdminRole && $existingGrade) {
+            // Baho bo'sh bo'lsa — bahoni o'chirish
+            if ($grade === null || $grade === '') {
+                DB::table('student_grades')->where('id', $existingGrade->id)->delete();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Baho o\'chirildi (admin)',
+                    'grade_deleted' => true,
+                    'grade' => null,
+                ]);
+            }
+
             DB::table('student_grades')
                 ->where('id', $existingGrade->id)
                 ->update([
@@ -2515,31 +2529,33 @@ class JournalController extends Controller
     }
 
     /**
-     * Delete MT submission (superadmin only) — allows student to re-upload
+     * Admin: MT submission faylni o'chirish.
      */
-    public function deleteMtSubmission($submissionId)
+    public function deleteMtSubmission(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
+        $user = auth()->user();
+        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
             return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
         }
 
-        $submission = DB::table('independent_submissions')->where('id', $submissionId)->first();
+        $request->validate([
+            'submission_id' => 'required|integer',
+        ]);
+
+        $submission = DB::table('independent_submissions')->where('id', $request->submission_id)->first();
         if (!$submission) {
-            return response()->json(['success' => false, 'message' => 'Topilmadi'], 404);
+            return response()->json(['success' => false, 'message' => 'Submission topilmadi'], 404);
         }
 
         // Faylni diskdan o'chirish
         if ($submission->file_path) {
-            $filePath = storage_path('app/public/' . $submission->file_path);
-            if (file_exists($filePath)) {
-                unlink($filePath);
-            }
+            Storage::disk('public')->delete($submission->file_path);
         }
 
-        // DB dan o'chirish
-        DB::table('independent_submissions')->where('id', $submissionId)->delete();
+        // Submission yozuvini o'chirish
+        DB::table('independent_submissions')->where('id', $submission->id)->delete();
 
-        return response()->json(['success' => true, 'message' => 'MT fayl muvaffaqiyatli o\'chirildi']);
+        return response()->json(['success' => true, 'message' => 'Fayl o\'chirildi']);
     }
 
     /**
@@ -6270,5 +6286,117 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Talabaning joriy semestrdagi barcha baholarini Excel ga eksport qilish.
+     * student_grades jadvalidagi har bir yozuv alohida qator bo'lib chiqadi.
+     * Faqat admin/superadmin uchun.
+     */
+    public function exportStudentGrades(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
+            abort(403);
+        }
+
+        $studentHemisId = $request->query('student_hemis_id');
+        if (!$studentHemisId) {
+            abort(400, 'student_hemis_id majburiy');
+        }
+
+        $student = Student::where('hemis_id', $studentHemisId)->first();
+        if (!$student) {
+            abort(404, 'Talaba topilmadi');
+        }
+
+        $semesterCode = $student->semester_code;
+
+        // student_grades dan barcha yozuvlarni olish (joriy semestr)
+        $grades = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('semester_code', $semesterCode)
+            ->orderBy('subject_name')
+            ->orderBy('training_type_code')
+            ->orderBy('lesson_date')
+            ->get();
+
+        // Excel yaratish
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Baholar');
+
+        $sheet->setCellValue('A1', 'Talaba: ' . $student->full_name);
+        $sheet->setCellValue('A2', 'HEMIS ID: ' . $studentHemisId);
+        $sheet->setCellValue('D1', 'Guruh: ' . ($student->group_name ?? ''));
+        $sheet->setCellValue('D2', 'Semestr: ' . ($student->semester_name ?? $semesterCode));
+        $sheet->getStyle('A1:D1')->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A2:D2')->getFont()->setBold(true);
+
+        // Jadval sarlavhasi
+        $headers = ['#', 'Fan nomi', 'Subject ID', 'Turi', 'Training code', 'Baho', 'Retake', 'Status', 'Reason', 'Sana', 'Quiz result ID'];
+        $col = 'A';
+        foreach ($headers as $h) {
+            $sheet->setCellValue($col . '4', $h);
+            $sheet->getStyle($col . '4')->getFont()->setBold(true);
+            $sheet->getStyle($col . '4')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
+            $col++;
+        }
+
+        // Training type nomlari
+        $typeNames = [
+            99 => 'MT', 100 => 'ON', 101 => 'OSKI', 102 => 'Test', 103 => 'Quiz',
+        ];
+
+        $row = 5;
+        $num = 1;
+        foreach ($grades as $g) {
+            $typeName = $typeNames[$g->training_type_code] ?? ($g->training_type_name ?? 'JN');
+            $lessonDate = $g->lesson_date ? \Carbon\Carbon::parse($g->lesson_date)->format('d.m.Y') : '';
+
+            $sheet->setCellValue('A' . $row, $num);
+            $sheet->setCellValue('B' . $row, $g->subject_name ?? '');
+            $sheet->setCellValue('C' . $row, $g->subject_id ?? '');
+            $sheet->setCellValue('D' . $row, $typeName);
+            $sheet->setCellValue('E' . $row, $g->training_type_code);
+            $sheet->setCellValue('F' . $row, $g->grade);
+            $sheet->setCellValue('G' . $row, $g->retake_grade);
+            $sheet->setCellValue('H' . $row, $g->status ?? '');
+            $sheet->setCellValue('I' . $row, $g->reason ?? '');
+            $sheet->setCellValue('J' . $row, $lessonDate);
+            $sheet->setCellValue('K' . $row, $g->quiz_result_id ?? '');
+
+            // OSKI/Test qatorlarini ranglash
+            if (in_array($g->training_type_code, [101, 102])) {
+                $sheet->getStyle('A' . $row . ':K' . $row)->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setARGB($g->training_type_code == 101 ? 'FFFFF3CD' : 'FFDBEAFE');
+            }
+
+            $row++;
+            $num++;
+        }
+
+        // Ustun kengliklari
+        $widths = ['A' => 5, 'B' => 35, 'C' => 14, 'D' => 8, 'E' => 14, 'F' => 8, 'G' => 8, 'H' => 10, 'I' => 14, 'J' => 12, 'K' => 14];
+        foreach ($widths as $c => $w) $sheet->getColumnDimension($c)->setWidth($w);
+
+        // Chegaralar
+        $lastRow = $row - 1;
+        if ($lastRow >= 4) {
+            $sheet->getStyle('A4:K' . $lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+        }
+
+        $fileName = 'Baholar_' . preg_replace('/[^a-zA-Z0-9_\x{0400}-\x{04FF}]/u', '_', $student->full_name) . '_' . date('Y-m-d') . '.xlsx';
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $tempFile = tempnam(sys_get_temp_dir(), 'grades_');
+        $writer->save($tempFile);
+
+        return response()->download($tempFile, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 }

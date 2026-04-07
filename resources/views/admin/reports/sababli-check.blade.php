@@ -275,6 +275,7 @@
 
                     allData = res.data;
                     lastResponse = res;
+                    if (res.filter_debug) console.log('FILTER DEBUG:', res.filter_debug, 'Params sent:', params);
                     $('#total-badge').text('Jami: ' + res.total + ' ta yozuv');
                     $('#match-badge').text('Mos: ' + (res.match_count || 0));
                     $('#mismatch-badge').text('Mos emas: ' + (res.mismatch_count || 0));

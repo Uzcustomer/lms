@@ -4128,6 +4128,11 @@ class ReportController extends Controller
             'match_count' => $matchCount,
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
+            'filter_debug' => array_merge($filterDebug, [
+                'excWithSubject_count' => count($excWithSubject),
+                'excGeneral_count' => count($excGeneral),
+                'total_results' => $total,
+            ]),
         ]);
     }
 

@@ -2094,11 +2094,13 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Sizda tahrirlash huquqi yo\'q'], 403);
         }
 
+        $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+
         $request->validate([
             'student_hemis_id' => 'required',
             'subject_id' => 'required',
             'semester_code' => 'required',
-            'grade' => 'required|numeric|min:0|max:100',
+            'grade' => $isAdminRole ? 'nullable|numeric|min:0|max:100' : 'required|numeric|min:0|max:100',
         ]);
 
         $studentHemisId = $request->student_hemis_id;
@@ -2202,6 +2204,18 @@ class JournalController extends Controller
 
         // Admin edit: directly update existing grade, bypass all locks
         if ($isAdminEdit && $isAdminRole && $existingGrade) {
+            // Baho bo'sh bo'lsa — bahoni o'chirish
+            if ($grade === null || $grade === '') {
+                DB::table('student_grades')->where('id', $existingGrade->id)->delete();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Baho o\'chirildi (admin)',
+                    'grade_deleted' => true,
+                    'grade' => null,
+                ]);
+            }
+
             DB::table('student_grades')
                 ->where('id', $existingGrade->id)
                 ->update([
@@ -2512,6 +2526,36 @@ class JournalController extends Controller
         );
 
         return response()->download($filePath, $downloadName);
+    }
+
+    /**
+     * Admin: MT submission faylni o'chirish.
+     */
+    public function deleteMtSubmission(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'submission_id' => 'required|integer',
+        ]);
+
+        $submission = DB::table('independent_submissions')->where('id', $request->submission_id)->first();
+        if (!$submission) {
+            return response()->json(['success' => false, 'message' => 'Submission topilmadi'], 404);
+        }
+
+        // Faylni diskdan o'chirish
+        if ($submission->file_path) {
+            Storage::disk('public')->delete($submission->file_path);
+        }
+
+        // Submission yozuvini o'chirish
+        DB::table('independent_submissions')->where('id', $submission->id)->delete();
+
+        return response()->json(['success' => true, 'message' => 'Fayl o\'chirildi']);
     }
 
     /**

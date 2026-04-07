@@ -12,7 +12,6 @@ use App\Models\StudentNotification;
 use App\Models\Setting;
 use App\Services\DocumentTemplateService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -116,19 +115,13 @@ class AbsenceExcuseController extends Controller
         $user = Auth::user();
         $reviewerName = $user->name ?? $user->full_name ?? $user->short_name;
 
-        // Superadmin tanlagan tasdiqlash sanasi (yoki hozirgi vaqt)
-        $approvedDate = now();
-        if ($user->hasRole('superadmin') && request('approved_date')) {
-            $approvedDate = Carbon::parse(request('approved_date'))->setTime(now()->hour, now()->minute, now()->second);
-        }
-
         try {
             // Tasdiqlash uchun ma'lumotlarni oldindan o'rnatish
             if ($excuse->isPending()) {
                 $excuse->forceFill([
                     'status' => 'approved',
                     'reviewed_by_name' => $reviewerName,
-                    'reviewed_at' => $approvedDate,
+                    'reviewed_at' => now(),
                 ]);
             }
 
@@ -198,7 +191,7 @@ class AbsenceExcuseController extends Controller
                 'status' => 'approved',
                 'reviewed_by' => $user->id,
                 'reviewed_by_name' => $reviewerName,
-                'reviewed_at' => $excuse->reviewed_at ?? $approvedDate,
+                'reviewed_at' => $excuse->reviewed_at ?? now(),
                 'approved_pdf_path' => $pdfPath,
             ]);
 

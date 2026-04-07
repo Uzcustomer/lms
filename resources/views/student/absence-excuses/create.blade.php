@@ -556,8 +556,6 @@
 
     @push('scripts')
     <script>
-    window._isImpersonating = {{ session('impersonating') ? 'true' : 'false' }};
-
     function absenceForm() {
         const MONTHS_UZ = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
         const WDAYS = ['Ya','Du','Se','Cho','Pa','Ju','Sha'];
@@ -683,7 +681,7 @@
                     const dt = new Date(this.calYear, this.calMonth, d);
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
-                    const isFuture = window._isImpersonating ? false : dt > today;
+                    const isFuture = dt > today;
 
                     // Max_days cheklovi: end tanlayotganda start+maxDays dan keyingi kunlar disabled
                     let beyondMax = false;
@@ -813,8 +811,6 @@
                 this.deadlineWarning = '';
                 this.deadlineExpired = false;
                 if (!this.endDate) return;
-                // Superadmin impersonate qilayotganda limitni o'tkazib yuborish
-                if (window._isImpersonating) return;
                 const end = new Date(this.endDate);
                 let nextDay = new Date(end);
                 nextDay.setDate(nextDay.getDate() + 1);
@@ -877,12 +873,10 @@
             },
             miniPrevMonth(index) {
                 const item = this.assessments[index];
-                if (!window._isImpersonating) {
-                    const today = new Date();
-                    const cur = item.cal_year * 12 + item.cal_month;
-                    const min = today.getFullYear() * 12 + today.getMonth();
-                    if (cur <= min) return;
-                }
+                const today = new Date();
+                const cur = item.cal_year * 12 + item.cal_month;
+                const min = today.getFullYear() * 12 + today.getMonth();
+                if (cur <= min) return;
                 if (item.cal_month === 0) { item.cal_month = 11; item.cal_year--; }
                 else item.cal_month--;
             },
@@ -939,7 +933,7 @@
                     const dt = new Date(item.cal_year, item.cal_month, d);
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
-                    const isPast = window._isImpersonating ? false : dt < today;
+                    const isPast = dt < today;
                     const beyondLimit = maxDate ? ds > maxDate : false;
                     // Non-JN: shu fan JN range ichidagi sanalar band
                     let takenByJn = false;

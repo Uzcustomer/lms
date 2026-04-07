@@ -296,6 +296,10 @@
                             {{ __('Qayta yuklash') }} ({{ $item['remaining_attempts'] }} {{ __('marta') }})
                             <input type="file" name="file" class="hidden mt-file-input" accept=".zip,.doc,.docx,.ppt,.pptx,.pdf">
                         </label>
+                        <div class="mt-upload-loader hidden mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+                            <svg class="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span class="text-xs font-medium text-blue-600">{{ __('Yuklanmoqda...') }}</span>
+                        </div>
                     </form>
                 @elseif($item['submission'] && !$item['is_overdue'] && $item['grade'] === null)
                     <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
@@ -305,6 +309,10 @@
                             {{ __('Qayta yuklash') }}
                             <input type="file" name="file" class="hidden mt-file-input" accept=".zip,.doc,.docx,.ppt,.pptx,.pdf">
                         </label>
+                        <div class="mt-upload-loader hidden mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+                            <svg class="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span class="text-xs font-medium text-blue-600">{{ __('Yuklanmoqda...') }}</span>
+                        </div>
                     </form>
                 @elseif($item['submission'] && $item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60) && $item['remaining_attempts'] <= 0)
                     <p class="text-[11px] text-red-400 font-medium">{{ __('Qayta yuklash imkoniyati tugagan') }}</p>
@@ -319,6 +327,10 @@
                         <p class="mt-file-name text-[11px] text-gray-500 mt-1.5 truncate hidden"></p>
                         <p class="text-[10px] text-gray-400 mt-1">Max 10MB (zip, doc, ppt, pdf)</p>
                         <button type="submit" class="hidden w-full mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition mt-submit-btn">{{ __('Yuklash') }}</button>
+                        <div class="mt-upload-loader hidden mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+                            <svg class="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span class="text-xs font-medium text-blue-600">{{ __('Yuklanmoqda...') }}</span>
+                        </div>
                     </form>
                 @elseif($item['is_overdue'] && !$item['submission'])
                     <p class="text-[11px] text-red-400 font-medium">{{ __('Muddat tugagan') }}</p>
@@ -328,12 +340,28 @@
     </div>
 
     <script>
+    function showFormLoader(form) {
+        var loader = form.querySelector('.mt-upload-loader');
+        if (loader) loader.classList.remove('hidden');
+        var submitBtn = form.querySelector('.mt-submit-btn');
+        if (submitBtn) submitBtn.classList.add('hidden');
+        var chooseBtn = form.querySelector('.mt-choose-btn');
+        if (chooseBtn) chooseBtn.classList.add('hidden');
+        // Qayta yuklash label ni ham yashirish
+        var labels = form.querySelectorAll('label');
+        labels.forEach(function(l) { l.classList.add('hidden'); });
+    }
+
     window.bindMtCompression = function(container) {
         var COMPRESS_THRESHOLD = 2 * 1024 * 1024;
         var MAX_FILE_SIZE = 10 * 1024 * 1024;
         container.querySelectorAll('.mt-upload-form').forEach(function(form) {
             var fileInput = form.querySelector('.mt-file-input');
             if (!fileInput) return;
+
+            // Submit tugmasi bosilganda ham loader ko'rsatish
+            form.addEventListener('submit', function() { showFormLoader(form); });
+
             fileInput.addEventListener('change', function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
@@ -346,13 +374,13 @@
                 if (chooseBtn) { chooseBtn.classList.remove('bg-blue-500','hover:bg-blue-600'); chooseBtn.classList.add('bg-gray-500','hover:bg-gray-600'); }
                 if (file.size <= COMPRESS_THRESHOLD) {
                     // Qayta yuklash formlari uchun avtomatik submit
-                    if (!submitBtn) { form.submit(); }
+                    if (!submitBtn) { showFormLoader(form); form.submit(); }
                     return;
                 }
                 var ext = file.name.split('.').pop().toLowerCase();
                 if (ext === 'zip') {
                     if (file.size > MAX_FILE_SIZE) { alert('Fayl hajmi ' + (file.size/1024/1024).toFixed(1) + 'MB. Max 10MB.'); fileInput.value = ''; if(nameEl) nameEl.classList.add('hidden'); if(submitBtn) submitBtn.classList.add('hidden'); return; }
-                    if (!submitBtn) { form.submit(); }
+                    if (!submitBtn) { showFormLoader(form); form.submit(); }
                     return;
                 }
                 if (typeof JSZip === 'undefined') { alert('Siqish kutubxonasi yuklanmadi.'); fileInput.value = ''; return; }
@@ -375,7 +403,7 @@
                     dt.items.add(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.zip', {type:'application/zip'}));
                     fileInput.files = dt.files;
                     if (submitBtn) { overlay.style.display='none'; return; }
-                    form.submit();
+                    overlay.style.display='none'; showFormLoader(form); form.submit();
                 }).catch(function(err) { overlay.style.display='none'; alert('Xatolik: '+err.message); fileInput.value=''; });
             });
         });

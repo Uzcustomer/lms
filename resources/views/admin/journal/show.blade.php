@@ -1915,11 +1915,9 @@
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
                                             $inputDisabled = $isYnSubmittedMt
                                                 ? !$isSuperAdminMt
-                                                : ($isSuperAdminMt
+                                                : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
-                                                    : ($isAdminMt
-                                                        ? ($isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt))
-                                                        : ($isDekan || $isRegistrator || $hasGrade || !$hasFile)));
+                                                    : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
                                             // YN yuborilgan bo'lsa hamma action bloklash (superadmin bundan mustasno)
                                             if ($isYnSubmittedMt && !$isSuperAdminMt) {
                                                 $canRegrade = false;
@@ -1979,6 +1977,11 @@
                                                             <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $daysSince }} kun o'tdi</span>
                                                         @elseif($urgency === 'danger')
                                                             <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
+                                                        @endif
+                                                        @if($isAdminMt)
+                                                            <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"
+                                                                style="font-size: 10px; color: #dc2626; background: none; border: 1px solid #fca5a5; border-radius: 4px; padding: 1px 6px; cursor: pointer; margin-top: 2px;"
+                                                                title="Faylni o'chirish">&#10005; O'chirish</button>
                                                         @endif
                                                     </div>
                                                 @else
@@ -2045,15 +2048,15 @@
                                                         Saqlash
                                                     </button>
                                                     @endif
-                                                @elseif($isSuperAdminMt && $hasGrade)
-                                                    {{-- Superadmin: can edit saved grade --}}
+                                                @elseif($isAdminMt && $hasGrade)
+                                                    {{-- Admin/Superadmin: can edit saved grade --}}
                                                     <button type="button"
                                                         onclick="saveMtGrade('{{ $student->hemis_id }}', false, true)"
                                                         id="mt-save-btn-{{ $student->hemis_id }}"
                                                         style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #7c3aed; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         O'zgartirish
                                                     </button>
-                                                @elseif($isLockedPermanent || ($isAdminMt && $hasGrade))
+                                                @elseif($isLockedPermanent)
                                                     {{-- Grade >= minimumLimit: permanently locked --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">
                                                         &#128274; Qabul qilindi
@@ -2959,8 +2962,13 @@
             const commentInput = document.getElementById('mt-comment-input-' + studentHemisId);
             const comment = commentInput ? commentInput.value : '';
 
-            if (grade === '' || isNaN(grade) || grade < 0 || grade > 100) {
-                alert('Iltimos, 0 dan 100 gacha baho kiriting');
+            // Admin uchun bo'sh qoldirish mumkin (bahoni o'chirish)
+            if (grade !== '' && (isNaN(grade) || grade < 0 || grade > 100)) {
+                alert('Iltimos, 0 dan 100 gacha baho kiriting yoki bo\'sh qoldiring');
+                return;
+            }
+            if (grade === '' && !adminEdit) {
+                alert('Iltimos, baho kiriting');
                 return;
             }
 
@@ -2980,7 +2988,7 @@
                     student_hemis_id: studentHemisId,
                     subject_id: mtGradeConfig.subjectId,
                     semester_code: mtGradeConfig.semesterCode,
-                    grade: parseFloat(grade),
+                    grade: grade === '' ? null : parseFloat(grade),
                     grade_comment: comment,
                     regrade: isRegrade ? true : false,
                     admin_edit: adminEdit ? true : false
@@ -2988,7 +2996,20 @@
             })
             .then(response => response.json().then(data => ({ ok: response.ok, data })))
             .then(({ ok, data }) => {
-                if (data.success) {
+                if (data.success && data.grade_deleted) {
+                    // Baho o'chirildi — inputni tozalash va ochish
+                    input.value = '';
+                    input.disabled = false;
+                    input.style.background = '#fff';
+                    input.style.color = '#111827';
+                    const commentCell = document.getElementById('mt-comment-' + studentHemisId);
+                    if (commentCell) {
+                        commentCell.innerHTML = '<input type="text" id="mt-comment-input-' + studentHemisId + '" style="width:100%;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;outline:none;" placeholder="Ixtiyoriy">';
+                    }
+                    const actionCell2 = document.getElementById('mt-action-' + studentHemisId);
+                    actionCell2.innerHTML = '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\')" style="padding:6px 16px;font-size:13px;font-weight:600;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;">Saqlash</button>';
+                    updateMtBadge();
+                } else if (data.success) {
                     // Lock the input
                     input.value = Math.round(data.grade);
                     input.disabled = true;
@@ -3071,8 +3092,31 @@
         }
 
         function cancelRegrade(studentHemisId) {
-            // Reload the page to restore original state
             location.reload();
+        }
+
+        function deleteMtFile(submissionId, studentHemisId) {
+            if (!confirm('Bu talabaning MT faylini o\'chirishni tasdiqlaysizmi?')) return;
+
+            fetch('{{ route("admin.journal.delete-mt-submission") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': mtGradeConfig.csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ submission_id: submissionId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    var fileCell = document.getElementById('mt-file-' + studentHemisId);
+                    if (fileCell) fileCell.innerHTML = '<span style="color:#f87171;font-size:12px;font-weight:500;">Yuklanmagan</span>';
+                } else {
+                    alert(data.message || 'Xatolik');
+                }
+            })
+            .catch(() => alert('Server xatosi'));
         }
 
         // Update MT tab badge count after grading

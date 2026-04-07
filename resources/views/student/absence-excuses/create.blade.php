@@ -515,10 +515,10 @@
                                 <template x-for="(item, ri) in group.items" :key="item._idx">
                                     <div class="ae-fan-item">
                                         <div style="margin-bottom:6px;" class="flex items-center gap-2 flex-wrap">
-                                            <span class="px-2 py-0.5 text-xs font-bold rounded-lg inline-block"
+                                            <span class="px-2.5 py-1 text-sm font-bold rounded-lg inline-block"
                                                   :class="'badge-' + item.assessment_type"
                                                   x-text="getLabel(item.assessment_type)"></span>
-                                            <span class="text-[10px] text-gray-400" x-text="fmtDate(item.original_date)"></span>
+                                            <span class="text-xs text-gray-400" x-text="fmtDate(item.original_date)"></span>
                                             <template x-if="item.is_makeup_period">
                                                 <span class="px-2 py-0.5 text-[10px] font-bold rounded-lg inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">
                                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>

@@ -21,10 +21,42 @@
                                     <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __("Shaxsiy ma'lumotlar") }}</h4>
                                     <ul class="space-y-2">
                                         <li><span class="font-medium">{{ __("Tug'ilgan sana:") }}</span> {{ date('d.m.Y', $profileData['birth_date']) }}</li>
-                                        <li><span class="font-medium">{{ __('Telefon:') }}</span> {{ $profileData['phone'] }}</li>
                                         <li><span class="font-medium">{{ __('Email:') }}</span> {{ $profileData['email'] }}</li>
                                         <li><span class="font-medium">{{ __('Jinsi:') }}</span> {{ $profileData['gender']['name'] }}</li>
                                     </ul>
+
+                                    {{-- Telefon va Telegram tahrirlash --}}
+                                    <div class="mt-4 pt-3 border-t border-gray-200">
+                                        @if(session('success'))
+                                            <div class="mb-3 px-3 py-2 bg-green-100 border border-green-300 text-green-700 rounded-lg text-sm font-medium">{{ session('success') }}</div>
+                                        @endif
+                                        @if($errors->any())
+                                            <div class="mb-3 px-3 py-2 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm font-medium">
+                                                @foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach
+                                            </div>
+                                        @endif
+                                        <form method="POST" action="{{ route('student.profile.update-contact') }}">
+                                            @csrf
+                                            <div class="space-y-3">
+                                                <div>
+                                                    <label class="text-sm font-medium text-gray-600">{{ __('Telefon raqam') }}</label>
+                                                    <input type="text" name="phone" value="{{ old('phone', $profileData['phone']) }}"
+                                                           placeholder="+998901234567"
+                                                           class="mt-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                                </div>
+                                                <div>
+                                                    <label class="text-sm font-medium text-gray-600">{{ __('Telegram ID') }}</label>
+                                                    <input type="text" name="telegram_username" value="{{ old('telegram_username', $profileData['telegram_username']) }}"
+                                                           placeholder="@username"
+                                                           class="mt-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                                </div>
+                                                <button type="submit"
+                                                        class="w-full px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition">
+                                                    {{ __('Saqlash') }}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
                                 <div class="bg-gray-50 p-4 rounded-lg">
                                     <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __("Ta'lim ma'lumotlari") }}</h4>

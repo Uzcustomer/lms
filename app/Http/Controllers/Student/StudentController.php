@@ -1425,8 +1425,9 @@ class StudentController extends Controller
             'student_id_number' => $student->student_id_number,
             'image' => $student->image ?? asset('images/default-avatar.png'),
             'birth_date' => $student->birth_date ? $student->birth_date->timestamp : null,
-            'phone' => $student->other['phone'] ?? '',
+            'phone' => $student->phone ?: ($student->other['phone'] ?? ''),
             'email' => $student->other['email'] ?? '',
+            'telegram_username' => $student->telegram_username ?? '',
             'gender' => ['name' => $student->gender_name ?? ''],
             'faculty' => ['name' => $student->department_name ?? ''],
             'specialty' => ['name' => $student->specialty_name ?? ''],
@@ -1440,6 +1441,26 @@ class StudentController extends Controller
         ];
 
         return view('student.profile', compact('profileData'));
+    }
+
+    public function updateContact(Request $request)
+    {
+        $student = Auth::guard('student')->user();
+
+        $request->validate([
+            'phone' => ['nullable', 'string', 'regex:/^\+\d{7,15}$/'],
+            'telegram_username' => ['nullable', 'string', 'regex:/^@[a-zA-Z0-9_]{5,32}$/'],
+        ], [
+            'phone.regex' => 'Telefon raqam formatida bo\'lishi kerak: +998XXXXXXXXX',
+            'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (5-32 belgi)',
+        ]);
+
+        $student->update([
+            'phone' => $request->phone,
+            'telegram_username' => $request->telegram_username,
+        ]);
+
+        return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli saqlandi');
     }
 
     public function examSchedule()

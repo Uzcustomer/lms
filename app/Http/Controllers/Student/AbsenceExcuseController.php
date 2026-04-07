@@ -143,6 +143,10 @@ class AbsenceExcuseController extends Controller
                     }
                 },
                 function ($attribute, $value, $fail) {
+                    // Superadmin impersonate qilayotganda 10 kunlik limitni o'tkazib yuborish
+                    if (session('impersonating')) {
+                        return;
+                    }
                     if ($value) {
                         $endDate = Carbon::parse($value);
                         $nextDay = $endDate->copy()->addDay();

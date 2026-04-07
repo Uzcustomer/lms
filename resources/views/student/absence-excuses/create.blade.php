@@ -556,6 +556,8 @@
 
     @push('scripts')
     <script>
+    window._isImpersonating = {{ session('impersonating') ? 'true' : 'false' }};
+
     function absenceForm() {
         const MONTHS_UZ = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentabr','Oktabr','Noyabr','Dekabr'];
         const WDAYS = ['Ya','Du','Se','Cho','Pa','Ju','Sha'];
@@ -811,6 +813,8 @@
                 this.deadlineWarning = '';
                 this.deadlineExpired = false;
                 if (!this.endDate) return;
+                // Superadmin impersonate qilayotganda limitni o'tkazib yuborish
+                if (window._isImpersonating) return;
                 const end = new Date(this.endDate);
                 let nextDay = new Date(end);
                 nextDay.setDate(nextDay.getDate() + 1);

@@ -937,7 +937,7 @@
                     const dt = new Date(item.cal_year, item.cal_month, d);
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
-                    const isPast = dt < today;
+                    const isPast = window._isImpersonating ? false : dt < today;
                     const beyondLimit = maxDate ? ds > maxDate : false;
                     // Non-JN: shu fan JN range ichidagi sanalar band
                     let takenByJn = false;

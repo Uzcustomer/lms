@@ -3,15 +3,15 @@
     <template x-if="item.is_makeup_period">
         <div>
             <template x-if="!item.jn_submitted && !item.makeup_date && !(item.assessment_type === 'jn' && item.makeup_start)">
-                <div class="flex flex-col gap-2">
+                <div class="flex items-center gap-2">
                     <button type="button" @click="item.jn_submitted = true; item.makeup_date = ''; item.makeup_start = ''; item.makeup_end = ''; item.show_cal = false"
-                            class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-all">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        {{ __("O'z vaqtida topshiraman") }}
+                            class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        {{ __("O'z vaqtida") }}
                     </button>
                     <button type="button" @click="item.show_cal = !item.show_cal"
-                            class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg border-2 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:border-orange-300 transition-all">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border-2 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 hover:border-orange-300 transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         {{ __('Qayta topshiraman') }}
                     </button>
                 </div>

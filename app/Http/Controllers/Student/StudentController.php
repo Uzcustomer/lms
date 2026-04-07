@@ -1425,8 +1425,9 @@ class StudentController extends Controller
             'student_id_number' => $student->student_id_number,
             'image' => $student->image ?? asset('images/default-avatar.png'),
             'birth_date' => $student->birth_date ? $student->birth_date->timestamp : null,
-            'phone' => $student->other['phone'] ?? '',
+            'phone' => $student->phone ?: ($student->other['phone'] ?? ''),
             'email' => $student->other['email'] ?? '',
+            'telegram_username' => $student->telegram_username ?? '',
             'gender' => ['name' => $student->gender_name ?? ''],
             'faculty' => ['name' => $student->department_name ?? ''],
             'specialty' => ['name' => $student->specialty_name ?? ''],
@@ -1439,7 +1440,42 @@ class StudentController extends Controller
             'is_graduate' => $student->is_graduate,
         ];
 
-        return view('student.profile', compact('profileData'));
+        $botUsername = config('services.telegram.bot_username', '');
+
+        return view('student.profile', compact('profileData', 'student', 'botUsername'));
+    }
+
+    public function updateContact(Request $request)
+    {
+        $student = Auth::guard('student')->user();
+
+        $request->validate([
+            'phone' => ['nullable', 'string', 'regex:/^\+\d{7,15}$/'],
+            'telegram_username' => ['nullable', 'string', 'regex:/^@[a-zA-Z0-9_]{5,32}$/'],
+        ], [
+            'phone.regex' => 'Telefon raqam formatida bo\'lishi kerak: +998XXXXXXXXX',
+            'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (5-32 belgi)',
+        ]);
+
+        $student->phone = $request->phone;
+
+        // Telegram username o'zgarganda — yangi verification code generatsiya qilish
+        $newTelegram = $request->telegram_username;
+        if ($newTelegram && $newTelegram !== $student->telegram_username) {
+            $student->telegram_username = $newTelegram;
+            $student->telegram_verification_code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
+            $student->telegram_verified_at = null;
+            $student->telegram_chat_id = null;
+        } elseif (!$newTelegram) {
+            $student->telegram_username = null;
+            $student->telegram_verification_code = null;
+            $student->telegram_verified_at = null;
+            $student->telegram_chat_id = null;
+        }
+
+        $student->save();
+
+        return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli saqlandi');
     }
 
     public function examSchedule()

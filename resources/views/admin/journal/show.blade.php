@@ -84,6 +84,28 @@
             min-width: 0;
             overflow-x: auto;
         }
+        /* Student name Excel export button */
+        .student-name-cell { position: relative; }
+        .student-export-btn {
+            display: none; position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+            width: 22px; height: 22px; border-radius: 4px; border: none; cursor: pointer;
+            background: #16a34a; color: #fff; padding: 0;
+            align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            z-index: 5;
+        }
+        .student-export-btn:hover { background: #15803d; }
+        .student-name-cell:hover .student-export-btn { display: inline-flex; }
+
+        .mt-file-delete-btn {
+            display: none; position: absolute; right: -2px; top: -2px;
+            width: 16px; height: 16px; border-radius: 50%; border: none; cursor: pointer;
+            background: #dc2626; color: #fff; font-size: 10px; line-height: 1;
+            align-items: center; justify-content: center; padding: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 5;
+        }
+        .mt-file-delete-btn:hover { background: #b91c1c; }
+        .mt-file-cell:hover .mt-file-delete-btn { display: inline-flex; }
+
         .journal-sidebar {
             width: 280px;
             flex-shrink: 0;
@@ -878,7 +900,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                             @forelse($lectureLessonDates as $idx => $date)
                                                 @php
                                                     $scheduledPairs = $lecturePairsByDate[$date] ?? [];
@@ -933,7 +955,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                             @forelse($lectureColumns as $idx => $col)
                                                 @php
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
@@ -1114,7 +1136,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
@@ -1293,7 +1315,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($jbColumns as $colIndex => $col)
                                                 @php
@@ -1903,11 +1925,9 @@
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
                                             $inputDisabled = $isYnSubmittedMt
                                                 ? !$isSuperAdminMt
-                                                : ($isSuperAdminMt
+                                                : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
-                                                    : ($isAdminMt
-                                                        ? ($isDekan || $isRegistrator || $hasGrade || (!$hasFile && !$isAdminMt))
-                                                        : ($isDekan || $isRegistrator || $hasGrade || !$hasFile)));
+                                                    : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
                                             // YN yuborilgan bo'lsa hamma action bloklash (superadmin bundan mustasno)
                                             if ($isYnSubmittedMt && !$isSuperAdminMt) {
                                                 $canRegrade = false;
@@ -1942,31 +1962,24 @@
                                         @endphp
                                         <tr id="mt-row-{{ $student->hemis_id }}" {!! $rowBg ? 'style="background:' . $rowBg . '"' : '' !!}>
                                             <td class="px-2 py-1 text-center" style="color: #111827;">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
-                                                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                                                        <div style="display: flex; align-items: center; gap: 4px;">
-                                                            <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
-                                                               style="color: #2563eb; font-size: 12px; text-decoration: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;"
-                                                               title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
-                                                                {{ Str::limit($submission->file_original_name, 20) }}
-                                                            </a>
-                                                            @if($isSuperAdminMt)
-                                                                <button type="button"
-                                                                    onclick="deleteMtSubmission('{{ $submission->id }}', '{{ $student->hemis_id }}', '{{ addslashes($student->full_name) }}')"
-                                                                    style="background: none; border: none; cursor: pointer; padding: 1px 3px; font-size: 13px; color: #ef4444; line-height: 1; border-radius: 3px; transition: background 0.15s;"
-                                                                    onmouseover="this.style.background='#fee2e2'"
-                                                                    onmouseout="this.style.background='none'"
-                                                                    title="MT faylni o'chirish">
-                                                                    &#10005;
-                                                                </button>
-                                                            @endif
-                                                        </div>
+                                                    <div class="mt-file-cell" style="display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative;">
+                                                        <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
+                                                           style="color: #2563eb; font-size: 12px; text-decoration: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;"
+                                                           title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
+                                                            {{ Str::limit($submission->file_original_name, 20) }}
+                                                        </a>
                                                         @if($urgency === 'warning')
                                                             <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $daysSince }} kun o'tdi</span>
                                                         @elseif($urgency === 'danger')
                                                             <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
+                                                        @endif
+                                                        @if($isSuperAdminMt)
+                                                            <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"
+                                                                class="mt-file-delete-btn"
+                                                                title="Faylni o'chirish">&#10005;</button>
                                                         @endif
                                                     </div>
                                                 @else
@@ -2033,15 +2046,15 @@
                                                         Saqlash
                                                     </button>
                                                     @endif
-                                                @elseif($isSuperAdminMt && $hasGrade)
-                                                    {{-- Superadmin: can edit saved grade --}}
+                                                @elseif($isAdminMt && $hasGrade)
+                                                    {{-- Admin/Superadmin: can edit saved grade --}}
                                                     <button type="button"
                                                         onclick="saveMtGrade('{{ $student->hemis_id }}', false, true)"
                                                         id="mt-save-btn-{{ $student->hemis_id }}"
                                                         style="padding: 6px 16px; font-size: 13px; font-weight: 600; background: #7c3aed; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
                                                         O'zgartirish
                                                     </button>
-                                                @elseif($isLockedPermanent || ($isAdminMt && $hasGrade))
+                                                @elseif($isLockedPermanent)
                                                     {{-- Grade >= minimumLimit: permanently locked --}}
                                                     <span style="display: inline-flex; align-items: center; padding: 4px 10px; font-size: 12px; background: #dcfce7; color: #15803d; border-radius: 6px;">
                                                         &#128274; Qabul qilindi
@@ -2125,7 +2138,7 @@
                                             @endphp
                                             <tr>
                                                 <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
@@ -2213,7 +2226,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($mtColumns as $colIndex => $col)
                                                 @php
@@ -2403,6 +2416,10 @@
     <script>
         window.minimumLimit = {{ $minimumLimit ?? 60 }};
         window.isAdminRole = {{ (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false) ? 'true' : 'false' }};
+
+        function exportStudentGrades(hemisId) {
+            window.open('{{ route("admin.journal.export-student-grades") }}?student_hemis_id=' + encodeURIComponent(hemisId), '_blank');
+        }
 
         // ====== Cascading Sidebar Filters ======
         // Zanjir: Fakultet(erkin) → Yo'nalish → Kurs → Semestr → [Guruh ↔ Fan]
@@ -2911,31 +2928,6 @@
             }
         }
 
-        function deleteMtSubmission(submissionId, studentHemisId, studentName) {
-            if (!confirm(studentName + ' ning MT faylini o\'chirmoqchimisiz?\nTalaba qayta yuklay oladi.')) return;
-
-            fetch('{{ url("admin/journal/delete-mt-submission") }}/' + submissionId, {
-                method: 'DELETE',
-                headers: {
-                    'X-CSRF-TOKEN': mtGradeConfig.csrfToken,
-                    'Accept': 'application/json'
-                }
-            })
-            .then(response => response.json().then(data => ({ ok: response.ok, data })))
-            .then(({ ok, data }) => {
-                if (data.success) {
-                    const fileCell = document.getElementById('mt-file-' + studentHemisId);
-                    if (fileCell) {
-                        fileCell.innerHTML = '<span style="color:#f87171;font-size:12px;font-weight:500;">Yuklanmagan</span>';
-                    }
-                    alert(data.message);
-                } else {
-                    alert(data.message || 'Xatolik yuz berdi');
-                }
-            })
-            .catch(() => alert('Tarmoq xatosi'));
-        }
-
         function saveMtGrade(studentHemisId, isRegrade, adminEdit) {
             if (isDekan) return;
             const input = document.getElementById('mt-grade-' + studentHemisId);
@@ -2943,8 +2935,13 @@
             const commentInput = document.getElementById('mt-comment-input-' + studentHemisId);
             const comment = commentInput ? commentInput.value : '';
 
-            if (grade === '' || isNaN(grade) || grade < 0 || grade > 100) {
-                alert('Iltimos, 0 dan 100 gacha baho kiriting');
+            // Admin uchun bo'sh qoldirish mumkin (bahoni o'chirish)
+            if (grade !== '' && (isNaN(grade) || grade < 0 || grade > 100)) {
+                alert('Iltimos, 0 dan 100 gacha baho kiriting yoki bo\'sh qoldiring');
+                return;
+            }
+            if (grade === '' && !adminEdit) {
+                alert('Iltimos, baho kiriting');
                 return;
             }
 
@@ -2964,7 +2961,7 @@
                     student_hemis_id: studentHemisId,
                     subject_id: mtGradeConfig.subjectId,
                     semester_code: mtGradeConfig.semesterCode,
-                    grade: parseFloat(grade),
+                    grade: grade === '' ? null : parseFloat(grade),
                     grade_comment: comment,
                     regrade: isRegrade ? true : false,
                     admin_edit: adminEdit ? true : false
@@ -2972,7 +2969,20 @@
             })
             .then(response => response.json().then(data => ({ ok: response.ok, data })))
             .then(({ ok, data }) => {
-                if (data.success) {
+                if (data.success && data.grade_deleted) {
+                    // Baho o'chirildi — inputni tozalash va ochish
+                    input.value = '';
+                    input.disabled = false;
+                    input.style.background = '#fff';
+                    input.style.color = '#111827';
+                    const commentCell = document.getElementById('mt-comment-' + studentHemisId);
+                    if (commentCell) {
+                        commentCell.innerHTML = '<input type="text" id="mt-comment-input-' + studentHemisId + '" style="width:100%;padding:3px 6px;font-size:12px;border:1px solid #d1d5db;border-radius:4px;outline:none;" placeholder="Ixtiyoriy">';
+                    }
+                    const actionCell2 = document.getElementById('mt-action-' + studentHemisId);
+                    actionCell2.innerHTML = '<button type="button" onclick="saveMtGrade(\'' + studentHemisId + '\')" style="padding:6px 16px;font-size:13px;font-weight:600;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;">Saqlash</button>';
+                    updateMtBadge();
+                } else if (data.success) {
                     // Lock the input
                     input.value = Math.round(data.grade);
                     input.disabled = true;
@@ -3055,8 +3065,31 @@
         }
 
         function cancelRegrade(studentHemisId) {
-            // Reload the page to restore original state
             location.reload();
+        }
+
+        function deleteMtFile(submissionId, studentHemisId) {
+            if (!confirm('Bu talabaning MT faylini o\'chirishni tasdiqlaysizmi?')) return;
+
+            fetch('{{ route("admin.journal.delete-mt-submission") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': mtGradeConfig.csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ submission_id: submissionId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    var fileCell = document.getElementById('mt-file-' + studentHemisId);
+                    if (fileCell) fileCell.innerHTML = '<span style="color:#f87171;font-size:12px;font-weight:500;">Yuklanmagan</span>';
+                } else {
+                    alert(data.message || 'Xatolik');
+                }
+            })
+            .catch(() => alert('Server xatosi'));
         }
 
         // Update MT tab badge count after grading

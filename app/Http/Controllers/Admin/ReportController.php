@@ -3687,13 +3687,36 @@ class ReportController extends Controller
 
         // C) Barcha approved arizalar (HEMIS da topilmaganlarni aniqlash uchun)
         // C1: Fanga bog'langan arizalar (makeups orqali, student_subjects dan resolve)
-        $allApprovedWithSubject = DB::table('absence_excuses as ae')
+        $allApprovedWithSubjectQuery = DB::table('absence_excuses as ae')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
-            ->leftJoin('groups as g2', 'g2.group_hemis_id', '=', 's.group_id')
+            ->join('groups as g2', 'g2.group_hemis_id', '=', 's.group_id')
+            ->where('g2.department_active', true)
+            ->where('g2.active', true)
             ->where('ae.status', 'approved')
-            ->whereNotNull('aem.subject_id')
-            ->select(
+            ->whereNotNull('aem.subject_id');
+
+        // Filtrlarni C1 ga ham qo'llash
+        if ($request->filled('education_type')) {
+            $allApprovedWithSubjectQuery->whereIn('s.group_id', $groupIds);
+        }
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $allApprovedWithSubjectQuery->where('s.department_id', $faculty->department_hemis_id);
+            }
+        }
+        if ($request->filled('specialty')) {
+            $allApprovedWithSubjectQuery->where('s.specialty_id', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $allApprovedWithSubjectQuery->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('group')) {
+            $allApprovedWithSubjectQuery->where('s.group_id', $request->group);
+        }
+
+        $allApprovedWithSubject = $allApprovedWithSubjectQuery->select(
                 'ae.id as excuse_id',
                 'ae.student_hemis_id',
                 's.full_name',
@@ -3722,9 +3745,11 @@ class ReportController extends Controller
             ->get();
 
         // C2: Umumiy arizalar (fan ko'rsatilmagan)
-        $allApprovedGeneral = DB::table('absence_excuses as ae')
+        $allApprovedGeneralQuery = DB::table('absence_excuses as ae')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
-            ->leftJoin('groups as g2', 'g2.group_hemis_id', '=', 's.group_id')
+            ->join('groups as g2', 'g2.group_hemis_id', '=', 's.group_id')
+            ->where('g2.department_active', true)
+            ->where('g2.active', true)
             ->where('ae.status', 'approved')
             ->where(function ($q) {
                 $q->whereNotExists(function ($sub) {
@@ -3733,8 +3758,29 @@ class ReportController extends Controller
                         ->whereColumn('aem2.absence_excuse_id', 'ae.id')
                         ->whereNotNull('aem2.subject_id');
                 });
-            })
-            ->select(
+            });
+
+        // Filtrlarni C2 ga ham qo'llash
+        if ($request->filled('education_type')) {
+            $allApprovedGeneralQuery->whereIn('s.group_id', $groupIds);
+        }
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $allApprovedGeneralQuery->where('s.department_id', $faculty->department_hemis_id);
+            }
+        }
+        if ($request->filled('specialty')) {
+            $allApprovedGeneralQuery->where('s.specialty_id', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $allApprovedGeneralQuery->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('group')) {
+            $allApprovedGeneralQuery->where('s.group_id', $request->group);
+        }
+
+        $allApprovedGeneral = $allApprovedGeneralQuery->select(
                 'ae.id as excuse_id',
                 'ae.student_hemis_id',
                 's.full_name',
@@ -3813,6 +3859,7 @@ class ReportController extends Controller
             // Juftlik detali
             $pair = [
                 'lesson_date' => $dateStr ? date('d.m.Y', strtotime($dateStr)) : '-',
+                'lesson_date_raw' => $dateStr ?: '0000-00-00',
                 'lesson_pair' => ($att->lesson_pair_start_time && $att->lesson_pair_end_time)
                     ? $att->lesson_pair_start_time . '-' . $att->lesson_pair_end_time : '-',
                 'hemis_status' => $hemisStatus,
@@ -3882,7 +3929,7 @@ class ReportController extends Controller
             }
 
             // pairs ni sana bo'yicha saralash
-            usort($row['pairs'], fn($a, $b) => strcmp($a['lesson_date'], $b['lesson_date']));
+            usort($row['pairs'], fn($a, $b) => strcmp($a['lesson_date_raw'], $b['lesson_date_raw']));
 
             $results[] = $row;
         }
@@ -3938,6 +3985,7 @@ class ReportController extends Controller
                 'match' => 'mismatch',
                 'pairs' => [[
                     'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
+                    'lesson_date_raw' => $startDate ?: '0000-00-00',
                     'lesson_pair' => '-',
                     'hemis_status' => 'Davomat topilmadi',
                     'mark_status' => 'Sababli (ariza)',
@@ -3948,17 +3996,11 @@ class ReportController extends Controller
             ];
         }
 
-        // 4B: Umumiy arizalar (fansiz) — faqat talaba umuman natijada yo'q bo'lsa qo'shish
+        // 4B: Umumiy arizalar (fansiz) — har doim alohida yozuv sifatida qo'shish
         foreach ($allApprovedGeneral as $exc) {
-            // Takrorlanishni oldini olish
+            // Takrorlanishni oldini olish (bir ariza faqat bir marta)
             $excUniqueKey = 'general|' . $exc->excuse_id;
             if (isset($addedExcuseKeys[$excUniqueKey])) {
-                continue;
-            }
-
-            // Talaba umuman results da yo'q bo'lsa — qo'shish
-            // Yoki talaba results da bor, lekin umumiy ariza alohida ko'rsatilishi kerak
-            if (isset($studentsInResults[$exc->student_hemis_id])) {
                 continue;
             }
 
@@ -3985,6 +4027,7 @@ class ReportController extends Controller
                 'match' => 'mismatch',
                 'pairs' => [[
                     'lesson_date' => ($startDate ? date('d.m.Y', strtotime($startDate)) : '-') . ' — ' . ($endDate ? date('d.m.Y', strtotime($endDate)) : '-'),
+                    'lesson_date_raw' => $startDate ?: '0000-00-00',
                     'lesson_pair' => '-',
                     'hemis_status' => 'Davomat topilmadi',
                     'mark_status' => 'Sababli (ariza)',
@@ -3993,7 +4036,6 @@ class ReportController extends Controller
                 ]],
                 'journal_url' => '#',
             ];
-            $studentsInResults[$exc->student_hemis_id] = true;
         }
 
         // Qidirish filtri
@@ -4049,15 +4091,45 @@ class ReportController extends Controller
         }
         unset($item);
 
-        // DEBUG LOG: student_subjects dan resolve qilib, attendance da topilmaganlarni aniqlash (faqat 10-semestr)
+        // DEBUG LOG: student_subjects dan resolve qilib, attendance da topilmaganlarni aniqlash
         $debugLog = [];
-        $allMakeupRows = DB::table('absence_excuse_makeups as aem')
+        $debugMakeupQuery = DB::table('absence_excuse_makeups as aem')
             ->join('absence_excuses as ae', 'ae.id', '=', 'aem.absence_excuse_id')
             ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
+            ->join('groups as g3', 'g3.group_hemis_id', '=', 's.group_id')
+            ->where('g3.department_active', true)
+            ->where('g3.active', true)
             ->where('ae.status', 'approved')
-            ->whereNotNull('aem.subject_id')
-            ->where('s.semester_code', '10')
-            ->select(
+            ->whereNotNull('aem.subject_id');
+
+        // Joriy semestr filtri
+        if ($currentSemesterFilter) {
+            $debugMakeupQuery->whereColumn('s.semester_code', 's.semester_code')
+                             ->where(function ($q) {
+                                 $q->whereExists(function ($sub) {
+                                     $sub->select(DB::raw(1))
+                                         ->from('attendances as att_check')
+                                         ->whereColumn('att_check.student_hemis_id', 's.hemis_id')
+                                         ->where('att_check.education_year_current', true);
+                                 });
+                             });
+        }
+
+        // Filtrlarni debug queryga ham qo'llash
+        if ($request->filled('education_type')) {
+            $debugMakeupQuery->whereIn('s.group_id', $groupIds);
+        }
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $debugMakeupQuery->where('s.department_id', $faculty->department_hemis_id);
+            }
+        }
+        if ($request->filled('group')) {
+            $debugMakeupQuery->where('s.group_id', $request->group);
+        }
+
+        $allMakeupRows = $debugMakeupQuery->select(
                 'aem.id as makeup_id',
                 'aem.subject_name',
                 'aem.subject_id',
@@ -4065,44 +4137,46 @@ class ReportController extends Controller
                 'ae.start_date',
                 'ae.end_date',
                 's.full_name',
-                's.group_name'
+                's.group_name',
+                DB::raw("(SELECT ss.subject_id FROM student_subjects ss
+                          WHERE ss.student_hemis_id = ae.student_hemis_id
+                          AND ss.subject_name = aem.subject_name LIMIT 1) as resolved_subject_id")
             )
             ->get();
 
-        foreach ($allMakeupRows as $m) {
-            // student_subjects dan subject_id ni resolve qilish
-            $ssResult = DB::table('student_subjects')
-                ->where('student_hemis_id', $m->student_hemis_id)
-                ->where('subject_name', $m->subject_name)
-                ->select('subject_id')
-                ->first();
+        // Batch: barcha student_hemis_id larni yig'ish va attendance da mavjud juftliklarni olish
+        $debugStudentIds = $allMakeupRows->pluck('student_hemis_id')->unique()->values()->toArray();
 
-            $resolvedId = $ssResult->subject_id ?? $m->subject_id;
-            $resolvedVia = $ssResult ? 'student_subjects' : 'aem.subject_id (original)';
-
-            // attendance da resolved_id bilan nb yozuvi bor-yo'qligini tekshirish
-            $attExists = DB::table('attendances')
-                ->where('student_hemis_id', $m->student_hemis_id)
-                ->where('subject_id', $resolvedId)
+        $attExistingPairs = [];
+        $attExistingSubjects = [];
+        if (!empty($debugStudentIds)) {
+            // Attendance da mavjud student+subject juftliklarni batch olish
+            $attPairsRaw = DB::table('attendances')
+                ->whereIn('student_hemis_id', $debugStudentIds)
                 ->where(function ($q) {
                     $q->where('absent_on', '>', 0)->orWhere('absent_off', '>', 0);
                 })
-                ->exists();
+                ->select('student_hemis_id', 'subject_id', 'subject_name')
+                ->distinct()
+                ->get();
 
-            // Faqat topilmaganlarni log ga qo'shish
+            foreach ($attPairsRaw as $ap) {
+                $attExistingPairs[$ap->student_hemis_id . '|' . $ap->subject_id] = true;
+                $attExistingSubjects[$ap->student_hemis_id][] = $ap->subject_id . ' (' . $ap->subject_name . ')';
+            }
+        }
+
+        foreach ($allMakeupRows as $m) {
+            $resolvedId = $m->resolved_subject_id ?? $m->subject_id;
+            $resolvedVia = $m->resolved_subject_id ? 'student_subjects' : 'aem.subject_id (original)';
+
+            $pairKey = $m->student_hemis_id . '|' . $resolvedId;
+            $attExists = isset($attExistingPairs[$pairKey]);
+
             if (!$attExists) {
-                // attendance da shu talaba uchun qanday subject_id lar bor ekanligini tekshirish
-                $existingSubjects = DB::table('attendances')
-                    ->where('student_hemis_id', $m->student_hemis_id)
-                    ->where(function ($q) {
-                        $q->where('absent_on', '>', 0)->orWhere('absent_off', '>', 0);
-                    })
-                    ->select('subject_id', 'subject_name')
-                    ->distinct()
-                    ->limit(10)
-                    ->get()
-                    ->map(fn($r) => $r->subject_id . ' (' . $r->subject_name . ')')
-                    ->implode(', ');
+                $existingSubjects = isset($attExistingSubjects[$m->student_hemis_id])
+                    ? implode(', ', array_slice($attExistingSubjects[$m->student_hemis_id], 0, 10))
+                    : 'hech qaysi';
 
                 $debugLog[] = [
                     'makeup_id' => $m->makeup_id,
@@ -4114,7 +4188,7 @@ class ReportController extends Controller
                     'resolved_id' => $resolvedId,
                     'resolved_via' => $resolvedVia,
                     'att_exists' => false,
-                    'reason' => 'attendance da nb topilmadi. Mavjud fanlar: ' . ($existingSubjects ?: 'hech qaysi'),
+                    'reason' => 'attendance da nb topilmadi. Mavjud fanlar: ' . $existingSubjects,
                 ];
             }
         }

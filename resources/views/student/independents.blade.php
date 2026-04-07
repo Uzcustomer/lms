@@ -67,9 +67,10 @@
             document.body.style.overflow = 'hidden';
             this.$nextTick(() => {
                 document.querySelectorAll('[id^=&quot;upload-slot-&quot;]').forEach(slot => {
-                    if (slot.children.length > 0) return;
                     var id = slot.id.replace('upload-slot-', '');
                     var src = document.querySelector('#mt-upload-forms [data-mt-id=&quot;' + id + '&quot;]');
+                    // Har doim yangilash — eski innerHTML ni tozalab, to'g'ri formani inject qilish
+                    slot.innerHTML = '';
                     if (src && src.innerHTML.trim()) {
                         slot.innerHTML = src.innerHTML;
                         window.bindMtCompression(slot);
@@ -193,7 +194,7 @@
 
                     {{-- Modal body --}}
                     <div class="flex-1 overflow-y-auto p-2">
-                        <template x-for="(item, idx) in modalItems" :key="idx">
+                        <template x-for="(item, idx) in modalItems" :key="item.id">
                             <div class="mb-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-2 border border-gray-100 dark:border-gray-600">
                                 {{-- Status + Baho --}}
                                 <div class="flex items-center justify-between mb-3">

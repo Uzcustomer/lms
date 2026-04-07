@@ -57,6 +57,10 @@
         .compare-table tr:hover { background: #f8fafc; }
         .compare-empty { text-align: center; padding: 40px; color: #94a3b8; }
 
+        .xulosa-dup-del { display: none; position: absolute; right: -8px; top: -8px; width: 16px; height: 16px; border-radius: 50%; border: none; cursor: pointer; background: #dc2626; color: #fff; font-size: 10px; line-height: 1; align-items: center; justify-content: center; padding: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 5; }
+        .xulosa-dup-del:hover { background: #b91c1c; }
+        .xulosa-dup-wrap:hover .xulosa-dup-del { display: inline-flex; }
+
         /* Conflict modal */
         .conflict-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
         .conflict-modal { background: #fff; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
@@ -402,7 +406,7 @@
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
-        function getXulosaBadge(code, text) {
+        function getXulosaBadge(code, text, resultId) {
             var styles = {
                 'ok':               'background:#dcfce7;color:#166534;border:1px solid #86efac;',
                 'uploaded':         'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
@@ -418,7 +422,12 @@
                 'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;'
             };
             var style = styles[code] || 'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;';
-            return '<span class="badge" style="' + style + 'font-size:10px;white-space:nowrap;">' + esc(text) + '</span>';
+            var badge = '<span class="badge" style="' + style + 'font-size:10px;white-space:nowrap;">' + esc(text) + '</span>';
+            if ((code === '2T' || code === '2O') && resultId) {
+                badge = '<span class="xulosa-dup-wrap" style="position:relative;display:inline-block;">' + badge +
+                    '<button onclick="deleteDuplicateGrade(' + resultId + ')" class="xulosa-dup-del" title="Dublikat bahoni o\'chirish">&#10005;</button></span>';
+            }
+            return badge;
         }
 
         // ========== TARTIBGA SOLISH ==========
@@ -652,7 +661,7 @@
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
-                html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa) + '</td>';
+                html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa, r.id) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -1094,6 +1103,34 @@
                 var ids = window._conflictIds;
                 closeConflictModal();
                 sendDeleteRequest(ids, selected);
+            };
+
+            // ========== DUBLIKAT O'CHIRISH (2T/2O) ==========
+            window.deleteDuplicateGrade = function(resultId) {
+                if (!confirm('Bu dublikat natijani o\'chirishni tasdiqlaysizmi?\nHemis quiz result va unga bog\'langan baho o\'chiriladi.')) return;
+
+                // 1. student_grades dan o'chirish (agar yuklangan bo'lsa)
+                $.ajax({
+                    url: deleteGradesUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ids: [resultId], confirmed_fan_names: [] }),
+                    complete: function() {
+                        // 2. hemis_quiz_results dan o'chirish (is_active = 0)
+                        $.ajax({
+                            url: destroyUrlBase + '/' + resultId,
+                            type: 'DELETE',
+                            headers: { 'X-CSRF-TOKEN': csrfToken },
+                            success: function() {
+                                // Jadvaldan olib tashlash
+                                $('#row-' + resultId).fadeOut(300, function() { $(this).remove(); });
+                                allData = allData.filter(function(r) { return r.id !== resultId; });
+                                filteredData = filteredData.filter(function(r) { return r.id !== resultId; });
+                            },
+                            error: function() { alert('O\'chirishda xatolik'); }
+                        });
+                    }
+                });
             };
 
             // ========== SOLISHTIRISH ==========

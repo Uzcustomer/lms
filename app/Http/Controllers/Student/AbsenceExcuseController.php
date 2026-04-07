@@ -143,10 +143,6 @@ class AbsenceExcuseController extends Controller
                     }
                 },
                 function ($attribute, $value, $fail) {
-                    // Superadmin impersonate qilayotganda 10 kunlik limitni o'tkazib yuborish
-                    if (session('impersonating')) {
-                        return;
-                    }
                     if ($value) {
                         $endDate = Carbon::parse($value);
                         $nextDay = $endDate->copy()->addDay();
@@ -185,9 +181,9 @@ class AbsenceExcuseController extends Controller
             'makeup_dates.*.assessment_type' => 'required|string',
             'makeup_dates.*.assessment_type_code' => 'required|string',
             'makeup_dates.*.original_date' => 'required|date',
-            'makeup_dates.*.makeup_date' => session('impersonating') ? 'nullable|date' : 'nullable|date|after_or_equal:today',
-            'makeup_dates.*.makeup_start' => session('impersonating') ? 'nullable|date' : 'nullable|date|after_or_equal:today',
-            'makeup_dates.*.makeup_end' => session('impersonating') ? 'nullable|date' : 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_date' => 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_start' => 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_end' => 'nullable|date|after_or_equal:today',
         ], [
             'reason.required' => 'Sababni tanlang',
             'reason.in' => 'Noto\'g\'ri sabab tanlangan',

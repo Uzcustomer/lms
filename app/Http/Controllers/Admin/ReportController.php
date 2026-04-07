@@ -3751,6 +3751,7 @@ class ReportController extends Controller
         // ========================================
         $results = [];
         $addedKeys = []; // takrorlanishni oldini olish
+        $debugLog = []; // fan topilishi haqida debug ma'lumot
 
         foreach ($excWithSubject as $exc) {
             $excUniqueKey = $exc->excuse_id . '|' . $exc->subject_id;
@@ -3764,6 +3765,15 @@ class ReportController extends Controller
             // 1) subject_id bo'yicha qidirish
             $attKey = $exc->student_hemis_id . '|' . $exc->subject_id;
             $hemisRecords = $attMap[$attKey] ?? [];
+            $matchMethod = 'topilmadi';
+            $matchedHemisSubjectId = null;
+            $matchedHemisSubjectName = null;
+
+            if (!empty($hemisRecords)) {
+                $matchMethod = 'subject_id (' . $exc->subject_id . ')';
+                $matchedHemisSubjectId = $hemisRecords[0]->subject_id;
+                $matchedHemisSubjectName = $hemisRecords[0]->subject_name;
+            }
 
             // 2) Topilmasa — subject_name bo'yicha qidirish (aniq va fuzzy)
             if (empty($hemisRecords) && !empty($exc->subject_name) && isset($attByName[$exc->student_hemis_id])) {
@@ -3773,16 +3783,44 @@ class ReportController extends Controller
                 // Aniq nom moslik
                 if (isset($studentAttByName[$excSubjectNorm])) {
                     $hemisRecords = $studentAttByName[$excSubjectNorm];
+                    $matchMethod = 'fan_nomi_aniq';
+                    $matchedHemisSubjectId = $hemisRecords[0]->subject_id;
+                    $matchedHemisSubjectName = $hemisRecords[0]->subject_name;
                 } else {
                     // Fuzzy: bitta ikkinchisining ichida bormi
                     foreach ($studentAttByName as $attName => $attRecords) {
                         if (str_contains($attName, $excSubjectNorm) || str_contains($excSubjectNorm, $attName)) {
                             $hemisRecords = $attRecords;
+                            $matchMethod = 'fan_nomi_fuzzy';
+                            $matchedHemisSubjectId = $hemisRecords[0]->subject_id;
+                            $matchedHemisSubjectName = $hemisRecords[0]->subject_name;
                             break;
                         }
                     }
                 }
             }
+
+            // HEMIS da shu talaba uchun mavjud fanlarni yig'ish (debug uchun)
+            $hemsiAvailableSubjects = [];
+            if (isset($attByName[$exc->student_hemis_id])) {
+                foreach ($attByName[$exc->student_hemis_id] as $attName => $recs) {
+                    $hemsiAvailableSubjects[] = $recs[0]->subject_id . ': ' . $recs[0]->subject_name;
+                }
+            }
+
+            // Debug log yozuv
+            $debugLog[] = [
+                'student_hemis_id' => $exc->student_hemis_id,
+                'full_name' => $exc->full_name ?? '-',
+                'group_name' => $exc->group_name ?? '-',
+                'ariza_subject_name' => $exc->subject_name ?? '-',
+                'ariza_subject_id' => $exc->subject_id,
+                'match_method' => $matchMethod,
+                'hemis_subject_id' => $matchedHemisSubjectId,
+                'hemis_subject_name' => $matchedHemisSubjectName,
+                'found' => !empty($hemisRecords),
+                'hemis_available' => implode(' | ', array_slice($hemsiAvailableSubjects, 0, 15)),
+            ];
 
             // Ariza sanalar oralig'idagi HEMIS yozuvlarini filtrlash
             $matchingRecords = [];
@@ -4030,7 +4068,7 @@ class ReportController extends Controller
             'last_page' => (int) ceil($total / max($perPage, 1)),
             'match_count' => $matchCount,
             'mismatch_count' => $mismatchCount,
-            'debug_log' => [],
+            'debug_log' => $debugLog,
         ]);
     }
 

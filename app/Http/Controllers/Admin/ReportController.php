@@ -3592,6 +3592,12 @@ class ReportController extends Controller
         }
         $currentSemesterFilter = $request->get('current_semester', '1') == '1';
 
+        // Group PK dan group_hemis_id ga convert
+        $groupHemisId = null;
+        if ($request->filled('group')) {
+            $groupHemisId = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+        }
+
         // 1-QADAM: HEMIS dagi sababli va sababsiz davomatlarni olish
         $attQuery = DB::table('attendances as a')
             ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
@@ -3618,8 +3624,14 @@ class ReportController extends Controller
         if ($request->filled('level_code')) {
             $attQuery->where('s.level_code', $request->level_code);
         }
-        if ($request->filled('group')) {
-            $attQuery->where('s.group_id', $request->group);
+        if ($groupHemisId) {
+            $attQuery->where('s.group_id', $groupHemisId);
+        }
+        if ($request->filled('semester_code')) {
+            $attQuery->where('a.semester_code', $request->semester_code);
+        }
+        if ($request->filled('student_name')) {
+            $attQuery->where('s.full_name', 'LIKE', '%' . $request->student_name . '%');
         }
         if ($currentSemesterFilter) {
             $attQuery->whereColumn('a.semester_code', 's.semester_code')
@@ -3712,8 +3724,11 @@ class ReportController extends Controller
         if ($request->filled('level_code')) {
             $allApprovedWithSubjectQuery->where('s.level_code', $request->level_code);
         }
-        if ($request->filled('group')) {
-            $allApprovedWithSubjectQuery->where('s.group_id', $request->group);
+        if ($groupHemisId) {
+            $allApprovedWithSubjectQuery->where('s.group_id', $groupHemisId);
+        }
+        if ($request->filled('student_name')) {
+            $allApprovedWithSubjectQuery->where('s.full_name', 'LIKE', '%' . $request->student_name . '%');
         }
 
         $allApprovedWithSubject = $allApprovedWithSubjectQuery->select(
@@ -3776,8 +3791,11 @@ class ReportController extends Controller
         if ($request->filled('level_code')) {
             $allApprovedGeneralQuery->where('s.level_code', $request->level_code);
         }
-        if ($request->filled('group')) {
-            $allApprovedGeneralQuery->where('s.group_id', $request->group);
+        if ($groupHemisId) {
+            $allApprovedGeneralQuery->where('s.group_id', $groupHemisId);
+        }
+        if ($request->filled('student_name')) {
+            $allApprovedGeneralQuery->where('s.full_name', 'LIKE', '%' . $request->student_name . '%');
         }
 
         $allApprovedGeneral = $allApprovedGeneralQuery->select(
@@ -4125,8 +4143,11 @@ class ReportController extends Controller
                 $debugMakeupQuery->where('s.department_id', $faculty->department_hemis_id);
             }
         }
-        if ($request->filled('group')) {
-            $debugMakeupQuery->where('s.group_id', $request->group);
+        if ($groupHemisId) {
+            $debugMakeupQuery->where('s.group_id', $groupHemisId);
+        }
+        if ($request->filled('student_name')) {
+            $debugMakeupQuery->where('s.full_name', 'LIKE', '%' . $request->student_name . '%');
         }
 
         $allMakeupRows = $debugMakeupQuery->select(

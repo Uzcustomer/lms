@@ -877,10 +877,12 @@
             },
             miniPrevMonth(index) {
                 const item = this.assessments[index];
-                const today = new Date();
-                const cur = item.cal_year * 12 + item.cal_month;
-                const min = today.getFullYear() * 12 + today.getMonth();
-                if (cur <= min) return;
+                if (!window._isImpersonating) {
+                    const today = new Date();
+                    const cur = item.cal_year * 12 + item.cal_month;
+                    const min = today.getFullYear() * 12 + today.getMonth();
+                    if (cur <= min) return;
+                }
                 if (item.cal_month === 0) { item.cal_month = 11; item.cal_year--; }
                 else item.cal_month--;
             },

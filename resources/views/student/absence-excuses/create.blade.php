@@ -683,7 +683,7 @@
                     const dt = new Date(this.calYear, this.calMonth, d);
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
-                    const isFuture = dt > today;
+                    const isFuture = window._isImpersonating ? false : dt > today;
 
                     // Max_days cheklovi: end tanlayotganda start+maxDays dan keyingi kunlar disabled
                     let beyondMax = false;

@@ -57,8 +57,21 @@ class AbsenceExcuseController extends Controller
         // 1. Sababli kunlar oralig'idagi nazoratlar
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
 
+        // Qoldirilgan kunlardagi fanlar ro'yxati (subject_name bo'yicha)
+        // Nazoratlar + shu oraliqda darsi bo'lgan barcha fanlar
+        $scheduledSubjectNames = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->pluck('subject_name')
+            ->unique()
+            ->toArray();
+        $missedSubjectNames = array_unique(array_merge(
+            $missedAssessments->pluck('subject_name')->unique()->toArray(),
+            $scheduledSubjectNames
+        ));
+
         // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan nazoratlar
-        // (sababli kunlar bilan qayta topshirish orasidagi "bo'shliq"dagi nazoratlar ham topiladi)
+        // Faqat qoldirilgan fanlardagi testlar ko'rsatiladi
         $totalDays = $this->countNonSundays($startDate, $endDate);
         if ($totalDays > 0) {
             $makeupEnd = $this->addNonSundayDays(Carbon::today()->copy(), $totalDays);
@@ -71,6 +84,10 @@ class AbsenceExcuseController extends Controller
                 $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
 
                 foreach ($makeupAssessments as $ma) {
+                    // Faqat qoldirilgan kunlardagi fanlarga tegishli testlarni qo'shish
+                    if (!in_array($ma['subject_name'], $missedSubjectNames)) {
+                        continue;
+                    }
                     $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
                     if (!in_array($key, $existingKeys)) {
                         $ma['is_makeup_period'] = true;

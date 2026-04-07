@@ -1440,7 +1440,9 @@ class StudentController extends Controller
             'is_graduate' => $student->is_graduate,
         ];
 
-        return view('student.profile', compact('profileData'));
+        $botUsername = config('services.telegram.bot_username', '');
+
+        return view('student.profile', compact('profileData', 'student', 'botUsername'));
     }
 
     public function updateContact(Request $request)
@@ -1455,10 +1457,23 @@ class StudentController extends Controller
             'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (5-32 belgi)',
         ]);
 
-        $student->update([
-            'phone' => $request->phone,
-            'telegram_username' => $request->telegram_username,
-        ]);
+        $student->phone = $request->phone;
+
+        // Telegram username o'zgarganda — yangi verification code generatsiya qilish
+        $newTelegram = $request->telegram_username;
+        if ($newTelegram && $newTelegram !== $student->telegram_username) {
+            $student->telegram_username = $newTelegram;
+            $student->telegram_verification_code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
+            $student->telegram_verified_at = null;
+            $student->telegram_chat_id = null;
+        } elseif (!$newTelegram) {
+            $student->telegram_username = null;
+            $student->telegram_verification_code = null;
+            $student->telegram_verified_at = null;
+            $student->telegram_chat_id = null;
+        }
+
+        $student->save();
 
         return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli saqlandi');
     }

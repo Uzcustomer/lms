@@ -35,6 +35,7 @@
                                                 @foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach
                                             </div>
                                         @endif
+
                                         <form method="POST" action="{{ route('student.profile.update-contact') }}">
                                             @csrf
                                             <div class="space-y-3">
@@ -45,7 +46,7 @@
                                                            class="mt-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
                                                 </div>
                                                 <div>
-                                                    <label class="text-sm font-medium text-gray-600">{{ __('Telegram ID') }}</label>
+                                                    <label class="text-sm font-medium text-gray-600">{{ __('Telegram username') }}</label>
                                                     <input type="text" name="telegram_username" value="{{ old('telegram_username', $profileData['telegram_username']) }}"
                                                            placeholder="@username"
                                                            class="mt-1 w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
@@ -56,6 +57,42 @@
                                                 </button>
                                             </div>
                                         </form>
+
+                                        {{-- Telegram tasdiqlash bo'limi --}}
+                                        @if($student->telegram_username && $student->telegram_verification_code && !$student->telegram_verified_at)
+                                            <div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                                <p class="text-xs font-semibold text-blue-800 mb-2">{{ __('Telegram tasdiqlash') }}</p>
+                                                <p class="text-xs text-gray-500 mb-1">{{ __('Username:') }} <strong>{{ $student->telegram_username }}</strong></p>
+                                                <p class="text-xs text-gray-600 mb-1">{{ __('Tasdiqlash kodingiz:') }}</p>
+                                                <div class="flex items-center justify-center py-2 px-4 bg-white rounded-md border border-dashed border-gray-300 mb-2">
+                                                    <span class="text-2xl font-mono font-bold tracking-widest text-blue-700">{{ $student->telegram_verification_code }}</span>
+                                                </div>
+                                                <div class="text-xs text-gray-600 mb-2">
+                                                    <ol class="list-decimal list-inside space-y-1 text-gray-500">
+                                                        <li>{{ __('Quyidagi tugmani bosing') }}</li>
+                                                        <li>{{ __('Botga tasdiqlash kodini yuboring:') }} <strong>{{ $student->telegram_verification_code }}</strong></li>
+                                                    </ol>
+                                                </div>
+                                                @if($botUsername)
+                                                    <a href="https://t.me/{{ $botUsername }}?start={{ $student->telegram_verification_code }}"
+                                                       target="_blank"
+                                                       class="w-full inline-flex justify-center items-center px-3 py-2.5 bg-[#0088cc] text-white text-sm font-medium rounded-lg hover:bg-[#007ab8] transition">
+                                                        <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                                                        </svg>
+                                                        {{ __('Telegram botni ochish') }}
+                                                    </a>
+                                                @endif
+                                                <div id="profile-tg-status" class="hidden mt-2 p-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium text-center">
+                                                    {{ __('Telegram tasdiqlandi!') }}
+                                                </div>
+                                            </div>
+                                        @elseif($student->telegram_verified_at)
+                                            <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                                                <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                                <span class="text-sm font-medium text-green-700">{{ __('Telegram tasdiqlangan') }}: {{ $student->telegram_username }}</span>
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                                 <div class="bg-gray-50 p-4 rounded-lg">
@@ -105,4 +142,21 @@
             </div>
         </div>
     </div>
+
+    @if($student->telegram_username && $student->telegram_verification_code && !$student->telegram_verified_at)
+    <script>
+        setInterval(function() {
+            fetch('{{ route("student.verify-telegram.check") }}', {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.verified) {
+                    document.getElementById('profile-tg-status')?.classList.remove('hidden');
+                    setTimeout(() => location.reload(), 1500);
+                }
+            }).catch(() => {});
+        }, 3000);
+    </script>
+    @endif
 </x-student-app-layout>

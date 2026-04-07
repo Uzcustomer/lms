@@ -3579,6 +3579,7 @@ class ReportController extends Controller
      */
     public function sababliCheckData(Request $request)
     {
+        try {
         // Filtrlar
         $groupIds = [];
         if ($request->filled('education_type')) {
@@ -3592,9 +3593,45 @@ class ReportController extends Controller
         }
         $currentSemesterFilter = $request->get('current_semester', '1') == '1';
 
-        // 1-QADAM: HEMIS dagi sababli va sababsiz davomatlarni olish
-        $attQuery = DB::table('attendances as a')
-            ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
+        // Group PK dan group_hemis_id ga convert
+        $groupHemisId = null;
+        if ($request->filled('group')) {
+            $groupHemisId = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+        }
+
+        // ========================================
+        // 1-QADAM: Tasdiqlangan arizalarni olish (asosiy manba)
+        // ========================================
+
+        // Umumiy filtr funksiyasi
+        $applyFilters = function ($query, $studentAlias = 's') use ($request, $groupIds, $groupHemisId) {
+            if ($request->filled('education_type')) {
+                $query->whereIn("{$studentAlias}.group_id", $groupIds);
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $query->where("{$studentAlias}.department_id", $faculty->department_hemis_id);
+                }
+            }
+            if ($request->filled('specialty')) {
+                $query->where("{$studentAlias}.specialty_id", $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $query->where("{$studentAlias}.level_code", $request->level_code);
+            }
+            if ($groupHemisId) {
+                $query->where("{$studentAlias}.group_id", $groupHemisId);
+            }
+            if ($request->filled('student_name')) {
+                $query->where("{$studentAlias}.full_name", 'LIKE', '%' . $request->student_name . '%');
+            }
+        };
+
+        // A) Fanga bog'langan arizalar (makeups orqali)
+        $excWithSubjectQuery = DB::table('absence_excuses as ae')
+            ->join('students as s', 's.hemis_id', '=', 'ae.student_hemis_id')
+            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
             ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
@@ -4128,12 +4165,18 @@ class ReportController extends Controller
             'match_count' => $matchCount,
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
-            'filter_debug' => array_merge($filterDebug, [
-                'excWithSubject_count' => count($excWithSubject),
-                'excGeneral_count' => count($excGeneral),
-                'total_results' => $total,
-            ]),
         ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'data' => [],
+                'total' => 0,
+                'match_count' => 0,
+                'mismatch_count' => 0,
+                'debug_log' => [],
+                'error' => $e->getMessage(),
+                'error_line' => $e->getFile() . ':' . $e->getLine(),
+            ], 200);
+        }
     }
 
     /**

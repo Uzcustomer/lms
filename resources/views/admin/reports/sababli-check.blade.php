@@ -265,6 +265,14 @@
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
+                    if (res.error) {
+                        allData = [];
+                        $('#empty-state').show().find('p:first').html('Xatolik: ' + res.error + '<br><small style="color:#94a3b8;">' + (res.error_line || '') + '</small>');
+                        $('#table-area').hide();
+                        $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
+                        return;
+                    }
+
                     if (!res.data || res.data.length === 0) {
                         allData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
@@ -275,7 +283,6 @@
 
                     allData = res.data;
                     lastResponse = res;
-                    if (res.filter_debug) console.log('FILTER DEBUG:', res.filter_debug, 'Params sent:', params);
                     $('#total-badge').text('Jami: ' + res.total + ' ta yozuv');
                     $('#match-badge').text('Mos: ' + (res.match_count || 0));
                     $('#mismatch-badge').text('Mos emas: ' + (res.mismatch_count || 0));

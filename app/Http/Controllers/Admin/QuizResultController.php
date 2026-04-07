@@ -1837,6 +1837,93 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Tanlangan natijalar uchun student_grades da mavjud OSKI/Test baholarini solishtirish.
+     */
+    public function compareGrades(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+        ]);
+
+        $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $comparisons = [];
+
+        foreach ($results as $result) {
+            $student = Student::where('hemis_id', $result->student_id)
+                ->orWhere('student_id_number', $result->student_id)
+                ->first();
+
+            if (!$student) continue;
+
+            // Quiz turini aniqlash
+            $trainingTypeCode = null;
+            $typeName = '-';
+            if (in_array($result->quiz_type, $oskiTypes)) {
+                $trainingTypeCode = 101;
+                $typeName = 'OSKI';
+            } elseif (in_array($result->quiz_type, $testTypes)) {
+                $trainingTypeCode = 102;
+                $typeName = 'Test';
+            }
+            if (!$trainingTypeCode) continue;
+
+            // Mavjud baholarni topish
+            $existingGrades = StudentGrade::where('student_hemis_id', $student->hemis_id)
+                ->where('subject_id', $result->fan_id)
+                ->where('training_type_code', $trainingTypeCode)
+                ->get();
+
+            if ($existingGrades->isEmpty()) continue;
+
+            foreach ($existingGrades as $eg) {
+                $comparisons[] = [
+                    'quiz_result_id' => $result->id,
+                    'student_grade_id' => $eg->id,
+                    'student_id' => $result->student_id,
+                    'student_name' => $student->full_name ?? $result->student_name,
+                    'fan_name' => $result->fan_name,
+                    'fan_id' => $result->fan_id,
+                    'type' => $typeName,
+                    'moodle_grade' => $result->grade,
+                    'existing_grade' => $eg->grade,
+                    'existing_reason' => $eg->reason,
+                    'existing_date' => $eg->lesson_date ? \Carbon\Carbon::parse($eg->lesson_date)->format('d.m.Y') : '',
+                    'quiz_result_id_ref' => $eg->quiz_result_id,
+                ];
+            }
+        }
+
+        return response()->json([
+            'comparisons' => $comparisons,
+            'total' => count($comparisons),
+        ]);
+    }
+
+    /**
+     * Bitta student_grade yozuvini o'chirish (ID bo'yicha).
+     */
+    public function deleteStudentGrade(Request $request)
+    {
+        $request->validate([
+            'student_grade_id' => 'required|integer',
+        ]);
+
+        $grade = StudentGrade::find($request->student_grade_id);
+        if (!$grade) {
+            return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
+        }
+
+        $grade->delete();
+
+        return response()->json(['success' => true, 'message' => 'Baho o\'chirildi']);
+    }
+
+    /**
      * Bitta quiz natijani o'chirish (is_active = 0).
      */
     public function destroy($id)

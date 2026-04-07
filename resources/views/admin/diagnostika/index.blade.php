@@ -43,6 +43,19 @@
         .btn-delete-grades { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(220,38,38,0.3); height: 32px; white-space: nowrap; }
         .btn-delete-grades:hover:not(:disabled) { background: linear-gradient(135deg, #b91c1c, #dc2626); transform: translateY(-1px); }
         .btn-delete-grades:disabled { cursor: not-allowed; opacity: 0.4; }
+        .btn-compare { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: linear-gradient(135deg, #0891b2, #06b6d4); color: #fff; border: none; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(8,145,178,0.3); height: 32px; white-space: nowrap; }
+        .btn-compare:hover:not(:disabled) { background: linear-gradient(135deg, #0e7490, #0891b2); transform: translateY(-1px); }
+        .btn-compare:disabled { cursor: not-allowed; opacity: 0.4; }
+
+        .compare-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .compare-modal { background: #fff; border-radius: 12px; max-width: 800px; width: 95%; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .compare-header { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
+        .compare-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+        .compare-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .compare-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-weight: 700; color: #334155; border-bottom: 2px solid #e2e8f0; }
+        .compare-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+        .compare-table tr:hover { background: #f8fafc; }
+        .compare-empty { text-align: center; padding: 40px; color: #94a3b8; }
 
         /* Conflict modal */
         .conflict-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
@@ -206,6 +219,11 @@
                             Qayta yuklash
                         </button>
 
+                        <button type="button" id="btn-compare" class="btn-compare" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                            Solishtirish
+                        </button>
+
                         <button type="button" id="btn-delete-grades" class="btn-delete-grades" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                             Bahoni o'chirish
@@ -357,6 +375,8 @@
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
         var reuploadUrl = '{{ route($routePrefix . ".quiz-results.reupload") }}';
         var deleteGradesUrl = '{{ route($routePrefix . ".quiz-results.delete-grades") }}';
+        var compareGradesUrl = '{{ route($routePrefix . ".quiz-results.compare-grades") }}';
+        var deleteStudentGradeUrl = '{{ route($routePrefix . ".quiz-results.delete-student-grade") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var triggerCronUrl = '{{ route($routePrefix . ".quiz-results.trigger-cron") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
@@ -661,6 +681,7 @@
             });
             $('#btn-reupload').prop('disabled', !hasUploaded);
             $('#btn-delete-grades').prop('disabled', !hasUploaded);
+            $('#btn-compare').prop('disabled', count === 0);
         }
 
         // ========== EXCEL (Quiz natijalar) ==========
@@ -1073,6 +1094,103 @@
                 var ids = window._conflictIds;
                 closeConflictModal();
                 sendDeleteRequest(ids, selected);
+            };
+
+            // ========== SOLISHTIRISH ==========
+            $('#btn-compare').on('click', function() {
+                var ids = getSelectedIds();
+                if (ids.length === 0) return;
+
+                var btn = $(this);
+                btn.prop('disabled', true);
+                var origHtml = btn.html();
+                btn.html('<span class="spinner-sm"></span> Tekshirilmoqda...');
+
+                $.ajax({
+                    url: compareGradesUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ids: ids }),
+                    success: function(data) {
+                        showCompareModal(data.comparisons || []);
+                    },
+                    error: function(xhr) {
+                        alert(xhr.responseJSON?.message || 'Server xatosi');
+                    },
+                    complete: function() { btn.prop('disabled', false).html(origHtml); }
+                });
+            });
+
+            function showCompareModal(comparisons) {
+                var html = '<div class="compare-overlay" id="compare-overlay">';
+                html += '<div class="compare-modal">';
+                html += '<div class="compare-header">';
+                html += '<div style="font-size:15px;font-weight:700;color:#0f172a;">Mavjud baholar bilan solishtirish <span style="font-size:12px;font-weight:500;color:#64748b;">(' + comparisons.length + ' ta topildi)</span></div>';
+                html += '<button onclick="closeCompareModal()" style="background:none;border:none;cursor:pointer;font-size:20px;color:#94a3b8;">&times;</button>';
+                html += '</div>';
+                html += '<div class="compare-body">';
+
+                if (comparisons.length === 0) {
+                    html += '<div class="compare-empty">Tanlangan natijalar uchun sistemada mavjud OSKI/Test bahosi topilmadi.</div>';
+                } else {
+                    html += '<table class="compare-table">';
+                    html += '<thead><tr>';
+                    html += '<th>Talaba</th><th>Fan</th><th>Turi</th>';
+                    html += '<th style="color:#059669;">Moodle baho</th>';
+                    html += '<th style="color:#dc2626;">Sistemadagi baho</th>';
+                    html += '<th>Manba</th><th>Sana</th><th>Amal</th>';
+                    html += '</tr></thead><tbody>';
+
+                    for (var i = 0; i < comparisons.length; i++) {
+                        var c = comparisons[i];
+                        var reasonLabel = c.existing_reason === 'quiz_result' ? 'Moodle' : (c.existing_reason || 'Noma\'lum');
+                        html += '<tr id="cmp-row-' + c.student_grade_id + '">';
+                        html += '<td style="font-weight:600;">' + esc(c.student_name) + '<br><span style="font-size:10px;color:#94a3b8;">' + esc(c.student_id) + '</span></td>';
+                        html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span></td>';
+                        html += '<td><span class="badge ' + (c.type === 'Test' ? 'badge-grade' : 'badge-oski') + '">' + esc(c.type) + '</span></td>';
+                        html += '<td style="font-weight:700;color:#059669;font-size:14px;">' + esc(c.moodle_grade) + '</td>';
+                        html += '<td style="font-weight:700;color:#dc2626;font-size:14px;">' + esc(c.existing_grade) + '</td>';
+                        html += '<td><span style="font-size:11px;padding:2px 6px;border-radius:4px;background:' + (reasonLabel === 'Moodle' ? '#dbeafe;color:#1e40af' : '#fef3c7;color:#92400e') + ';">' + esc(reasonLabel) + '</span></td>';
+                        html += '<td style="font-size:11px;color:#64748b;">' + esc(c.existing_date) + '</td>';
+                        html += '<td><button onclick="deleteCompareGrade(' + c.student_grade_id + ')" class="btn-delete-grades" style="height:26px;font-size:10px;padding:3px 8px;">O\'chirish</button></td>';
+                        html += '</tr>';
+                    }
+                    html += '</tbody></table>';
+                }
+
+                html += '</div></div></div>';
+                $('body').append(html);
+            }
+
+            window.closeCompareModal = function() {
+                $('#compare-overlay').remove();
+            };
+
+            window.deleteCompareGrade = function(gradeId) {
+                if (!confirm('Bu bahoni sistemadan o\'chirishni tasdiqlaysizmi?')) return;
+
+                var btn = $('#cmp-row-' + gradeId + ' button');
+                btn.prop('disabled', true).text('...');
+
+                $.ajax({
+                    url: deleteStudentGradeUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ student_grade_id: gradeId }),
+                    success: function(data) {
+                        if (data.success) {
+                            $('#cmp-row-' + gradeId).css({ background: '#fef2f2', opacity: 0.5 });
+                            btn.text('O\'chirildi').css({ background: '#9ca3af', cursor: 'default' });
+                        } else {
+                            alert(data.message || 'Xatolik');
+                            btn.prop('disabled', false).text('O\'chirish');
+                        }
+                    },
+                    error: function() {
+                        alert('Server xatosi');
+                        btn.prop('disabled', false).text('O\'chirish');
+                    }
+                });
             };
 
         });

@@ -3692,11 +3692,17 @@ class ReportController extends Controller
         $attMap = [];
         $attByName = [];
         if (!empty($allStudentIds)) {
-            $attRows = DB::table('attendances as a')
+            $attQuery = DB::table('attendances as a')
                 ->whereIn('a.student_hemis_id', $allStudentIds)
                 ->where(function ($q) {
                     $q->where('a.absent_on', '>', 0)->orWhere('a.absent_off', '>', 0);
-                })
+                });
+
+            if ($request->filled('semester_code')) {
+                $attQuery->where('a.semester_code', $request->semester_code);
+            }
+
+            $attRows = $attQuery
                 ->select('a.student_hemis_id', 'a.subject_id', 'a.subject_name',
                     'a.lesson_date', 'a.lesson_pair_start_time', 'a.lesson_pair_end_time',
                     'a.absent_on', 'a.absent_off', 'a.semester_code')

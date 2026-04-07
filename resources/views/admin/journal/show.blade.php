@@ -96,6 +96,16 @@
         .student-export-btn:hover { background: #15803d; }
         .student-name-cell:hover .student-export-btn { display: inline-flex; }
 
+        .mt-file-delete-btn {
+            display: none; position: absolute; right: -2px; top: -2px;
+            width: 16px; height: 16px; border-radius: 50%; border: none; cursor: pointer;
+            background: #dc2626; color: #fff; font-size: 10px; line-height: 1;
+            align-items: center; justify-content: center; padding: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 5;
+        }
+        .mt-file-delete-btn:hover { background: #b91c1c; }
+        .mt-file-cell:hover .mt-file-delete-btn { display: inline-flex; }
+
         .journal-sidebar {
             width: 280px;
             flex-shrink: 0;
@@ -1955,7 +1965,7 @@
                                             <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(auth()->user()?->hasAnyRole(['admin', 'superadmin']))<button type="button" class="student-export-btn" onclick="exportStudentGrades('{{ $student->hemis_id }}')" title="Excel yuklab olish"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button>@endif</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
-                                                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                                                    <div class="mt-file-cell" style="display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative;">
                                                         <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
                                                            style="color: #2563eb; font-size: 12px; text-decoration: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;"
                                                            title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
@@ -1966,10 +1976,10 @@
                                                         @elseif($urgency === 'danger')
                                                             <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
                                                         @endif
-                                                        @if($isAdminMt)
+                                                        @if($isSuperAdminMt)
                                                             <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"
-                                                                style="font-size: 10px; color: #dc2626; background: none; border: 1px solid #fca5a5; border-radius: 4px; padding: 1px 6px; cursor: pointer; margin-top: 2px;"
-                                                                title="Faylni o'chirish">&#10005; O'chirish</button>
+                                                                class="mt-file-delete-btn"
+                                                                title="Faylni o'chirish">&#10005;</button>
                                                         @endif
                                                     </div>
                                                 @else

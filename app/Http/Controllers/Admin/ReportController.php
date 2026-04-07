@@ -3731,12 +3731,16 @@ class ReportController extends Controller
                 'a.semester_code'
             )->get();
 
+            // Indekslash: subject_id bo'yicha va subject_name bo'yicha
+            $attByName = []; // student_hemis_id => [{subject_name => ..., subject_id => ...}]
             foreach ($attRows as $att) {
-                $dateStr = substr($att->lesson_date, 0, 10);
                 $key = $att->student_hemis_id . '|' . $att->subject_id;
                 $attMap[$key][] = $att;
                 // Umumiy indeks (faqat talaba bo'yicha — umumiy arizalar uchun)
                 $attMap['general|' . $att->student_hemis_id][] = $att;
+                // Nom bo'yicha indeks (fan nomi solishtiruv uchun)
+                $normalizedName = mb_strtolower(trim($att->subject_name));
+                $attByName[$att->student_hemis_id][$normalizedName][] = $att;
             }
         }
 
@@ -3757,8 +3761,28 @@ class ReportController extends Controller
             $endDate = substr($exc->end_date, 0, 10);
 
             // HEMIS da shu talaba + fan uchun davomatni olish
+            // 1) subject_id bo'yicha qidirish
             $attKey = $exc->student_hemis_id . '|' . $exc->subject_id;
             $hemisRecords = $attMap[$attKey] ?? [];
+
+            // 2) Topilmasa — subject_name bo'yicha qidirish (aniq va fuzzy)
+            if (empty($hemisRecords) && !empty($exc->subject_name) && isset($attByName[$exc->student_hemis_id])) {
+                $excSubjectNorm = mb_strtolower(trim($exc->subject_name));
+                $studentAttByName = $attByName[$exc->student_hemis_id];
+
+                // Aniq nom moslik
+                if (isset($studentAttByName[$excSubjectNorm])) {
+                    $hemisRecords = $studentAttByName[$excSubjectNorm];
+                } else {
+                    // Fuzzy: bitta ikkinchisining ichida bormi
+                    foreach ($studentAttByName as $attName => $attRecords) {
+                        if (str_contains($attName, $excSubjectNorm) || str_contains($excSubjectNorm, $attName)) {
+                            $hemisRecords = $attRecords;
+                            break;
+                        }
+                    }
+                }
+            }
 
             // Ariza sanalar oralig'idagi HEMIS yozuvlarini filtrlash
             $matchingRecords = [];

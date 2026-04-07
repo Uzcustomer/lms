@@ -1946,11 +1946,23 @@
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
                                                     <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                                                        <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
-                                                           style="color: #2563eb; font-size: 12px; text-decoration: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;"
-                                                           title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
-                                                            {{ Str::limit($submission->file_original_name, 20) }}
-                                                        </a>
+                                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                                            <a href="{{ route('admin.journal.download-submission', $submission->id) }}"
+                                                               style="color: #2563eb; font-size: 12px; text-decoration: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block;"
+                                                               title="{{ $student->full_name }} {{ $subject->subject_name }}_MT">
+                                                                {{ Str::limit($submission->file_original_name, 20) }}
+                                                            </a>
+                                                            @if($isSuperAdminMt)
+                                                                <button type="button"
+                                                                    onclick="deleteMtSubmission('{{ $submission->id }}', '{{ $student->hemis_id }}', '{{ addslashes($student->full_name) }}')"
+                                                                    style="background: none; border: none; cursor: pointer; padding: 1px 3px; font-size: 13px; color: #ef4444; line-height: 1; border-radius: 3px; transition: background 0.15s;"
+                                                                    onmouseover="this.style.background='#fee2e2'"
+                                                                    onmouseout="this.style.background='none'"
+                                                                    title="MT faylni o'chirish">
+                                                                    &#10005;
+                                                                </button>
+                                                            @endif
+                                                        </div>
                                                         @if($urgency === 'warning')
                                                             <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $daysSince }} kun o'tdi</span>
                                                         @elseif($urgency === 'danger')
@@ -2897,6 +2909,31 @@
             } else {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fee2e2;color:#b91c1c;border-radius:6px;">Limit tugagan</span>';
             }
+        }
+
+        function deleteMtSubmission(submissionId, studentHemisId, studentName) {
+            if (!confirm(studentName + ' ning MT faylini o\'chirmoqchimisiz?\nTalaba qayta yuklay oladi.')) return;
+
+            fetch('{{ url("admin/journal/delete-mt-submission") }}/' + submissionId, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': mtGradeConfig.csrfToken,
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(({ ok, data }) => {
+                if (data.success) {
+                    const fileCell = document.getElementById('mt-file-' + studentHemisId);
+                    if (fileCell) {
+                        fileCell.innerHTML = '<span style="color:#f87171;font-size:12px;font-weight:500;">Yuklanmagan</span>';
+                    }
+                    alert(data.message);
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                }
+            })
+            .catch(() => alert('Tarmoq xatosi'));
         }
 
         function saveMtGrade(studentHemisId, isRegrade, adminEdit) {

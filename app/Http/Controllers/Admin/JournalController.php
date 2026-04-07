@@ -2515,6 +2515,34 @@ class JournalController extends Controller
     }
 
     /**
+     * Delete MT submission (superadmin only) — allows student to re-upload
+     */
+    public function deleteMtSubmission($submissionId)
+    {
+        if (!auth()->user()?->hasRole('superadmin')) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $submission = DB::table('independent_submissions')->where('id', $submissionId)->first();
+        if (!$submission) {
+            return response()->json(['success' => false, 'message' => 'Topilmadi'], 404);
+        }
+
+        // Faylni diskdan o'chirish
+        if ($submission->file_path) {
+            $filePath = storage_path('app/public/' . $submission->file_path);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+        }
+
+        // DB dan o'chirish
+        DB::table('independent_submissions')->where('id', $submissionId)->delete();
+
+        return response()->json(['success' => true, 'message' => 'MT fayl muvaffaqiyatli o\'chirildi']);
+    }
+
+    /**
      * Download history file with custom name
      */
     public function downloadHistoryFile($historyId)

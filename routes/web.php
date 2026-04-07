@@ -280,6 +280,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-sidebar-options', [JournalController::class, 'getSidebarOptions'])->name('get-sidebar-options');
             Route::get('/get-topics', [JournalController::class, 'getTopics'])->name('get-topics');
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
+            Route::delete('/delete-mt-submission/{submissionId}', [JournalController::class, 'deleteMtSubmission'])->name('delete-mt-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');

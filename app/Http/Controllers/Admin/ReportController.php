@@ -3597,6 +3597,15 @@ class ReportController extends Controller
             $groupHemisId = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
         }
 
+        // Debug: filtrlarni log qilish
+        $filterDebug = [
+            'group_param' => $request->get('group'),
+            'group_hemis_id' => $groupHemisId,
+            'student_name' => $request->get('student_name'),
+            'education_type' => $request->get('education_type'),
+            'faculty' => $request->get('faculty'),
+        ];
+
         // ========================================
         // 1-QADAM: Tasdiqlangan arizalarni olish (asosiy manba)
         // ========================================
@@ -4093,6 +4102,7 @@ class ReportController extends Controller
             'match_count' => $matchCount,
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
+            'filter_debug' => $filterDebug,
         ]);
     }
 

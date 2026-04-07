@@ -54,14 +54,6 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 140px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Semestr</label>
-                            <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="flex: 1; min-width: 220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Talaba FISH</label>
-                            <input type="text" id="student_name" placeholder="Ism yoki familya..." style="width:100%;height:36px;padding:0 10px;font-size:0.8rem;font-weight:500;border:1px solid #cbd5e1;border-radius:8px;outline:none;color:#1e293b;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.04);transition:all 0.2s;" onfocus="this.style.borderColor='#2b5ea7';this.style.boxShadow='0 0 0 2px rgba(43,94,167,0.1)'" onblur="this.style.borderColor='#cbd5e1';this.style.boxShadow='0 1px 2px rgba(0,0,0,0.04)'">
-                        </div>
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Holat filtri</label>
                             <select id="filter_status" class="select2" style="width: 100%;">
@@ -70,8 +62,6 @@
                                 <option value="match">Faqat moslar</option>
                             </select>
                         </div>
-                    </div>
-                    <div class="filter-row">
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
                             <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
@@ -141,39 +131,35 @@
                         </div>
                         <div id="pagination-area" style="padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;"></div>
 
-                        <!-- Debug Log: Fan solishtiruv natijasi -->
+                        <!-- Debug Log -->
                         <div id="debug-log-area" style="display:none;">
-                            <div style="border-top:2px solid #6366f1;background:#eef2ff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                                <span style="font-size:13px;font-weight:700;color:#4338ca;cursor:pointer;" onclick="$('#debug-log-table').toggle();$(this).find('.debug-arrow').toggleClass('open');">
-                                    <span class="debug-arrow open" style="display:inline-block;transition:transform 0.2s;">&#9654;</span>
-                                    Fan solishtiruv LOG
+                            <div style="border-top:2px solid #fbbf24;background:#fffbeb;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                <span style="font-size:13px;font-weight:700;color:#92400e;cursor:pointer;" onclick="$('#debug-log-table').toggle();$(this).find('.debug-arrow').toggleClass('open');">
+                                    <span class="debug-arrow" style="display:inline-block;transition:transform 0.2s;">&#9654;</span>
+                                    DEBUG LOG — Topilmagan / Muammoli arizalar
                                     (<span id="debug-log-count">0</span> ta)
-                                    — <span style="color:#16a34a;" id="debug-found-count">0</span> topildi,
-                                    <span style="color:#dc2626;" id="debug-notfound-count">0</span> topilmadi
+                                    <span style="font-size:11px;color:#b45309;margin-left:8px;">(bosing ochish/yopish)</span>
                                 </span>
                                 <div style="position:relative;">
-                                    <input type="text" id="debug-search" placeholder="hemis_id, ism, fan..." style="padding:5px 10px 5px 28px;border:1px solid #a5b4fc;border-radius:6px;font-size:11.5px;width:220px;outline:none;background:#fff;" oninput="filterDebugLog()">
-                                    <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:#6366f1;pointer-events:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                                    <span id="debug-search-count" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:#4338ca;display:none;"></span>
+                                    <input type="text" id="debug-search" placeholder="hemis_id, ism, fan..." style="padding:5px 10px 5px 28px;border:1px solid #fbbf24;border-radius:6px;font-size:11.5px;width:220px;outline:none;background:#fff;" oninput="filterDebugLog()">
+                                    <svg style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;color:#b45309;pointer-events:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    <span id="debug-search-count" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:#92400e;display:none;"></span>
                                 </div>
                             </div>
-                            <div id="debug-log-table" style="max-height:500px;overflow:auto;">
+                            <div id="debug-log-table" style="display:none;max-height:400px;overflow:auto;">
                                 <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
-                                    <thead style="background:#e0e7ff;position:sticky;top:0;z-index:1;">
+                                    <thead style="background:#fef3c7;position:sticky;top:0;z-index:1;">
                                         <tr>
-                                            <th class="dlog-th">#</th>
-                                            <th class="dlog-th">Holat</th>
-                                            <th class="dlog-th">Talaba</th>
-                                            <th class="dlog-th">Guruh</th>
-                                            <th class="dlog-th">Ariza fan nomi</th>
-                                            <th class="dlog-th" style="text-align:center;">Ariza fan ID</th>
-                                            <th class="dlog-th">Qanday topildi</th>
-                                            <th class="dlog-th">HEMIS fan nomi</th>
-                                            <th class="dlog-th" style="text-align:center;">HEMIS fan ID</th>
-                                            <th class="dlog-th">Ariza sanasi</th>
-                                            <th class="dlog-th">HEMIS nb sanalari</th>
-                                            <th class="dlog-th" style="text-align:center;">Oraliqda</th>
-                                            <th class="dlog-th">HEMIS dagi mavjud fanlar</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">#</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Makeup ID</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Talaba</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Guruh</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Fan nomi</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Asl ID</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Resolved ID</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Qayerdan</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Att?</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #fbbf24;font-size:10px;text-transform:uppercase;color:#92400e;">Sabab</th>
                                         </tr>
                                     </thead>
                                     <tbody id="debug-log-body"></tbody>
@@ -247,8 +233,6 @@
                 specialty: $('#specialty').val() || '',
                 level_code: $('#level_code').val() || '',
                 group: $('#group').val() || '',
-                semester_code: $('#semester_code').val() || '',
-                student_name: ($('#student_name').val() || '').trim(),
                 filter_status: $('#filter_status').val() || '',
                 search: ($('#table-search').val() || '').trim(),
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
@@ -385,8 +369,6 @@
             if (val === 'Sababli') return '<span class="badge badge-hemis-ok">Sababli</span>';
             if (val === 'Sababsiz') return '<span class="badge badge-hemis-bad">Sababsiz</span>';
             if (val === 'Aralash') return '<span class="badge badge-hemis-mixed">Aralash</span>';
-            if (val === 'Fan topilmadi') return '<span class="badge badge-hemis-none" title="HEMIS da bu fan uchun nb yozuvi umuman yo\'q">Fan topilmadi</span>';
-            if (val && val.indexOf('Sana mos emas') === 0) return '<span class="badge badge-hemis-warn" title="' + esc(val) + '">Sana mos emas</span>';
             if (val === 'Davomat topilmadi') return '<span class="badge badge-hemis-none">Topilmadi</span>';
             return '<span class="badge badge-hemis-none">' + esc(val) + '</span>';
         }
@@ -451,12 +433,7 @@
                 $('#debug-log-area').hide();
                 return;
             }
-            var foundCount = allDebugLogs.filter(function(l) { return l.debug_status === 'topildi'; }).length;
-            var dateIssueCount = allDebugLogs.filter(function(l) { return l.debug_status === 'sana_mos_emas'; }).length;
-            var notFoundCount = allDebugLogs.length - foundCount - dateIssueCount;
             $('#debug-log-count').text(allDebugLogs.length);
-            $('#debug-found-count').text(foundCount);
-            $('#debug-notfound-count').text(notFoundCount + (dateIssueCount > 0 ? ' + ' + dateIssueCount + ' sana mos emas' : ''));
             $('#debug-search').val('');
             $('#debug-search-count').hide();
             renderDebugRows(allDebugLogs);
@@ -476,52 +453,34 @@
                 return (l.student_hemis_id || '').toString().toLowerCase().indexOf(term) > -1
                     || (l.full_name || '').toLowerCase().indexOf(term) > -1
                     || (l.group_name || '').toLowerCase().indexOf(term) > -1
-                    || (l.ariza_subject_name || '').toLowerCase().indexOf(term) > -1
-                    || (l.hemis_subject_name || '').toLowerCase().indexOf(term) > -1
-                    || (l.match_method || '').toLowerCase().indexOf(term) > -1
-                    || (l.hemis_available || '').toLowerCase().indexOf(term) > -1;
+                    || (l.subject_name || '').toLowerCase().indexOf(term) > -1
+                    || (l.original_id || '').toString().indexOf(term) > -1
+                    || (l.resolved_id || '').toString().indexOf(term) > -1
+                    || (l.reason || '').toLowerCase().indexOf(term) > -1;
             });
             renderDebugRows(filtered);
             $('#debug-search-count').text(filtered.length + ' / ' + allDebugLogs.length).show();
             $('#debug-log-count').text(filtered.length);
         }
 
-        function methodBadge(method) {
-            if (method === 'topilmadi') return '<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">TOPILMADI</span>';
-            if (method && method.indexOf('subject_id') === 0) return '<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">Subject ID</span>';
-            if (method === 'fan_nomi_aniq') return '<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">Fan nomi (aniq)</span>';
-            if (method === 'fan_nomi_fuzzy') return '<span style="background:#fef9c3;color:#a16207;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">Fan nomi (fuzzy)</span>';
-            return '<span style="background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">' + esc(method) + '</span>';
-        }
-
-        function statusBadge(status) {
-            if (status === 'topildi') return '<span style="background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;">TOPILDI</span>';
-            if (status === 'sana_mos_emas') return '<span style="background:#fef9c3;color:#a16207;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;">SANA MOS EMAS</span>';
-            return '<span style="background:#fee2e2;color:#dc2626;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;">FAN TOPILMADI</span>';
-        }
-
         function renderDebugRows(logs) {
             var html = '';
             for (var i = 0; i < logs.length; i++) {
                 var l = logs[i];
-                var st = l.debug_status || (l.found ? 'topildi' : 'fan_topilmadi');
-                var rowBg = st === 'topildi' ? (i % 2 === 0 ? '#f0fdf4' : '#fff')
-                          : st === 'sana_mos_emas' ? (i % 2 === 0 ? '#fefce8' : '#fffbeb')
-                          : (i % 2 === 0 ? '#fef2f2' : '#fff5f5');
-                html += '<tr style="background:' + rowBg + ';border-bottom:1px solid #e2e8f0;">';
-                html += '<td style="padding:6px;color:#64748b;font-weight:600;">' + (i + 1) + '</td>';
-                html += '<td style="padding:6px;">' + statusBadge(st) + '</td>';
+                var attIcon = l.att_exists ? '<span style="color:#16a34a;">&#10004;</span>' : '<span style="color:#dc2626;">&#10008;</span>';
+                var idChanged = l.original_id != l.resolved_id;
+                var rowBg = i % 2 === 0 ? '#fff' : '#fffbeb';
+                html += '<tr style="background:' + rowBg + ';border-bottom:1px solid #fef3c7;">';
+                html += '<td style="padding:6px;color:#92400e;font-weight:600;">' + (i + 1) + '</td>';
+                html += '<td style="padding:6px;font-weight:700;color:#0f172a;">' + l.makeup_id + '</td>';
                 html += '<td style="padding:6px;">' + esc(l.full_name) + ' <span style="color:#94a3b8;font-size:10px;">(' + l.student_hemis_id + ')</span></td>';
                 html += '<td style="padding:6px;">' + esc(l.group_name) + '</td>';
-                html += '<td style="padding:6px;font-weight:600;color:#0f172a;">' + esc(l.ariza_subject_name) + '</td>';
-                html += '<td style="padding:6px;text-align:center;color:#64748b;font-size:11px;">' + (l.ariza_subject_id || '-') + '</td>';
-                html += '<td style="padding:6px;">' + methodBadge(l.match_method) + '</td>';
-                html += '<td style="padding:6px;color:' + (l.found ? '#15803d' : '#94a3b8') + ';font-weight:' + (l.found ? '600' : '400') + ';">' + esc(l.hemis_subject_name || '-') + '</td>';
-                html += '<td style="padding:6px;text-align:center;color:' + (l.found ? '#15803d' : '#94a3b8') + ';font-weight:600;">' + (l.hemis_subject_id || '-') + '</td>';
-                html += '<td style="padding:6px;font-size:11px;color:#4338ca;">' + esc(l.ariza_dates || '-') + '</td>';
-                html += '<td style="padding:6px;font-size:11px;color:' + (st === 'sana_mos_emas' ? '#a16207' : '#64748b') + ';">' + esc(l.hemis_date_range || '-') + '</td>';
-                html += '<td style="padding:6px;text-align:center;font-weight:700;color:' + (l.hemis_in_range > 0 ? '#15803d' : '#dc2626') + ';">' + (l.hemis_in_range || 0) + '/' + (l.hemis_total_records || 0) + '</td>';
-                html += '<td style="padding:6px;font-size:10px;color:#64748b;max-width:300px;word-break:break-all;">' + esc(l.hemis_available || '-') + '</td>';
+                html += '<td style="padding:6px;font-weight:600;color:#0f172a;">' + esc(l.subject_name) + '</td>';
+                html += '<td style="padding:6px;text-align:center;' + (idChanged ? 'color:#dc2626;text-decoration:line-through;' : '') + '">' + l.original_id + '</td>';
+                html += '<td style="padding:6px;text-align:center;font-weight:700;' + (idChanged ? 'color:#16a34a;' : 'color:#64748b;') + '">' + l.resolved_id + '</td>';
+                html += '<td style="padding:6px;"><span style="background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">' + esc(l.resolved_via) + '</span></td>';
+                html += '<td style="padding:6px;text-align:center;">' + attIcon + '</td>';
+                html += '<td style="padding:6px;color:#b45309;font-size:11px;">' + esc(l.reason) + '</td>';
                 html += '</tr>';
             }
             $('#debug-log-body').html(html);
@@ -678,22 +637,15 @@
 
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
-            function rSem() { rd('#semester_code'); pd('{{ route("admin.journal.get-semesters") }}', { level_code: $('#level_code').val() || '' }, '#semester_code'); }
 
             $('#education_type').change(function() { rSpec(); rGrp(); });
             $('#faculty').change(function() { rSpec(); rGrp(); });
             $('#specialty').change(function() { rGrp(); });
-            $('#level_code').change(function() { rGrp(); rSem(); });
-
-            // Enter tugmasi bilan talaba ismi bo'yicha qidirish
-            $('#student_name').on('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); loadReport(); }
-            });
+            $('#level_code').change(function() { rGrp(); });
 
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
             pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
-            rSem();
         });
     </script>
 
@@ -731,9 +683,6 @@
         .toggle-label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
         .toggle-switch.active .toggle-label { color: #1e3a5f; }
 
-        .dlog-th { padding:8px 6px; text-align:left; border-bottom:2px solid #6366f1; font-size:10px; text-transform:uppercase; color:#4338ca; font-weight:700; white-space:nowrap; }
-        .debug-arrow.open { transform: rotate(90deg); }
-
         .journal-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .journal-table thead { position: sticky; top: 0; z-index: 10; }
         .journal-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
@@ -759,7 +708,6 @@
         .badge-hemis-ok { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
         .badge-hemis-bad { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
         .badge-hemis-none { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-        .badge-hemis-warn { background: #fef9c3; color: #a16207; border: 1px solid #fde68a; }
         .badge-match { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-weight: 700; }
         .badge-mismatch { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-weight: 700; }
 

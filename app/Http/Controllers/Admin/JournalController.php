@@ -2549,13 +2549,10 @@ class JournalController extends Controller
 
         // Faylni diskdan o'chirish
         if ($submission->file_path) {
-            $filePath = storage_path('app/public/' . $submission->file_path);
-            if (file_exists($filePath)) {
-                unlink($filePath);
-            }
+            Storage::disk('public')->delete($submission->file_path);
         }
 
-        // DB dan o'chirish
+        // Submission yozuvini o'chirish
         DB::table('independent_submissions')->where('id', $submission->id)->delete();
 
         return response()->json(['success' => true, 'message' => 'Fayl o\'chirildi']);

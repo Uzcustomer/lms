@@ -916,7 +916,7 @@ class ReportController extends Controller
         // 3-QADAM: Fanga biriktirilgan faol talabalar sonini hisoblash
         // student_subjects jadvalidan — HEMIS da fanga biriktirilgan talabalarni olish
         // Chetlashtirilgan talabalar (student_status_code != 11) hisobga olinmaydi
-        // Joriy semestrga tegishli biriktirishlarni aniqlash
+        // Joriy semestrga tegishli biriktirishlarni aniqlash (guruh+fan+semestr kaliti bilan)
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
         $semesterCodes = $schedules->pluck('semester_code')->unique()->values()->toArray();
@@ -927,8 +927,8 @@ class ReportController extends Controller
             ->whereIn('ss.subject_id', $subjectIds)
             ->whereIn('ss.semester_id', $semesterCodes)
             ->where('st.student_status_code', 11) // Faqat faol talabalar
-            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
-            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');
 
         // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
@@ -961,8 +961,8 @@ class ReportController extends Controller
 
             // Baho: fanga biriktirilgan talabalar soni va baho qo'yilmaganlar soni
             $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
-            // Fanga biriktirilgan talabalar soni (student_subjects), topilmasa guruh soni
-            $gsKey = $sch->group_id . '|' . $sch->subject_id;
+            // Fanga biriktirilgan talabalar soni (student_subjects — semestr bo'yicha), topilmasa guruh soni
+            $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
             $totalStudents = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
 
             if ($skipGradeCheck) {

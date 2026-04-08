@@ -259,6 +259,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
             Route::post('/admin-edit-grade', [JournalController::class, 'adminEditGrade'])->name('admin-edit-grade');
+            Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade');
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
             Route::get('/download-lesson-file/{lessonOpening}', [JournalController::class, 'downloadLessonFile'])->name('download-lesson-file');
@@ -346,6 +347,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'export'])->name('export');
             Route::post('/subscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'subscribe'])->name('subscribe');
             Route::post('/unsubscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'unsubscribe'])->name('unsubscribe');
+            Route::post('/notify-danger', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'notifyDanger'])->name('notify-danger');
             Route::post('/toggle-false-show', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'toggleFalseShow'])->name('toggle-false-show');
             Route::post('/bulk-assign-firm', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'bulkAssignFirm'])->name('bulk-assign-firm');
             Route::post('/registration-talabnoma', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'registrationTalabnoma'])->name('registration-talabnoma');

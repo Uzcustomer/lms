@@ -195,6 +195,13 @@
                                 </button>
                             </form>
                         @endif
+                    <form method="POST" action="{{ route('admin.international-students.notify-danger') }}" style="margin:0;">
+                        @csrf
+                        <button type="submit" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;background:#dc2626;border:1px solid #b91c1c;border-radius:8px;cursor:pointer;white-space:nowrap;" onclick="return confirm('Muddati qizil holatdagi barcha talabalarga bildirishnoma yuborilsinmi?')">
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                            Ogohlantirish yuborish
+                        </button>
+                    </form>
                     <a href="{{ route('admin.international-students.export', request()->all()) }}" class="int-btn-export">
                         <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
@@ -387,7 +394,7 @@
                                     </td>
                                     <td><span class="text-cell">{{ $visa?->firm_display ?? '—' }}</span></td>
                                     <td>
-                                        @if($visa)
+                                        @if($hasRealData)
                                             @if($visa->status === 'approved')
                                                 <span class="int-status-pill int-status-green">Tasdiqlangan</span>
                                             @elseif($visa->status === 'rejected')

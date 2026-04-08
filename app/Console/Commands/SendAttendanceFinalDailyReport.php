@@ -210,8 +210,8 @@ class SendAttendanceFinalDailyReport extends Command
             ->whereIn('ss.subject_id', $subjectIds)
             ->whereIn('ss.semester_id', $semesterCodes)
             ->where('st.student_status_code', 11)
-            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
-            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');
 
         // Zaxira: guruh bo'yicha talabalar soni
@@ -248,8 +248,8 @@ class SendAttendanceFinalDailyReport extends Command
                     || (!empty($gradeExcludedSubjectPatterns) && collect($gradeExcludedSubjectPatterns)
                         ->contains(fn($p) => str_contains($subjectNameLower, mb_strtolower($p))));
 
-                // Fanga biriktirilgan talabalar soni (student_subjects), topilmasa guruh soni
-                $gsKey = $sch->group_id . '|' . $sch->subject_id;
+                // Fanga biriktirilgan talabalar soni (student_subjects — semestr bo'yicha), topilmasa guruh soni
+                $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
                 $totalStudents = $subjectStudentCounts[$gsKey] ?? ($studentCounts[$sch->group_id] ?? 0);
 
                 // Baho qo'yilgan talabalar soni

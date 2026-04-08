@@ -122,8 +122,8 @@ class SendUnratedRegistrationsReport extends Command
                 $q->where('st.student_status_code', '!=', '60')
                   ->orWhereNull('st.student_status_code');
             })
-            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
-            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');
 
         // Zaxira: agar student_subjects da ma'lumot bo'lmasa, guruh bo'yicha hisoblash
@@ -197,7 +197,7 @@ class SendUnratedRegistrationsReport extends Command
             }
 
             // Fanga biriktirilgan faol talabalar soni (student_subjects), topilmasa guruh soni
-            $gsKey = $sch->group_id . '|' . $sch->subject_id;
+            $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
             $subjectTotal = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
             if ($subjectTotal === 0) {
                 continue; // Bu fanga biriktirilgan faol talaba yo'q

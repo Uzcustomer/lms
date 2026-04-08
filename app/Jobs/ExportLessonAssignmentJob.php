@@ -224,8 +224,8 @@ class ExportLessonAssignmentJob implements ShouldQueue
             ->whereIn('ss.subject_id', $subjectIds)
             ->whereIn('ss.semester_id', $semesterCodes)
             ->where('st.student_status_code', 11)
-            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
-            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id)"))
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
             ->pluck('cnt', 'gs_key');
 
         $groupStudentCounts = DB::table('students')
@@ -255,7 +255,7 @@ class ExportLessonAssignmentJob implements ShouldQueue
                    || isset($attendanceByKey[$attKey]);
 
             $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
-            $gsKey = $sch->group_id . '|' . $sch->subject_id;
+            $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
             $totalStudents = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
 
             if ($skipGradeCheck) {

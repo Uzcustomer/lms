@@ -3645,8 +3645,10 @@ class ReportController extends Controller
             'ae.start_date', 'ae.end_date', 'g.id as group_pk',
             'aem.subject_name', 'aem.subject_id as aem_subject_id',
             DB::raw("COALESCE(
-                (SELECT cs.subject_id FROM curriculum_subjects cs
-                 WHERE cs.curriculum_subject_hemis_id = aem.subject_id LIMIT 1),
+                CASE WHEN aem.subject_id >= 100000 THEN
+                    (SELECT cs.subject_id FROM curriculum_subjects cs
+                     WHERE cs.curriculum_subject_hemis_id = aem.subject_id LIMIT 1)
+                ELSE NULL END,
                 (SELECT att.subject_id FROM attendances att
                  WHERE att.student_hemis_id = ae.student_hemis_id
                  AND TRIM(att.subject_name) = TRIM(aem.subject_name) LIMIT 1),

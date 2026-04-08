@@ -3840,6 +3840,8 @@ class ReportController extends Controller
                 'pairs' => $pairs,
                 'journal_url' => ($exc->group_pk && $exc->subject_id && $semCode)
                     ? route('admin.journal.show', ['groupId' => $exc->group_pk, 'subjectId' => $exc->subject_id, 'semesterCode' => $semCode]) : '#',
+                'match_method' => $matchMethod,
+                'aem_subject_id' => $exc->aem_subject_id ?? null,
             ];
 
             // Debug log
@@ -4066,10 +4068,14 @@ class ReportController extends Controller
 
         $query = DB::table('attendances as a')
             ->where('a.student_hemis_id', $request->student_hemis_id)
-            ->where('a.subject_id', $request->subject_id)
             ->where(function ($q) {
                 $q->where('a.absent_on', '>', 0)->orWhere('a.absent_off', '>', 0);
             });
+
+        // subject_id = 0 bo'lsa barcha fanlarni olish
+        if ($request->subject_id && $request->subject_id != '0') {
+            $query->where('a.subject_id', $request->subject_id);
+        }
 
         if ($request->get('current_semester', '1') == '1') {
             $query->where('a.education_year_current', true)

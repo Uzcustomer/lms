@@ -3645,6 +3645,8 @@ class ReportController extends Controller
             'ae.start_date', 'ae.end_date', 'g.id as group_pk',
             'aem.subject_name', 'aem.subject_id as aem_subject_id',
             DB::raw("COALESCE(
+                (SELECT cs.subject_id FROM curriculum_subjects cs
+                 WHERE cs.curriculum_subject_hemis_id = aem.subject_id LIMIT 1),
                 (SELECT att.subject_id FROM attendances att
                  WHERE att.student_hemis_id = ae.student_hemis_id
                  AND TRIM(att.subject_name) = TRIM(aem.subject_name) LIMIT 1),
@@ -3722,10 +3724,23 @@ class ReportController extends Controller
         // ========================================
         $results = [];
         $debugLog = [];
+        $resolveLog = [];
         $addedKeys = [];
 
         // A) Fanga bog'langan arizalar
         foreach ($excWithSubject as $exc) {
+            // Resolve log: subject_id o'zgargan bo'lsa
+            if (isset($exc->aem_subject_id) && $exc->aem_subject_id != $exc->subject_id) {
+                $resolveLog[] = [
+                    'student_hemis_id' => $exc->student_hemis_id,
+                    'full_name' => $exc->full_name ?? '-',
+                    'subject_name' => $exc->subject_name ?? '',
+                    'original_id' => $exc->aem_subject_id,
+                    'resolved_id' => $exc->subject_id,
+                    'excuse_id' => $exc->excuse_id,
+                ];
+            }
+
             $excKey = $exc->excuse_id . '|' . $exc->subject_id;
             if (isset($addedKeys[$excKey])) continue;
             $addedKeys[$excKey] = true;
@@ -4003,6 +4018,8 @@ class ReportController extends Controller
             'match_count' => $matchCount,
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
+            'resolve_log' => $resolveLog,
+            'resolve_log' => $resolveLog,
         ]);
       } catch (\Exception $e) {
             return response()->json([

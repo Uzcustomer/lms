@@ -12,7 +12,7 @@
                 <!-- Filters -->
                 <div class="filter-container">
                     <div class="filter-row">
-                        <div class="filter-item" style="min-width: 160px;">
+                        <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
                             <select id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -23,7 +23,7 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 200px;">
+                        <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
                             <select id="faculty" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
@@ -32,11 +32,11 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 240px;">
+                        <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                             <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="min-width: 90px;">
+                        <div class="filter-item" style="min-width: 70px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                             <select id="per_page" class="select2" style="width: 100%;">
                                 @foreach([10, 25, 50, 100] as $ps)
@@ -44,53 +44,51 @@
                                 @endforeach
                             </select>
                         </div>
-                    </div>
-                    <div class="filter-row">
-                        <div class="filter-item" style="min-width: 140px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
-                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="min-width: 170px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="min-width: 140px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Semestr</label>
-                            <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="flex: 1; min-width: 220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Talaba FISH</label>
-                            <input type="text" id="student_name" placeholder="Ism yoki familya..." style="width:100%;height:36px;padding:0 10px;font-size:0.8rem;font-weight:500;border:1px solid #cbd5e1;border-radius:8px;outline:none;color:#1e293b;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.04);transition:all 0.2s;" onfocus="this.style.borderColor='#2b5ea7';this.style.boxShadow='0 0 0 2px rgba(43,94,167,0.1)'" onblur="this.style.borderColor='#cbd5e1';this.style.boxShadow='0 1px 2px rgba(0,0,0,0.04)'">
-                        </div>
-                        <div class="filter-item" style="min-width: 160px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Holat filtri</label>
-                            <select id="filter_status" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                <option value="mismatch">Faqat mos emaslar</option>
-                                <option value="match">Faqat moslar</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="filter-row">
-                        <div class="filter-item" style="min-width: 160px;">
+                        <div class="filter-item">
                             <label class="filter-label">&nbsp;</label>
                             <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
                                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
                                 <span class="toggle-label">Joriy semestr</span>
                             </div>
                         </div>
-                        <div class="filter-item" style="min-width: 290px;">
+                        <div class="filter-item">
                             <label class="filter-label">&nbsp;</label>
-                            <div style="display:flex;gap:8px;">
+                            <div style="display:flex;gap:6px;">
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
-                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     Excel
                                 </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
-                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Tekshirish
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 120px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Semestr</label>
+                            <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 180px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Talaba FISH</label>
+                            <input type="text" id="student_name" placeholder="Ism yoki familya..." style="width:100%;height:36px;padding:0 10px;font-size:0.8rem;font-weight:500;border:1px solid #cbd5e1;border-radius:8px;outline:none;color:#1e293b;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.04);transition:all 0.2s;" onfocus="this.style.borderColor='#2b5ea7';this.style.boxShadow='0 0 0 2px rgba(43,94,167,0.1)'" onblur="this.style.borderColor='#cbd5e1';this.style.boxShadow='0 1px 2px rgba(0,0,0,0.04)'">
+                        </div>
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Holat filtri</label>
+                            <select id="filter_status" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="mismatch">Faqat mos emaslar</option>
+                                <option value="match">Faqat moslar</option>
+                            </select>
                         </div>
                     </div>
                 </div>

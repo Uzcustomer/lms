@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 
 class ImportAdmissionExcuses extends Command
 {
-    protected $signature = 'import:admission-excuses {--file=tests/re_apply.csv : CSV fayl yo\'li}';
+    protected $signature = 'import:admission-excuses {--file=tests/re_apply.csv : CSV fayl yo\'li} {--clean : Avval eski admission arizalarni o\'chirish}';
     protected $description = 'Admission (re_apply) CSV dan sababli arizalarni import qilish';
 
     private array $sababKeyMap = [
@@ -29,6 +29,18 @@ class ImportAdmissionExcuses extends Command
         if (!file_exists($filePath)) {
             $this->error("Fayl topilmadi: {$filePath}");
             return self::FAILURE;
+        }
+
+        // Eski admission arizalarni o'chirish
+        if ($this->option('clean')) {
+            $oldIds = AbsenceExcuse::where('file_path', 'LIKE', 'https://admission%')->pluck('id');
+            if ($oldIds->isNotEmpty()) {
+                $makeupCount = AbsenceExcuseMakeup::whereIn('absence_excuse_id', $oldIds)->delete();
+                $excuseCount = AbsenceExcuse::whereIn('id', $oldIds)->delete();
+                $this->warn("Eski admission arizalar o'chirildi: {$excuseCount} ta ariza, {$makeupCount} ta makeup");
+            } else {
+                $this->info("Eski admission arizalar topilmadi.");
+            }
         }
 
         $rows = $this->parseCsv($filePath);
@@ -69,18 +81,6 @@ class ImportAdmissionExcuses extends Command
             $endDate = trim($row['sabab_end_date'] ?? '');
             if (!$startDate || !$endDate) {
                 $errors[] = "#{$rowNum}: Sanalar bo'sh";
-                $skipped++;
-                continue;
-            }
-
-            // Dublikat tekshiruvi
-            $exists = AbsenceExcuse::where('student_hemis_id', $student->hemis_id)
-                ->where('reason', $reason)
-                ->where('start_date', $startDate)
-                ->where('end_date', $endDate)
-                ->exists();
-
-            if ($exists) {
                 $skipped++;
                 continue;
             }

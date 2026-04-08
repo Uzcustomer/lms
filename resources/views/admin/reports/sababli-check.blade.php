@@ -457,7 +457,8 @@
             if (val === 'Aralash' && studentId && subjectId) return '<span class="badge badge-hemis-mixed" style="cursor:pointer;" onclick="openAttDetail(\'' + studentId + '\', \'' + subjectId + '\')" title="Batafsil ko\'rish">Aralash</span>';
             if (val === 'Aralash') return '<span class="badge badge-hemis-mixed">Aralash</span>';
             if (val === 'Davomat topilmadi') return '<span class="badge badge-hemis-none">Topilmadi</span>';
-            if ((val === 'Fan topilmadi' || val === "Ma'lumot yo'q") && studentId) return '<span class="badge badge-hemis-none" style="cursor:pointer;" onclick="openFanNotFound(' + rowIdx + ')" title="Batafsil">' + esc(val) + '</span>';
+            if (val === "Ma'lumot yo'q" && studentId) return '<span class="badge badge-hemis-none" style="cursor:pointer;" onclick="openFanNotFound(' + rowIdx + ')" title="Batafsil">Ma\'lumot yo\'q</span>';
+            if (val === "Ma'lumot yo'q") return '<span class="badge badge-hemis-none">Ma\'lumot yo\'q</span>';
             return '<span class="badge badge-hemis-none">' + esc(val) + '</span>';
         }
 

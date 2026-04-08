@@ -3806,17 +3806,11 @@ class ReportController extends Controller
 
             $totalHours = $totalOn + $totalOff;
             if (empty($pairs)) {
-                if ($matchMethod === 'topilmadi') {
-                    $hemisStatus = 'Fan topilmadi';
-                } elseif (!empty($hemisRecords)) {
-                    $hemisStatus = 'Sana mos emas';
-                } else {
-                    $hemisStatus = "Ma'lumot yo'q";
-                }
+                $hemisStatus = "Ma'lumot yo'q";
                 $match = 'mismatch';
                 $pairs = [['lesson_date' => date('d.m.Y', strtotime($startDate)).' — '.date('d.m.Y', strtotime($endDate)),
                     'lesson_date_raw' => $startDate, 'lesson_pair' => '-', 'hemis_status' => $hemisStatus,
-                    'mark_status' => 'Sababli (ariza)', 'absent_on' => 0, 'absent_off' => 0]];
+                    'mark_status' => 'Sababli (ariza)', 'absent_on' => 0, 'absent_off' => 0, 'training_type' => '-']];
             } else {
                 $hemisStatus = ($totalOn > 0 && $totalOff > 0) ? 'Aralash' : (($totalOn > 0) ? 'Sababli' : 'Sababsiz');
                 $match = in_array($hemisStatus, ['Sababli', 'Aralash']) ? 'match' : 'mismatch';

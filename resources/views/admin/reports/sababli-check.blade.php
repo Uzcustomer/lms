@@ -457,19 +457,30 @@
             if (val === 'Aralash' && studentId && subjectId) return '<span class="badge badge-hemis-mixed" style="cursor:pointer;" onclick="openAttDetail(\'' + studentId + '\', \'' + subjectId + '\')" title="Batafsil ko\'rish">Aralash</span>';
             if (val === 'Aralash') return '<span class="badge badge-hemis-mixed">Aralash</span>';
             if (val === 'Davomat topilmadi') return '<span class="badge badge-hemis-none">Topilmadi</span>';
-            if ((val === 'Fan topilmadi' || val === "Ma'lumot yo'q") && studentId) return '<span class="badge badge-hemis-none" style="cursor:pointer;" onclick="openFanNotFound(' + rowIdx + ')" title="Batafsil">' + esc(val) + '</span>';
+            if (val === "Ma'lumot yo'q" && studentId) return '<span class="badge badge-hemis-none" style="cursor:pointer;" onclick="openFanNotFound(' + rowIdx + ')" title="Batafsil">Ma\'lumot yo\'q</span>';
+            if (val === "Ma'lumot yo'q") return '<span class="badge badge-hemis-none">Ma\'lumot yo\'q</span>';
             return '<span class="badge badge-hemis-none">' + esc(val) + '</span>';
         }
 
         function renderTable(data) {
             var html = '';
             var prevKey = '';
+
+            // Har bir talabaning nechta unique arizasi borligini hisoblash
+            var studentExcuseCount = {};
+            for (var j = 0; j < data.length; j++) {
+                var sid = data[j].student_hemis_id;
+                if (!studentExcuseCount[sid]) studentExcuseCount[sid] = {};
+                if (data[j].excuse_id) studentExcuseCount[sid][data[j].excuse_id] = true;
+            }
+
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var curKey = r.student_hemis_id + '|' + (r.excuse_id || '');
+                var excuseCountForStudent = Object.keys(studentExcuseCount[r.student_hemis_id] || {}).length;
 
-                // Yangi ariza guruhi bo'lsa — sarlavha qator qo'shish
-                if (curKey !== prevKey && r.excuse_id && r.excuse_start) {
+                // Faqat talabaning 1 dan ko'p arizasi bo'lganda sarlavha ko'rsatish
+                if (curKey !== prevKey && r.excuse_id && r.excuse_start && excuseCountForStudent > 1) {
                     if (prevKey !== '') {
                         html += '<tr><td colspan="11" style="height:25px;background:#fff;border:none;"></td></tr>';
                     }

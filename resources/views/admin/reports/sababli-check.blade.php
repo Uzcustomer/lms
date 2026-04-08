@@ -256,6 +256,7 @@
                             <th>#</th>
                             <th>Sana</th>
                             <th>Juftlik</th>
+                            <th>Dars turi</th>
                             <th>Sababli (soat)</th>
                             <th>Sababsiz (soat)</th>
                             <th>HEMIS holati</th>
@@ -497,6 +498,7 @@
                 html += '<td style="text-align:center;">' + (i + 1) + '</td>';
                 html += '<td style="text-align:center;">' + esc(p.lesson_date) + '</td>';
                 html += '<td style="text-align:center;">' + esc(p.lesson_pair) + '</td>';
+                html += '<td style="text-align:center;font-size:11px;">' + esc(p.training_type || '-') + '</td>';
                 html += '<td style="text-align:center;color:#065f46;font-weight:600;">' + p.absent_on + '</td>';
                 html += '<td style="text-align:center;color:#dc2626;font-weight:600;">' + p.absent_off + '</td>';
                 html += '<td style="text-align:center;">' + hemisBadge(p.hemis_status) + '</td>';

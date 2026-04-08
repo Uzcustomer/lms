@@ -3718,7 +3718,8 @@ class ReportController extends Controller
             $attRows = $attQuery
                 ->select('a.student_hemis_id', 'a.subject_id', 'a.subject_name',
                     'a.lesson_date', 'a.lesson_pair_start_time', 'a.lesson_pair_end_time',
-                    'a.absent_on', 'a.absent_off', 'a.semester_code')
+                    'a.absent_on', 'a.absent_off', 'a.semester_code',
+                    'a.training_type_code', 'a.training_type_name')
                 ->get();
 
             foreach ($attRows as $att) {
@@ -3796,6 +3797,7 @@ class ReportController extends Controller
                         'mark_status' => 'Sababli (ariza)',
                         'absent_on' => (int)$att->absent_on,
                         'absent_off' => (int)$att->absent_off,
+                        'training_type' => $att->training_type_name ?? '-',
                     ];
                 }
             }
@@ -3871,7 +3873,8 @@ class ReportController extends Controller
                     $pairs[] = ['lesson_date' => date('d.m.Y', strtotime($d)), 'lesson_date_raw' => $d,
                         'lesson_pair' => ($att->lesson_pair_start_time && $att->lesson_pair_end_time) ? $att->lesson_pair_start_time.'-'.$att->lesson_pair_end_time : '-',
                         'hemis_status' => ((int)$att->absent_on > 0) ? 'Sababli' : 'Sababsiz',
-                        'mark_status' => 'Sababli (ariza)', 'absent_on' => (int)$att->absent_on, 'absent_off' => (int)$att->absent_off];
+                        'mark_status' => 'Sababli (ariza)', 'absent_on' => (int)$att->absent_on, 'absent_off' => (int)$att->absent_off,
+                        'training_type' => $att->training_type_name ?? '-'];
                 }
             }
             $totalHours = $totalOn + $totalOff;

@@ -471,13 +471,11 @@
 
                 // Yangi ariza guruhi bo'lsa — sarlavha qator qo'shish
                 if (curKey !== prevKey && r.excuse_id && r.excuse_start) {
-                    var sepColor = r.match === 'mismatch' ? '#fef2f2' : '#f0fdf4';
-                    var sepBorder = r.match === 'mismatch' ? '#fecaca' : '#bbf7d0';
-                    html += '<tr style="background:' + sepColor + ';border-top:2px solid ' + sepBorder + ';">';
-                    html += '<td colspan="11" style="padding:6px 12px;font-size:12px;font-weight:700;color:#334155;">';
-                    html += '<span style="margin-right:8px;">Ariza #' + r.excuse_id + '</span>';
-                    html += '<span style="font-weight:500;color:#64748b;">' + esc(r.full_name) + '</span>';
-                    html += '<span style="margin-left:8px;padding:2px 8px;border-radius:4px;font-size:11px;background:#dbeafe;color:#1e40af;">' + esc(r.excuse_start) + ' — ' + esc(r.excuse_end) + '</span>';
+                    html += '<tr style="background:#1e40af;">';
+                    html += '<td colspan="11" style="padding:10px 14px;font-size:13px;font-weight:700;color:#fff;">';
+                    html += '<span style="margin-right:10px;">Ariza #' + r.excuse_id + '</span>';
+                    html += '<span style="font-weight:500;color:#bfdbfe;">' + esc(r.full_name) + '</span>';
+                    html += '<span style="margin-left:10px;padding:3px 10px;border-radius:6px;font-size:12px;background:#fff;color:#1e40af;font-weight:700;">' + esc(r.excuse_start) + ' — ' + esc(r.excuse_end) + '</span>';
                     html += '</td></tr>';
                 }
                 prevKey = curKey;

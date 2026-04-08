@@ -394,7 +394,7 @@
                                     </td>
                                     <td><span class="text-cell">{{ $visa?->firm_display ?? '—' }}</span></td>
                                     <td>
-                                        @if($visa)
+                                        @if($hasRealData)
                                             @if($visa->status === 'approved')
                                                 <span class="int-status-pill int-status-green">Tasdiqlangan</span>
                                             @elseif($visa->status === 'rejected')

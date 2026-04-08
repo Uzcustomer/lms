@@ -105,6 +105,12 @@ class ImportAdmissionExcuses extends Command
             $fileOriginalName = $filPathValue ? basename($filPathValue) : '';
 
             // Ariza yaratish
+            // Admission dagi haqiqiy sana (certificate dan)
+            $admissionCreatedAt = null;
+            if ($certificateJson && !empty($certificateJson['created_at'])) {
+                $admissionCreatedAt = $certificateJson['created_at'];
+            }
+
             $excuse = AbsenceExcuse::create([
                 'student_id' => $student->id,
                 'student_hemis_id' => $student->hemis_id,
@@ -120,9 +126,11 @@ class ImportAdmissionExcuses extends Command
                 'status' => 'approved',
                 'reviewed_by' => $reviewedBy,
                 'reviewed_by_name' => $reviewerName,
-                'reviewed_at' => $certificateJson['created_at'] ?? now(),
+                'reviewed_at' => $admissionCreatedAt ?? now(),
                 'approved_pdf_path' => $approvedPdfPath,
                 'verification_token' => Str::uuid()->toString(),
+                'created_at' => $admissionCreatedAt ?? now(),
+                'updated_at' => $admissionCreatedAt ?? now(),
             ]);
 
             // Makeups yaratish — subjects JSON dan

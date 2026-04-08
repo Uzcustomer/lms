@@ -6224,6 +6224,75 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
     /**
      * Admin uchun istalgan bahoni o'zgartirish yoki o'chirish
      */
+    /**
+     * Admin: ON/OSKI/Test baholarini kiritish yoki yangilash
+     */
+    public function saveExamGrade(Request $request)
+    {
+        if (!auth()->user()->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'student_hemis_id' => 'required|string',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'training_type_code' => 'required|in:100,101,102',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $studentHemisId = $request->student_hemis_id;
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $typeCode = (int) $request->training_type_code;
+        $grade = round($request->grade, 2);
+
+        $typeNames = [100 => 'ON', 101 => 'OSKI', 102 => 'Test'];
+
+        try {
+            // Mavjud baho bormi?
+            $existing = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', $typeCode)
+                ->first();
+
+            if ($existing) {
+                DB::table('student_grades')->where('id', $existing->id)->update([
+                    'grade' => $grade,
+                    'updated_at' => now(),
+                ]);
+            } else {
+                // Talaba ma'lumotlarini olish
+                $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+
+                DB::table('student_grades')->insert([
+                    'student_hemis_id' => $studentHemisId,
+                    'student_id' => $student->student_id ?? null,
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'training_type_code' => $typeCode,
+                    'grade' => $grade,
+                    'lesson_date' => now()->toDateString(),
+                    'education_year_code' => $student->education_year_code ?? null,
+                    'education_year_current' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => ($typeNames[$typeCode] ?? 'Baho') . ' saqlandi: ' . $grade,
+                'grade' => $grade,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
+    }
+
     public function adminEditGrade(Request $request)
     {
         if (!auth()->user()->hasAnyRole(['admin', 'superadmin'])) {

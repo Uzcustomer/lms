@@ -531,6 +531,7 @@
         .non-final-grade {
             background-color: #fee2e2 !important; /* Och qizil — is_final=false */
         }
+        .exam-cell[onclick]:hover { background: #eff6ff; cursor: pointer; }
         .grade-fail {
             color: #dc2626 !important;
         }
@@ -1181,9 +1182,10 @@
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
-                                            <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            @php $isExamAdmin = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false; @endphp
+                                            <td class="px-1 py-1 text-center exam-cell" @if($isExamAdmin) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 100, {{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : 'null' }})" style="cursor:pointer;" title="Bosing: ON% kiritish" @endif>{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            <td class="px-1 py-1 text-center exam-cell" @if($isExamAdmin) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : 'null' }})" style="cursor:pointer;" title="Bosing: OSKI kiritish" @endif>{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            <td class="px-1 py-1 text-center exam-cell" @if($isExamAdmin) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : 'null' }})" style="cursor:pointer;" title="Bosing: Test kiritish" @endif>{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1520,9 +1522,10 @@
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
-                                            <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            @php $isExamAdmin = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false; @endphp
+                                            <td class="px-1 py-1 text-center exam-cell" @if($isExamAdmin) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 100, {{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : 'null' }})" style="cursor:pointer;" title="Bosing: ON% kiritish" @endif>{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            <td class="px-1 py-1 text-center exam-cell" @if($isExamAdmin) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : 'null' }})" style="cursor:pointer;" title="Bosing: OSKI kiritish" @endif>{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            <td class="px-1 py-1 text-center exam-cell" @if($isExamAdmin) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : 'null' }})" style="cursor:pointer;" title="Bosing: Test kiritish" @endif>{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -2926,6 +2929,56 @@
             } else {
                 cell.innerHTML = '<span style="display:inline-flex;align-items:center;padding:4px 10px;font-size:12px;background:#fee2e2;color:#b91c1c;border-radius:6px;">Limit tugagan</span>';
             }
+        }
+
+        // Admin: ON/OSKI/Test baho kiritish
+        function editExamGrade(cell, studentHemisId, typeCode, currentValue) {
+            if (cell.querySelector('input')) return;
+            var typeNames = {100: 'ON%', 101: 'OSKI', 102: 'Test'};
+            var original = cell.innerHTML;
+            var input = document.createElement('input');
+            input.type = 'number'; input.min = '0'; input.max = '100'; input.step = '1';
+            input.value = currentValue !== null ? currentValue : '';
+            input.placeholder = '0-100';
+            input.style.cssText = 'width:50px;padding:2px 4px;text-align:center;font-size:12px;border:2px solid #3b82f6;border-radius:4px;outline:none;';
+            cell.innerHTML = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+
+            function save() {
+                var val = input.value.trim();
+                if (val === '') { cell.innerHTML = original; return; }
+                if (isNaN(val) || val < 0 || val > 100) { alert('0-100 orasida kiriting'); input.focus(); return; }
+                cell.innerHTML = '<span style="color:#6b7280;">...</span>';
+                fetch('{{ route("admin.journal.save-exam-grade") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json'},
+                    body: JSON.stringify({
+                        student_hemis_id: studentHemisId,
+                        subject_id: '{{ $subject->subject_id ?? "" }}',
+                        semester_code: '{{ $semesterCode ?? "" }}',
+                        training_type_code: typeCode,
+                        grade: parseFloat(val)
+                    })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        cell.innerHTML = '<span class="font-bold text-blue-600">' + Math.round(data.grade) + '</span>';
+                    } else {
+                        alert(data.message || 'Xatolik');
+                        cell.innerHTML = original;
+                    }
+                })
+                .catch(() => { alert('Tarmoq xatosi'); cell.innerHTML = original; });
+            }
+
+            input.addEventListener('blur', save);
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { cell.innerHTML = original; }
+            });
         }
 
         function saveMtGrade(studentHemisId, isRegrade, adminEdit) {

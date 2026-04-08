@@ -44,6 +44,32 @@
                                 @endforeach
                             </select>
                         </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 120px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Semestr</label>
+                            <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="flex: 1; min-width: 250px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Talaba FISH</label>
+                            <input type="text" id="student_name" placeholder="Ism yoki familya..." style="width:100%;height:36px;padding:0 10px;font-size:0.8rem;font-weight:500;border:1px solid #cbd5e1;border-radius:8px;outline:none;color:#1e293b;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.04);transition:all 0.2s;" onfocus="this.style.borderColor='#2b5ea7';this.style.boxShadow='0 0 0 2px rgba(43,94,167,0.1)'" onblur="this.style.borderColor='#cbd5e1';this.style.boxShadow='0 1px 2px rgba(0,0,0,0.04)'">
+                        </div>
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Holat filtri</label>
+                            <select id="filter_status" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="mismatch">Faqat mos emaslar</option>
+                                <option value="match">Faqat moslar</option>
+                            </select>
+                        </div>
                         <div class="filter-item">
                             <label class="filter-label">&nbsp;</label>
                             <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
@@ -63,32 +89,6 @@
                                     Tekshirish
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                    <div class="filter-row">
-                        <div class="filter-item" style="min-width: 110px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
-                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="min-width: 140px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="min-width: 120px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Semestr</label>
-                            <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
-                        <div class="filter-item" style="min-width: 180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Talaba FISH</label>
-                            <input type="text" id="student_name" placeholder="Ism yoki familya..." style="width:100%;height:36px;padding:0 10px;font-size:0.8rem;font-weight:500;border:1px solid #cbd5e1;border-radius:8px;outline:none;color:#1e293b;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.04);transition:all 0.2s;" onfocus="this.style.borderColor='#2b5ea7';this.style.boxShadow='0 0 0 2px rgba(43,94,167,0.1)'" onblur="this.style.borderColor='#cbd5e1';this.style.boxShadow='0 1px 2px rgba(0,0,0,0.04)'">
-                        </div>
-                        <div class="filter-item" style="min-width: 140px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Holat filtri</label>
-                            <select id="filter_status" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                <option value="mismatch">Faqat mos emaslar</option>
-                                <option value="match">Faqat moslar</option>
-                            </select>
                         </div>
                     </div>
                 </div>

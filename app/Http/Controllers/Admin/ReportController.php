@@ -3807,7 +3807,7 @@ class ReportController extends Controller
             $totalHours = $totalOn + $totalOff;
             if (empty($pairs)) {
                 $hemisStatus = "Ma'lumot yo'q";
-                $match = 'mismatch';
+                $match = 'match';
                 $pairs = [['lesson_date' => date('d.m.Y', strtotime($startDate)).' — '.date('d.m.Y', strtotime($endDate)),
                     'lesson_date_raw' => $startDate, 'lesson_pair' => '-', 'hemis_status' => $hemisStatus,
                     'mark_status' => 'Sababli (ariza)', 'absent_on' => 0, 'absent_off' => 0, 'training_type' => '-']];

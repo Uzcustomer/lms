@@ -108,7 +108,7 @@ function checkPdfSize(input) {
 {{-- Alpine store + searchable select components --}}
 <script>
 document.addEventListener('alpine:init', function() {
-    Alpine.store('birthCountry', '{{ old('birth_country', $visaInfo?->birth_country ?? '') }}');
+    Alpine.store('birthCountry', '{{ old('birth_country', $visaInfo?->birth_country ?? 'India') }}');
 });
 
 var countryRegions = {
@@ -166,6 +166,11 @@ function regionSelect(config) {
         value: config.value || '',
         search: config.value || '',
         open: false,
+        init() {
+            // Dastlabki davlat uchun viloyatlarni yuklash
+            var country = Alpine.store('birthCountry');
+            if (country) this.regions = countryRegions[country] || [];
+        },
         get filtered() {
             if (this.regions.length === 0) return [];
             if (!this.search) return this.regions;

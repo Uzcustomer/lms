@@ -6277,7 +6277,6 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                     'grade' => $grade,
                     'lesson_date' => now()->toDateString(),
                     'education_year_code' => $student->education_year_code ?? null,
-                    'education_year_current' => true,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);

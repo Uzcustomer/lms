@@ -283,9 +283,9 @@ class ImportGrades extends Command
             }
         });
 
-        // Oxirgi 7 kunni tekshirish (bugundan tashqari)
+        // Oxirgi 15 kunni tekshirish (bugundan tashqari)
         // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
-        $lookbackStart = Carbon::today()->subDays(7)->startOfDay();
+        $lookbackStart = Carbon::today()->subDays(15)->startOfDay();
         $todayStart = Carbon::today()->startOfDay();
 
         // Barcha 7 kunni ro'yxatga olish

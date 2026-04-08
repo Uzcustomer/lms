@@ -230,17 +230,23 @@ class InternationalStudentController extends Controller
             $parts = [];
             $regDays = $info->registrationDaysLeft();
             $visaDays = $info->visaDaysLeft();
+            $en = str_starts_with(strtolower($student->group_name ?? ''), 'xd') || str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy');
 
             if ($regDays !== null && $regDays <= 3) {
-                $parts[] = $regDays <= 0 ? "Registratsiya muddati tugagan!" : "Registratsiya muddati tugashiga {$regDays} kun!";
+                $parts[] = $en
+                    ? ($regDays <= 0 ? "Registration expired!" : "Registration expires in {$regDays} days!")
+                    : ($regDays <= 0 ? "Registratsiya muddati tugagan!" : "Registratsiya muddati tugashiga {$regDays} kun!");
             }
             if ($visaDays !== null && $visaDays <= 15) {
-                $parts[] = $visaDays <= 0 ? "Viza muddati tugagan!" : "Viza muddati tugashiga {$visaDays} kun!";
+                $parts[] = $en
+                    ? ($visaDays <= 0 ? "Visa expired!" : "Visa expires in {$visaDays} days!")
+                    : ($visaDays <= 0 ? "Viza muddati tugagan!" : "Viza muddati tugashiga {$visaDays} kun!");
             }
 
             if (empty($parts)) continue;
 
-            $message = "🔴 " . implode(' ', $parts) . " Pasportingizni registrator ofisiga topshiring!";
+            $tail = $en ? "Submit your passport to the registrator office!" : "Pasportingizni registrator ofisiga topshiring!";
+            $message = "🔴 " . implode(' ', $parts) . " " . $tail;
 
             // Sayt bildirishnoma
             StudentNotification::create([

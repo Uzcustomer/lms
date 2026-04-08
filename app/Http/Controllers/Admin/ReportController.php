@@ -3704,6 +3704,17 @@ class ReportController extends Controller
                 $attQuery->where('a.semester_code', $request->semester_code);
             }
 
+            // Joriy semestr filtri
+            if ($request->get('current_semester', '1') == '1') {
+                $attQuery->where('a.education_year_current', true)
+                         ->whereExists(function ($sub) {
+                             $sub->select(DB::raw(1))
+                                 ->from('students as st')
+                                 ->whereColumn('st.hemis_id', 'a.student_hemis_id')
+                                 ->whereColumn('a.semester_code', 'st.semester_code');
+                         });
+            }
+
             $attRows = $attQuery
                 ->select('a.student_hemis_id', 'a.subject_id', 'a.subject_name',
                     'a.lesson_date', 'a.lesson_pair_start_time', 'a.lesson_pair_end_time',
@@ -3813,6 +3824,7 @@ class ReportController extends Controller
                 'semester_name' => ($semCode ? ($semesterNames[$semCode] ?? $exc->semester_name) : $exc->semester_name) ?? '-',
                 'subject_name' => $exc->subject_name ?? '-',
                 'subject_id' => $exc->subject_id,
+                'excuse_id' => $exc->excuse_id,
                 'total_absent_on' => $totalOn, 'total_absent_off' => $totalOff, 'total_hours' => $totalHours,
                 'hemis_status' => $hemisStatus, 'mark_status' => 'Sababli (ariza)', 'match' => $match,
                 'pairs' => $pairs,
@@ -3880,6 +3892,7 @@ class ReportController extends Controller
                 'group_name' => $exc->group_name ?? '-', 'semester_name' => $exc->semester_name ?? '-',
                 'subject_name' => 'Umumiy ariza: '.date('d.m.Y', strtotime($startDate)).' - '.date('d.m.Y', strtotime($endDate)),
                 'subject_id' => null,
+                'excuse_id' => $exc->excuse_id,
                 'total_absent_on' => $totalOn, 'total_absent_off' => $totalOff, 'total_hours' => $totalHours,
                 'hemis_status' => $hemisStatus, 'mark_status' => 'Sababli (ariza)', 'match' => $match,
                 'pairs' => $pairs, 'journal_url' => '#',

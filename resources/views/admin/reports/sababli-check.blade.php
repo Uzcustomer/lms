@@ -408,8 +408,13 @@
             return '<span class="badge badge-mismatch">Mos emas</span>';
         }
 
-        function markBadge(val) {
-            if (val && val.indexOf('Sababli') === 0) return '<span class="badge badge-lms">' + esc(val) + '</span>';
+        function markBadge(val, excuseId) {
+            if (val && val.indexOf('Sababli') === 0) {
+                if (excuseId) {
+                    return '<a href="/admin/absence-excuses/' + excuseId + '" target="_blank" class="badge badge-lms" style="cursor:pointer;text-decoration:none;" title="Arizani ko\'rish">' + esc(val) + '</a>';
+                }
+                return '<span class="badge badge-lms">' + esc(val) + '</span>';
+            }
             return '<span class="badge badge-hemis-bad">Ariza yo\'q</span>';
         }
 
@@ -434,7 +439,7 @@
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.semester_name) + '</td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:700;font-size:13px;color:#dc2626;">' + r.total_hours + '</td>';
-                html += '<td style="text-align:center;">' + markBadge(r.mark_status) + '</td>';
+                html += '<td style="text-align:center;">' + markBadge(r.mark_status, r.excuse_id) + '</td>';
                 html += '<td style="text-align:center;">' + hemisBadge(r.hemis_status) + '</td>';
                 html += '<td style="text-align:center;">' + matchBadge(r.match) + '</td>';
                 html += '<td style="text-align:center;"><button class="btn-detail" onclick="openPairsModal(' + i + ')" title="Batafsil"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button></td>';

@@ -3647,7 +3647,7 @@ class ReportController extends Controller
         )->get();
 
         // 2-QADAM: Barcha tasdiqlangan arizalarni olish
-        // A) Subject bilan bog'langan arizalar (student_subjects dan subject_id ni resolve qilish)
+        // A) Subject bilan bog'langan arizalar (curriculum_subjects dan subject_id ni resolve qilish)
         $subjectExcuses = DB::table('absence_excuses as ae')
             ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
             ->where('ae.status', 'approved')
@@ -3656,6 +3656,8 @@ class ReportController extends Controller
                 'ae.id as excuse_id',
                 'ae.student_hemis_id',
                 DB::raw("COALESCE(
+                    (SELECT cs.subject_id FROM curriculum_subjects cs
+                     WHERE cs.curriculum_subject_hemis_id = aem.subject_id LIMIT 1),
                     (SELECT att.subject_id FROM attendances att
                      WHERE att.student_hemis_id = ae.student_hemis_id
                      AND TRIM(att.subject_name) = TRIM(aem.subject_name) LIMIT 1),
@@ -3666,6 +3668,8 @@ class ReportController extends Controller
                      LIMIT 1),
                     aem.subject_id
                 ) as subject_id"),
+                'aem.subject_id as original_subject_id',
+                'aem.subject_name',
                 'ae.start_date',
                 'ae.end_date'
             )
@@ -3707,6 +3711,8 @@ class ReportController extends Controller
                 'ae.end_date',
                 'g2.id as group_pk',
                 DB::raw("COALESCE(
+                    (SELECT cs.subject_id FROM curriculum_subjects cs
+                     WHERE cs.curriculum_subject_hemis_id = aem.subject_id LIMIT 1),
                     (SELECT att.subject_id FROM attendances att
                      WHERE att.student_hemis_id = ae.student_hemis_id
                      AND TRIM(att.subject_name) = TRIM(aem.subject_name) LIMIT 1),
@@ -3717,6 +3723,7 @@ class ReportController extends Controller
                      LIMIT 1),
                     aem.subject_id
                 ) as subject_id"),
+                'aem.subject_id as original_subject_id',
                 'aem.subject_name'
             )
             ->get();
@@ -3752,9 +3759,21 @@ class ReportController extends Controller
 
         // Indekslash: student_hemis_id|subject_id => [{start_date, end_date}]
         $excuseMap = [];
+        $resolveLog = [];
         foreach ($subjectExcuses as $exc) {
             $excKey = $exc->student_hemis_id . '|' . $exc->subject_id;
             $excuseMap[$excKey][] = $exc;
+
+            // Log: subject_id resolve qilingan bo'lsa
+            if (isset($exc->original_subject_id) && $exc->original_subject_id != $exc->subject_id) {
+                $resolveLog[] = [
+                    'student_hemis_id' => $exc->student_hemis_id,
+                    'subject_name' => $exc->subject_name ?? '',
+                    'original_id' => $exc->original_subject_id,
+                    'resolved_id' => $exc->subject_id,
+                    'excuse_id' => $exc->excuse_id,
+                ];
+            }
         }
 
         // Umumiy arizalar indeksi: student_hemis_id => [{start_date, end_date}]
@@ -4128,6 +4147,7 @@ class ReportController extends Controller
             'match_count' => $matchCount,
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
+            'resolve_log' => $resolveLog,
         ]);
     }
 

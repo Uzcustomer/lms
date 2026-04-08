@@ -166,6 +166,33 @@
                                 </table>
                             </div>
                         </div>
+
+                        <!-- Resolve Log -->
+                        <div id="resolve-log-area" style="display:none;">
+                            <div style="border-top:2px solid #60a5fa;background:#eff6ff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                                <span style="font-size:13px;font-weight:700;color:#1e40af;cursor:pointer;" onclick="$('#resolve-log-table').toggle();$(this).find('.resolve-arrow').toggleClass('open');">
+                                    <span class="resolve-arrow" style="display:inline-block;transition:transform 0.2s;">&#9654;</span>
+                                    Subject ID o'zgartirilganlar
+                                    (<span id="resolve-log-count">0</span> ta)
+                                    <span style="font-size:11px;color:#3b82f6;margin-left:8px;">(curriculum_subject_hemis_id → subject_id)</span>
+                                </span>
+                            </div>
+                            <div id="resolve-log-table" style="display:none;max-height:300px;overflow:auto;">
+                                <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+                                    <thead style="background:#dbeafe;position:sticky;top:0;z-index:1;">
+                                        <tr>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #60a5fa;font-size:10px;text-transform:uppercase;color:#1e40af;">#</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #60a5fa;font-size:10px;text-transform:uppercase;color:#1e40af;">Talaba</th>
+                                            <th style="padding:8px 6px;text-align:left;border-bottom:2px solid #60a5fa;font-size:10px;text-transform:uppercase;color:#1e40af;">Fan nomi</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #60a5fa;font-size:10px;text-transform:uppercase;color:#1e40af;">Asl ID</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #60a5fa;font-size:10px;text-transform:uppercase;color:#1e40af;">Resolved ID</th>
+                                            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #60a5fa;font-size:10px;text-transform:uppercase;color:#1e40af;">Ariza ID</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="resolve-log-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -281,6 +308,7 @@
                     $('#time-badge').text(elapsed + ' soniyada tekshirildi');
                     renderPage();
                     renderDebugLog(res.debug_log || []);
+                    renderResolveLog(res.resolve_log || []);
                     $('#table-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
@@ -484,6 +512,29 @@
                 html += '</tr>';
             }
             $('#debug-log-body').html(html);
+        }
+
+        function renderResolveLog(logs) {
+            if (!logs || logs.length === 0) {
+                $('#resolve-log-area').hide();
+                return;
+            }
+            $('#resolve-log-count').text(logs.length);
+            var html = '';
+            for (var i = 0; i < logs.length; i++) {
+                var l = logs[i];
+                var rowBg = i % 2 === 0 ? '#fff' : '#eff6ff';
+                html += '<tr style="background:' + rowBg + ';border-bottom:1px solid #dbeafe;">';
+                html += '<td style="padding:6px;color:#1e40af;font-weight:600;">' + (i + 1) + '</td>';
+                html += '<td style="padding:6px;">' + esc(l.student_hemis_id) + '</td>';
+                html += '<td style="padding:6px;font-weight:600;color:#0f172a;">' + esc(l.subject_name) + '</td>';
+                html += '<td style="padding:6px;text-align:center;color:#dc2626;text-decoration:line-through;">' + esc(l.original_id) + '</td>';
+                html += '<td style="padding:6px;text-align:center;font-weight:700;color:#16a34a;">' + esc(l.resolved_id) + '</td>';
+                html += '<td style="padding:6px;text-align:center;color:#64748b;">' + esc(l.excuse_id) + '</td>';
+                html += '</tr>';
+            }
+            $('#resolve-log-body').html(html);
+            $('#resolve-log-area').show();
         }
 
         function downloadExcel() {
@@ -736,5 +787,6 @@
         .pg-btn:hover { background: #f0f9ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
         .debug-arrow.open { transform: rotate(90deg); }
+        .resolve-arrow.open { transform: rotate(90deg); }
     </style>
 </x-app-layout>

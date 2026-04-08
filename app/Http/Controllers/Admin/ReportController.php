@@ -4032,7 +4032,6 @@ class ReportController extends Controller
             'mismatch_count' => $mismatchCount,
             'debug_log' => $debugLog,
             'resolve_log' => $resolveLog,
-            'resolve_log' => $resolveLog,
         ]);
       } catch (\Exception $e) {
             return response()->json([
@@ -4040,6 +4039,45 @@ class ReportController extends Controller
                 'error' => $e->getMessage(), 'error_line' => $e->getFile() . ':' . $e->getLine(),
             ]);
       }
+    }
+
+    /**
+     * Sababli check: talabaning attendance detallari (absent_off > 0).
+     */
+    public function sababliCheckAttendanceDetail(Request $request)
+    {
+        $request->validate([
+            'student_hemis_id' => 'required',
+            'subject_id' => 'required',
+        ]);
+
+        $query = DB::table('attendances as a')
+            ->where('a.student_hemis_id', $request->student_hemis_id)
+            ->where('a.subject_id', $request->subject_id)
+            ->where(function ($q) {
+                $q->where('a.absent_on', '>', 0)->orWhere('a.absent_off', '>', 0);
+            });
+
+        if ($request->get('current_semester', '1') == '1') {
+            $query->where('a.education_year_current', true)
+                  ->whereExists(function ($sub) {
+                      $sub->select(DB::raw(1))
+                          ->from('students as st')
+                          ->whereColumn('st.hemis_id', 'a.student_hemis_id')
+                          ->whereColumn('a.semester_code', 'st.semester_code');
+                  });
+        }
+
+        $rows = $query->select(
+            'a.subject_id', 'a.subject_name', 'a.lesson_date',
+            'a.absent_on', 'a.absent_off',
+            'a.semester_code', 'a.semester_name',
+            'a.education_year_code', 'a.education_year_name', 'a.education_year_current',
+            'a.training_type_code', 'a.training_type_name',
+            'a.lesson_pair_start_time', 'a.lesson_pair_end_time'
+        )->orderBy('a.lesson_date')->get();
+
+        return response()->json(['rows' => $rows]);
     }
 
     /**

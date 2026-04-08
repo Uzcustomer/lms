@@ -526,6 +526,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');
+        Route::get('/reports/sababli-check/attendance-detail', [ReportController::class, 'sababliCheckAttendanceDetail'])->name('reports.sababli-check.attendance-detail');
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
         Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');

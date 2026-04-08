@@ -8,7 +8,7 @@
 $API_BASE = 'https://student.ttatf.uz/rest/v1/data/attendance-list';
 
 // Cookie dan tokenni olish yoki hardcode qilish
-$TOKEN = $_COOKIE['hemis_token'] ?? '';
+$TOKEN = $_COOKIE['hemis_token'] ?? 'pzZYvrKCD17iQc2p1vGd64fp5Muxr8-j';
 
 // ============ FORM YUBORILGAN BO'LSA ============
 $results = [];

@@ -80,9 +80,12 @@ class InternationalStudentController extends Controller
 
         if ($request->filled('data_status')) {
             if ($request->data_status === 'filled') {
-                $query->whereHas('visaInfo');
+                $query->whereHas('visaInfo', fn($q) => $q->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
             } elseif ($request->data_status === 'not_filled') {
-                $query->whereDoesntHave('visaInfo');
+                $query->where(function ($q) {
+                    $q->whereDoesntHave('visaInfo')
+                      ->orWhereHas('visaInfo', fn($q2) => $q2->whereNull('passport_number')->whereNull('visa_number')->whereNull('registration_end_date'));
+                });
             } elseif ($request->data_status === 'approved') {
                 $query->whereHas('visaInfo', fn($q) => $q->where('status', 'approved'));
             } elseif ($request->data_status === 'pending') {

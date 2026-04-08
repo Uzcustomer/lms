@@ -210,6 +210,38 @@
     </div>
 
     <!-- Juftliklar modali -->
+    <!-- Attendance Detail Modal -->
+    <div id="att-detail-overlay" class="pairs-modal-overlay" style="display:none;" onclick="if(event.target===this) $('#att-detail-overlay').fadeOut(150);">
+        <div class="pairs-modal" onclick="event.stopPropagation()" style="max-width:800px;">
+            <div class="pairs-modal-header">
+                <h3 id="att-detail-title" style="margin:0;font-size:15px;font-weight:700;color:#0f172a;">Attendance tafsiloti</h3>
+                <button class="pairs-modal-close" onclick="$('#att-detail-overlay').fadeOut(150)">&times;</button>
+            </div>
+            <div class="pairs-modal-body">
+                <div id="att-detail-loading" style="text-align:center;padding:30px;color:#64748b;">
+                    <svg class="animate-spin" style="display:inline;width:20px;height:20px;margin-right:6px;" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    Yuklanmoqda...
+                </div>
+                <table class="pairs-table" id="att-detail-table" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Sana</th>
+                            <th>Juftlik</th>
+                            <th>Fan nomi</th>
+                            <th>Subject ID</th>
+                            <th>Sababli</th>
+                            <th>Sababsiz</th>
+                            <th>Semester</th>
+                            <th>O'quv yili</th>
+                        </tr>
+                    </thead>
+                    <tbody id="att-detail-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div id="pairs-modal-overlay" class="pairs-modal-overlay" style="display:none;" onclick="closePairsModal(event)">
         <div class="pairs-modal" onclick="event.stopPropagation()">
             <div class="pairs-modal-header">
@@ -418,9 +450,11 @@
             return '<span class="badge badge-hemis-bad">Ariza yo\'q</span>';
         }
 
-        function hemisBadge(val) {
+        function hemisBadge(val, studentId, subjectId) {
             if (val === 'Sababli') return '<span class="badge badge-hemis-ok">Sababli</span>';
+            if (val === 'Sababsiz' && studentId && subjectId) return '<span class="badge badge-hemis-bad" style="cursor:pointer;" onclick="openAttDetail(\'' + studentId + '\', \'' + subjectId + '\')" title="Batafsil ko\'rish">Sababsiz</span>';
             if (val === 'Sababsiz') return '<span class="badge badge-hemis-bad">Sababsiz</span>';
+            if (val === 'Aralash' && studentId && subjectId) return '<span class="badge badge-hemis-mixed" style="cursor:pointer;" onclick="openAttDetail(\'' + studentId + '\', \'' + subjectId + '\')" title="Batafsil ko\'rish">Aralash</span>';
             if (val === 'Aralash') return '<span class="badge badge-hemis-mixed">Aralash</span>';
             if (val === 'Davomat topilmadi') return '<span class="badge badge-hemis-none">Topilmadi</span>';
             return '<span class="badge badge-hemis-none">' + esc(val) + '</span>';
@@ -440,7 +474,7 @@
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:700;font-size:13px;color:#dc2626;">' + r.total_hours + '</td>';
                 html += '<td style="text-align:center;">' + markBadge(r.mark_status, r.excuse_id) + '</td>';
-                html += '<td style="text-align:center;">' + hemisBadge(r.hemis_status) + '</td>';
+                html += '<td style="text-align:center;">' + hemisBadge(r.hemis_status, r.student_hemis_id, r.subject_id) + '</td>';
                 html += '<td style="text-align:center;">' + matchBadge(r.match) + '</td>';
                 html += '<td style="text-align:center;"><button class="btn-detail" onclick="openPairsModal(' + i + ')" title="Batafsil"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button></td>';
                 html += '</tr>';
@@ -476,6 +510,52 @@
         function closePairsModal(e) {
             if (e && e.target !== e.currentTarget) return;
             $('#pairs-modal-overlay').fadeOut(150);
+        }
+
+        var attDetailUrl = '{{ route("admin.reports.sababli-check.attendance-detail") }}';
+
+        function openAttDetail(studentId, subjectId) {
+            $('#att-detail-title').text('Attendance: ' + studentId + ' | Subject ID: ' + subjectId);
+            $('#att-detail-loading').show();
+            $('#att-detail-table').hide();
+            $('#att-detail-overlay').fadeIn(150);
+
+            var cs = $('#filter-current-semester').is(':checked') ? '1' : '0';
+
+            $.ajax({
+                url: attDetailUrl,
+                type: 'GET',
+                data: { student_hemis_id: studentId, subject_id: subjectId, current_semester: cs },
+                success: function(res) {
+                    var rows = res.rows || [];
+                    var html = '';
+                    for (var i = 0; i < rows.length; i++) {
+                        var r = rows[i];
+                        var date = r.lesson_date ? r.lesson_date.substring(0, 10).split('-').reverse().join('.') : '-';
+                        var pair = (r.lesson_pair_start_time && r.lesson_pair_end_time) ? r.lesson_pair_start_time + '-' + r.lesson_pair_end_time : '-';
+                        html += '<tr>';
+                        html += '<td style="text-align:center;">' + (i + 1) + '</td>';
+                        html += '<td style="text-align:center;">' + date + '</td>';
+                        html += '<td style="text-align:center;">' + esc(pair) + '</td>';
+                        html += '<td>' + esc(r.subject_name || '-') + '</td>';
+                        html += '<td style="text-align:center;">' + esc(r.subject_id || '-') + '</td>';
+                        html += '<td style="text-align:center;color:#065f46;font-weight:600;">' + (r.absent_on || 0) + '</td>';
+                        html += '<td style="text-align:center;color:#dc2626;font-weight:600;">' + (r.absent_off || 0) + '</td>';
+                        html += '<td style="text-align:center;font-size:11px;">' + esc(r.semester_name || r.semester_code || '-') + '</td>';
+                        html += '<td style="text-align:center;font-size:11px;">' + esc(r.education_year_name || '-') + (r.education_year_current ? ' <span style="color:#16a34a;">●</span>' : '') + '</td>';
+                        html += '</tr>';
+                    }
+                    if (rows.length === 0) {
+                        html = '<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:20px;">Ma\'lumot topilmadi</td></tr>';
+                    }
+                    $('#att-detail-body').html(html);
+                    $('#att-detail-loading').hide();
+                    $('#att-detail-table').show();
+                },
+                error: function() {
+                    $('#att-detail-loading').html('<span style="color:#dc2626;">Xatolik yuz berdi</span>');
+                }
+            });
         }
 
         var allDebugLogs = [];

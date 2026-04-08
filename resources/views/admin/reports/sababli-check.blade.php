@@ -520,7 +520,7 @@
             $('#att-detail-table').hide();
             $('#att-detail-overlay').fadeIn(150);
 
-            var cs = $('#filter-current-semester').is(':checked') ? '1' : '0';
+            var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
 
             $.ajax({
                 url: attDetailUrl,

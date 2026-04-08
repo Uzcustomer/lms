@@ -496,7 +496,7 @@
                 var rowClass = r.match === 'mismatch' ? 'row-mismatch' : '';
                 html += '<tr class="journal-row ' + rowClass + '">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
-                html += '<td style="cursor:pointer;" onclick="window.open(\'' + r.journal_url + '\', \'_blank\')"><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span></td>';
                 html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td style="text-align:center;font-size:12px;color:#475569;">' + esc(r.semester_name) + '</td>';

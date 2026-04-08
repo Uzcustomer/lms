@@ -3704,6 +3704,17 @@ class ReportController extends Controller
                 $attQuery->where('a.semester_code', $request->semester_code);
             }
 
+            // Joriy semestr filtri
+            if ($request->get('current_semester', '1') == '1') {
+                $attQuery->where('a.education_year_current', true)
+                         ->whereExists(function ($sub) {
+                             $sub->select(DB::raw(1))
+                                 ->from('students as st')
+                                 ->whereColumn('st.hemis_id', 'a.student_hemis_id')
+                                 ->whereColumn('a.semester_code', 'st.semester_code');
+                         });
+            }
+
             $attRows = $attQuery
                 ->select('a.student_hemis_id', 'a.subject_id', 'a.subject_name',
                     'a.lesson_date', 'a.lesson_pair_start_time', 'a.lesson_pair_end_time',

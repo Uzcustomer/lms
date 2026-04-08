@@ -3804,7 +3804,13 @@ class ReportController extends Controller
 
             $totalHours = $totalOn + $totalOff;
             if (empty($pairs)) {
-                $hemisStatus = ($matchMethod === 'topilmadi') ? 'Fan topilmadi' : 'Sana mos emas';
+                if ($matchMethod === 'topilmadi') {
+                    $hemisStatus = 'Fan topilmadi';
+                } elseif (!empty($hemisRecords)) {
+                    $hemisStatus = 'Sana mos emas';
+                } else {
+                    $hemisStatus = "Ma'lumot yo'q";
+                }
                 $match = 'mismatch';
                 $pairs = [['lesson_date' => date('d.m.Y', strtotime($startDate)).' — '.date('d.m.Y', strtotime($endDate)),
                     'lesson_date_raw' => $startDate, 'lesson_pair' => '-', 'hemis_status' => $hemisStatus,

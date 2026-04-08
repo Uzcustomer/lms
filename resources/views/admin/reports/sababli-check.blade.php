@@ -464,8 +464,24 @@
 
         function renderTable(data) {
             var html = '';
+            var prevKey = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
+                var curKey = r.student_hemis_id + '|' + (r.excuse_id || '');
+
+                // Yangi ariza guruhi bo'lsa — sarlavha qator qo'shish
+                if (curKey !== prevKey && r.excuse_id && r.excuse_start) {
+                    var sepColor = r.match === 'mismatch' ? '#fef2f2' : '#f0fdf4';
+                    var sepBorder = r.match === 'mismatch' ? '#fecaca' : '#bbf7d0';
+                    html += '<tr style="background:' + sepColor + ';border-top:2px solid ' + sepBorder + ';">';
+                    html += '<td colspan="11" style="padding:6px 12px;font-size:12px;font-weight:700;color:#334155;">';
+                    html += '<span style="margin-right:8px;">Ariza #' + r.excuse_id + '</span>';
+                    html += '<span style="font-weight:500;color:#64748b;">' + esc(r.full_name) + '</span>';
+                    html += '<span style="margin-left:8px;padding:2px 8px;border-radius:4px;font-size:11px;background:#dbeafe;color:#1e40af;">' + esc(r.excuse_start) + ' — ' + esc(r.excuse_end) + '</span>';
+                    html += '</td></tr>';
+                }
+                prevKey = curKey;
+
                 var rowClass = r.match === 'mismatch' ? 'row-mismatch' : '';
                 html += '<tr class="journal-row ' + rowClass + '">';
                 html += '<td class="td-num">' + r.row_num + '</td>';

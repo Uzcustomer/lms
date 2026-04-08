@@ -155,9 +155,12 @@ class InternationalStudentController extends Controller
             $filledCount = $realFilledCount;
             $notFilledCount = $totalFiltered - $filledCount;
         }
-        $approvedCount = (clone $allVisas)->where('status', 'approved')->count();
-        $pendingCount = (clone $allVisas)->where('status', 'pending')->count();
-        $rejectedCount = (clone $allVisas)->where('status', 'rejected')->count();
+        $realDataFilter = function ($q) {
+            $q->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date'));
+        };
+        $approvedCount = (clone $allVisas)->where('status', 'approved')->where($realDataFilter)->count();
+        $pendingCount = (clone $allVisas)->where('status', 'pending')->where($realDataFilter)->count();
+        $rejectedCount = (clone $allVisas)->where('status', 'rejected')->where($realDataFilter)->count();
 
         $visaUrgentCount = StudentVisaInfo::whereIn('student_id', $filteredIds)
             ->whereNotNull('visa_end_date')

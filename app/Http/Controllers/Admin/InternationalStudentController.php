@@ -87,11 +87,11 @@ class InternationalStudentController extends Controller
                       ->orWhereHas('visaInfo', fn($q2) => $q2->whereNull('passport_number')->whereNull('visa_number')->whereNull('registration_end_date'));
                 });
             } elseif ($request->data_status === 'approved') {
-                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'approved'));
+                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'approved')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
             } elseif ($request->data_status === 'pending') {
-                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'pending'));
+                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'pending')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
             } elseif ($request->data_status === 'rejected') {
-                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'rejected'));
+                $query->whereHas('visaInfo', fn($q) => $q->where('status', 'rejected')->where(fn($q2) => $q2->whereNotNull('passport_number')->orWhereNotNull('visa_number')->orWhereNotNull('registration_end_date')));
             }
         }
 

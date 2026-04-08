@@ -139,9 +139,14 @@ class InternationalStudentController extends Controller
         // Statistika — filtrlangan natijaga asoslangan
         $totalFiltered = $filteredIds->count();
         $allVisas = StudentVisaInfo::whereIn('student_id', $filteredIds);
-        $realFilledCount = (clone $allVisas)->count();
+        // Haqiqiy ma'lumot kiritganlar (faqat firma emas)
+        $realFilledCount = (clone $allVisas)->where(function ($q) {
+            $q->whereNotNull('passport_number')
+              ->orWhereNotNull('visa_number')
+              ->orWhereNotNull('registration_end_date');
+        })->count();
         if ($falseShowEnabled) {
-            $filledCount = $totalFiltered; // Hammasi kiritgan ko'rinadi
+            $filledCount = $totalFiltered;
             $notFilledCount = 0;
         } else {
             $filledCount = $realFilledCount;

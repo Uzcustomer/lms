@@ -464,12 +464,22 @@
         function renderTable(data) {
             var html = '';
             var prevKey = '';
+
+            // Har bir talabaning nechta unique arizasi borligini hisoblash
+            var studentExcuseCount = {};
+            for (var j = 0; j < data.length; j++) {
+                var sid = data[j].student_hemis_id;
+                if (!studentExcuseCount[sid]) studentExcuseCount[sid] = {};
+                if (data[j].excuse_id) studentExcuseCount[sid][data[j].excuse_id] = true;
+            }
+
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var curKey = r.student_hemis_id + '|' + (r.excuse_id || '');
+                var excuseCountForStudent = Object.keys(studentExcuseCount[r.student_hemis_id] || {}).length;
 
-                // Yangi ariza guruhi bo'lsa — sarlavha qator qo'shish
-                if (curKey !== prevKey && r.excuse_id && r.excuse_start) {
+                // Faqat talabaning 1 dan ko'p arizasi bo'lganda sarlavha ko'rsatish
+                if (curKey !== prevKey && r.excuse_id && r.excuse_start && excuseCountForStudent > 1) {
                     if (prevKey !== '') {
                         html += '<tr><td colspan="11" style="height:25px;background:#fff;border:none;"></td></tr>';
                     }

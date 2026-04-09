@@ -688,6 +688,21 @@ class InternationalStudentController extends Controller
      */
     public function storeVisa(Request $request, Student $student)
     {
+        // Sanalarni dd.mm.yyyy / dd/mm/yyyy / dd,mm,yyyy / dd-mm-yyyy formatdan Y-m-d ga o'tkazish
+        $dateFields = ['passport_issued_date','passport_expiry_date','registration_start_date','registration_end_date','visa_start_date','visa_end_date','visa_issued_date','entry_date'];
+        foreach ($dateFields as $field) {
+            $val = $request->input($field);
+            if ($val && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $val)) {
+                $cleaned = preg_replace('/[\/,\-]/', '.', $val);
+                $parts = explode('.', $cleaned);
+                if (count($parts) === 3) {
+                    $d = (int)$parts[0]; $m = (int)$parts[1]; $y = (int)$parts[2];
+                    if ($y < 100) $y += 2000;
+                    $request->merge([$field => sprintf('%04d-%02d-%02d', $y, $m, $d)]);
+                }
+            }
+        }
+
         $request->validate([
             'passport_number' => 'nullable|string|max:50',
             'passport_issued_place' => 'nullable|string|max:255',

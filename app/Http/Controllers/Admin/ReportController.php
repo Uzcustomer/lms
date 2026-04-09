@@ -3639,7 +3639,7 @@ class ReportController extends Controller
         $applyFilters($excWithSubjectQuery);
 
         $excWithSubject = $excWithSubjectQuery->select(
-            'ae.id as excuse_id', 'ae.student_hemis_id', 's.full_name',
+            'ae.id as excuse_id', 'ae.student_hemis_id', 's.full_name', 's.student_id_number',
             's.department_name', 's.specialty_name', 's.level_name',
             's.group_name', 's.semester_name', 's.group_id',
             'ae.start_date', 'ae.end_date', 'g.id as group_pk',
@@ -3680,7 +3680,7 @@ class ReportController extends Controller
         $applyFilters($excGeneralQuery);
 
         $excGeneral = $excGeneralQuery->select(
-            'ae.id as excuse_id', 'ae.student_hemis_id', 's.full_name',
+            'ae.id as excuse_id', 'ae.student_hemis_id', 's.full_name', 's.student_id_number',
             's.department_name', 's.specialty_name', 's.level_name',
             's.group_name', 's.semester_name', 's.group_id',
             'ae.start_date', 'ae.end_date', 'g.id as group_pk'
@@ -3820,6 +3820,7 @@ class ReportController extends Controller
             $semCode = !empty($hemisRecords) ? $hemisRecords[0]->semester_code : null;
             $results[] = [
                 'student_hemis_id' => $exc->student_hemis_id,
+                'student_id_number' => $exc->student_id_number ?? '-',
                 'full_name' => $exc->full_name ?? '-',
                 'department_name' => $exc->department_name ?? '-',
                 'specialty_name' => $exc->specialty_name ?? '-',
@@ -3896,6 +3897,7 @@ class ReportController extends Controller
             }
             $results[] = [
                 'student_hemis_id' => $exc->student_hemis_id,
+                'student_id_number' => $exc->student_id_number ?? '-',
                 'full_name' => $exc->full_name ?? '-', 'department_name' => $exc->department_name ?? '-',
                 'specialty_name' => $exc->specialty_name ?? '-', 'level_name' => $exc->level_name ?? '-',
                 'group_name' => $exc->group_name ?? '-', 'semester_name' => $exc->semester_name ?? '-',

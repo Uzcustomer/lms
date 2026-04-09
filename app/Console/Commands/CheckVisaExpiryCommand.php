@@ -41,6 +41,12 @@ class CheckVisaExpiryCommand extends Command
         return self::SUCCESS;
     }
 
+    private function isInternational(Student $student): bool
+    {
+        return str_starts_with(strtolower($student->group_name ?? ''), 'xd')
+            || str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy');
+    }
+
     private function checkRegistration(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
     {
         $daysLeft = $info->registrationDaysLeft();
@@ -57,11 +63,16 @@ class CheckVisaExpiryCommand extends Command
         }
 
         $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
+        $en = $this->isInternational($student);
 
         if ($daysLeft <= 0) {
-            $message = "{$emoji} Registratsiya muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
+            $message = $en
+                ? "{$emoji} Your registration has expired! Please contact the registrator office immediately."
+                : "{$emoji} Registratsiya muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
         } else {
-            $message = "{$emoji} Registratsiya muddati tugashiga {$daysLeft} kun qoldi. Muddatini uzaytiring.";
+            $message = $en
+                ? "{$emoji} Your registration expires in {$daysLeft} days. Please renew it."
+                : "{$emoji} Registratsiya muddati tugashiga {$daysLeft} kun qoldi. Muddatini uzaytiring.";
         }
 
         // Talabaga bildirishnoma
@@ -91,11 +102,16 @@ class CheckVisaExpiryCommand extends Command
         }
 
         $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
+        $en = $this->isInternational($student);
 
         if ($daysLeft <= 0) {
-            $message = "{$emoji} Viza muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
+            $message = $en
+                ? "{$emoji} Your visa has expired! Please contact the registrator office immediately."
+                : "{$emoji} Viza muddati tugagan! Zudlik bilan registrator ofisiga murojaat qiling.";
         } else {
-            $message = "{$emoji} Viza muddati tugashiga {$daysLeft} kun qoldi. Vizangizni yangilang.";
+            $message = $en
+                ? "{$emoji} Your visa expires in {$daysLeft} days. Please renew it."
+                : "{$emoji} Viza muddati tugashiga {$daysLeft} kun qoldi. Vizangizni yangilang.";
         }
 
         $this->notifyStudent($student, $telegram, $message, $level, 'visa');
@@ -118,7 +134,10 @@ class CheckVisaExpiryCommand extends Command
         $shouldWarn = ($regDays !== null && $regDays <= 7) || ($visaDays !== null && $visaDays <= 30);
         if (!$shouldWarn) return 0;
 
-        $message = "⚠️ Pasportingizni registrator ofisi xodimiga topshirishingiz kerak. Iltimos, tezroq topshiring.";
+        $en = $this->isInternational($student);
+        $message = $en
+            ? "⚠️ You need to submit your passport to the registrator office. Please do it as soon as possible."
+            : "⚠️ Pasportingizni registrator ofisi xodimiga topshirishingiz kerak. Iltimos, tezroq topshiring.";
         $this->notifyStudent($student, $telegram, $message, 'danger', 'passport');
         return 1;
     }

@@ -11,11 +11,11 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport berilgan sana</label>
-            <input type="date" name="passport_issued_date" value="{{ $visaInfo?->passport_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="passport_issued_date" value="{{ $visaInfo?->passport_issued_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Pasport tugash sanasi</label>
-            <input type="date" name="passport_expiry_date" value="{{ $visaInfo?->passport_expiry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="passport_expiry_date" value="{{ $visaInfo?->passport_expiry_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -55,15 +55,15 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Boshlanish</label>
-            <input type="date" name="registration_start_date" value="{{ $visaInfo?->registration_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="registration_start_date" value="{{ $visaInfo?->registration_start_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Tugash</label>
-            <input type="date" name="registration_end_date" value="{{ $visaInfo?->registration_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="registration_end_date" value="{{ $visaInfo?->registration_end_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Kirish sanasi</label>
-            <input type="date" name="entry_date" value="{{ $visaInfo?->entry_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="entry_date" value="{{ $visaInfo?->entry_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -84,7 +84,13 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Kirishlar</label>
-            <input type="number" name="visa_entries_count" value="{{ $visaInfo?->visa_entries_count ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+            <select name="visa_entries_count" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
+                <option value="">-</option>
+                @for($i = 1; $i <= 10; $i++)
+                    <option value="{{ $i }}" {{ (int)($visaInfo?->visa_entries_count ?? 0) === $i ? 'selected' : '' }}>{{ $i }}</option>
+                @endfor
+                <option value="99" {{ (int)($visaInfo?->visa_entries_count ?? 0) === 99 ? 'selected' : '' }}>Ko'p martalik / Multiple</option>
+            </select>
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Muddat (kun)</label>
@@ -94,11 +100,11 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-top:10px;">
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Boshlanish</label>
-            <input type="date" name="visa_start_date" value="{{ $visaInfo?->visa_start_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="visa_start_date" value="{{ $visaInfo?->visa_start_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Tugash</label>
-            <input type="date" name="visa_end_date" value="{{ $visaInfo?->visa_end_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="visa_end_date" value="{{ $visaInfo?->visa_end_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan joy</label>
@@ -106,7 +112,7 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Berilgan sana</label>
-            <input type="date" name="visa_issued_date" value="{{ $visaInfo?->visa_issued_date?->format('Y-m-d') ?? '' }}" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
+            <input type="text" name="visa_issued_date" value="{{ $visaInfo?->visa_issued_date?->format('d.m.Y') ?? '' }}" class="admin-datepicker" placeholder="kk.oo.yyyy" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer;">
         </div>
     </div>
 
@@ -140,6 +146,39 @@
     </div>
 </form>
 
+<script>
+function initAdminDatepickers(container) {
+    if (typeof window.flatpickr === 'undefined') return;
+    var root = container || document;
+    root.querySelectorAll('.admin-datepicker').forEach(function(el) {
+        if (el._flatpickr) return;
+        flatpickr(el, {
+            dateFormat: 'd.m.Y',
+            allowInput: true,
+            parseDate: function(dateStr, format) {
+                // Support: dd/mm/yyyy, dd.mm.yyyy, dd,mm,yyyy, dd-mm-yyyy
+                var cleaned = dateStr.replace(/[\/,\-]/g, '.');
+                var parts = cleaned.split('.');
+                if (parts.length === 3) {
+                    var day = parseInt(parts[0], 10);
+                    var month = parseInt(parts[1], 10) - 1;
+                    var year = parseInt(parts[2], 10);
+                    if (year < 100) year += 2000;
+                    if (day > 0 && month >= 0 && month < 12 && year > 1900) {
+                        return new Date(year, month, day);
+                    }
+                }
+                return new Date(dateStr);
+            }
+        });
+    });
+}
+document.addEventListener('DOMContentLoaded', function() { initAdminDatepickers(); });
+// Re-init when Alpine x-show panels become visible (edit panel toggle)
+document.addEventListener('click', function() {
+    setTimeout(function() { initAdminDatepickers(); }, 100);
+});
+</script>
 <script>
 if (typeof adminCountrySelect === 'undefined') {
     var adminCountryItems = ['Afghanistan','Albania','Algeria','Angola','Argentina','Armenia','Australia','Austria','Azerbaijan','Bahrain','Bangladesh','Belarus','Belgium','Bhutan','Bolivia','Bosnia','Brazil','Brunei','Bulgaria','Cambodia','Cameroon','Canada','Chad','Chile','China','Colombia','Congo','Croatia','Cuba','Cyprus','Czech Republic','Denmark','Ecuador','Egypt','Eritrea','Estonia','Ethiopia','Finland','France','Georgia','Germany','Ghana','Greece','Guatemala','Guinea','Haiti','Honduras','Hungary','India','Indonesia','Iran','Iraq','Ireland','Israel','Italy','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Korea','Kuwait','Kyrgyzstan','Laos','Latvia','Lebanon','Libya','Lithuania','Madagascar','Malaysia','Maldives','Mali','Mexico','Moldova','Mongolia','Morocco','Mozambique','Myanmar','Nepal','Netherlands','New Zealand','Nicaragua','Niger','Nigeria','Norway','Oman','Pakistan','Palestine','Panama','Paraguay','Peru','Philippines','Poland','Portugal','Qatar','Romania','Russia','Saudi Arabia','Senegal','Serbia','Singapore','Slovakia','Slovenia','Somalia','South Africa','Spain','Sri Lanka','Sudan','Sweden','Switzerland','Syria','Tajikistan','Tanzania','Thailand','Tunisia','Turkey','Turkmenistan','UAE','Uganda','Ukraine','United Kingdom','United States','Uruguay','Uzbekistan','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'];

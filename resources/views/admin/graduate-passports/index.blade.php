@@ -1,36 +1,41 @@
 <x-app-layout>
     @push('styles')
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         .gp-container { padding: 16px; }
-        .gp-filters { background: linear-gradient(135deg, #f0f4f8, #e8edf5); padding: 16px 20px; border-radius: 12px; margin-bottom: 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .gp-filter { display: flex; flex-direction: column; gap: 4px; }
-        .gp-filter label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #475569; }
-        .gp-filter input, .gp-filter select { height: 36px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none; background: #fff; }
-        .gp-filter input:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
-        .gp-btn { padding: 8px 18px; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; height: 36px; display: inline-flex; align-items: center; gap: 6px; }
+        .gp-search-bar { background: linear-gradient(135deg, #f0f4f8, #e8edf5); padding: 16px 20px; border-radius: 12px; margin-bottom: 16px; display: flex; gap: 10px; align-items: center; }
+        .gp-search-input { flex: 1; height: 40px; padding: 0 16px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; background: #fff; }
+        .gp-search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .gp-btn { padding: 8px 20px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; height: 40px; display: inline-flex; align-items: center; gap: 6px; }
         .gp-btn-primary { background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; }
         .gp-btn-primary:hover { background: linear-gradient(135deg, #1d4ed8, #2563eb); }
-        .gp-stats { display: flex; gap: 8px; margin-bottom: 12px; }
-        .gp-stat { padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; }
+
+        /* Statistika */
+        .gp-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .gp-stat-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+        .gp-stat-header { padding: 10px 14px; font-size: 13px; font-weight: 700; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+        .gp-stat-body { padding: 8px 14px; }
+        .gp-spec-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+        .gp-spec-row:last-child { border-bottom: none; }
+        .gp-spec-name { color: #334155; font-weight: 500; }
+        .gp-grp-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+        .gp-grp-badge { padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; }
+        .gp-total-badge { padding: 2px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.25); color: #fff; }
+
+        /* Jadval */
         .gp-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
         .gp-table thead th { background: #1e293b; color: #fff; padding: 12px 10px; font-size: 11px; text-transform: uppercase; text-align: left; white-space: nowrap; }
         .gp-table tbody td { padding: 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
         .gp-table tbody tr:hover { background: #f0f9ff; }
         .gp-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .gp-badge-ok { background: #dcfce7; color: #166534; }
-        .gp-badge-no { background: #fee2e2; color: #991b1b; }
-        .gp-file-btn { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-decoration: none; cursor: pointer; border: 1px solid #cbd5e1; color: #334155; background: #fff; }
+        .gp-file-btn { display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-decoration: none; border: 1px solid #cbd5e1; color: #334155; background: #fff; }
         .gp-file-btn:hover { background: #f0f9ff; border-color: #2563eb; color: #2563eb; }
-        .gp-empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
-        .gp-loading { text-align: center; padding: 40px; color: #2563eb; }
+        .gp-empty { text-align: center; padding: 40px 20px; color: #94a3b8; }
+        .gp-loading { text-align: center; padding: 40px; color: #2563eb; display: none; }
         .gp-pagination { display: flex; gap: 4px; justify-content: center; padding: 12px; flex-wrap: wrap; }
         .gp-pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
         .gp-pg-btn:hover { background: #f0f9ff; border-color: #2563eb; }
         .gp-pg-active { background: #2563eb !important; color: #fff !important; border-color: #2563eb !important; }
-        .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
-        .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; font-size: 13px; }
-        .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; }
+        @keyframes spin{to{transform:rotate(360deg)}}
     </style>
     @endpush
 
@@ -39,56 +44,53 @@
     </x-slot>
 
     <div class="gp-container">
-        <div class="gp-filters">
-            <div class="gp-filter" style="min-width:140px;">
-                <label>Ta'lim turi</label>
-                <select id="f-education-type" class="select2" style="width:100%;">
-                    <option value="">Barchasi</option>
-                    @foreach($educationTypes as $t)
-                        <option value="{{ $t->education_type_code }}">{{ $t->education_type_name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="gp-filter" style="flex:1;min-width:180px;">
-                <label>Fakultet</label>
-                <select id="f-faculty" class="select2" style="width:100%;">
-                    <option value="">Barchasi</option>
-                    @foreach($faculties as $f)
-                        <option value="{{ $f->id }}">{{ $f->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="gp-filter" style="min-width:140px;">
-                <label>Guruh</label>
-                <input type="text" id="f-group" placeholder="d1/22-01a...">
-            </div>
-            <div class="gp-filter" style="flex:1;min-width:200px;">
-                <label>Qidirish</label>
-                <input type="text" id="f-search" placeholder="Ism, ID, passport, JSHSHIR...">
-            </div>
-            <div class="gp-filter">
-                <label>&nbsp;</label>
-                <button class="gp-btn gp-btn-primary" onclick="loadData(1)">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                    Qidirish
-                </button>
-            </div>
+        <!-- Statistika -->
+        <div style="margin-bottom:12px;font-size:15px;font-weight:700;color:#1e293b;">
+            Jami: <span style="color:#2563eb;">{{ $total }}</span> ta bitiruvchi ma'lumot to'ldirgan
         </div>
 
-        <div id="stats-area" style="display:none;" class="gp-stats">
-            <span class="gp-stat" style="background:#dbeafe;color:#1e40af;" id="stat-total"></span>
+        @if(!empty($byFaculty))
+        <div class="gp-stats-grid">
+            @php $colors = ['#1e40af','#047857','#b45309','#7c3aed','#dc2626','#0891b2','#4338ca','#be123c','#15803d','#0369a1']; $ci = 0; @endphp
+            @foreach($byFaculty as $facName => $facData)
+                <div class="gp-stat-card">
+                    <div class="gp-stat-header" style="background:{{ $colors[$ci % count($colors)] }};">
+                        <span>{{ $facName }}</span>
+                        <span class="gp-total-badge">{{ $facData['total'] }}</span>
+                    </div>
+                    <div class="gp-stat-body">
+                        @foreach($facData['specialties'] as $specName => $specData)
+                            <div class="gp-spec-row">
+                                <span class="gp-spec-name">{{ $specName }} <span style="color:#94a3b8;">({{ $specData['total'] }})</span></span>
+                                <div class="gp-grp-badges">
+                                    @foreach($specData['groups'] as $grpName => $grpCount)
+                                        <span class="gp-grp-badge" style="background:#dcfce7;color:#166534;">{{ $grpName }}: {{ $grpCount }}</span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+                @php $ci++; @endphp
+            @endforeach
+        </div>
+        @endif
+
+        <!-- Qidirish -->
+        <div class="gp-search-bar">
+            <input type="text" id="f-search" class="gp-search-input" placeholder="Ism, student ID, passport raqami, JSHSHIR, guruh nomi bo'yicha qidirish..." onkeyup="if(event.key==='Enter')loadData(1)">
+            <button class="gp-btn gp-btn-primary" onclick="loadData(1)">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                Qidirish
+            </button>
         </div>
 
-        <div id="loading" class="gp-loading" style="display:none;">
+        <div id="loading" class="gp-loading">
             <div style="width:36px;height:36px;margin:0 auto 8px;border:4px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
             Yuklanmoqda...
         </div>
-        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
-        <div id="empty" class="gp-empty">
-            <p style="font-size:15px;font-weight:600;">Bitiruvchilar passport ma'lumotlarini ko'rish</p>
-            <p style="font-size:13px;margin-top:4px;">Filtrlarni tanlang va "Qidirish" tugmasini bosing</p>
-        </div>
+        <div id="result-count" style="display:none;margin-bottom:8px;font-size:13px;font-weight:700;color:#1e40af;"></div>
 
         <div id="table-area" style="display:none;">
             <div style="overflow-x:auto;">
@@ -113,50 +115,39 @@
             </div>
             <div id="pagination" class="gp-pagination"></div>
         </div>
+
+        <div id="empty" class="gp-empty" style="display:none;">
+            <p style="font-size:15px;font-weight:600;">Ma'lumot topilmadi</p>
+        </div>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         var dataUrl = '{{ route("admin.graduate-passports.data") }}';
         var fileUrlBase = '{{ url("/admin/graduate-passports") }}';
-        var csrfToken = '{{ csrf_token() }}';
 
-        $(function() {
-            $('.select2').select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: 'Barchasi' });
-            loadData(1);
-        });
+        $(function() { loadData(1); });
 
         function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
         function loadData(page) {
-            $('#empty').hide(); $('#table-area').hide(); $('#loading').show(); $('#stats-area').hide();
+            $('#empty').hide(); $('#table-area').hide(); $('#loading').show(); $('#result-count').hide();
 
             $.ajax({
                 url: dataUrl, type: 'GET',
-                data: {
-                    page: page, per_page: 50,
-                    education_type: $('#f-education-type').val() || '',
-                    faculty: $('#f-faculty').val() || '',
-                    group_name: $('#f-group').val() || '',
-                    search: $('#f-search').val() || '',
-                },
+                data: { page: page, per_page: 50, search: $('#f-search').val() || '' },
                 success: function(res) {
                     $('#loading').hide();
                     if (!res.data || res.data.length === 0) {
-                        $('#empty').show().find('p:first').text("Ma'lumot topilmadi");
+                        $('#empty').show();
                         return;
                     }
-                    $('#stat-total').text('Jami: ' + res.total + ' ta');
-                    $('#stats-area').show();
+                    $('#result-count').text('Topildi: ' + res.total + ' ta').show();
                     renderTable(res.data);
                     renderPagination(res);
                     $('#table-area').show();
                 },
-                error: function() {
-                    $('#loading').hide();
-                    $('#empty').show().find('p:first').text('Xatolik yuz berdi');
-                }
+                error: function() { $('#loading').hide(); $('#empty').show(); }
             });
         }
 
@@ -168,7 +159,7 @@
                 if (r.has_front) files += '<a href="' + fileUrlBase + '/' + r.id + '/file/passport_front_path" target="_blank" class="gp-file-btn">Old</a> ';
                 if (r.has_back) files += '<a href="' + fileUrlBase + '/' + r.id + '/file/passport_back_path" target="_blank" class="gp-file-btn">Orqa</a> ';
                 if (r.has_foreign) files += '<a href="' + fileUrlBase + '/' + r.id + '/file/foreign_passport_path" target="_blank" class="gp-file-btn">Xorijiy</a>';
-                if (!files) files = '<span class="gp-badge gp-badge-no">Yo\'q</span>';
+                if (!files) files = '<span style="color:#dc2626;font-size:11px;">Yo\'q</span>';
 
                 var nameUz = [r.last_name, r.first_name, r.father_name].filter(Boolean).join(' ');
 
@@ -197,8 +188,5 @@
             }
             $('#pagination').html(html);
         }
-
-        $('#f-search').on('keyup', function(e) { if (e.key === 'Enter') loadData(1); });
-        $('#f-group').on('keyup', function(e) { if (e.key === 'Enter') loadData(1); });
     </script>
 </x-app-layout>

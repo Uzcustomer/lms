@@ -121,7 +121,12 @@ class StaffEvaluationController extends Controller
 
         $url = route('staff-evaluate.form', $teacher->eval_qr_token);
 
-        $qrSvg = QrCode::size(400)->margin(2)->generate($url);
+        $qrSvg = QrCode::size(400)->errorCorrection('H')->margin(2)->generate($url);
+
+        // SVG markaziga "RG" yozuvini qo'shish
+        $rgOverlay = '<rect x="170" y="178" width="60" height="44" rx="8" fill="#2563EB"/>'
+            . '<text x="200" y="208" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="28" fill="white">RG</text>';
+        $qrSvg = str_replace('</svg>', $rgOverlay . '</svg>', $qrSvg);
 
         return response($qrSvg)
             ->header('Content-Type', 'image/svg+xml')

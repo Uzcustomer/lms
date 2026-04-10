@@ -54,7 +54,14 @@
         @if($teacher->eval_qr_token)
         <div class="flex flex-col sm:flex-row items-center gap-6">
             <div class="flex-shrink-0 bg-white p-3 border rounded-lg">
-                {!! QrCode::size(200)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                <div class="relative inline-block">
+                    {!! QrCode::size(200)->errorCorrection('H')->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="bg-blue-600 rounded-md px-2 py-1">
+                            <span class="text-white font-bold text-lg leading-none">RG</span>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="flex-1 text-center sm:text-left">
                 <h3 class="font-semibold text-gray-800 mb-2">QR kod</h3>

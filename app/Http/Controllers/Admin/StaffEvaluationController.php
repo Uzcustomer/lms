@@ -137,11 +137,14 @@ class StaffEvaluationController extends Controller
 
         $qrSvg = QrCode::size(400)->errorCorrection('H')->margin(2)->generate($url);
 
-        // SVG markaziga "RG" yozuvini qo'shish
-        $rgOverlay = '<rect x="155" y="165" width="90" height="70" rx="10" fill="white"/>'
-            . '<rect x="162" y="172" width="76" height="56" rx="8" fill="#2563EB"/>'
-            . '<text x="200" y="210" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="34" fill="white">RG</text>';
-        $qrSvg = str_replace('</svg>', $rgOverlay . '</svg>', $qrSvg);
+        // SVG markaziga logo qo'shish
+        $logoPath = public_path('logo.png');
+        if (file_exists($logoPath)) {
+            $logoBase64 = base64_encode(file_get_contents($logoPath));
+            $logoOverlay = '<circle cx="200" cy="200" r="32" fill="white"/>'
+                . '<image x="174" y="174" width="52" height="52" href="data:image/png;base64,' . $logoBase64 . '" clip-path="circle(26px at 26px 26px)"/>';
+            $qrSvg = str_replace('</svg>', $logoOverlay . '</svg>', $qrSvg);
+        }
 
         return response($qrSvg)
             ->header('Content-Type', 'image/svg+xml')

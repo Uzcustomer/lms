@@ -163,10 +163,8 @@
                 <div class="flex-shrink-0 relative">
                     {!! QrCode::size(80)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div class="bg-white rounded-md" style="padding:3px;">
-                            <div class="bg-blue-600 rounded px-1.5 py-0.5">
-                                <span class="text-white font-bold text-xs leading-none">RG</span>
-                            </div>
+                        <div class="bg-white rounded-full" style="padding:3px;">
+                            <img src="{{ asset('logo.png') }}" alt="Logo" class="rounded-full" style="width:22px;height:22px;">
                         </div>
                     </div>
                     <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"

@@ -87,6 +87,20 @@ class StaffEvaluationController extends Controller
         ))->with('success', "{$count} ta xodim uchun QR kod yaratildi.");
     }
 
+    public function deleteAllQr()
+    {
+        $teachers = Teacher::whereNotNull('eval_qr_token')->get();
+        $count = $teachers->count();
+
+        foreach ($teachers as $teacher) {
+            $teacher->staffEvaluations()->delete();
+            $teacher->update(['eval_qr_token' => null]);
+        }
+
+        return redirect()->route('admin.staff-evaluation.index', ['tab' => 'list'])
+            ->with('success', "{$count} ta xodimning QR kodi va baholari o'chirildi.");
+    }
+
     public function deleteQr(Teacher $teacher)
     {
         $teacher->staffEvaluations()->delete();

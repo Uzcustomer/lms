@@ -28,13 +28,26 @@
                     </a>
                 @endif
             </form>
-            <form method="POST" action="{{ route('admin.staff-evaluation.generate-all-qr') }}">
-                @csrf
-                <button type="submit"
-                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-                    Barchaga QR yaratish
-                </button>
-            </form>
+            <div class="flex gap-2">
+                <form method="POST" action="{{ route('admin.staff-evaluation.generate-all-qr') }}">
+                    @csrf
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                        Barchaga QR yaratish
+                    </button>
+                </form>
+                @if($activeTab === 'qr')
+                <form method="POST" action="{{ route('admin.staff-evaluation.delete-all-qr') }}"
+                      onsubmit="return confirm('Barcha QR kodlar va ularga tegishli baholar o\'chiriladi. Davom etasizmi?')">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit"
+                            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">
+                        Hammasini o'chirish
+                    </button>
+                </form>
+                @endif
+            </div>
         </div>
 
         {{-- Tablar --}}

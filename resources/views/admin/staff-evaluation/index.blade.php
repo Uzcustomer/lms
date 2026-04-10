@@ -220,11 +220,14 @@
             @if($teacher->eval_qr_token)
             <div class="border rounded-lg overflow-hidden shadow-sm bg-white">
                 <div id="card-{{ $teacher->id }}" style="padding:32px 24px; text-align:center; font-family:Arial,sans-serif; background:white;">
-                    {{-- Logo --}}
-                    <img src="{{ asset('logo.png') }}" alt="Logo" style="width:80px; height:80px; border-radius:50%; margin:0 auto 12px;">
-                    {{-- QR kod --}}
-                    <div style="display:inline-block; padding:10px; border:2px solid #e5e7eb; border-radius:12px; margin-bottom:16px;">
+                    {{-- QR kod with logo --}}
+                    <div style="display:inline-block; padding:10px; border:2px solid #e5e7eb; border-radius:12px; margin-bottom:16px; position:relative;">
                         {!! QrCode::size(180)->errorCorrection('H')->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
+                            <div style="background:white; border-radius:50%; padding:4px; display:flex;">
+                                <img src="{{ asset('logo.png') }}" alt="Logo" style="width:42px; height:42px; border-radius:50%;">
+                            </div>
+                        </div>
                     </div>
                     {{-- Ma'lumotlar --}}
                     <div style="font-size:13px; color:#1e3a8a; font-weight:700; line-height:1.4; margin-bottom:4px;">

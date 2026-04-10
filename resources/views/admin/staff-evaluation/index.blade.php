@@ -155,7 +155,7 @@
             </table>
         </div>
 
-        @else
+        @elseif($activeTab === 'qr')
         {{-- ==================== QR KODLAR TABI ==================== --}}
         <div class="space-y-3">
             @forelse($teachers as $teacher)

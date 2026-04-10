@@ -17,7 +17,7 @@ class BackfillAttendance extends Command
         {--from= : Boshlanish sanasi (Y-m-d), masalan: 2026-01-01}
         {--to= : Tugash sanasi (Y-m-d), default kecha}';
 
-    protected $description = 'Faqat attendance yozuvlarini HEMIS API dan qayta import qilish (baholarni o\'zgartirmaydi)';
+    protected $description = 'Faqat o\'zgargan attendance yozuvlarini HEMIS API dan yangilash (baholarni tegmaydi)';
 
     private string $baseUrl;
     private string $token;
@@ -30,7 +30,7 @@ class BackfillAttendance extends Command
         $this->token = config('services.hemis.token') ?? '';
 
         if (!$this->baseUrl || !$this->token) {
-            $this->error('HEMIS API konfiguratsiyasi topilmadi (services.hemis.base_url / token)');
+            $this->error('HEMIS API konfiguratsiyasi topilmadi');
             return self::FAILURE;
         }
 
@@ -45,20 +45,25 @@ class BackfillAttendance extends Command
         $endDate = $toDate ? Carbon::parse($toDate)->startOfDay() : Carbon::yesterday()->startOfDay();
 
         if ($startDate->greaterThan($endDate)) {
-            $this->error("Boshlanish sanasi tugash sanasidan katta bo'lishi mumkin emas.");
+            $this->error("Boshlanish sanasi tugash sanasidan katta.");
             return self::FAILURE;
         }
 
         $period = CarbonPeriod::create($startDate, $endDate);
         $totalDays = abs($startDate->diffInDays($endDate)) + 1;
 
-        $this->info("ATTENDANCE BACKFILL: {$startDate->toDateString()} → {$endDate->toDateString()} ({$totalDays} kun)");
-        $this->info("Faqat attendance import qilinadi, baholar o'zgarmaydi.");
+        $this->info("ATTENDANCE SYNC: {$startDate->toDateString()} → {$endDate->toDateString()} ({$totalDays} kun)");
+        $this->info("Faqat o'zgarganlar yangilanadi.");
         $this->newLine();
 
+        // Student lookup cache
+        $studentCache = [];
+
         $successDays = 0;
-        $failedDays = [];
         $totalUpdated = 0;
+        $totalSkipped = 0;
+        $totalNew = 0;
+        $failedDays = [];
         $dayNum = 0;
 
         foreach ($period as $date) {
@@ -66,35 +71,121 @@ class BackfillAttendance extends Command
             $dayFrom = $date->copy()->startOfDay()->timestamp;
             $dayTo = $date->copy()->endOfDay()->timestamp;
 
-            $items = $this->fetchAttendance($dayFrom, $dayTo);
+            $apiItems = $this->fetchAttendance($dayFrom, $dayTo);
 
-            if ($items === false) {
+            if ($apiItems === false) {
                 $failedDays[] = $date->toDateString();
                 $this->error("  {$date->toDateString()} — API xato");
                 continue;
             }
 
+            if (empty($apiItems)) {
+                $successDays++;
+                continue;
+            }
+
+            // API dan kelgan hemis_id lar
+            $apiHemisIds = array_column($apiItems, 'id');
+
+            // DB dan mavjud yozuvlarni olish (faqat hemis_id va absent_on/off)
+            $existingRows = DB::table('attendances')
+                ->whereIn('hemis_id', $apiHemisIds)
+                ->pluck(DB::raw("CONCAT(absent_on, '|', absent_off)"), 'hemis_id')
+                ->toArray();
+
             $dayUpdated = 0;
-            foreach ($items as $item) {
-                try {
-                    if ($this->processAttendance($item)) {
-                        $dayUpdated++;
+            $daySkipped = 0;
+            $dayNew = 0;
+
+            foreach ($apiItems as $item) {
+                $hemisId = $item['id'] ?? 0;
+                $absentOn = $item['absent_on'] ?? 0;
+                $absentOff = $item['absent_off'] ?? 0;
+
+                if ($absentOn == 0 && $absentOff == 0) continue;
+
+                // DB da bormi va qiymatlari bir xilmi?
+                if (isset($existingRows[$hemisId])) {
+                    $dbValue = $existingRows[$hemisId];
+                    $apiValue = $absentOn . '|' . $absentOff;
+
+                    if ($dbValue === $apiValue) {
+                        $daySkipped++;
+                        continue; // O'zgarmagan — o'tkazib yuborish
                     }
-                } catch (\Throwable $e) {
-                    Log::warning("[AttendanceBackfill] Item failed: " . substr($e->getMessage(), 0, 100));
+
+                    // Faqat absent_on va absent_off yangilash
+                    DB::table('attendances')
+                        ->where('hemis_id', $hemisId)
+                        ->update([
+                            'absent_on' => $absentOn,
+                            'absent_off' => $absentOff,
+                            'updated_at' => now(),
+                        ]);
+                    $dayUpdated++;
+                } else {
+                    // Yangi yozuv — to'liq insert
+                    $studentId = $item['student']['id'] ?? null;
+                    if (!$studentId) continue;
+
+                    if (!isset($studentCache[$studentId])) {
+                        $studentCache[$studentId] = Student::where('hemis_id', $studentId)->first();
+                    }
+                    $student = $studentCache[$studentId];
+                    if (!$student) continue;
+
+                    Attendance::create([
+                        'hemis_id' => $hemisId,
+                        'subject_schedule_id' => $item['_subject_schedule'],
+                        'student_id' => $student->id,
+                        'student_hemis_id' => $studentId,
+                        'student_name' => $item['student']['name'],
+                        'employee_id' => $item['employee']['id'],
+                        'employee_name' => $item['employee']['name'],
+                        'subject_id' => $item['subject']['id'],
+                        'subject_name' => $item['subject']['name'],
+                        'subject_code' => $item['subject']['code'],
+                        'education_year_code' => $item['educationYear']['code'],
+                        'education_year_name' => $item['educationYear']['name'],
+                        'education_year_current' => $item['educationYear']['current'],
+                        'semester_code' => $item['semester']['code'],
+                        'semester_name' => $item['semester']['name'],
+                        'group_id' => $item['group']['id'],
+                        'group_name' => $item['group']['name'],
+                        'education_lang_code' => $item['group']['educationLang']['code'],
+                        'education_lang_name' => $item['group']['educationLang']['name'],
+                        'training_type_code' => $item['trainingType']['code'],
+                        'training_type_name' => $item['trainingType']['name'],
+                        'lesson_pair_code' => $item['lessonPair']['code'],
+                        'lesson_pair_name' => $item['lessonPair']['name'],
+                        'lesson_pair_start_time' => $item['lessonPair']['start_time'],
+                        'lesson_pair_end_time' => $item['lessonPair']['end_time'],
+                        'absent_on' => $absentOn,
+                        'absent_off' => $absentOff,
+                        'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
+                        'status' => 'absent',
+                    ]);
+                    $dayNew++;
                 }
             }
 
             $totalUpdated += $dayUpdated;
+            $totalSkipped += $daySkipped;
+            $totalNew += $dayNew;
             $successDays++;
-            $this->info("  {$date->toDateString()} — {$dayNum}/{$totalDays} — " . count($items) . " ta olindi, {$dayUpdated} ta yangilandi");
+
+            $info = "{$date->toDateString()} — {$dayNum}/{$totalDays}";
+            if ($dayUpdated > 0 || $dayNew > 0) {
+                $this->info("  {$info} — yangilandi: {$dayUpdated}, yangi: {$dayNew}, o'tkazildi: {$daySkipped}");
+            }
         }
 
         $this->newLine();
-        $this->info("TUGADI: {$successDays}/{$totalDays} kun muvaffaqiyatli, jami {$totalUpdated} ta attendance yangilandi.");
+        $this->info("TUGADI: {$successDays}/{$totalDays} kun");
+        $this->info("  Yangilandi: {$totalUpdated} | Yangi: {$totalNew} | O'tkazildi (bir xil): {$totalSkipped}");
 
         if (!empty($failedDays)) {
-            $this->warn("Xato bo'lgan kunlar: " . implode(', ', $failedDays));
+            $this->warn("Xato kunlar: " . implode(', ', $failedDays));
         }
 
         return empty($failedDays) ? self::SUCCESS : self::FAILURE;
@@ -137,54 +228,5 @@ class BackfillAttendance extends Command
         } while ($page <= $totalPages);
 
         return $allItems;
-    }
-
-    private function processAttendance(array $item): bool
-    {
-        $studentId = $item['student']['id'] ?? null;
-        if (!$studentId) return false;
-
-        $absentOn = $item['absent_on'] ?? 0;
-        $absentOff = $item['absent_off'] ?? 0;
-        if ($absentOn == 0 && $absentOff == 0) return false;
-
-        $student = Student::where('hemis_id', $studentId)->first();
-        if (!$student) return false;
-
-        Attendance::updateOrCreate(
-            ['hemis_id' => $item['id']],
-            [
-                'subject_schedule_id' => $item['_subject_schedule'],
-                'student_id' => $student->id,
-                'student_hemis_id' => $item['student']['id'],
-                'student_name' => $item['student']['name'],
-                'employee_id' => $item['employee']['id'],
-                'employee_name' => $item['employee']['name'],
-                'subject_id' => $item['subject']['id'],
-                'subject_name' => $item['subject']['name'],
-                'subject_code' => $item['subject']['code'],
-                'education_year_code' => $item['educationYear']['code'],
-                'education_year_name' => $item['educationYear']['name'],
-                'education_year_current' => $item['educationYear']['current'],
-                'semester_code' => $item['semester']['code'],
-                'semester_name' => $item['semester']['name'],
-                'group_id' => $item['group']['id'],
-                'group_name' => $item['group']['name'],
-                'education_lang_code' => $item['group']['educationLang']['code'],
-                'education_lang_name' => $item['group']['educationLang']['name'],
-                'training_type_code' => $item['trainingType']['code'],
-                'training_type_name' => $item['trainingType']['name'],
-                'lesson_pair_code' => $item['lessonPair']['code'],
-                'lesson_pair_name' => $item['lessonPair']['name'],
-                'lesson_pair_start_time' => $item['lessonPair']['start_time'],
-                'lesson_pair_end_time' => $item['lessonPair']['end_time'],
-                'absent_on' => $absentOn,
-                'absent_off' => $absentOff,
-                'lesson_date' => Carbon::createFromTimestamp($item['lesson_date']),
-                'status' => 'absent',
-            ]
-        );
-
-        return true;
     }
 }

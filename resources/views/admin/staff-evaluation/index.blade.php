@@ -139,53 +139,53 @@
 
         @else
         {{-- ==================== QR KODLAR TABI ==================== --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div class="space-y-3">
             @forelse($teachers as $teacher)
-            <div class="border rounded-lg p-4 text-center hover:shadow-md transition-shadow group relative">
-                <div class="font-semibold text-gray-800 mb-1">{{ $teacher->full_name }}</div>
-                @if($teacher->department)
-                    <div class="text-xs text-gray-400 mb-3">{{ $teacher->department }}</div>
-                @endif
-
-                @if($teacher->eval_qr_token)
-                    <div class="relative flex justify-center mb-3">
-                        <div>
-                            {!! QrCode::size(160)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+            <a href="{{ route('admin.staff-evaluation.show', $teacher) }}"
+               class="flex items-center gap-5 border rounded-lg p-4 hover:shadow-md transition-shadow group bg-white">
+                <div class="flex-shrink-0 w-10 text-center text-lg font-bold text-gray-400">
+                    {{ $teachers->firstItem() + $loop->index }}
+                </div>
+                <div class="flex-shrink-0 relative">
+                    {!! QrCode::size(100)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                    <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                         onclick="event.preventDefault(); window.location.href='{{ route('admin.staff-evaluation.download-qr', $teacher) }}'">
+                        <span class="px-3 py-1 bg-white text-gray-800 rounded text-xs font-medium shadow">&#8681; Yuklab olish</span>
+                    </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{{ $teacher->full_name }}</div>
+                    @if($teacher->department)
+                        <div class="text-sm text-gray-400">{{ $teacher->department }}</div>
+                    @endif
+                    @if($teacher->staff_position)
+                        <div class="text-xs text-gray-400">{{ $teacher->staff_position }}</div>
+                    @endif
+                </div>
+                <div class="flex-shrink-0 text-right">
+                    @if($teacher->staff_evaluations_avg_rating)
+                        @php
+                            $avg = $teacher->staff_evaluations_avg_rating;
+                            if ($avg >= 4) $rColor = 'text-green-600';
+                            elseif ($avg >= 3) $rColor = 'text-yellow-600';
+                            else $rColor = 'text-red-600';
+                        @endphp
+                        <div class="flex items-center gap-1 {{ $rColor }}">
+                            <span>&#9733;</span>
+                            <span class="text-lg font-bold">{{ number_format($avg, 1) }}</span>
                         </div>
-                        <a href="{{ route('admin.staff-evaluation.download-qr', $teacher) }}"
-                           class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span class="px-4 py-2 bg-white text-gray-800 rounded-lg text-sm font-medium shadow">
-                                &#8681; Yuklab olish
-                            </span>
-                        </a>
-                    </div>
-                    <div class="flex items-center justify-center gap-2">
-                        @if($teacher->staff_evaluations_avg_rating)
-                            <span class="text-yellow-500">&#9733;</span>
-                            <span class="text-sm font-semibold">{{ number_format($teacher->staff_evaluations_avg_rating, 1) }}</span>
-                            <span class="text-xs text-gray-400">({{ $teacher->staff_evaluations_count }})</span>
-                        @endif
-                    </div>
-                @else
-                    <div class="py-6 text-gray-300">
-                        <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
-                        </svg>
-                    </div>
-                    <form method="POST" action="{{ route('admin.staff-evaluation.generate-qr', $teacher) }}">
-                        @csrf
-                        <button type="submit" class="mt-2 px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
-                            QR yaratish
-                        </button>
-                    </form>
-                @endif
-            </div>
+                        <div class="text-xs text-gray-400">{{ $teacher->staff_evaluations_count }} ta baho</div>
+                    @else
+                        <span class="text-gray-300 text-sm">Baholar yo'q</span>
+                    @endif
+                </div>
+            </a>
             @empty
-            <div class="col-span-full text-center text-gray-500 py-8">
+            <div class="text-center text-gray-500 py-8">
                 @if(request('search'))
-                    "{{ request('search') }}" bo'yicha xodim topilmadi.
+                    "{{ request('search') }}" bo'yicha QR kodli xodim topilmadi.
                 @else
-                    Xodimlar topilmadi.
+                    QR kodli xodimlar yo'q. Avval QR kodlarni yarating.
                 @endif
             </div>
             @endforelse

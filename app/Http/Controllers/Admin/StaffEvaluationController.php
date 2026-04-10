@@ -34,12 +34,17 @@ class StaffEvaluationController extends Controller
         return view('admin.staff-evaluation.index', compact('teachers'));
     }
 
-    public function show(Teacher $teacher)
+    public function show(Request $request, Teacher $teacher)
     {
-        $evaluations = $teacher->staffEvaluations()
+        $query = $teacher->staffEvaluations()
             ->with('student:id,full_name,short_name')
-            ->latest()
-            ->paginate(20);
+            ->latest();
+
+        if ($request->filled('rating')) {
+            $query->where('rating', $request->rating);
+        }
+
+        $evaluations = $query->paginate(20)->withQueryString();
 
         $avgRating = $teacher->staffEvaluations()->avg('rating');
         $totalCount = $teacher->staffEvaluations()->count();

@@ -147,8 +147,13 @@
                     {{ $teachers->firstItem() + $loop->index }}
                 </div>
                 <div class="flex-shrink-0 relative">
-                    {!! QrCode::size(80)->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
-                    <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    {!! QrCode::size(80)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="bg-blue-600 rounded px-1 py-0.5">
+                            <span class="text-white font-bold text-xs leading-none">RG</span>
+                        </div>
+                    </div>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
                          onclick="event.preventDefault(); window.location.href='{{ route('admin.staff-evaluation.download-qr', $teacher) }}'">
                         <span class="px-3 py-1 bg-white text-gray-800 rounded text-xs font-medium shadow">&#8681; Yuklab olish</span>
                     </div>

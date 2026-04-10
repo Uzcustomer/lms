@@ -25,13 +25,19 @@ class GraduatePassportController extends Controller
 
     public function data(Request $request)
     {
-        $request->validate(['group_id' => 'required']);
-
-        $students = DB::table('students as s')
+        $query = DB::table('students as s')
             ->where('s.is_graduate', true)
-            ->where('s.group_id', $request->group_id)
-            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
-            ->select(
+            ->where('s.education_type_code', '11')
+            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id');
+
+        // Agar group_id berilsa — faqat shu guruh, aks holda faqat to'ldirganlar
+        if ($request->filled('group_id')) {
+            $query->where('s.group_id', $request->group_id);
+        } else {
+            $query->whereNotNull('gp.id');
+        }
+
+        $students = $query->select(
                 's.id', 's.hemis_id', 's.student_id_number', 's.full_name',
                 's.department_name', 's.group_name',
                 'gp.id as gp_id', 'gp.first_name', 'gp.last_name', 'gp.father_name',
@@ -47,6 +53,7 @@ class GraduatePassportController extends Controller
                 return [
                     'full_name' => $st->full_name,
                     'student_id_number' => $st->student_id_number,
+                    'group_name' => $st->group_name ?? '',
                     'filled' => $filled,
                     'gp_id' => $st->gp_id,
                     'name_uz' => $filled ? trim(($st->last_name ?? '') . ' ' . ($st->first_name ?? '') . ' ' . ($st->father_name ?? '')) : '',

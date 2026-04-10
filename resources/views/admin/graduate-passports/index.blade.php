@@ -49,6 +49,7 @@
                                     <th style="width:44px;text-align:center;">#</th>
                                     <th>Talaba FISH</th>
                                     <th>Student ID</th>
+                                    <th>Guruh</th>
                                     <th style="text-align:center;">Holat</th>
                                     <th>Ma'lumotlar</th>
                                     <th style="text-align:center;">Fayllar</th>
@@ -72,18 +73,25 @@
 
         function loadGroup() {
             var groupId = $('#group-select').val();
-            if (!groupId) { $('#table-area').hide(); $('#empty').show(); return; }
 
             $('#empty').hide(); $('#table-area').hide(); $('#loading').show();
 
-            $.get(dataUrl, { group_id: groupId }, function(res) {
+            var params = groupId ? { group_id: groupId } : {};
+
+            $.get(dataUrl, params, function(res) {
                 $('#loading').hide();
                 var students = res.students || [];
-                if (students.length === 0) { $('#empty').show().find('p').text("Talabalar topilmadi"); return; }
+                if (students.length === 0) {
+                    $('#loading').hide();
+                    $('#empty').show().find('p').text(groupId ? "Talabalar topilmadi" : "To'ldirgan talaba yo'q");
+                    return;
+                }
 
                 var filled = students.filter(function(s) { return s.filled; }).length;
                 var emptyCount = students.length - filled;
-                var groupName = $('#group-select option:selected').text().split('(')[0].trim();
+                var groupName = groupId
+                    ? $('#group-select option:selected').text().split('(')[0].trim()
+                    : 'Barcha to\'ldirganlar';
 
                 $('#group-info').text(groupName + ' — ' + students.length + ' ta talaba');
                 $('#stat-filled').text("To'ldirgan: " + filled);
@@ -130,6 +138,7 @@
                     html += '<td style="text-align:center;font-weight:700;color:#2b5ea7;">' + (i + 1) + '</td>';
                     html += '<td style="font-weight:600;color:#0f172a;font-size:12px;text-transform:uppercase;">' + esc(s.full_name) + '</td>';
                     html += '<td style="font-size:11px;color:#64748b;font-weight:500;">' + esc(s.student_id_number) + '</td>';
+                    html += '<td><span style="background:linear-gradient(135deg,#1a3268,#2b5ea7);color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;">' + esc(s.group_name) + '</span></td>';
                     html += '<td style="text-align:center;">' + status + '</td>';
                     html += '<td>' + info + '</td>';
                     html += '<td style="text-align:center;">' + files + '</td>';
@@ -151,6 +160,9 @@
                 arrow.style.transform = 'rotate(90deg)';
             }
         }
+
+        // Sahifa ochilganda barcha to'ldirganlarni yuklash
+        $(document).ready(function() { loadGroup(); });
     </script>
 
     <style>

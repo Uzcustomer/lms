@@ -82,6 +82,10 @@ Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceE
 Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
 Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
 
+// Xodimni baholash (QR kod orqali, public)
+Route::get('/staff-evaluate/{token}', [\App\Http\Controllers\StaffEvaluateController::class, 'form'])->name('staff-evaluate.form');
+Route::post('/staff-evaluate/{token}', [\App\Http\Controllers\StaffEvaluateController::class, 'submit'])->name('staff-evaluate.submit');
+
 // Til almashtirish (Language switch)
 Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
 
@@ -684,9 +688,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
     });
 
-    // Faqat superadmin uchun
+    // Faqat superadmin uchun — Xodimlarni baholash
     Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
-        Route::get('/staff-evaluation', fn () => view('admin.staff-evaluation.index'))->name('staff-evaluation.index');
+        Route::get('/staff-evaluation', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'index'])->name('staff-evaluation.index');
+        Route::get('/staff-evaluation/{user}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
+        Route::post('/staff-evaluation/{user}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');
+        Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
+        Route::get('/staff-evaluation/{user}/download-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'downloadQr'])->name('staff-evaluation.download-qr');
     });
 });
 

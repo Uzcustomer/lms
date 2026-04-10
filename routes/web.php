@@ -697,6 +697,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::delete('/staff-evaluation/{teacher}/delete-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteQr'])->name('staff-evaluation.delete-qr');
         Route::post('/staff-evaluation/{teacher}/regenerate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'regenerateQr'])->name('staff-evaluation.regenerate-qr');
         Route::get('/staff-evaluation/{teacher}/download-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'downloadQr'])->name('staff-evaluation.download-qr');
+        Route::get('/staff-evaluation/{teacher}/export-excel', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'exportExcel'])->name('staff-evaluation.export-excel');
     });
 });
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\StaffEvaluationExport;
 use App\Http\Controllers\Controller;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
@@ -102,6 +103,14 @@ class StaffEvaluationController extends Controller
 
         return redirect()->route('admin.staff-evaluation.show', $teacher)
             ->with('success', "QR kod qayta yaratildi, eski baholar o'chirildi.");
+    }
+
+    public function exportExcel(Request $request, Teacher $teacher)
+    {
+        $rating = $request->input('rating');
+        $filename = 'baholar-' . Str::slug($teacher->full_name) . '.xlsx';
+
+        return (new StaffEvaluationExport($teacher->id, $rating))->download($filename);
     }
 
     public function downloadQr(Teacher $teacher)

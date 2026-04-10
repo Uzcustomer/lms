@@ -100,29 +100,38 @@
         @endif
     </div>
 
-    {{-- Yulduz filtrlari --}}
+    {{-- Yulduz filtrlari + Excel --}}
     <div class="bg-white shadow rounded-lg p-4 mb-6">
-        <div class="flex flex-wrap items-center gap-2">
-            <span class="text-sm font-medium text-gray-600 mr-1">Filtr:</span>
-            <a href="{{ route('admin.staff-evaluation.show', $teacher) }}"
-               class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors {{ !request('rating') ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
-                Barchasi ({{ $totalCount }})
-            </a>
-            @foreach($ratingDistribution as $star => $count)
-                @php
-                    if ($star >= 4) { $btnActive = 'bg-green-600 text-white'; $btnInactive = 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'; }
-                    elseif ($star == 3) { $btnActive = 'bg-yellow-500 text-white'; $btnInactive = 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'; }
-                    else { $btnActive = 'bg-red-600 text-white'; $btnInactive = 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'; }
-                @endphp
-                <a href="{{ route('admin.staff-evaluation.show', ['teacher' => $teacher, 'rating' => $star]) }}"
-                   class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors {{ request('rating') == $star ? $btnActive : $btnInactive }}">
-                    {{ $star }} &#9733; ({{ $count }})
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-medium text-gray-600 mr-1">Filtr:</span>
+                <a href="{{ route('admin.staff-evaluation.show', $teacher) }}"
+                   class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors {{ !request('rating') ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                    Barchasi ({{ $totalCount }})
                 </a>
-            @endforeach
+                @foreach($ratingDistribution as $star => $count)
+                    @php
+                        if ($star >= 4) { $btnActive = 'bg-green-600 text-white'; $btnInactive = 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'; }
+                        elseif ($star == 3) { $btnActive = 'bg-yellow-500 text-white'; $btnInactive = 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'; }
+                        else { $btnActive = 'bg-red-600 text-white'; $btnInactive = 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'; }
+                    @endphp
+                    <a href="{{ route('admin.staff-evaluation.show', ['teacher' => $teacher, 'rating' => $star]) }}"
+                       class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors {{ request('rating') == $star ? $btnActive : $btnInactive }}">
+                        {{ $star }} &#9733; ({{ $count }})
+                    </a>
+                @endforeach
+            </div>
+            <a href="{{ route('admin.staff-evaluation.export-excel', array_merge(['teacher' => $teacher], request()->only('rating'))) }}"
+               class="px-4 py-2 bg-green-700 text-white rounded-lg text-sm font-medium hover:bg-green-800 inline-flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Excel
+            </a>
         </div>
     </div>
 
-    {{-- Baholar ro'yxati --}}
+    {{-- Baholar ro'yxati — 2 column --}}
     <div class="bg-white shadow rounded-lg p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">
             Baholar va izohlar
@@ -131,41 +140,43 @@
             @endif
         </h3>
 
-        @forelse($evaluations as $eval)
-        @php
-            if ($eval->rating >= 4) { $cardBg = 'bg-green-50 border-green-200'; $starColor = 'text-green-500'; }
-            elseif ($eval->rating == 3) { $cardBg = 'bg-yellow-50 border-yellow-200'; $starColor = 'text-yellow-500'; }
-            else { $cardBg = 'bg-red-50 border-red-200'; $starColor = 'text-red-500'; }
-        @endphp
-        <div class="rounded-lg border p-4 mb-3 {{ $cardBg }}">
-            <div class="flex items-center gap-3 mb-1">
-                <div class="flex">
-                    @for($i = 1; $i <= 5; $i++)
-                        <span class="{{ $i <= $eval->rating ? $starColor : 'text-gray-300' }} text-lg">&#9733;</span>
-                    @endfor
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            @forelse($evaluations as $eval)
+            @php
+                if ($eval->rating >= 4) { $cardBg = 'bg-green-50 border-green-200'; $starColor = 'text-green-500'; }
+                elseif ($eval->rating == 3) { $cardBg = 'bg-yellow-50 border-yellow-200'; $starColor = 'text-yellow-500'; }
+                else { $cardBg = 'bg-red-50 border-red-200'; $starColor = 'text-red-500'; }
+            @endphp
+            <div class="rounded-lg border p-4 {{ $cardBg }}">
+                <div class="flex items-center gap-3 mb-1">
+                    <div class="flex">
+                        @for($i = 1; $i <= 5; $i++)
+                            <span class="{{ $i <= $eval->rating ? $starColor : 'text-gray-300' }} text-lg">&#9733;</span>
+                        @endfor
+                    </div>
+                    <span class="text-sm text-gray-500">
+                        {{ $eval->created_at->format('d.m.Y H:i') }}
+                    </span>
                 </div>
-                <span class="text-sm text-gray-500">
-                    {{ $eval->created_at->format('d.m.Y H:i') }}
-                </span>
+                @if($eval->comment)
+                    <p class="text-gray-700 mt-1 text-sm">{{ $eval->comment }}</p>
+                @endif
+                @if($eval->student)
+                    <p class="text-xs text-gray-400 mt-2">{{ $eval->student->short_name ?? $eval->student->full_name }}</p>
+                @else
+                    <p class="text-xs text-gray-400 mt-2">Anonim</p>
+                @endif
             </div>
-            @if($eval->comment)
-                <p class="text-gray-700 mt-1">{{ $eval->comment }}</p>
-            @endif
-            @if($eval->student)
-                <p class="text-xs text-gray-400 mt-2">{{ $eval->student->short_name ?? $eval->student->full_name }}</p>
-            @else
-                <p class="text-xs text-gray-400 mt-2">Anonim</p>
-            @endif
+            @empty
+            <div class="col-span-2 text-center py-8 text-gray-500">
+                @if(request('rating'))
+                    {{ request('rating') }} yulduzli baholar yo'q.
+                @else
+                    Hali baholar yo'q.
+                @endif
+            </div>
+            @endforelse
         </div>
-        @empty
-        <p class="text-gray-500 text-center py-8">
-            @if(request('rating'))
-                {{ request('rating') }} yulduzli baholar yo'q.
-            @else
-                Hali baholar yo'q.
-            @endif
-        </p>
-        @endforelse
 
         <div class="mt-4">
             {{ $evaluations->links() }}

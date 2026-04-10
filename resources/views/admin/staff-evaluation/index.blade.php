@@ -164,7 +164,7 @@
                     {!! QrCode::size(80)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <div class="bg-white rounded-full" style="padding:3px;">
-                            <img src="{{ asset('logo.png') }}" alt="Logo" class="rounded-full" style="width:22px;height:22px;">
+                            <img src="{{ asset('logo.png') }}" alt="Logo" class="rounded-full" style="width:28px;height:28px;">
                         </div>
                     </div>
                     <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"

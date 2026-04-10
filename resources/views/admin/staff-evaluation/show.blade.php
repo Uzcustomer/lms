@@ -57,8 +57,8 @@
                 <div class="relative inline-block">
                     {!! QrCode::size(200)->errorCorrection('H')->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div class="bg-white rounded-full" style="padding:4px;">
-                            <img src="{{ asset('logo.png') }}" alt="Logo" class="rounded-full" style="width:44px;height:44px;">
+                        <div class="bg-white rounded-full" style="padding:5px;">
+                            <img src="{{ asset('logo.png') }}" alt="Logo" class="rounded-full" style="width:56px;height:56px;">
                         </div>
                     </div>
                 </div>

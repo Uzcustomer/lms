@@ -683,6 +683,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
         Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
     });
+
+    // Faqat superadmin uchun
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
+        Route::get('/superadmin-panel', fn () => view('admin.superadmin-panel'))->name('superadmin-panel');
+    });
 });
 
 // Impersonatsiyani to'xtatish (har qanday guard'dan)

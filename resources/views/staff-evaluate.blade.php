@@ -94,8 +94,8 @@
         @endif
 
         <div class="header">
-            <div class="avatar">{{ mb_substr($user->name, 0, 1) }}</div>
-            <div class="staff-name">{{ $user->name }}</div>
+            <div class="avatar">{{ mb_substr($teacher->full_name, 0, 1) }}</div>
+            <div class="staff-name">{{ $teacher->full_name }}</div>
             <div class="subtitle">Xizmat sifatini baholang</div>
         </div>
 

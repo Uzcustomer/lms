@@ -165,4 +165,8 @@ class Teacher extends Authenticatable
         return $this->hasMany(StaffRegistrationDivision::class);
     }
 
+    public function staffEvaluations()
+    {
+        return $this->hasMany(StaffEvaluation::class);
+    }
 }

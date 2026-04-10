@@ -11,6 +11,8 @@
         </div>
     @endif
 
+    @php $activeTab = request('tab', 'list'); @endphp
+
     <div class="bg-white shadow rounded-lg p-6">
         {{-- Qidiruv va amallar --}}
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -51,7 +53,6 @@
         </div>
 
         {{-- Tablar --}}
-        @php $activeTab = request('tab', 'list'); @endphp
         <div class="flex gap-2 mb-6">
             <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'list'])) }}"
                class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors {{ $activeTab === 'list' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">

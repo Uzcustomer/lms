@@ -3,26 +3,35 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\StaffEvaluation;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class StaffEvaluationController extends Controller
 {
     public function index()
     {
-        $users = User::withCount('staffEvaluations')
-            ->withAvg('staffEvaluations', 'rating')
-            ->orderBy('name')
-            ->get();
+        $hasTable = Schema::hasTable('staff_evaluations');
 
-        return view('admin.staff-evaluation.index', compact('users'));
+        $query = User::orderBy('name');
+
+        if ($hasTable) {
+            $query->withCount('staffEvaluations')
+                  ->withAvg('staffEvaluations', 'rating');
+        }
+
+        $users = $query->get();
+
+        return view('admin.staff-evaluation.index', compact('users', 'hasTable'));
     }
 
     public function show(User $user)
     {
+        if (!Schema::hasTable('staff_evaluations')) {
+            return back()->with('error', 'staff_evaluations jadvali topilmadi. Migration ishlatilmagan.');
+        }
+
         $evaluations = $user->staffEvaluations()
             ->with('student:id,full_name,short_name')
             ->latest()
@@ -67,13 +76,10 @@ class StaffEvaluationController extends Controller
 
         $url = route('staff-evaluate.form', $user->eval_qr_token);
 
-        $qrImage = QrCode::format('png')
-            ->size(400)
-            ->margin(2)
-            ->generate($url);
+        $qrSvg = QrCode::size(400)->margin(2)->generate($url);
 
-        return response($qrImage)
-            ->header('Content-Type', 'image/png')
-            ->header('Content-Disposition', 'attachment; filename="qr-' . Str::slug($user->name) . '.png"');
+        return response($qrSvg)
+            ->header('Content-Type', 'image/svg+xml')
+            ->header('Content-Disposition', 'attachment; filename="qr-' . Str::slug($user->name) . '.svg"');
     }
 }

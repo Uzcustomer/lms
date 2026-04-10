@@ -47,7 +47,7 @@
                             <div class="text-xs text-gray-400">{{ $user->email }}</div>
                         </td>
                         <td class="px-4 py-3 text-center">
-                            @if($user->staff_evaluations_avg_rating)
+                            @if($hasTable && $user->staff_evaluations_avg_rating)
                                 <div class="flex items-center justify-center gap-1">
                                     <span class="text-yellow-500">&#9733;</span>
                                     <span class="font-semibold text-gray-800">{{ number_format($user->staff_evaluations_avg_rating, 1) }}</span>
@@ -57,7 +57,7 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 text-center text-sm text-gray-600">
-                            {{ $user->staff_evaluations_count }}
+                            {{ $hasTable ? $user->staff_evaluations_count : 0 }}
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($user->eval_qr_token)

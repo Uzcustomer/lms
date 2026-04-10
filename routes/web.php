@@ -691,9 +691,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
     // Faqat superadmin uchun — Xodimlarni baholash
     Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
         Route::get('/staff-evaluation', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'index'])->name('staff-evaluation.index');
+        Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
         Route::get('/staff-evaluation/{user}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
         Route::post('/staff-evaluation/{user}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');
-        Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
         Route::get('/staff-evaluation/{user}/download-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'downloadQr'])->name('staff-evaluation.download-qr');
     });
 });

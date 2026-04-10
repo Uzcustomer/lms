@@ -57,8 +57,10 @@
                 <div class="relative inline-block">
                     {!! QrCode::size(200)->errorCorrection('H')->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div class="bg-blue-600 rounded-md px-2 py-1">
-                            <span class="text-white font-bold text-lg leading-none">RG</span>
+                        <div class="bg-white rounded-lg p-1.5" style="padding:5px;">
+                            <div class="bg-blue-600 rounded-md px-3 py-1.5">
+                                <span class="text-white font-bold text-xl leading-none">RG</span>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ $user->name }} — Baholar
+            {{ $teacher->full_name }} — Baholar
         </h2>
     </x-slot>
 
@@ -48,24 +48,24 @@
         <div class="flex items-center justify-between">
             <div>
                 <h3 class="font-semibold text-gray-800">QR kod</h3>
-                @if($user->eval_qr_token)
+                @if($teacher->eval_qr_token)
                     <p class="text-sm text-gray-500 mt-1">
-                        Havola: <code class="bg-gray-100 px-2 py-0.5 rounded text-xs">{{ route('staff-evaluate.form', $user->eval_qr_token) }}</code>
+                        Havola: <code class="bg-gray-100 px-2 py-0.5 rounded text-xs break-all">{{ route('staff-evaluate.form', $teacher->eval_qr_token) }}</code>
                     </p>
                 @else
                     <p class="text-sm text-gray-400 mt-1">QR kod hali yaratilmagan.</p>
                 @endif
             </div>
             <div class="flex gap-2">
-                @if(!$user->eval_qr_token)
-                <form method="POST" action="{{ route('admin.staff-evaluation.generate-qr', $user) }}">
+                @if(!$teacher->eval_qr_token)
+                <form method="POST" action="{{ route('admin.staff-evaluation.generate-qr', $teacher) }}">
                     @csrf
                     <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
                         QR yaratish
                     </button>
                 </form>
                 @else
-                <a href="{{ route('admin.staff-evaluation.download-qr', $user) }}"
+                <a href="{{ route('admin.staff-evaluation.download-qr', $teacher) }}"
                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 inline-block">
                     QR yuklab olish
                 </a>

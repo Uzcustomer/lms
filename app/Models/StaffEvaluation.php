@@ -7,16 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 class StaffEvaluation extends Model
 {
     protected $fillable = [
-        'user_id',
+        'teacher_id',
         'student_id',
         'rating',
         'comment',
         'ip_address',
     ];
 
-    public function user()
+    public function teacher()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Teacher::class);
     }
 
     public function student()

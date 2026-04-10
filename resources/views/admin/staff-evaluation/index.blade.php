@@ -62,6 +62,10 @@
                class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors {{ $activeTab === 'qr' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
                 QR kodlar
             </a>
+            <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'shablon'])) }}"
+               class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors {{ $activeTab === 'shablon' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                Shablon
+            </a>
         </div>
 
         @if($activeTab === 'list')
@@ -209,10 +213,69 @@
             </div>
             @endforelse
         </div>
+        @elseif($activeTab === 'shablon')
+        {{-- ==================== SHABLON TABI ==================== --}}
+        <div class="space-y-6">
+            @forelse($teachers as $teacher)
+            @if($teacher->eval_qr_token)
+            <div class="border rounded-lg overflow-hidden shadow-sm" id="card-{{ $teacher->id }}">
+                {{-- Card template --}}
+                <div style="width:600px; margin:0 auto; font-family:Arial,sans-serif;">
+                    {{-- Header --}}
+                    <div style="background:#1e3a8a; padding:14px 24px; display:flex; align-items:center; gap:14px;">
+                        <img src="{{ asset('logo.png') }}" alt="Logo" style="width:48px;height:48px;border-radius:50%;">
+                        <div>
+                            <div style="color:white; font-size:16px; font-weight:700; line-height:1.3;">Toshkent davlat tibbiyot universiteti</div>
+                            <div style="color:#93c5fd; font-size:13px; font-weight:500;">Termiz filiali</div>
+                        </div>
+                    </div>
+                    {{-- Body --}}
+                    <div style="background:#2563eb; padding:20px 24px; display:flex; align-items:center; gap:0;">
+                        {{-- Chap tomon — O'zbekcha --}}
+                        <div style="flex:1; text-align:center; color:white; padding-right:16px;">
+                            <div style="font-size:14px; line-height:1.5;">
+                                QR kod orqali<br>
+                                xodimning xizmat<br>
+                                ko'rsatish sifatini<br>
+                                baholang
+                            </div>
+                        </div>
+                        {{-- O'rta — QR kod --}}
+                        <div style="flex-shrink:0; background:white; padding:8px; border-radius:8px;">
+                            {!! QrCode::size(140)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                        </div>
+                        {{-- O'ng tomon — Ruscha --}}
+                        <div style="flex:1; text-align:center; color:white; padding-left:16px;">
+                            <div style="font-size:14px; line-height:1.5;">
+                                Оцените качество<br>
+                                обслуживания<br>
+                                сотрудника с<br>
+                                помощью QR кода
+                            </div>
+                        </div>
+                    </div>
+                    {{-- Footer — xodim ismi --}}
+                    <div style="background:#1e3a8a; padding:8px 24px; text-align:center;">
+                        <span style="color:white; font-size:13px; font-weight:600;">{{ $teacher->full_name }}</span>
+                        @if($teacher->staff_position)
+                            <span style="color:#93c5fd; font-size:12px;"> — {{ $teacher->staff_position }}</span>
+                        @endif
+                    </div>
+                </div>
+            </div>
+            @endif
+            @empty
+            <div class="text-center text-gray-500 py-8">
+                QR kodli xodimlar yo'q. Avval QR kodlarni yarating.
+            </div>
+            @endforelse
+        </div>
         @endif
 
+        @if($activeTab !== 'shablon')
         <div class="mt-4">
             {{ $teachers->links() }}
         </div>
+        @endif
     </div>
 </x-app-layout>

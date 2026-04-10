@@ -686,7 +686,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
     // Faqat superadmin uchun
     Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
-        Route::get('/superadmin-panel', fn () => view('admin.superadmin-panel'))->name('superadmin-panel');
+        Route::get('/staff-evaluation', fn () => view('admin.staff-evaluation.index'))->name('staff-evaluation.index');
     });
 });
 

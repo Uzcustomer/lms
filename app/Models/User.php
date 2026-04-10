@@ -27,6 +27,7 @@ class User extends Authenticatable
         'password',
         'assigned_firm',
         'telegram_chat_id',
+        'eval_qr_token',
     ];
 
     /**
@@ -50,5 +51,10 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function staffEvaluations()
+    {
+        return $this->hasMany(StaffEvaluation::class);
     }
 }

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\StudentPassport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -11,43 +10,49 @@ class GraduatePassportController extends Controller
 {
     public function index()
     {
-        // Statistika: fakultet → yo'nalish → guruh bo'yicha
-        $stats = DB::table('graduate_student_passports as gp')
-            ->join('students as s', 's.id', '=', 'gp.student_id')
+        // Barcha graduate talabalar
+        $students = DB::table('students as s')
+            ->where('s.is_graduate', true)
+            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
             ->select(
-                's.department_name',
-                's.specialty_name',
-                's.group_name',
-                DB::raw('COUNT(*) as cnt')
+                's.id', 's.hemis_id', 's.student_id_number', 's.full_name',
+                's.department_name', 's.specialty_name', 's.group_name',
+                DB::raw('IF(gp.id IS NOT NULL, 1, 0) as filled')
             )
-            ->groupBy('s.department_name', 's.specialty_name', 's.group_name')
             ->orderBy('s.department_name')
-            ->orderBy('s.specialty_name')
             ->orderBy('s.group_name')
+            ->orderBy('s.full_name')
             ->get();
 
-        $total = $stats->sum('cnt');
-
-        // Fakultet bo'yicha guruhlash
+        // Fakultet → guruh → talabalar
         $byFaculty = [];
-        foreach ($stats as $row) {
-            $fac = $row->department_name ?? 'Noma\'lum';
-            $spec = $row->specialty_name ?? 'Noma\'lum';
-            $grp = $row->group_name ?? '-';
+        $totalStudents = 0;
+        $totalFilled = 0;
+
+        foreach ($students as $st) {
+            $fac = $st->department_name ?? 'Noma\'lum';
+            $grp = $st->group_name ?? '-';
 
             if (!isset($byFaculty[$fac])) {
-                $byFaculty[$fac] = ['total' => 0, 'specialties' => []];
+                $byFaculty[$fac] = ['groups' => [], 'total' => 0, 'filled' => 0];
             }
-            $byFaculty[$fac]['total'] += $row->cnt;
+            if (!isset($byFaculty[$fac]['groups'][$grp])) {
+                $byFaculty[$fac]['groups'][$grp] = ['students' => [], 'total' => 0, 'filled' => 0];
+            }
 
-            if (!isset($byFaculty[$fac]['specialties'][$spec])) {
-                $byFaculty[$fac]['specialties'][$spec] = ['total' => 0, 'groups' => []];
+            $byFaculty[$fac]['groups'][$grp]['students'][] = $st;
+            $byFaculty[$fac]['groups'][$grp]['total']++;
+            $byFaculty[$fac]['total']++;
+            $totalStudents++;
+
+            if ($st->filled) {
+                $byFaculty[$fac]['groups'][$grp]['filled']++;
+                $byFaculty[$fac]['filled']++;
+                $totalFilled++;
             }
-            $byFaculty[$fac]['specialties'][$spec]['total'] += $row->cnt;
-            $byFaculty[$fac]['specialties'][$spec]['groups'][$grp] = $row->cnt;
         }
 
-        return view('admin.graduate-passports.index', compact('byFaculty', 'total'));
+        return view('admin.graduate-passports.index', compact('byFaculty', 'totalStudents', 'totalFilled'));
     }
 
     public function data(Request $request)
@@ -60,10 +65,9 @@ class GraduatePassportController extends Controller
                 'gp.first_name_en', 'gp.last_name_en',
                 'gp.passport_series', 'gp.passport_number', 'gp.jshshir',
                 'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path',
-                'gp.created_at', 'gp.updated_at',
+                'gp.created_at',
                 's.hemis_id', 's.student_id_number', 's.full_name',
-                's.department_name', 's.specialty_name', 's.group_name',
-                's.level_name', 's.semester_name'
+                's.department_name', 's.specialty_name', 's.group_name'
             );
 
         if ($request->filled('search')) {
@@ -73,8 +77,7 @@ class GraduatePassportController extends Controller
                   ->orWhere('s.student_id_number', 'like', "%{$search}%")
                   ->orWhere('gp.passport_number', 'like', "%{$search}%")
                   ->orWhere('gp.jshshir', 'like', "%{$search}%")
-                  ->orWhere('s.group_name', 'like', "%{$search}%")
-                  ->orWhere('s.department_name', 'like', "%{$search}%");
+                  ->orWhere('s.group_name', 'like', "%{$search}%");
             });
         }
 
@@ -98,7 +101,6 @@ class GraduatePassportController extends Controller
                 'passport' => ($row->passport_series ?? '') . ($row->passport_number ?? ''),
                 'jshshir' => $row->jshshir,
                 'department_name' => $row->department_name,
-                'specialty_name' => $row->specialty_name,
                 'group_name' => $row->group_name,
                 'has_front' => !empty($row->passport_front_path),
                 'has_back' => !empty($row->passport_back_path),
@@ -108,10 +110,8 @@ class GraduatePassportController extends Controller
         });
 
         return response()->json([
-            'data' => $data,
-            'total' => $total,
-            'per_page' => $perPage,
-            'current_page' => (int) $page,
+            'data' => $data, 'total' => $total,
+            'per_page' => $perPage, 'current_page' => (int) $page,
             'last_page' => (int) ceil($total / max($perPage, 1)),
         ]);
     }

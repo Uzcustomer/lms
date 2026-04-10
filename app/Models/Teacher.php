@@ -53,6 +53,7 @@ class Teacher extends Authenticatable
         'login_code',
         'login_code_expires_at',
         'assigned_firm',
+        'eval_qr_token',
     ];
 
     protected $hidden = [

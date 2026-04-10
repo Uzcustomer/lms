@@ -19,11 +19,11 @@
                 <input type="text" name="search" value="{{ request('search') }}"
                        placeholder="Ism, familya, kafedra..."
                        class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 w-64">
-                <button type="submit" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
                     Qidirish
                 </button>
                 @if(request('search'))
-                    <a href="{{ route('admin.staff-evaluation.index', ['tab' => request('tab', 'list')]) }}" class="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">
+                    <a href="{{ route('admin.staff-evaluation.index', ['tab' => request('tab', 'list')]) }}" class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium">
                         Tozalash
                     </a>
                 @endif
@@ -143,15 +143,23 @@
         {{-- ==================== QR KODLAR TABI ==================== --}}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             @forelse($teachers as $teacher)
-            <div class="border rounded-lg p-4 text-center hover:shadow-md transition-shadow">
+            <div class="border rounded-lg p-4 text-center hover:shadow-md transition-shadow group relative">
                 <div class="font-semibold text-gray-800 mb-1">{{ $teacher->full_name }}</div>
                 @if($teacher->department)
                     <div class="text-xs text-gray-400 mb-3">{{ $teacher->department }}</div>
                 @endif
 
                 @if($teacher->eval_qr_token)
-                    <div class="flex justify-center mb-3">
-                        {!! QrCode::size(160)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                    <div class="relative flex justify-center mb-3">
+                        <div>
+                            {!! QrCode::size(160)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                        </div>
+                        <a href="{{ route('admin.staff-evaluation.download-qr', $teacher) }}"
+                           class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span class="px-4 py-2 bg-white text-gray-800 rounded-lg text-sm font-medium shadow">
+                                &#8681; Yuklab olish
+                            </span>
+                        </a>
                     </div>
                     <div class="flex items-center justify-center gap-2">
                         @if($teacher->staff_evaluations_avg_rating)
@@ -160,10 +168,6 @@
                             <span class="text-xs text-gray-400">({{ $teacher->staff_evaluations_count }})</span>
                         @endif
                     </div>
-                    <a href="{{ route('admin.staff-evaluation.download-qr', $teacher) }}"
-                       class="mt-2 inline-block px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">
-                        SVG yuklab olish
-                    </a>
                 @else
                     <div class="py-6 text-gray-300">
                         <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">

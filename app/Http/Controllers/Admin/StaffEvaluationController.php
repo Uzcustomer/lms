@@ -55,7 +55,10 @@ class StaffEvaluationController extends Controller
             $teacher->update(['eval_qr_token' => Str::random(32)]);
         }
 
-        return back()->with('success', "{$teacher->full_name} uchun QR kod yaratildi.");
+        return redirect()->route('admin.staff-evaluation.index', array_merge(
+            request()->only('search'),
+            ['tab' => 'qr']
+        ))->with('success', "{$teacher->full_name} uchun QR kod yaratildi.");
     }
 
     public function generateAllQr()
@@ -68,7 +71,10 @@ class StaffEvaluationController extends Controller
             }
         });
 
-        return back()->with('success', "{$count} ta xodim uchun QR kod yaratildi.");
+        return redirect()->route('admin.staff-evaluation.index', array_merge(
+            request()->only('search'),
+            ['tab' => 'qr']
+        ))->with('success', "{$count} ta xodim uchun QR kod yaratildi.");
     }
 
     public function downloadQr(Teacher $teacher)

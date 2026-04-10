@@ -25,17 +25,26 @@ class StaffEvaluationController extends Controller
             });
         }
 
+        if ($request->input('tab') === 'qr') {
+            $query->whereNotNull('eval_qr_token');
+        }
+
         $teachers = $query->orderBy('full_name')->paginate(20)->withQueryString();
 
         return view('admin.staff-evaluation.index', compact('teachers'));
     }
 
-    public function show(Teacher $teacher)
+    public function show(Request $request, Teacher $teacher)
     {
-        $evaluations = $teacher->staffEvaluations()
+        $query = $teacher->staffEvaluations()
             ->with('student:id,full_name,short_name')
-            ->latest()
-            ->paginate(20);
+            ->latest();
+
+        if ($request->filled('rating')) {
+            $query->where('rating', $request->rating);
+        }
+
+        $evaluations = $query->paginate(20)->withQueryString();
 
         $avgRating = $teacher->staffEvaluations()->avg('rating');
         $totalCount = $teacher->staffEvaluations()->count();
@@ -75,6 +84,24 @@ class StaffEvaluationController extends Controller
             request()->only('search'),
             ['tab' => 'qr']
         ))->with('success', "{$count} ta xodim uchun QR kod yaratildi.");
+    }
+
+    public function deleteQr(Teacher $teacher)
+    {
+        $teacher->staffEvaluations()->delete();
+        $teacher->update(['eval_qr_token' => null]);
+
+        return redirect()->route('admin.staff-evaluation.show', $teacher)
+            ->with('success', "QR kod va barcha baholar o'chirildi.");
+    }
+
+    public function regenerateQr(Teacher $teacher)
+    {
+        $teacher->staffEvaluations()->delete();
+        $teacher->update(['eval_qr_token' => Str::random(32)]);
+
+        return redirect()->route('admin.staff-evaluation.show', $teacher)
+            ->with('success', "QR kod qayta yaratildi, eski baholar o'chirildi.");
     }
 
     public function downloadQr(Teacher $teacher)

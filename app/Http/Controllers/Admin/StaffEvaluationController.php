@@ -141,8 +141,8 @@ class StaffEvaluationController extends Controller
         $logoPath = public_path('logo.png');
         if (file_exists($logoPath)) {
             $logoBase64 = base64_encode(file_get_contents($logoPath));
-            $logoOverlay = '<circle cx="200" cy="200" r="32" fill="white"/>'
-                . '<image x="174" y="174" width="52" height="52" href="data:image/png;base64,' . $logoBase64 . '" clip-path="circle(26px at 26px 26px)"/>';
+            $logoOverlay = '<circle cx="200" cy="200" r="40" fill="white"/>'
+                . '<image x="168" y="168" width="64" height="64" href="data:image/png;base64,' . $logoBase64 . '" clip-path="circle(32px at 32px 32px)"/>';
             $qrSvg = str_replace('</svg>', $logoOverlay . '</svg>', $qrSvg);
         }
 

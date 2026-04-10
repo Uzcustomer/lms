@@ -45,33 +45,36 @@
 
     {{-- QR kod --}}
     <div class="bg-white shadow rounded-lg p-5 mb-6">
+        @if($teacher->eval_qr_token)
+        <div class="flex flex-col sm:flex-row items-center gap-6">
+            <div class="flex-shrink-0 bg-white p-3 border rounded-lg">
+                {!! QrCode::size(200)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+            </div>
+            <div class="flex-1 text-center sm:text-left">
+                <h3 class="font-semibold text-gray-800 mb-2">QR kod</h3>
+                <p class="text-sm text-gray-500 mb-3">
+                    Havola: <code class="bg-gray-100 px-2 py-0.5 rounded text-xs break-all">{{ route('staff-evaluate.form', $teacher->eval_qr_token) }}</code>
+                </p>
+                <a href="{{ route('admin.staff-evaluation.download-qr', $teacher) }}"
+                   class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 inline-block">
+                    SVG yuklab olish
+                </a>
+            </div>
+        </div>
+        @else
         <div class="flex items-center justify-between">
             <div>
                 <h3 class="font-semibold text-gray-800">QR kod</h3>
-                @if($teacher->eval_qr_token)
-                    <p class="text-sm text-gray-500 mt-1">
-                        Havola: <code class="bg-gray-100 px-2 py-0.5 rounded text-xs break-all">{{ route('staff-evaluate.form', $teacher->eval_qr_token) }}</code>
-                    </p>
-                @else
-                    <p class="text-sm text-gray-400 mt-1">QR kod hali yaratilmagan.</p>
-                @endif
+                <p class="text-sm text-gray-400 mt-1">QR kod hali yaratilmagan.</p>
             </div>
-            <div class="flex gap-2">
-                @if(!$teacher->eval_qr_token)
-                <form method="POST" action="{{ route('admin.staff-evaluation.generate-qr', $teacher) }}">
-                    @csrf
-                    <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
-                        QR yaratish
-                    </button>
-                </form>
-                @else
-                <a href="{{ route('admin.staff-evaluation.download-qr', $teacher) }}"
-                   class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 inline-block">
-                    QR yuklab olish
-                </a>
-                @endif
-            </div>
+            <form method="POST" action="{{ route('admin.staff-evaluation.generate-qr', $teacher) }}">
+                @csrf
+                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">
+                    QR yaratish
+                </button>
+            </form>
         </div>
+        @endif
     </div>
 
     {{-- Baholar ro'yxati --}}

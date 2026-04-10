@@ -12,32 +12,48 @@
     @endif
 
     <div class="bg-white shadow rounded-lg p-6">
+        {{-- Qidiruv va amallar --}}
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <h3 class="text-lg font-semibold text-gray-900">Xodimlar ro'yxati</h3>
-            <div class="flex items-center gap-3">
-                <form method="GET" action="{{ route('admin.staff-evaluation.index') }}" class="flex items-center gap-2">
-                    <input type="text" name="search" value="{{ request('search') }}"
-                           placeholder="Ism, familya, kafedra..."
-                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 w-64">
-                    <button type="submit" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
-                        Qidirish
-                    </button>
-                    @if(request('search'))
-                        <a href="{{ route('admin.staff-evaluation.index') }}" class="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">
-                            Tozalash
-                        </a>
-                    @endif
-                </form>
-                <form method="POST" action="{{ route('admin.staff-evaluation.generate-all-qr') }}">
-                    @csrf
-                    <button type="submit"
-                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-                        Barchaga QR yaratish
-                    </button>
-                </form>
-            </div>
+            <form method="GET" action="{{ route('admin.staff-evaluation.index') }}" class="flex items-center gap-2">
+                <input type="hidden" name="tab" value="{{ request('tab', 'list') }}">
+                <input type="text" name="search" value="{{ request('search') }}"
+                       placeholder="Ism, familya, kafedra..."
+                       class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 w-64">
+                <button type="submit" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
+                    Qidirish
+                </button>
+                @if(request('search'))
+                    <a href="{{ route('admin.staff-evaluation.index', ['tab' => request('tab', 'list')]) }}" class="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm">
+                        Tozalash
+                    </a>
+                @endif
+            </form>
+            <form method="POST" action="{{ route('admin.staff-evaluation.generate-all-qr') }}">
+                @csrf
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                    Barchaga QR yaratish
+                </button>
+            </form>
         </div>
 
+        {{-- Tablar --}}
+        @php $activeTab = request('tab', 'list'); @endphp
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="flex gap-4 -mb-px">
+                <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'list'])) }}"
+                   class="pb-3 px-1 text-sm font-medium border-b-2 {{ $activeTab === 'list' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                    Ro'yxat
+                </a>
+                <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'qr'])) }}"
+                   class="pb-3 px-1 text-sm font-medium border-b-2 {{ $activeTab === 'qr' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                    QR kodlar
+                </a>
+            </nav>
+        </div>
+
+        @if($activeTab === 'list')
+        {{-- ==================== RO'YXAT TABI ==================== --}}
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
@@ -47,7 +63,7 @@
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kafedra</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">O'rtacha baho</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Baholar soni</th>
-                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">QR kod</th>
+                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">QR</th>
                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Amallar</th>
                     </tr>
                 </thead>
@@ -80,13 +96,9 @@
                         </td>
                         <td class="px-4 py-3 text-center">
                             @if($teacher->eval_qr_token)
-                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Mavjud
-                                </span>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">&#10003;</span>
                             @else
-                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                                    Yo'q
-                                </span>
+                                <span class="text-gray-300">—</span>
                             @endif
                         </td>
                         <td class="px-4 py-3 text-center">
@@ -126,6 +138,57 @@
                 </tbody>
             </table>
         </div>
+
+        @else
+        {{-- ==================== QR KODLAR TABI ==================== --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            @forelse($teachers as $teacher)
+            <div class="border rounded-lg p-4 text-center hover:shadow-md transition-shadow">
+                <div class="font-semibold text-gray-800 mb-1">{{ $teacher->full_name }}</div>
+                @if($teacher->department)
+                    <div class="text-xs text-gray-400 mb-3">{{ $teacher->department }}</div>
+                @endif
+
+                @if($teacher->eval_qr_token)
+                    <div class="flex justify-center mb-3">
+                        {!! QrCode::size(160)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                    </div>
+                    <div class="flex items-center justify-center gap-2">
+                        @if($teacher->staff_evaluations_avg_rating)
+                            <span class="text-yellow-500">&#9733;</span>
+                            <span class="text-sm font-semibold">{{ number_format($teacher->staff_evaluations_avg_rating, 1) }}</span>
+                            <span class="text-xs text-gray-400">({{ $teacher->staff_evaluations_count }})</span>
+                        @endif
+                    </div>
+                    <a href="{{ route('admin.staff-evaluation.download-qr', $teacher) }}"
+                       class="mt-2 inline-block px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">
+                        SVG yuklab olish
+                    </a>
+                @else
+                    <div class="py-6 text-gray-300">
+                        <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path>
+                        </svg>
+                    </div>
+                    <form method="POST" action="{{ route('admin.staff-evaluation.generate-qr', $teacher) }}">
+                        @csrf
+                        <button type="submit" class="mt-2 px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                            QR yaratish
+                        </button>
+                    </form>
+                @endif
+            </div>
+            @empty
+            <div class="col-span-full text-center text-gray-500 py-8">
+                @if(request('search'))
+                    "{{ request('search') }}" bo'yicha xodim topilmadi.
+                @else
+                    Xodimlar topilmadi.
+                @endif
+            </div>
+            @endforelse
+        </div>
+        @endif
 
         <div class="mt-4">
             {{ $teachers->links() }}

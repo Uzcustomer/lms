@@ -26,7 +26,7 @@ class StaffEvaluationController extends Controller
             });
         }
 
-        if ($request->input('tab') === 'qr') {
+        if (in_array($request->input('tab'), ['qr', 'shablon'])) {
             $query->whereNotNull('eval_qr_token');
         }
 

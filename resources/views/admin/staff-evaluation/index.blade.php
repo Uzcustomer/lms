@@ -142,12 +142,12 @@
         <div class="space-y-3">
             @forelse($teachers as $teacher)
             <a href="{{ route('admin.staff-evaluation.show', $teacher) }}"
-               class="flex items-center gap-5 border rounded-lg p-4 hover:shadow-md transition-shadow group bg-white">
-                <div class="flex-shrink-0 w-10 text-center text-lg font-bold text-gray-400">
+               class="flex items-center gap-3 border rounded-lg p-3 hover:shadow-md transition-shadow group bg-white">
+                <div class="flex-shrink-0 w-8 text-center text-sm font-bold text-gray-400">
                     {{ $teachers->firstItem() + $loop->index }}
                 </div>
                 <div class="flex-shrink-0 relative">
-                    {!! QrCode::size(100)->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                    {!! QrCode::size(80)->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
                     <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                          onclick="event.preventDefault(); window.location.href='{{ route('admin.staff-evaluation.download-qr', $teacher) }}'">
                         <span class="px-3 py-1 bg-white text-gray-800 rounded text-xs font-medium shadow">&#8681; Yuklab olish</span>

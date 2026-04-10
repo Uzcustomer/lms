@@ -39,17 +39,15 @@
 
         {{-- Tablar --}}
         @php $activeTab = request('tab', 'list'); @endphp
-        <div class="border-b border-gray-200 mb-6">
-            <nav class="flex gap-4 -mb-px">
-                <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'list'])) }}"
-                   class="pb-3 px-1 text-sm font-medium border-b-2 {{ $activeTab === 'list' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
-                    Ro'yxat
-                </a>
-                <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'qr'])) }}"
-                   class="pb-3 px-1 text-sm font-medium border-b-2 {{ $activeTab === 'qr' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
-                    QR kodlar
-                </a>
-            </nav>
+        <div class="flex gap-2 mb-6">
+            <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'list'])) }}"
+               class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors {{ $activeTab === 'list' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                Ro'yxat
+            </a>
+            <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'qr'])) }}"
+               class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors {{ $activeTab === 'qr' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                QR kodlar
+            </a>
         </div>
 
         @if($activeTab === 'list')

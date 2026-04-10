@@ -25,6 +25,10 @@ class StaffEvaluationController extends Controller
             });
         }
 
+        if ($request->input('tab') === 'qr') {
+            $query->whereNotNull('eval_qr_token');
+        }
+
         $teachers = $query->orderBy('full_name')->paginate(20)->withQueryString();
 
         return view('admin.staff-evaluation.index', compact('teachers'));

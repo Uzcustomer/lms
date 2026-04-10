@@ -215,61 +215,64 @@
         </div>
         @elseif($activeTab === 'shablon')
         {{-- ==================== SHABLON TABI ==================== --}}
-        <div class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             @forelse($teachers as $teacher)
             @if($teacher->eval_qr_token)
-            <div class="border rounded-lg overflow-hidden shadow-sm" id="card-{{ $teacher->id }}">
-                {{-- Card template --}}
-                <div style="width:600px; margin:0 auto; font-family:Arial,sans-serif;">
-                    {{-- Header --}}
-                    <div style="background:#1e3a8a; padding:14px 24px; display:flex; align-items:center; gap:14px;">
-                        <img src="{{ asset('logo.png') }}" alt="Logo" style="width:48px;height:48px;border-radius:50%;">
-                        <div>
-                            <div style="color:white; font-size:16px; font-weight:700; line-height:1.3;">Toshkent davlat tibbiyot universiteti</div>
-                            <div style="color:#93c5fd; font-size:13px; font-weight:500;">Termiz filiali</div>
-                        </div>
+            <div class="border rounded-lg overflow-hidden shadow-sm bg-white">
+                <div id="card-{{ $teacher->id }}" style="padding:32px 24px; text-align:center; font-family:Arial,sans-serif; background:white;">
+                    {{-- Logo --}}
+                    <img src="{{ asset('logo.png') }}" alt="Logo" style="width:80px; height:80px; border-radius:50%; margin:0 auto 12px;">
+                    {{-- QR kod --}}
+                    <div style="display:inline-block; padding:10px; border:2px solid #e5e7eb; border-radius:12px; margin-bottom:16px;">
+                        {!! QrCode::size(180)->errorCorrection('H')->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
                     </div>
-                    {{-- Body --}}
-                    <div style="background:#2563eb; padding:20px 24px; display:flex; align-items:center; gap:0;">
-                        {{-- Chap tomon — O'zbekcha --}}
-                        <div style="flex:1; text-align:center; color:white; padding-right:16px;">
-                            <div style="font-size:14px; line-height:1.5;">
-                                QR kod orqali<br>
-                                xodimning xizmat<br>
-                                ko'rsatish sifatini<br>
-                                baholang
-                            </div>
-                        </div>
-                        {{-- O'rta — QR kod --}}
-                        <div style="flex-shrink:0; background:white; padding:8px; border-radius:8px;">
-                            {!! QrCode::size(140)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
-                        </div>
-                        {{-- O'ng tomon — Ruscha --}}
-                        <div style="flex:1; text-align:center; color:white; padding-left:16px;">
-                            <div style="font-size:14px; line-height:1.5;">
-                                Оцените качество<br>
-                                обслуживания<br>
-                                сотрудника с<br>
-                                помощью QR кода
-                            </div>
-                        </div>
+                    {{-- Ma'lumotlar --}}
+                    <div style="font-size:13px; color:#1e3a8a; font-weight:700; line-height:1.4; margin-bottom:4px;">
+                        Toshkent davlat tibbiyot universiteti
                     </div>
-                    {{-- Footer — xodim ismi --}}
-                    <div style="background:#1e3a8a; padding:8px 24px; text-align:center;">
-                        <span style="color:white; font-size:13px; font-weight:600;">{{ $teacher->full_name }}</span>
-                        @if($teacher->staff_position)
-                            <span style="color:#93c5fd; font-size:12px;"> — {{ $teacher->staff_position }}</span>
-                        @endif
+                    <div style="font-size:12px; color:#1e3a8a; margin-bottom:12px;">
+                        Termiz filiali
                     </div>
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:4px;">
+                        Registrator ofisi xodimi:
+                    </div>
+                    <div style="font-size:15px; color:#111827; font-weight:700;">
+                        {{ $teacher->full_name }}
+                    </div>
+                </div>
+                {{-- Yuklab olish tugmasi --}}
+                <div class="border-t px-4 py-3 text-center bg-gray-50">
+                    <button onclick="downloadCard('card-{{ $teacher->id }}', '{{ Str::slug($teacher->full_name) }}')"
+                            class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 inline-flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Rasm sifatida yuklab olish
+                    </button>
                 </div>
             </div>
             @endif
             @empty
-            <div class="text-center text-gray-500 py-8">
+            <div class="col-span-full text-center text-gray-500 py-8">
                 QR kodli xodimlar yo'q. Avval QR kodlarni yarating.
             </div>
             @endforelse
         </div>
+
+        @push('scripts')
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        <script>
+        function downloadCard(elementId, filename) {
+            const el = document.getElementById(elementId);
+            html2canvas(el, { scale: 3, backgroundColor: '#ffffff', useCORS: true }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'qr-card-' + filename + '.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+        </script>
+        @endpush
         @endif
 
         @if($activeTab !== 'shablon')

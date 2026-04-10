@@ -844,6 +844,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'store'])->name('passport.store');
         Route::get('/passport/file/{field}', [\App\Http\Controllers\Student\StudentPassportController::class, 'showFile'])->name('passport.file');
         Route::post('/passport/file/{field}/delete', [\App\Http\Controllers\Student\StudentPassportController::class, 'deleteFile'])->name('passport.file.delete');
+        Route::post('/passport/clear', [\App\Http\Controllers\Student\StudentPassportController::class, 'clear'])->name('passport.clear');
 
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {

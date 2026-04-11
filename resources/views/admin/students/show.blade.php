@@ -9,7 +9,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-full mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 bg-white border-b border-gray-200">
                     <div class="flex flex-col md:flex-row">
@@ -470,6 +470,230 @@
                             </div>
                             @endif
 
+                            {{-- Qabul ma'lumotlari --}}
+                            @if($canUploadFiles)
+                            <div class="mt-6" id="admission-section">
+                                <div style="padding:10px 16px; background:linear-gradient(135deg,#1a3268,#2b5ea7); border-radius:10px 10px 0 0; display:flex; align-items:center; justify-content:space-between; cursor:pointer;" onclick="toggleSection('admission-body','admission-arrow')">
+                                    <span style="font-size:14px; font-weight:700; color:#fff;">Qabul ma'lumotlari</span>
+                                    <svg id="admission-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="transition:transform 0.2s;transform:rotate(90deg);"><path d="M9 5l7 7-7 7"/></svg>
+                                </div>
+                                <div id="admission-body" style="border:1px solid #dbe4ef; border-top:none; border-radius:0 0 10px 10px; padding:20px; background:#fff;">
+
+                                    <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST">
+                                        @csrf
+
+                                        {{-- SHAXSIY MA'LUMOTLAR --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Shaxsiy ma'lumotlar</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],
+                                                    ['tugilgan_sana',"Tug'ilgan sana",'date'],['jshshir','JSHSHIR'],
+                                                    ['jinsi','Jinsi'],['tel1','Tel 1'],['tel2','Tel 2'],
+                                                    ['email','Email'],['millat','Millat'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
+                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ? ($f[2] ?? '' === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        {{-- TUG'ILGAN JOY --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Tug'ilgan joy</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['tugilgan_davlat','Davlat'],['tugilgan_viloyat','Viloyat'],['tugulgan_tuman','Tuman'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        {{-- MANZIL --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Manzil</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['doimiy_manzil','Doimiy manzil'],
+                                                    ['yashash_davlat','Yashash davlat'],['yashash_viloyat','Yashash viloyat'],
+                                                    ['yashash_tuman','Yashash tuman'],['yashash_manzil','Yashash manzil'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        {{-- PASPORT --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Pasport</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['passport_seriya','Seriya'],['passport_raqam','Raqam'],
+                                                    ['passport_sana','Berilgan sana','date'],['passport_joy','Berilgan joy'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
+                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ? ($f[2] ?? '' === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        {{-- TA'LIM --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Ta'lim ma'lumotlari</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['oliy_malumot',"Oliy ma'lumot"],['otm_nomi','OTM nomi'],
+                                                    ['talim_turi',"Ta'lim turi"],['talim_shakli',"Ta'lim shakli"],
+                                                    ['mutaxassislik','Mutaxassislik'],['toplagan_ball','Toplagan ball'],
+                                                    ['tolov_shakli',"To'lov shakli"],['muassasa_nomi','Muassasa nomi'],
+                                                    ['hujjat_seriya','Hujjat seriya'],['ortalacha_ball','Ortalacha ball'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        {{-- TIL SERTIFIKATLARI --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Til sertifikatlari</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['sertifikat_turi','Sertifikat turi'],['sertifikat_ball','Sertifikat ball'],
+                                                    ['milliy_sertifikat','Milliy sertifikat'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        {{-- OTA --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Ota ma'lumotlari</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],
+                                                    ['ota_tel','Tel'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        {{-- ONA --}}
+                                        <div style="margin-bottom:20px;">
+                                            <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:12px;">Ona ma'lumotlari</div>
+                                            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px;">
+                                                @foreach([
+                                                    ['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],
+                                                    ['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi'],
+                                                ] as $f)
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           style="width:100%;padding:6px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;box-sizing:border-box;background:#f8fafc;">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <button type="submit" style="padding:9px 28px; background:linear-gradient(135deg,#1a3268,#2b5ea7); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; transition:opacity 0.2s;" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                                                Saqlash
+                                            </button>
+                                            @if($admissionData)
+                                            <span style="font-size:11px; color:#64748b; margin-left:12px;">Oxirgi yangilangan: {{ $admissionData->updated_at->format('d.m.Y H:i') }}</span>
+                                            @endif
+                                        </div>
+                                    </form>
+
+                                    {{-- PDF FAYLLAR --}}
+                                    <div style="margin-top:24px; border-top:2px solid #e2e8f0; padding-top:16px;">
+                                        <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:12px;">Hujjatlar (PDF/rasm)</div>
+
+                                        {{-- Fayl yuklash --}}
+                                        <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data" style="margin-bottom:16px;">
+                                            @csrf
+                                            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">Hujjat nomi</label>
+                                                    <select name="admission_file_name" style="padding:7px 10px;border:1px solid #cbd5e1;border-radius:7px;font-size:13px;background:#f8fafc;min-width:180px;">
+                                                        @foreach(['Pasport (PDF)','Propiska (PDF)','Attestat (PDF)','Ruxsatnoma (PDF)','DTM varaqa (PDF)',"Ota pasporti (PDF)","Ona pasporti (PDF)",'Obyektivka','Boshqa'] as $opt)
+                                                        <option>{{ $opt }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px;">Fayl (PDF/JPG/PNG, max 20MB)</label>
+                                                    <input type="file" name="admission_file" accept=".pdf,.jpg,.jpeg,.png" required
+                                                           style="padding:5px 8px;border:1px solid #cbd5e1;border-radius:7px;font-size:12px;background:#fff;">
+                                                </div>
+                                                <div>
+                                                    <button type="submit" style="padding:8px 20px; background:linear-gradient(135deg,#166534,#16a34a); color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;">
+                                                        Yuklash
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+
+                                        {{-- Yuklangan hujjatlar --}}
+                                        @php
+                                            $admissionFileNames = ['Pasport (PDF)','Propiska (PDF)','Attestat (PDF)','Ruxsatnoma (PDF)','DTM varaqa (PDF)',"Ota pasporti (PDF)","Ona pasporti (PDF)",'Obyektivka','Boshqa'];
+                                            $admissionFiles = $studentFiles->filter(fn($f) => in_array($f->name, $admissionFileNames));
+                                        @endphp
+                                        @if($admissionFiles->count() > 0)
+                                        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                                            @foreach($admissionFiles as $af)
+                                            <div style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                <span style="font-size:12px; font-weight:600; color:#0f172a;">{{ $af->name }}</span>
+                                                <a href="{{ route('admin.students.files.download', [$student, $af]) }}"
+                                                   style="font-size:11px; color:#2563eb; text-decoration:none; font-weight:600;">↓</a>
+                                                <form action="{{ route('admin.students.admission-files.delete', [$student, $af]) }}" method="POST" style="display:inline;"
+                                                      onsubmit="return confirm('{{ addslashes($af->name) }} faylini o\'chirmoqchimisiz?')">
+                                                    @csrf @method('DELETE')
+                                                    <button type="submit" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:13px;padding:0;line-height:1;">×</button>
+                                                </form>
+                                            </div>
+                                            @endforeach
+                                        </div>
+                                        @else
+                                        <p style="font-size:12px; color:#9ca3af;">Hujjatlar yuklanmagan</p>
+                                        @endif
+                                    </div>
+
+                                </div>
+                            </div>
+                            @endif
+
                             {{-- _curriculum / hash / timestamps --}}
                             <div class="mt-6 bg-gray-50 p-4 rounded-lg">
                                 <h4 class="font-semibold text-base mb-3 text-gray-700 border-b pb-2">Tizim ma'lumotlari</h4>
@@ -528,4 +752,18 @@
             </div>
         </div>
     </div>
+
+    <script>
+    function toggleSection(bodyId, arrowId) {
+        var body = document.getElementById(bodyId);
+        var arrow = document.getElementById(arrowId);
+        if (body.style.display === 'none') {
+            body.style.display = 'block';
+            arrow.style.transform = 'rotate(90deg)';
+        } else {
+            body.style.display = 'none';
+            arrow.style.transform = 'rotate(0deg)';
+        }
+    }
+    </script>
 </x-app-layout>

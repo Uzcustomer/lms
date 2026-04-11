@@ -122,33 +122,29 @@ class CalculateStudentRatings extends Command
         $this->info("Hisoblangan: " . count($ratings) . " ta talaba");
 
         // Bazaga yozish
-        DB::transaction(function () use ($ratings) {
-            // Eski ma'lumotlarni tozalash
-            StudentRating::truncate();
+        StudentRating::query()->delete();
 
-            // Yangilarni kiritish
-            foreach (array_chunk($ratings, 500) as $chunk) {
-                StudentRating::insert(array_map(function ($r) {
-                    $r['created_at'] = now();
-                    $r['updated_at'] = now();
-                    return $r;
-                }, $chunk));
-            }
+        foreach (array_chunk($ratings, 500) as $chunk) {
+            StudentRating::insert(array_map(function ($r) {
+                $r['created_at'] = now();
+                $r['updated_at'] = now();
+                return $r;
+            }, $chunk));
+        }
 
-            // Rank hisoblash — department + specialty ichida
-            DB::statement("
-                UPDATE student_ratings sr
-                JOIN (
-                    SELECT id,
-                           RANK() OVER (
-                               PARTITION BY department_code, specialty_code
-                               ORDER BY jn_average DESC
-                           ) as computed_rank
-                    FROM student_ratings
-                ) ranked ON sr.id = ranked.id
-                SET sr.rank = ranked.computed_rank
-            ");
-        });
+        // Rank hisoblash — department + specialty ichida
+        DB::statement("
+            UPDATE student_ratings sr
+            JOIN (
+                SELECT id,
+                       RANK() OVER (
+                           PARTITION BY department_code, specialty_code
+                           ORDER BY jn_average DESC
+                       ) as computed_rank
+                FROM student_ratings
+            ) ranked ON sr.id = ranked.id
+            SET sr.rank = ranked.computed_rank
+        ");
 
         $this->info('Reyting muvaffaqiyatli yangilandi!');
     }

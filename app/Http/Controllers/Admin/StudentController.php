@@ -260,7 +260,10 @@ class StudentController extends Controller
         }
 
         $canUploadFiles = in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin']);
-        $studentFiles = $canUploadFiles ? $student->files()->latest()->get() : collect();
+        $studentFiles = collect();
+        if ($canUploadFiles && \Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+            $studentFiles = $student->files()->latest()->get();
+        }
 
         return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo', 'canUploadFiles', 'studentFiles'));
     }
@@ -370,25 +373,34 @@ class StudentController extends Controller
             return back()->with('error', "Sizda fayl yuklash huquqi yo'q.");
         }
 
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+            return back()->with('error', "student_files jadvali topilmadi. Iltimos, migratsiyani ishga tushiring: php artisan migrate");
+        }
+
         $request->validate([
             'file' => 'required|file|max:10240',
             'file_name' => 'required|string|max:255',
         ]);
 
-        $file = $request->file('file');
-        $path = $file->store('student-files/' . $student->id, 'public');
+        try {
+            $file = $request->file('file');
+            $path = $file->store('student-files/' . $student->id, 'public');
 
-        \App\Models\StudentFile::create([
-            'student_id' => $student->id,
-            'name' => $request->file_name,
-            'original_name' => $file->getClientOriginalName(),
-            'path' => $path,
-            'mime_type' => $file->getClientMimeType(),
-            'size' => $file->getSize(),
-            'uploaded_by' => $user?->id,
-        ]);
+            \App\Models\StudentFile::create([
+                'student_id' => $student->id,
+                'name' => $request->file_name,
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $user?->id,
+            ]);
 
-        return back()->with('success', "Fayl muvaffaqiyatli yuklandi.");
+            return back()->with('success', "Fayl muvaffaqiyatli yuklandi.");
+        } catch (\Exception $e) {
+            Log::error('Fayl yuklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Fayl yuklashda xatolik yuz berdi: " . $e->getMessage());
+        }
     }
 
     public function downloadFile(Student $student, \App\Models\StudentFile $file)

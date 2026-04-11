@@ -20,9 +20,6 @@ class CalculateStudentRatings extends Command
 
         $students = Student::whereNotNull('hemis_id')
             ->whereNotNull('semester_code')
-            ->where(function ($q) {
-                $q->where('status', 10)->orWhereNull('status');
-            })
             ->get();
 
         $this->info("Jami talabalar: {$students->count()}");

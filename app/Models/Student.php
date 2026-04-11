@@ -322,6 +322,11 @@ class Student extends Authenticatable
         return $this->hasOne(\App\Models\FaceIdDescriptor::class);
     }
 
+    public function files()
+    {
+        return $this->hasMany(\App\Models\StudentFile::class);
+    }
+
     public function isProfileComplete(): bool
     {
         return !empty($this->phone);

@@ -259,7 +259,10 @@ class StudentController extends Controller
                 ->get();
         }
 
-        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo'));
+        $canUploadFiles = in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin']);
+        $studentFiles = $canUploadFiles ? $student->files()->latest()->get() : collect();
+
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo', 'canUploadFiles', 'studentFiles'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)
@@ -353,6 +356,77 @@ class StudentController extends Controller
         }
     }
 
+
+    public function uploadFile(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl yuklash huquqi yo'q.");
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:10240',
+            'file_name' => 'required|string|max:255',
+        ]);
+
+        $file = $request->file('file');
+        $path = $file->store('student-files/' . $student->id, 'public');
+
+        \App\Models\StudentFile::create([
+            'student_id' => $student->id,
+            'name' => $request->file_name,
+            'original_name' => $file->getClientOriginalName(),
+            'path' => $path,
+            'mime_type' => $file->getClientMimeType(),
+            'size' => $file->getSize(),
+            'uploaded_by' => $user?->id,
+        ]);
+
+        return back()->with('success', "Fayl muvaffaqiyatli yuklandi.");
+    }
+
+    public function downloadFile(Student $student, \App\Models\StudentFile $file)
+    {
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        if (!$disk->exists($file->path)) {
+            return back()->with('error', "Fayl topilmadi.");
+        }
+
+        return $disk->download($file->path, $file->original_name);
+    }
+
+    public function deleteFile(Student $student, \App\Models\StudentFile $file)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl o'chirish huquqi yo'q.");
+        }
+
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        \Illuminate\Support\Facades\Storage::disk('public')->delete($file->path);
+        $file->delete();
+
+        return back()->with('success', "Fayl muvaffaqiyatli o'chirildi.");
+    }
 
     public function getCurricula(Request $request)
     {

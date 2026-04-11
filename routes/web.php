@@ -133,6 +133,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
         Route::post('/students/{student}/toggle-five-candidate', [AdminStudentController::class, 'toggleFiveCandidate'])->name('students.toggle-five-candidate');
         Route::post('/students/bulk-reset-password', [AdminStudentController::class, 'bulkResetLocalPassword'])->name('students.bulk-reset-password');
+        Route::post('/students/{student}/files', [AdminStudentController::class, 'uploadFile'])->name('students.files.upload');
+        Route::get('/students/{student}/files/{file}/download', [AdminStudentController::class, 'downloadFile'])->name('students.files.download');
+        Route::delete('/students/{student}/files/{file}', [AdminStudentController::class, 'deleteFile'])->name('students.files.delete');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');

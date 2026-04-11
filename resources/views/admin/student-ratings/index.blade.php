@@ -39,11 +39,24 @@
                     @endforeach
                 </select>
             </div>
-            @if($selectedDepartment || $selectedSpecialty || $selectedLevel)
-            <a href="{{ route('admin.student-ratings.index') }}" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 font-medium">
-                Tozalash
+            <div class="flex-1 min-w-[200px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Qidirish</label>
+                <div class="flex gap-2">
+                    <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="F.I.O yoki guruh..."
+                           class="flex-1 border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <a href="{{ route('admin.student-ratings.export-excel', request()->query()) }}" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 font-medium flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Excel
             </a>
-            @endif
         </form>
         @if($lastUpdated)
         <div class="mt-3 text-xs text-gray-400">
@@ -82,8 +95,8 @@
                 elseif ($r->jn_average >= 60) $scoreColor = 'text-yellow-600';
                 else $scoreColor = 'text-red-600';
             @endphp
-            <div class="border-2 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-shadow {{ $border }}"
-                 onclick="showSubjects('{{ $r->student_hemis_id }}', this)">
+            <button type="button" class="border-2 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-shadow {{ $border }} text-left w-full"
+                 onclick="showSubjectsModal('{{ $r->student_hemis_id }}')">
                 <div class="flex items-center gap-4">
                     <div class="flex-shrink-0 text-center w-12">
                         @if($medal)
@@ -100,9 +113,7 @@
                         <div class="text-2xl font-bold {{ $scoreColor }}">{{ number_format($r->jn_average, 1) }}</div>
                     </div>
                 </div>
-                {{-- Fan tafsilotlari shu yerga qo'shiladi --}}
-                <div class="subject-details hidden mt-3 border-t pt-3"></div>
-            </div>
+            </button>
             @endforeach
         </div>
     </div>
@@ -166,31 +177,19 @@
 
     @push('scripts')
     <script>
-    function showSubjects(hemisId, el) {
-        const details = el.querySelector('.subject-details');
-        if (details.innerHTML.trim() && !details.classList.contains('hidden')) {
-            details.classList.add('hidden');
-            return;
-        }
-        if (details.innerHTML.trim()) {
-            details.classList.remove('hidden');
-            return;
-        }
-        details.innerHTML = '<div class="text-center text-gray-400 text-sm py-2">Yuklanmoqda...</div>';
-        details.classList.remove('hidden');
-        fetchSubjects(hemisId, function(data) {
-            details.innerHTML = buildTable(data.subjects);
-        });
-    }
-
     function showSubjectsModal(hemisId) {
         document.getElementById('modalBody').innerHTML = '<div class="text-center text-gray-400 py-4">Yuklanmoqda...</div>';
         document.getElementById('subjectModal').classList.remove('hidden');
-        fetchSubjects(hemisId, function(data) {
-            document.getElementById('modalTitle').textContent = data.full_name + ' — ' + data.group_name;
-            document.getElementById('modalBody').innerHTML = buildTable(data.subjects)
-                + '<div class="mt-3 text-right text-sm font-bold text-gray-600">Umumiy o\'rtacha: ' + data.jn_average + '</div>';
-        });
+        fetch('/admin/student-ratings/' + hemisId + '/subjects')
+            .then(r => r.json())
+            .then(function(data) {
+                document.getElementById('modalTitle').textContent = data.full_name + ' — ' + data.group_name;
+                document.getElementById('modalBody').innerHTML = buildTable(data.subjects)
+                    + '<div class="mt-3 text-right text-sm font-bold text-gray-600">Umumiy o\'rtacha: ' + data.jn_average + '</div>';
+            })
+            .catch(function() {
+                document.getElementById('modalBody').innerHTML = '<div class="text-center text-red-500 py-4">Xatolik yuz berdi</div>';
+            });
     }
 
     function closeModal() {
@@ -199,15 +198,6 @@
     document.getElementById('subjectModal').addEventListener('click', function(e) {
         if (e.target === this) closeModal();
     });
-
-    function fetchSubjects(hemisId, callback) {
-        fetch('/admin/student-ratings/' + hemisId + '/subjects')
-            .then(r => r.json())
-            .then(callback)
-            .catch(() => {
-                document.getElementById('modalBody').innerHTML = '<div class="text-center text-red-500 py-4">Xatolik yuz berdi</div>';
-            });
-    }
 
     function buildTable(subjects) {
         if (!subjects || !subjects.length) return '<div class="text-center text-gray-400 py-4">Fanlar topilmadi</div>';

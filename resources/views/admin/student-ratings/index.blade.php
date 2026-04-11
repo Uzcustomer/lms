@@ -165,7 +165,7 @@
     {{-- Modal --}}
     <div id="subjectModal" class="fixed inset-0 z-50 hidden" style="background:rgba(0,0,0,0.5);">
         <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-screen-xl max-h-[80vh] overflow-hidden">
                 <div class="flex items-center justify-between px-5 py-4 border-b">
                     <h3 id="modalTitle" class="font-bold text-gray-800">Fan tafsilotlari</h3>
                     <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>

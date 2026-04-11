@@ -19,7 +19,6 @@
                     @endforeach
                 </select>
             </div>
-
             <div class="flex-1 min-w-[200px]">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Yo'nalish</label>
                 <select name="specialty" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
@@ -31,7 +30,6 @@
                     @endforeach
                 </select>
             </div>
-
             <div class="w-[140px]">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Kurs</label>
                 <select name="level" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
@@ -41,14 +39,12 @@
                     @endforeach
                 </select>
             </div>
-
             @if($selectedDepartment || $selectedSpecialty || $selectedLevel)
-            <a href="{{ route('admin.student-ratings.index') }}" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">
+            <a href="{{ route('admin.student-ratings.index') }}" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 font-medium">
                 Tozalash
             </a>
             @endif
         </form>
-
         @if($lastUpdated)
         <div class="mt-3 text-xs text-gray-400">
             Oxirgi yangilanish: {{ \Carbon\Carbon::parse($lastUpdated)->format('d.m.Y H:i') }}
@@ -74,28 +70,38 @@
         <h3 class="text-lg font-bold text-gray-800 mb-5 flex items-center gap-2">
             <span class="text-yellow-500 text-2xl">&#9733;</span> TOP 10
         </h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             @foreach($top10 as $index => $r)
             @php
-                if ($index === 0) { $border = 'border-yellow-400 bg-yellow-50'; $medal = '🥇'; $medalSize = 'text-4xl'; }
-                elseif ($index === 1) { $border = 'border-gray-400 bg-gray-50'; $medal = '🥈'; $medalSize = 'text-3xl'; }
-                elseif ($index === 2) { $border = 'border-amber-600 bg-amber-50'; $medal = '🥉'; $medalSize = 'text-3xl'; }
-                else { $border = 'border-blue-200 bg-blue-50'; $medal = ''; $medalSize = ''; }
+                if ($index === 0) { $border = 'border-yellow-400 bg-yellow-50'; $medal = '🥇'; }
+                elseif ($index === 1) { $border = 'border-gray-400 bg-gray-50'; $medal = '🥈'; }
+                elseif ($index === 2) { $border = 'border-amber-600 bg-amber-50'; $medal = '🥉'; }
+                else { $border = 'border-blue-200 bg-blue-50'; $medal = ''; }
 
                 if ($r->jn_average >= 80) $scoreColor = 'text-green-600';
                 elseif ($r->jn_average >= 60) $scoreColor = 'text-yellow-600';
                 else $scoreColor = 'text-red-600';
             @endphp
-            <div class="border-2 rounded-xl p-4 text-center {{ $border }} {{ $index < 3 ? 'md:col-span-1 lg:col-span-1' : '' }}">
-                @if($medal)
-                    <div class="{{ $medalSize }} mb-1">{{ $medal }}</div>
-                @else
-                    <div class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto mb-2 text-sm">{{ $index + 1 }}</div>
-                @endif
-                <div class="text-2xl font-bold {{ $scoreColor }}">{{ number_format($r->jn_average, 1) }}</div>
-                <div class="font-semibold text-gray-800 text-sm mt-1 leading-tight">{{ $r->full_name }}</div>
-                <div class="text-xs text-gray-400 mt-1">{{ $r->group_name }}</div>
-                <div class="text-xs text-gray-400">{{ $r->subjects_count }} fan</div>
+            <div class="border-2 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-shadow {{ $border }}"
+                 onclick="showSubjects('{{ $r->student_hemis_id }}', this)">
+                <div class="flex items-center gap-4">
+                    <div class="flex-shrink-0 text-center w-12">
+                        @if($medal)
+                            <div class="text-3xl">{{ $medal }}</div>
+                        @else
+                            <div class="w-9 h-9 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center mx-auto text-sm">{{ $index + 1 }}</div>
+                        @endif
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-gray-800 text-sm">{{ $r->full_name }}</div>
+                        <div class="text-xs text-gray-400">{{ $r->group_name }} &middot; {{ $r->subjects_count }} fan</div>
+                    </div>
+                    <div class="flex-shrink-0 text-right">
+                        <div class="text-2xl font-bold {{ $scoreColor }}">{{ number_format($r->jn_average, 1) }}</div>
+                    </div>
+                </div>
+                {{-- Fan tafsilotlari shu yerga qo'shiladi --}}
+                <div class="subject-details hidden mt-3 border-t pt-3"></div>
             </div>
             @endforeach
         </div>
@@ -124,7 +130,7 @@
                         elseif ($r->jn_average >= 60) $scoreBg = 'bg-yellow-100 text-yellow-800';
                         else $scoreBg = 'bg-red-100 text-red-800';
                     @endphp
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-gray-50 cursor-pointer" onclick="showSubjectsModal('{{ $r->student_hemis_id }}')">
                         <td class="px-4 py-3 text-sm font-medium text-gray-500">{{ $r->rank }}</td>
                         <td class="px-4 py-3 text-sm font-medium text-gray-800">{{ $r->full_name }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ $r->group_name }}</td>
@@ -140,11 +146,89 @@
                 </tbody>
             </table>
         </div>
-        <div class="mt-4">
-            {{ $others->links() }}
-        </div>
+        <div class="mt-4">{{ $others->links() }}</div>
     </div>
     @endif
-
     @endif
+
+    {{-- Modal --}}
+    <div id="subjectModal" class="fixed inset-0 z-50 hidden" style="background:rgba(0,0,0,0.5);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden">
+                <div class="flex items-center justify-between px-5 py-4 border-b">
+                    <h3 id="modalTitle" class="font-bold text-gray-800">Fan tafsilotlari</h3>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                </div>
+                <div id="modalBody" class="p-5 overflow-y-auto" style="max-height:60vh;"></div>
+            </div>
+        </div>
+    </div>
+
+    @push('scripts')
+    <script>
+    function showSubjects(hemisId, el) {
+        const details = el.querySelector('.subject-details');
+        if (details.innerHTML.trim() && !details.classList.contains('hidden')) {
+            details.classList.add('hidden');
+            return;
+        }
+        if (details.innerHTML.trim()) {
+            details.classList.remove('hidden');
+            return;
+        }
+        details.innerHTML = '<div class="text-center text-gray-400 text-sm py-2">Yuklanmoqda...</div>';
+        details.classList.remove('hidden');
+        fetchSubjects(hemisId, function(data) {
+            details.innerHTML = buildTable(data.subjects);
+        });
+    }
+
+    function showSubjectsModal(hemisId) {
+        document.getElementById('modalBody').innerHTML = '<div class="text-center text-gray-400 py-4">Yuklanmoqda...</div>';
+        document.getElementById('subjectModal').classList.remove('hidden');
+        fetchSubjects(hemisId, function(data) {
+            document.getElementById('modalTitle').textContent = data.full_name + ' — ' + data.group_name;
+            document.getElementById('modalBody').innerHTML = buildTable(data.subjects)
+                + '<div class="mt-3 text-right text-sm font-bold text-gray-600">Umumiy o\'rtacha: ' + data.jn_average + '</div>';
+        });
+    }
+
+    function closeModal() {
+        document.getElementById('subjectModal').classList.add('hidden');
+    }
+    document.getElementById('subjectModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    function fetchSubjects(hemisId, callback) {
+        fetch('/admin/student-ratings/' + hemisId + '/subjects')
+            .then(r => r.json())
+            .then(callback)
+            .catch(() => {
+                document.getElementById('modalBody').innerHTML = '<div class="text-center text-red-500 py-4">Xatolik yuz berdi</div>';
+            });
+    }
+
+    function buildTable(subjects) {
+        if (!subjects || !subjects.length) return '<div class="text-center text-gray-400 py-4">Fanlar topilmadi</div>';
+        let html = '<table class="w-full text-sm"><thead><tr class="bg-gray-50">'
+            + '<th class="px-3 py-2 text-left text-xs font-medium text-gray-500">#</th>'
+            + '<th class="px-3 py-2 text-left text-xs font-medium text-gray-500">Fan nomi</th>'
+            + '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500">Kunlar</th>'
+            + '<th class="px-3 py-2 text-center text-xs font-medium text-gray-500">JN bali</th>'
+            + '</tr></thead><tbody>';
+        subjects.forEach(function(s, i) {
+            let color = s.average >= 80 ? 'text-green-700 bg-green-50' : (s.average >= 60 ? 'text-yellow-700 bg-yellow-50' : 'text-red-700 bg-red-50');
+            html += '<tr class="border-t border-gray-100">'
+                + '<td class="px-3 py-2 text-gray-400">' + (i+1) + '</td>'
+                + '<td class="px-3 py-2 text-gray-800">' + s.name + '</td>'
+                + '<td class="px-3 py-2 text-center text-gray-500">' + s.days + '</td>'
+                + '<td class="px-3 py-2 text-center"><span class="inline-block px-2 py-0.5 rounded-full text-xs font-bold ' + color + '">' + s.average + '</span></td>'
+                + '</tr>';
+        });
+        html += '</tbody></table>';
+        return html;
+    }
+    </script>
+    @endpush
 </x-app-layout>

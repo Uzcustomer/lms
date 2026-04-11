@@ -131,7 +131,7 @@
                         else $scoreBg = 'bg-red-100 text-red-800';
                     @endphp
                     <tr class="hover:bg-gray-50 cursor-pointer" onclick="showSubjectsModal('{{ $r->student_hemis_id }}')">
-                        <td class="px-4 py-3 text-sm font-medium text-gray-500">{{ $r->rank }}</td>
+                        <td class="px-4 py-3 text-sm font-medium text-gray-500">{{ 10 + ($others->currentPage() - 1) * $others->perPage() + $loop->iteration }}</td>
                         <td class="px-4 py-3 text-sm font-medium text-gray-800">{{ $r->full_name }}</td>
                         <td class="px-4 py-3 text-sm text-gray-600">{{ $r->group_name }}</td>
                         <td class="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate">{{ $r->specialty_name }}</td>

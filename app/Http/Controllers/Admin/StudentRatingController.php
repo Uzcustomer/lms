@@ -46,11 +46,19 @@ class StudentRatingController extends Controller
             $query->where('level_code', $selectedLevel);
         }
 
-        $query->orderBy('rank')->orderByDesc('jn_average');
+        $query->orderByDesc('jn_average');
+        $totalStudents = (clone $query)->count();
 
         $top10 = (clone $query)->limit(10)->get();
-        $others = (clone $query)->offset(10)->paginate(20)->withQueryString();
-        $totalStudents = (clone $query)->count();
+
+        // Top 10 dan keyingilar — offset 10 dan boshlab paginate
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 20;
+        $othersQuery = (clone $query)->offset(10 + ($page - 1) * $perPage)->limit($perPage)->get();
+        $others = new \Illuminate\Pagination\LengthAwarePaginator(
+            $othersQuery, max(0, $totalStudents - 10), $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         $lastUpdated = StudentRating::max('calculated_at');
 

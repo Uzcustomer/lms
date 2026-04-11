@@ -111,6 +111,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return redirect()->route('admin.dashboard');
         });
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/student-ratings', [\App\Http\Controllers\Admin\StudentRatingController::class, 'index'])->name('student-ratings.index');
 
         // Role switching
         Route::post('/switch-role', function (\Illuminate\Http\Request $request) {

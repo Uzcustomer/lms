@@ -6168,6 +6168,7 @@ class ReportController extends Controller
             }
 
             $punctualityAvailable = count($scheduledTestPairs) > 0 || count($scheduledOskiPairs) > 0;
+            $studentDetails = [];
 
             if ($punctualityAvailable && \Illuminate\Support\Facades\Schema::hasTable('hemis_quiz_results')) {
                 try {
@@ -6182,47 +6183,84 @@ class ReportController extends Controller
                         ->whereNotNull('hqr.date_start')
                         ->select(
                             'st.group_id',
+                            'st.group_name',
+                            'st.full_name',
+                            'st.student_id_number',
                             'hqr.fan_id',
+                            'hqr.fan_name',
                             'hqr.quiz_type',
-                            'hqr.date_start'
+                            'hqr.date_start',
+                            'hqr.date_finish',
+                            'hqr.attempt_number',
+                            'hqr.grade'
                         )
+                        ->orderBy('hqr.date_start')
                         ->get();
 
                     foreach ($quizRows as $q) {
                         $key = $q->group_id . '|' . $q->fan_id;
-                        if (in_array($q->quiz_type, $testTypesQz)) {
+                        $isTest = in_array($q->quiz_type, $testTypesQz);
+                        $isOski = in_array($q->quiz_type, $oskiTypesQz);
+
+                        if ($isTest) {
                             if (!isset($scheduledTestPairs[$key])) continue;
                             $sched = $scheduledTestPairs[$key];
-                            // Agar vaqt belgilanmagan bo'lsa, sana bo'yicha solishtiramiz
-                            if ($sched['has_time']) {
-                                if ($q->date_start <= $sched['scheduled_dt']) {
-                                    $testOnTime++;
-                                } else {
-                                    $testLate++;
-                                }
-                            } else {
-                                $startDate = substr($q->date_start, 0, 10);
-                                if ($startDate <= $sched['test_date']) {
-                                    $testOnTime++;
-                                } else {
-                                    $testLate++;
-                                }
-                            }
-                        } elseif (in_array($q->quiz_type, $oskiTypesQz)) {
+                            $scheduledDt = $sched['has_time']
+                                ? $sched['scheduled_dt']
+                                : ($sched['test_date'] . ' 23:59:59');
+                            $onTime = $sched['has_time']
+                                ? ($q->date_start <= $sched['scheduled_dt'])
+                                : (substr($q->date_start, 0, 10) <= $sched['test_date']);
+
+                            if ($onTime) $testOnTime++; else $testLate++;
+
+                            $studentDetails[] = [
+                                'group' => $q->group_name,
+                                'student' => $q->full_name,
+                                'student_id' => $q->student_id_number,
+                                'subject' => $q->fan_name,
+                                'type' => 'TEST',
+                                'scheduled' => $sched['has_time']
+                                    ? $sched['scheduled_dt']
+                                    : $sched['test_date'],
+                                'has_time' => $sched['has_time'],
+                                'date_start' => $q->date_start,
+                                'date_finish' => $q->date_finish,
+                                'attempt' => $q->attempt_number,
+                                'grade' => $q->grade,
+                                'status' => $onTime ? 'on_time' : 'late',
+                            ];
+                        } elseif ($isOski) {
                             if (!isset($scheduledOskiPairs[$key])) continue;
                             $sched = $scheduledOskiPairs[$key];
-                            $startDate = substr($q->date_start, 0, 10);
-                            if ($startDate <= $sched['oski_date']) {
-                                $oskiOnTime++;
-                            } else {
-                                $oskiLate++;
-                            }
+                            $onTime = substr($q->date_start, 0, 10) <= $sched['oski_date'];
+
+                            if ($onTime) $oskiOnTime++; else $oskiLate++;
+
+                            $studentDetails[] = [
+                                'group' => $q->group_name,
+                                'student' => $q->full_name,
+                                'student_id' => $q->student_id_number,
+                                'subject' => $q->fan_name,
+                                'type' => 'OSKI',
+                                'scheduled' => $sched['oski_date'],
+                                'has_time' => false,
+                                'date_start' => $q->date_start,
+                                'date_finish' => $q->date_finish,
+                                'attempt' => $q->attempt_number,
+                                'grade' => $q->grade,
+                                'status' => $onTime ? 'on_time' : 'late',
+                            ];
                         }
                     }
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::warning('testMarkaziTimesData: hemis_quiz_results so\'rovi xatolik: ' . $e->getMessage());
                 }
             }
+
+            // JSON hajmini kichikroq qilish uchun 2000 qator bilan cheklaymiz
+            $studentDetailsLimited = array_slice($studentDetails, 0, 2000);
+            $studentDetailsTruncated = count($studentDetails) > 2000;
 
             // Sort
             $subjectData = array_values($subjectAgg);
@@ -6259,6 +6297,9 @@ class ReportController extends Controller
                 'by_subject' => $subjectData,
                 'by_kafedra' => $kafedraData,
                 'by_faculty' => $facultyData,
+                'by_student' => $studentDetailsLimited,
+                'by_student_total' => count($studentDetails),
+                'by_student_truncated' => $studentDetailsTruncated,
             ]);
         } catch (\Throwable $e) {
             return response()->json(['error' => 'Xatolik: ' . $e->getMessage()], 500);
@@ -6422,6 +6463,177 @@ class ReportController extends Controller
         $widths = [5, 28, 28, 14, 30, 14, 14, 16, 14, 12, 18];
         foreach ($widths as $i => $w) {
             $sheet->getColumnDimensionByColumn($i + 1)->setWidth($w);
+        }
+
+        // ===================== Sheet 2: Talabalar kesimida =====================
+        if (\Illuminate\Support\Facades\Schema::hasTable('hemis_quiz_results')) {
+            $sheet2 = $spreadsheet->createSheet();
+            $sheet2->setTitle('Talabalar');
+
+            $studentHeaders = [
+                '#',
+                'Guruh',
+                'Talaba (FISH)',
+                'Student ID',
+                'Fan',
+                'Tur',
+                'Belgilangan vaqt',
+                'Boshlangan vaqt',
+                'Tugatilgan vaqt',
+                'Urinish',
+                'Baho',
+                'Holat',
+            ];
+            foreach ($studentHeaders as $col => $header) {
+                $sheet2->setCellValue([$col + 1, 1], $header);
+            }
+            $sheet2->getStyle('A1:L1')->applyFromArray($headerStyle);
+
+            $testTypesQz = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypesQz = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+            // exam_schedules dan jadvalni yig'amiz (filtr bilan)
+            $schedQuery = DB::table('exam_schedules as es')
+                ->select('es.group_hemis_id', 'es.subject_id', 'es.subject_name', 'es.oski_date', 'es.oski_na', 'es.test_date', 'es.test_na');
+            if ($hasTestTime) {
+                $schedQuery->addSelect('es.test_time');
+            }
+            if ($dateFrom || $dateTo) {
+                $schedQuery->where(function ($q) use ($dateFrom, $dateTo) {
+                    $q->where(function ($q2) use ($dateFrom, $dateTo) {
+                        if ($dateFrom) $q2->where('es.oski_date', '>=', $dateFrom);
+                        if ($dateTo) $q2->where('es.oski_date', '<=', $dateTo);
+                    })->orWhere(function ($q2) use ($dateFrom, $dateTo) {
+                        if ($dateFrom) $q2->where('es.test_date', '>=', $dateFrom);
+                        if ($dateTo) $q2->where('es.test_date', '<=', $dateTo);
+                    });
+                });
+            }
+            if ($facultyDepartmentHemisId) {
+                $schedQuery->where('es.department_hemis_id', $facultyDepartmentHemisId);
+            }
+            if ($allowedSubjectIds !== null) {
+                $schedQuery->whereIn('es.subject_id', $allowedSubjectIds);
+            }
+            if ($subjectFilter) {
+                $schedQuery->where('es.subject_id', $subjectFilter);
+            }
+            if ($semesterFilter) {
+                $schedQuery->where('es.semester_code', $semesterFilter);
+            } elseif ($currentSemesterCodes !== null && count($currentSemesterCodes) > 0) {
+                $schedQuery->whereIn('es.semester_code', $currentSemesterCodes);
+            }
+
+            $schedRows = $schedQuery->get();
+
+            $testMap = [];
+            $oskiMap = [];
+            $groupIds = [];
+            $subjectIds = [];
+            foreach ($schedRows as $sr) {
+                if ($sr->test_date && !$sr->test_na) {
+                    $tt = $hasTestTime && !empty($sr->test_time) ? $sr->test_time : null;
+                    if ($tt && strlen($tt) === 5) $tt .= ':00';
+                    $testMap[$sr->group_hemis_id . '|' . $sr->subject_id] = [
+                        'test_date' => $sr->test_date,
+                        'test_time' => $tt,
+                        'subject_name' => $sr->subject_name,
+                    ];
+                    $groupIds[$sr->group_hemis_id] = true;
+                    $subjectIds[$sr->subject_id] = true;
+                }
+                if ($sr->oski_date && !$sr->oski_na) {
+                    $oskiMap[$sr->group_hemis_id . '|' . $sr->subject_id] = [
+                        'oski_date' => $sr->oski_date,
+                        'subject_name' => $sr->subject_name,
+                    ];
+                    $groupIds[$sr->group_hemis_id] = true;
+                    $subjectIds[$sr->subject_id] = true;
+                }
+            }
+
+            $row2 = 2;
+            $num2 = 0;
+
+            if (!empty($groupIds) && !empty($subjectIds)) {
+                $studentQuery = DB::table('hemis_quiz_results as hqr')
+                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
+                    ->whereIn('st.group_id', array_keys($groupIds))
+                    ->whereIn('hqr.fan_id', array_keys($subjectIds))
+                    ->where('hqr.is_active', 1)
+                    ->whereNotNull('hqr.date_start')
+                    ->select(
+                        'st.group_id',
+                        'st.group_name',
+                        'st.full_name',
+                        'st.student_id_number',
+                        'hqr.fan_id',
+                        'hqr.fan_name',
+                        'hqr.quiz_type',
+                        'hqr.date_start',
+                        'hqr.date_finish',
+                        'hqr.attempt_number',
+                        'hqr.grade'
+                    )
+                    ->orderBy('st.group_name')
+                    ->orderBy('st.full_name')
+                    ->orderBy('hqr.date_start');
+
+                $studentQuery->chunk(3000, function ($records) use ($sheet2, &$row2, &$num2, $testMap, $oskiMap, $testTypesQz, $oskiTypesQz) {
+                    foreach ($records as $q) {
+                        $key = $q->group_id . '|' . $q->fan_id;
+                        $isTest = in_array($q->quiz_type, $testTypesQz);
+                        $isOski = in_array($q->quiz_type, $oskiTypesQz);
+
+                        $scheduled = null;
+                        $type = null;
+                        $onTime = null;
+
+                        if ($isTest && isset($testMap[$key])) {
+                            $m = $testMap[$key];
+                            $type = 'TEST';
+                            if ($m['test_time']) {
+                                $scheduled = $m['test_date'] . ' ' . substr($m['test_time'], 0, 5);
+                                $onTime = $q->date_start <= $m['test_date'] . ' ' . $m['test_time'];
+                            } else {
+                                $scheduled = $m['test_date'];
+                                $onTime = substr($q->date_start, 0, 10) <= $m['test_date'];
+                            }
+                        } elseif ($isOski && isset($oskiMap[$key])) {
+                            $m = $oskiMap[$key];
+                            $type = 'OSKI';
+                            $scheduled = $m['oski_date'];
+                            $onTime = substr($q->date_start, 0, 10) <= $m['oski_date'];
+                        } else {
+                            continue;
+                        }
+
+                        $num2++;
+                        $sheet2->setCellValue([1, $row2], $num2);
+                        $sheet2->setCellValue([2, $row2], $q->group_name);
+                        $sheet2->setCellValue([3, $row2], $q->full_name);
+                        $sheet2->setCellValue([4, $row2], $q->student_id_number);
+                        $sheet2->setCellValue([5, $row2], $q->fan_name);
+                        $sheet2->setCellValue([6, $row2], $type);
+                        $sheet2->setCellValue([7, $row2], $scheduled);
+                        $sheet2->setCellValue([8, $row2], $q->date_start);
+                        $sheet2->setCellValue([9, $row2], $q->date_finish);
+                        $sheet2->setCellValue([10, $row2], $q->attempt_number);
+                        $sheet2->setCellValue([11, $row2], $q->grade);
+                        $sheet2->setCellValue([12, $row2], $onTime ? 'Vaqtida' : 'Kechikish');
+                        $row2++;
+                    }
+                });
+            }
+
+            $lastRow2 = $row2 - 1;
+            if ($lastRow2 > 1) {
+                $sheet2->getStyle("A2:L{$lastRow2}")->applyFromArray($borderStyle);
+            }
+            $widths2 = [5, 16, 30, 14, 30, 8, 18, 20, 20, 10, 10, 14];
+            foreach ($widths2 as $i => $w) {
+                $sheet2->getColumnDimensionByColumn($i + 1)->setWidth($w);
+            }
         }
 
         $fileName = 'Test_markazi_vaqtlari_' . date('Y-m-d_H-i') . '.xlsx';

@@ -137,6 +137,7 @@ class TeacherMainController extends Controller
             ->whereNull('deleted_at')
             ->whereIn('semester_code', $currentSemesterCodes)
             ->where('employee_id', $teacher->hemis_id)
+            ->where('training_type_code', 100)
             ->whereNotNull('created_at_api')
             ->whereNotNull('lesson_date')
             ->whereNotNull('lesson_pair_end_time')
@@ -157,13 +158,14 @@ class TeacherMainController extends Controller
         // Barcha o'qituvchilar bo'yicha reyting (score = during*1 + work*0.5 + after*0)
         // CACHE: 10 daqiqa — bu og'ir so'rov (GROUP BY employee_id butun student_grades bo'yicha).
         // Har o'qituvchi dashboardga kirganda qayta ishlatilmasligi uchun cache'lanadi.
-        $cacheKey = 'teacher:grading_time_stats:all:' . md5(implode(',', $currentSemesterCodes));
+        $cacheKey = 'teacher:grading_time_stats:all:jn:' . md5(implode(',', $currentSemesterCodes));
         $allTeachers = Cache::remember($cacheKey, 600, function () use (
             $currentSemesterCodes, $caseDuringClass, $caseWorkHours, $caseAfterHours
         ) {
             return DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('semester_code', $currentSemesterCodes)
+                ->where('training_type_code', 100)
                 ->whereNotNull('created_at_api')
                 ->whereNotNull('lesson_date')
                 ->whereNotNull('lesson_pair_end_time')

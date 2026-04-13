@@ -1757,17 +1757,20 @@ class AcademicScheduleController extends Controller
     public function bandlikKursatkichi(Request $request)
     {
         $totalComputers = 60;
+        $today = now()->format('Y-m-d');
 
-        // Test vaqti belgilangan (OSKI yoki Test) barcha sanalarni yig'ish
+        // Faqat bugundan keyingi (bugun kiradi) test vaqtlari belgilangan sanalar
         $oskiDates = ExamSchedule::whereNotNull('oski_date')
             ->whereNotNull('oski_time')
             ->where('oski_na', false)
+            ->whereDate('oski_date', '>=', $today)
             ->pluck('oski_date')
             ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
 
         $testDates = ExamSchedule::whereNotNull('test_date')
             ->whereNotNull('test_time')
             ->where('test_na', false)
+            ->whereDate('test_date', '>=', $today)
             ->pluck('test_date')
             ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
 
@@ -1804,7 +1807,7 @@ class AcademicScheduleController extends Controller
         $byDate = [];
         foreach ($schedules as $schedule) {
             $oskiDateStr = $schedule->oski_date?->format('Y-m-d');
-            if ($oskiDateStr && $schedule->oski_time && !$schedule->oski_na) {
+            if ($oskiDateStr && $schedule->oski_time && !$schedule->oski_na && $oskiDateStr >= $today) {
                 $byDate[$oskiDateStr][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'yn_type' => 'OSKI',
@@ -1812,7 +1815,7 @@ class AcademicScheduleController extends Controller
                 ];
             }
             $testDateStr = $schedule->test_date?->format('Y-m-d');
-            if ($testDateStr && $schedule->test_time && !$schedule->test_na) {
+            if ($testDateStr && $schedule->test_time && !$schedule->test_na && $testDateStr >= $today) {
                 $byDate[$testDateStr][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'yn_type' => 'Test',
@@ -1835,7 +1838,6 @@ class AcademicScheduleController extends Controller
         }
 
         // Har bir sana uchun karta ma'lumotlari
-        $today = now()->format('Y-m-d');
         $dateCards = collect();
         foreach ($uniqueDates as $dateStr) {
             $items = $byDate[$dateStr] ?? [];
@@ -1861,7 +1863,6 @@ class AcademicScheduleController extends Controller
                 'group_count' => count($items),
                 'total_students' => $totalStudents,
                 'max_occupied' => $maxOccupied,
-                'is_past' => $dateStr < $today,
                 'is_today' => $dateStr === $today,
                 'has_overflow' => $maxOccupied > $totalComputers,
             ]);

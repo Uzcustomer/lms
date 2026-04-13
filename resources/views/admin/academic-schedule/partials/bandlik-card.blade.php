@@ -3,40 +3,39 @@
         ? 'admin.academic-schedule.bandlik-kursatkichi.show'
         : 'teacher.academic-schedule.bandlik-kursatkichi.show';
 
-    if ($card['has_overflow']) {
-        $borderClass = 'border-red-300 hover:border-red-400';
-        $bgHeader = 'bg-gradient-to-r from-red-500 to-red-600';
-        $badgeClass = 'bg-red-100 text-red-800';
-        $badgeText = "Sig'imdan ortiq";
-    } elseif ($card['is_today']) {
-        $borderClass = 'border-indigo-400 hover:border-indigo-500 ring-2 ring-indigo-100';
-        $bgHeader = 'bg-gradient-to-r from-indigo-500 to-indigo-600';
-        $badgeClass = 'bg-indigo-100 text-indigo-800';
-        $badgeText = 'Bugun';
-    } elseif ($card['is_past']) {
-        $borderClass = 'border-gray-200 hover:border-gray-300 opacity-75';
-        $bgHeader = 'bg-gradient-to-r from-gray-500 to-gray-600';
-        $badgeClass = 'bg-gray-100 text-gray-700';
-        $badgeText = "O'tgan";
-    } else {
-        $borderClass = 'border-gray-200 hover:border-blue-400';
-        $bgHeader = 'bg-gradient-to-r from-blue-500 to-blue-600';
-        $badgeClass = 'bg-blue-100 text-blue-800';
-        $badgeText = 'Kelgusi';
-    }
+    $percent = $totalComputers > 0 ? min(100, round(($card['max_occupied'] / $totalComputers) * 100)) : 0;
+    $realPercent = $totalComputers > 0 ? round(($card['max_occupied'] / $totalComputers) * 100) : 0;
 @endphp
 
 <a href="{{ route($routeName, ['date' => $card['date_str']]) }}"
-   class="block bg-white border-2 {{ $borderClass }} rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden">
+   @class([
+       'block bg-white border-2 rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden',
+       'border-red-300 hover:border-red-400' => $card['has_overflow'],
+       'border-indigo-400 hover:border-indigo-500 ring-2 ring-indigo-100' => !$card['has_overflow'] && $card['is_today'],
+       'border-gray-200 hover:border-blue-400' => !$card['has_overflow'] && !$card['is_today'],
+   ])>
 
-    <div class="{{ $bgHeader }} px-4 py-3 text-white">
+    @if($card['has_overflow'])
+        <div class="px-4 py-3 text-white" style="background: linear-gradient(to right, #ef4444, #dc2626);">
+    @elseif($card['is_today'])
+        <div class="px-4 py-3 text-white" style="background: linear-gradient(to right, #6366f1, #4f46e5);">
+    @else
+        <div class="px-4 py-3 text-white" style="background: linear-gradient(to right, #3b82f6, #2563eb);">
+    @endif
         <div class="flex items-center justify-between">
             <div>
-                <div class="text-2xl font-bold">{{ $card['date']->format('d.m.Y') }}</div>
-                <div class="text-xs opacity-90 mt-0.5">{{ $card['date']->isoFormat('dddd') }}</div>
+                <div class="text-2xl font-bold leading-tight">{{ $card['date']->format('d.m.Y') }}</div>
+                <div class="text-xs opacity-90 mt-0.5 capitalize">{{ $card['date']->isoFormat('dddd') }}</div>
             </div>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-white/20 text-white">
-                {{ $badgeText }}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide"
+                  style="background: rgba(255,255,255,0.25); color: #fff;">
+                @if($card['has_overflow'])
+                    Sig'imdan ortiq
+                @elseif($card['is_today'])
+                    Bugun
+                @else
+                    Kelgusi
+                @endif
             </span>
         </div>
     </div>
@@ -69,32 +68,26 @@
                 </svg>
                 Eng yuqori band
             </span>
-            <span class="font-semibold {{ $card['has_overflow'] ? 'text-red-600' : 'text-gray-900' }}">
+            <span @class(['font-semibold', 'text-red-600' => $card['has_overflow'], 'text-gray-900' => !$card['has_overflow']])>
                 {{ $card['max_occupied'] }}/{{ $totalComputers }}
             </span>
         </div>
 
-        {{-- Progress bar eng yuqori bandlik uchun --}}
-        @php
-            $percent = $totalComputers > 0 ? min(100, round(($card['max_occupied'] / $totalComputers) * 100)) : 0;
-            if ($card['has_overflow']) $barColor = 'bg-red-500';
-            elseif ($percent >= 75) $barColor = 'bg-orange-500';
-            elseif ($percent >= 50) $barColor = 'bg-yellow-500';
-            else $barColor = 'bg-green-500';
-        @endphp
         <div class="pt-1">
             <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
                 <span>Bandlik</span>
-                <span class="font-semibold {{ $card['has_overflow'] ? 'text-red-600' : 'text-gray-700' }}">
-                    @if($card['has_overflow'])
-                        {{ round(($card['max_occupied'] / $totalComputers) * 100) }}%
-                    @else
-                        {{ $percent }}%
-                    @endif
+                <span @class(['font-semibold', 'text-red-600' => $card['has_overflow'], 'text-gray-700' => !$card['has_overflow']])>
+                    {{ $realPercent }}%
                 </span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                <div class="{{ $barColor }} h-full transition-all" style="width: {{ $percent }}%"></div>
+                @php
+                    if ($card['has_overflow']) $barColorHex = '#ef4444';
+                    elseif ($percent >= 75) $barColorHex = '#f97316';
+                    elseif ($percent >= 50) $barColorHex = '#eab308';
+                    else $barColorHex = '#22c55e';
+                @endphp
+                <div class="h-full transition-all" style="width: {{ $percent }}%; background-color: {{ $barColorHex }};"></div>
             </div>
         </div>
 

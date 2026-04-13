@@ -616,6 +616,14 @@
             Vaqtlar statistikasi
         </a>
 
+        <a href="{{ route('admin.reports.test-markazi-times') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.test-markazi-times*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+            </svg>
+            Test markazi vaqtlari
+        </a>
+
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'buxgalteriya']))
         <a href="{{ route('admin.contracts.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.contracts.*') ? 'sidebar-active' : '' }}">

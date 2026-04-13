@@ -558,6 +558,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/grading-time-stats', [ReportController::class, 'gradingTimeStats'])->name('reports.grading-time-stats');
         Route::get('/reports/grading-time-stats/data', [ReportController::class, 'gradingTimeStatsData'])->name('reports.grading-time-stats.data');
 
+        Route::get('/reports/test-markazi-times', [ReportController::class, 'testMarkaziTimes'])->name('reports.test-markazi-times');
+        Route::get('/reports/test-markazi-times/data', [ReportController::class, 'testMarkaziTimesData'])->name('reports.test-markazi-times.data');
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');

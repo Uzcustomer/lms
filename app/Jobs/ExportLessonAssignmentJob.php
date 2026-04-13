@@ -187,26 +187,15 @@ class ExportLessonAssignmentJob implements ShouldQueue
             ->pluck('subject_schedule_id')
             ->flip();
 
-        // Index-friendly timestamp range (DATE() indexni bloklaydi)
-        $dateFromTs = $minDate . ' 00:00:00';
-        $dateToTs = date('Y-m-d', strtotime($maxDate . ' +1 day')) . ' 00:00:00';
-
-        // 1-usul schedule_id'larning hammasini qamrab olgan bo'lsa, 2-usulni butunlay o'tkazib yuboramiz
-        $scheduleIdCoverage = count($attendanceByScheduleId) / max(count($scheduleHemisIds), 1);
-        if ($scheduleIdCoverage >= 0.95) {
-            $attendanceByKey = collect();
-        } else {
-            $attendanceByKey = DB::table('attendance_controls')
-                ->whereNull('deleted_at')
-                ->whereIn('employee_id', $employeeIds)
-                ->whereIn('group_id', $groupHemisIds)
-                ->where('lesson_date', '>=', $dateFromTs)
-                ->where('lesson_date', '<', $dateToTs)
-                ->where('load', '>', 0)
-                ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
-                ->pluck('ck')
-                ->flip();
-        }
+        $attendanceByKey = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('group_id', $groupHemisIds)
+            ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->where('load', '>', 0)
+            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
+            ->pluck('ck')
+            ->flip();
 
         $processedCountByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
@@ -215,21 +204,15 @@ class ExportLessonAssignmentJob implements ShouldQueue
             ->groupBy('subject_schedule_id')
             ->pluck('cnt', 'subject_schedule_id');
 
-        $gradeCoverage = count($processedCountByScheduleId) / max(count($scheduleHemisIds), 1);
-        if ($gradeCoverage >= 0.95) {
-            $processedCountByKey = collect();
-        } else {
-            $processedCountByKey = DB::table('student_grades as sg')
-                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                ->whereNull('sg.deleted_at')
-                ->whereIn('st.group_id', $groupHemisIds)
-                ->where('sg.lesson_date', '>=', $dateFromTs)
-                ->where('sg.lesson_date', '<', $dateToTs)
-                ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
-                ->select(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
-                ->groupBy(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code)"))
-                ->pluck('cnt', 'gk');
-        }
+        $processedCountByKey = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
+            ->select(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code)"))
+            ->pluck('cnt', 'gk');
 
         $groupIds = $schedules->pluck('group_id')->unique()->values()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();

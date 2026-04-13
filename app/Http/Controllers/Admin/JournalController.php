@@ -4673,67 +4673,6 @@ class JournalController extends Controller
     }
 
     /**
-     * Superadmin: YN ga yuborilgan darsni qaytarish
-     * YN submission, snapshot va qulflarni bekor qiladi.
-     */
-    public function revokeYn(Request $request)
-    {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ruxsat yo\'q. Faqat superadmin bu amalni bajara oladi.',
-            ], 403);
-        }
-
-        $request->validate([
-            'submission_id' => 'required|integer',
-        ]);
-
-        DB::beginTransaction();
-        try {
-            $ynSubmission = YnSubmission::findOrFail($request->submission_id);
-
-            $subjectId = $ynSubmission->subject_id;
-            $semesterCode = $ynSubmission->semester_code;
-            $groupHemisId = $ynSubmission->group_hemis_id;
-
-            // Guruh talabalarining hemis_id larini olish
-            $studentHemisIds = DB::table('students')
-                ->where('group_id', $groupHemisId)
-                ->pluck('hemis_id')
-                ->toArray();
-
-            // student_grades dagi qulflarni olib tashlash
-            if (!empty($studentHemisIds)) {
-                DB::table('student_grades')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subjectId)
-                    ->where('semester_code', $semesterCode)
-                    ->update(['is_yn_locked' => false]);
-            }
-
-            // JN/MT snapshotlarni o'chirish
-            YnStudentGrade::where('yn_submission_id', $ynSubmission->id)->delete();
-
-            // YN submission yozuvini o'chirish
-            $ynSubmission->delete();
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'YN qaytarildi. Baholarni tahrirlash mumkin.',
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Xatolik: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
      * Sababli talabaning bahosini saqlash (retake_grade sifatida)
      * YN qulflangan bo'lsa ham, tasdiqlangan sababli uchun ruxsat beriladi.
      */

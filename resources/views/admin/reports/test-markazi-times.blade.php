@@ -495,12 +495,19 @@
             renderStudentsTable();
         }
 
-        function formatDt(dt) {
+        function formatDt(dt, ensureTime, placeholderTime) {
             if (!dt) return '-';
-            // dt - "YYYY-MM-DD HH:MM:SS" yoki "YYYY-MM-DD HH:MM" yoki "YYYY-MM-DD"
             dt = String(dt);
-            if (dt.length >= 16) return dt.substring(0, 16);
-            return dt;
+            // "YYYY-MM-DD HH:MM:SS" yoki "YYYY-MM-DD HH:MM" yoki "YYYY-MM-DD"
+            var m = dt.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+            if (!m) return dt;
+            var out = m[3] + '.' + m[2] + '.' + m[1];
+            if (m[4] && m[5]) {
+                out += ' ' + m[4] + ':' + m[5];
+            } else if (ensureTime) {
+                out += ' ' + (placeholderTime || '--:--');
+            }
+            return out;
         }
 
         function renderStudentsTable() {
@@ -519,7 +526,7 @@
             });
 
             var info = 'Ko\'rsatilmoqda: ' + filtered.length.toLocaleString() + ' / ' + studentsTotal.toLocaleString();
-            if (studentsTruncated) info += ' (Excel orqali to\'liq yuklab oling)';
+            if (studentsTruncated) info += ' — kechikkanlar to\'liq, vaqtida boshlaganlarning bir qismi (Excel orqali hammasini yuklab oling)';
             $('#student-count').text(info);
 
             var container = $('#student-content');
@@ -542,8 +549,8 @@
             html += '<th class="th-hour">Holat</th>';
             html += '</tr></thead><tbody>';
 
-            // Show first 500 rendered rows to avoid browser slowness
-            var limit = Math.min(filtered.length, 500);
+            // Brauzerni sekinlashuvdan saqlash uchun 1000 qator bilan cheklanamiz
+            var limit = Math.min(filtered.length, 1000);
             for (var i = 0; i < limit; i++) {
                 var s = filtered[i];
                 var statusBadge = s.status === 'on_time'
@@ -559,8 +566,8 @@
                 html += '<td style="text-align:left;color:#1e293b;padding:8px 12px;">' + esc(s.student) + '<br><span style="font-size:11px;color:#94a3b8;">ID: ' + esc(s.student_id) + '</span></td>';
                 html += '<td style="text-align:left;color:#475569;padding:8px 12px;font-size:12px;">' + esc(s.subject) + '</td>';
                 html += '<td class="td-num">' + typeBadge + '</td>';
-                html += '<td class="td-num" style="font-size:12px;font-family:monospace;">' + esc(formatDt(s.scheduled)) + '</td>';
-                html += '<td class="td-num" style="font-size:12px;font-family:monospace;">' + esc(formatDt(s.date_start)) + '</td>';
+                html += '<td class="td-num" style="font-size:12px;font-family:monospace;">' + esc(formatDt(s.scheduled, true)) + '</td>';
+                html += '<td class="td-num" style="font-size:12px;font-family:monospace;">' + esc(formatDt(s.date_start, true)) + '</td>';
                 html += '<td class="td-num">' + (s.attempt || '-') + '</td>';
                 html += '<td class="td-num">' + (s.grade !== null && s.grade !== undefined ? s.grade : '-') + '</td>';
                 html += '<td class="td-num">' + statusBadge + '</td>';

@@ -1753,4 +1753,9 @@ class AcademicScheduleController extends Controller
             'yn_jadvali_' . date('Y-m-d_H-i') . '.xlsx'
         );
     }
+
+    public function bandlikKursatkichi(Request $request)
+    {
+        return view('admin.academic-schedule.bandlik-kursatkichi');
+    }
 }

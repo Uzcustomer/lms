@@ -809,6 +809,7 @@
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
+        $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -1172,8 +1173,26 @@
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            @php
+                                                $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $oskiRounded !== null)
+                                                    <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
+                                                @else
+                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $testRounded !== null)
+                                                    <span class="font-bold text-blue-600">{{ $testRounded }}</span>
+                                                @else
+                                                    {{ $testRounded !== null ? $testRounded : '' }}
+                                                @endif
+                                            </td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1511,8 +1530,26 @@
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            @php
+                                                $oskiRounded2 = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testRounded2 = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded2 !== null ? $oskiRounded2 : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $oskiRounded2 !== null)
+                                                    <span class="font-bold text-blue-600">{{ $oskiRounded2 }}</span>
+                                                @else
+                                                    {{ $oskiRounded2 !== null ? $oskiRounded2 : '' }}
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded2 !== null ? $testRounded2 : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $testRounded2 !== null)
+                                                    <span class="font-bold text-blue-600">{{ $testRounded2 }}</span>
+                                                @else
+                                                    {{ $testRounded2 !== null ? $testRounded2 : '' }}
+                                                @endif
+                                            </td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1558,10 +1595,20 @@
                         </div>
                         <div>
                             @if(isset($ynSubmission) && $ynSubmission)
-                                <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
-                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
-                                    @if($ynSubmission->submittedBy)
-                                        <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
+                                <div class="flex items-center gap-3">
+                                    <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
+                                        YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
+                                        @if($ynSubmission->submittedBy)
+                                            <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
+                                        @endif
+                                    </div>
+                                    @if(auth()->user()?->hasRole('superadmin'))
+                                        <button type="button" id="btn-revoke-yn"
+                                            class="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition shadow-sm text-sm"
+                                            onclick="revokeYn({{ $ynSubmission->id }})"
+                                            title="YN ga yuborilgan darsni qaytarish — baholar qulfdan chiqariladi">
+                                            Qaytarish
+                                        </button>
                                     @endif
                                 </div>
                             @elseif($canSubmitYn ?? false)
@@ -4289,6 +4336,50 @@
                 btn.disabled = false;
                 btn.textContent = 'YN ga yuborish';
                 btn.style.opacity = '1';
+            });
+        }
+
+        // Superadmin: YN ga yuborilgan darsni qaytarish
+        function revokeYn(submissionId) {
+            const warn = confirm(
+                'DIQQAT!\n\n' +
+                'YN ga yuborilgan dars qaytariladi. Quyidagilar bajariladi:\n\n' +
+                '1. JN va MT baholaridagi qulf olib tashlanadi\n' +
+                '2. Saqlangan JN/MT snapshotlari o\'chiriladi\n' +
+                '3. YN submission yozuvi o\'chiriladi\n\n' +
+                'Baholarni qayta tahrirlash mumkin bo\'ladi.\n\n' +
+                'Davom etasizmi?'
+            );
+            if (!warn) return;
+
+            const btn = document.getElementById('btn-revoke-yn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Qaytarilmoqda...'; btn.style.opacity = '0.6'; }
+
+            fetch('{{ route("admin.journal.revoke-yn") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ submission_id: submissionId })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    const notif = document.createElement('div');
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#f97316; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.textContent = data.message;
+                    document.body.appendChild(notif);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                    if (btn) { btn.disabled = false; btn.textContent = 'Qaytarish'; btn.style.opacity = '1'; }
+                }
+            })
+            .catch(err => {
+                alert('Xatolik: ' + err.message);
+                if (btn) { btn.disabled = false; btn.textContent = 'Qaytarish'; btn.style.opacity = '1'; }
             });
         }
         // === SABABLI BAHO MODAL ===

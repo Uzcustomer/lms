@@ -121,6 +121,7 @@
             Dashboard
         </a>
 
+        @if($hasActiveRole(['admin', 'superadmin', 'registrator_ofisi']))
         <a href="{{ route('admin.student-ratings.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.student-ratings.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,6 +129,7 @@
             </svg>
             Talabalar reytingi
         </a>
+        @endif
 
         @if($hasActiveRole('javobgar_firma'))
         <a href="{{ route('admin.firm-students.index') }}"

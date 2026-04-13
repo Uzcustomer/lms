@@ -5761,4 +5761,678 @@ class ReportController extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
     }
+
+    /**
+     * Test markazi vaqtlari - filtr sahifasi
+     * Test markazidagi imtihon sanalari va vaqtlari belgilanganligini tekshiradi
+     */
+    public function testMarkaziTimes(Request $request)
+    {
+        $dekanFacultyIds = get_dekan_faculty_ids();
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
+        }
+
+        $faculties = $facultyQuery->get();
+
+        $kafedraQuery = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name');
+
+        if (!empty($dekanFacultyIds)) {
+            $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
+        }
+        $kafedraQuery->where('s.current', true);
+
+        $kafedras = $kafedraQuery
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
+        return view('admin.reports.test-markazi-times', compact(
+            'faculties',
+            'kafedras',
+            'dekanFacultyIds'
+        ));
+    }
+
+    /**
+     * Test markazi vaqtlari - AJAX/Excel ma'lumotlari
+     * exam_schedules jadvalidagi OSKI va Test imtihon sanalari va vaqtlari
+     * belgilanganligini tekshiradi
+     */
+    public function testMarkaziTimesData(Request $request)
+    {
+        try {
+            $dekanFacultyIds = get_dekan_faculty_ids();
+            if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+                $request->merge(['faculty' => $dekanFacultyIds[0]]);
+            }
+
+            $dateFrom = $request->filled('date_from') ? $request->date_from : null;
+            $dateTo = $request->filled('date_to') ? $request->date_to : null;
+
+            // Faculty filter
+            $facultyDepartmentHemisId = null;
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $facultyDepartmentHemisId = $faculty->department_hemis_id;
+                }
+            }
+
+            // Kafedra filter: subject_ids
+            $allowedSubjectIds = null;
+            if ($request->filled('department')) {
+                $allowedSubjectIds = DB::table('curriculum_subjects')
+                    ->where('department_id', $request->department)
+                    ->pluck('subject_id')
+                    ->unique()
+                    ->toArray();
+            }
+
+            // Fan filter
+            $subjectFilter = $request->filled('subject') ? $request->subject : null;
+
+            // Semestr filter
+            $semesterFilter = $request->filled('semester') ? $request->semester : null;
+
+            // Holat filter: 'complete', 'missing_date', 'missing_time', 'na', yoki null (barchasi)
+            $statusFilter = $request->filled('status') && $request->status !== '' ? $request->status : null;
+
+            // Joriy semestr bo'yicha filtrlash
+            $currentSemesterCodes = null;
+            if ($request->get('current_semester', '1') === '1' && !$semesterFilter) {
+                $currentSemesterCodes = DB::table('semesters')
+                    ->where('current', true)
+                    ->pluck('code')
+                    ->unique()
+                    ->toArray();
+            }
+
+            // Subject -> kafedra mapping
+            $subjectKafedraMap = DB::table('curriculum_subjects')
+                ->whereNotNull('department_id')
+                ->whereNotNull('department_name')
+                ->select('subject_id', 'department_id', 'department_name')
+                ->groupBy('subject_id', 'department_id', 'department_name')
+                ->get()
+                ->groupBy('subject_id')
+                ->map(fn($items) => $items->first());
+
+            // Excel export
+            if ($request->get('export') === 'excel') {
+                return $this->exportTestMarkaziTimesExcel($request, $dateFrom, $dateTo, $facultyDepartmentHemisId, $allowedSubjectIds, $subjectFilter, $semesterFilter, $statusFilter, $currentSemesterCodes, $subjectKafedraMap);
+            }
+
+            // Asosiy query - exam_schedules jadvali
+            $baseQuery = DB::table('exam_schedules');
+
+            if ($dateFrom || $dateTo) {
+                $baseQuery->where(function ($q) use ($dateFrom, $dateTo) {
+                    $q->where(function ($q2) use ($dateFrom, $dateTo) {
+                        if ($dateFrom) $q2->where('oski_date', '>=', $dateFrom);
+                        if ($dateTo) $q2->where('oski_date', '<=', $dateTo);
+                    })->orWhere(function ($q2) use ($dateFrom, $dateTo) {
+                        if ($dateFrom) $q2->where('test_date', '>=', $dateFrom);
+                        if ($dateTo) $q2->where('test_date', '<=', $dateTo);
+                    });
+                });
+            }
+
+            if ($facultyDepartmentHemisId) {
+                $baseQuery->where('department_hemis_id', $facultyDepartmentHemisId);
+            }
+            if ($allowedSubjectIds !== null) {
+                $baseQuery->whereIn('subject_id', $allowedSubjectIds);
+            }
+            if ($subjectFilter) {
+                $baseQuery->where('subject_id', $subjectFilter);
+            }
+            if ($semesterFilter) {
+                $baseQuery->where('semester_code', $semesterFilter);
+            } elseif ($currentSemesterCodes !== null && count($currentSemesterCodes) > 0) {
+                $baseQuery->whereIn('semester_code', $currentSemesterCodes);
+            }
+
+            // Har bir exam_schedules qatori 2 ta nazorat turini (OSKI va Test) o'z ichiga oladi
+            // Ularni alohida holatlarga (completed/missing_date/missing_time/na) bo'lib chiqaramiz
+            $hasTestTime = \Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'test_time');
+            $selectCols = [
+                'id',
+                'department_hemis_id',
+                'subject_id',
+                'subject_name',
+                'group_hemis_id',
+                'semester_code',
+                'oski_date',
+                'oski_na',
+                'test_date',
+                'test_na',
+                'created_at',
+                'updated_at',
+            ];
+            if ($hasTestTime) {
+                $selectCols[] = 'test_time';
+            }
+            $rows = (clone $baseQuery)->select($selectCols)->get();
+
+            // Umumiy ko'rsatkichlar va fan kesimida yig'ish
+            $total = 0;            // Jami nazorat turlari (OSKI + Test)
+            $oskiCompleted = 0;    // OSKI sanasi belgilangan
+            $oskiMissing = 0;      // OSKI sanasi belgilanmagan
+            $oskiNa = 0;           // OSKI kerak emas
+            $testCompleted = 0;    // Test sanasi va vaqti belgilangan
+            $testMissingDate = 0;  // Test sanasi belgilanmagan
+            $testMissingTime = 0;  // Test sanasi bor, vaqti yo'q
+            $testNa = 0;           // Test kerak emas
+
+            // Vaqt taqsimoti (test_time soati bo'yicha)
+            $hourCounts = array_fill(0, 24, 0);
+
+            // Fan va kafedra kesimida
+            $subjectAgg = [];
+            $kafedraAgg = [];
+            $facultyAgg = [];
+
+            // Faculty name mapping
+            $facultyMap = Department::where('structure_type_code', 11)
+                ->pluck('name', 'department_hemis_id')
+                ->toArray();
+
+            foreach ($rows as $r) {
+                $total += 2; // OSKI + Test
+
+                // OSKI hisobi
+                if ($r->oski_na) {
+                    $oskiNa++;
+                } elseif ($r->oski_date) {
+                    $oskiCompleted++;
+                } else {
+                    $oskiMissing++;
+                }
+
+                // Test hisobi
+                $testState = 'missing_date';
+                if ($r->test_na) {
+                    $testNa++;
+                    $testState = 'na';
+                } elseif ($r->test_date) {
+                    if ($hasTestTime && !empty($r->test_time)) {
+                        $testCompleted++;
+                        $testState = 'complete';
+                        // soat hisobiga qo'shish
+                        try {
+                            $hour = (int) substr($r->test_time, 0, 2);
+                            if ($hour >= 0 && $hour < 24) {
+                                $hourCounts[$hour]++;
+                            }
+                        } catch (\Throwable $e) {
+                        }
+                    } elseif (!$hasTestTime) {
+                        $testCompleted++;
+                        $testState = 'complete';
+                    } else {
+                        $testMissingTime++;
+                        $testState = 'missing_time';
+                    }
+                } else {
+                    $testMissingDate++;
+                    $testState = 'missing_date';
+                }
+
+                $oskiState = $r->oski_na ? 'na' : ($r->oski_date ? 'complete' : 'missing_date');
+
+                // Status filter - skip agar filter bor bo'lsa va mos kelmasa
+                $matchesStatus = true;
+                if ($statusFilter !== null) {
+                    $matchesStatus = ($statusFilter === $oskiState) || ($statusFilter === $testState);
+                }
+                if (!$matchesStatus) {
+                    continue;
+                }
+
+                // Fan agregatsiyasi
+                $subjKey = $r->subject_id;
+                if (!isset($subjectAgg[$subjKey])) {
+                    $kafedra = $subjectKafedraMap[$r->subject_id] ?? null;
+                    $subjectAgg[$subjKey] = [
+                        'id' => $r->subject_id,
+                        'name' => $r->subject_name,
+                        'kafedra' => $kafedra->department_name ?? '-',
+                        'total' => 0,
+                        'oski_complete' => 0,
+                        'oski_missing' => 0,
+                        'oski_na' => 0,
+                        'test_complete' => 0,
+                        'test_missing_date' => 0,
+                        'test_missing_time' => 0,
+                        'test_na' => 0,
+                    ];
+                }
+                $subjectAgg[$subjKey]['total'] += 2;
+                $subjectAgg[$subjKey]['oski_' . ($oskiState === 'complete' ? 'complete' : ($oskiState === 'na' ? 'na' : 'missing'))]++;
+                $subjectAgg[$subjKey]['test_' . $testState]++;
+
+                // Kafedra agregatsiyasi
+                $kafedra = $subjectKafedraMap[$r->subject_id] ?? null;
+                if ($kafedra) {
+                    $kafedraKey = $kafedra->department_id;
+                    if (!isset($kafedraAgg[$kafedraKey])) {
+                        $kafedraAgg[$kafedraKey] = [
+                            'id' => $kafedra->department_id,
+                            'name' => $kafedra->department_name,
+                            'total' => 0,
+                            'oski_complete' => 0,
+                            'oski_missing' => 0,
+                            'oski_na' => 0,
+                            'test_complete' => 0,
+                            'test_missing_date' => 0,
+                            'test_missing_time' => 0,
+                            'test_na' => 0,
+                        ];
+                    }
+                    $kafedraAgg[$kafedraKey]['total'] += 2;
+                    $kafedraAgg[$kafedraKey]['oski_' . ($oskiState === 'complete' ? 'complete' : ($oskiState === 'na' ? 'na' : 'missing'))]++;
+                    $kafedraAgg[$kafedraKey]['test_' . $testState]++;
+                }
+
+                // Fakultet agregatsiyasi
+                $facultyKey = $r->department_hemis_id;
+                if (!isset($facultyAgg[$facultyKey])) {
+                    $facultyAgg[$facultyKey] = [
+                        'id' => $r->department_hemis_id,
+                        'name' => $facultyMap[$r->department_hemis_id] ?? '-',
+                        'total' => 0,
+                        'oski_complete' => 0,
+                        'oski_missing' => 0,
+                        'oski_na' => 0,
+                        'test_complete' => 0,
+                        'test_missing_date' => 0,
+                        'test_missing_time' => 0,
+                        'test_na' => 0,
+                    ];
+                }
+                $facultyAgg[$facultyKey]['total'] += 2;
+                $facultyAgg[$facultyKey]['oski_' . ($oskiState === 'complete' ? 'complete' : ($oskiState === 'na' ? 'na' : 'missing'))]++;
+                $facultyAgg[$facultyKey]['test_' . $testState]++;
+            }
+
+            // Hourly data
+            $hourlyData = [];
+            $hourTotal = array_sum($hourCounts);
+            foreach (range(0, 23) as $h) {
+                $hourlyData[$h] = [
+                    'count' => $hourCounts[$h],
+                    'percent' => $hourTotal > 0 ? round($hourCounts[$h] / $hourTotal * 100, 1) : 0,
+                ];
+            }
+
+            // ========= Rejalashtirish vaqti tahlili =========
+            // Test markazi jadvalni imtihondan necha kun oldin belgilagan
+            $setupBuckets = [
+                'same_day' => 0,     // 0 kun - xuddi o'sha kuni
+                'day_before' => 0,   // 1 kun oldin
+                'week_before' => 0,  // 2-7 kun oldin
+                'two_weeks' => 0,    // 8-14 kun oldin
+                'month' => 0,        // 15-30 kun oldin
+                'early' => 0,        // 30+ kun oldin
+                'late' => 0,         // jadvalga imtihondan keyin o'zgartirish kiritilgan
+                'no_date' => 0,      // imtihon sanasi yo'q
+            ];
+            foreach ($rows as $r) {
+                $examDate = $r->test_date ?: $r->oski_date;
+                if (!$examDate) {
+                    $setupBuckets['no_date']++;
+                    continue;
+                }
+                $setDate = $r->updated_at ?: $r->created_at;
+                if (!$setDate) {
+                    $setupBuckets['no_date']++;
+                    continue;
+                }
+                try {
+                    $diff = Carbon::parse($setDate)->startOfDay()->diffInDays(Carbon::parse($examDate)->startOfDay(), false);
+                    if ($diff < 0) {
+                        $setupBuckets['late']++;
+                    } elseif ($diff === 0) {
+                        $setupBuckets['same_day']++;
+                    } elseif ($diff === 1) {
+                        $setupBuckets['day_before']++;
+                    } elseif ($diff <= 7) {
+                        $setupBuckets['week_before']++;
+                    } elseif ($diff <= 14) {
+                        $setupBuckets['two_weeks']++;
+                    } elseif ($diff <= 30) {
+                        $setupBuckets['month']++;
+                    } else {
+                        $setupBuckets['early']++;
+                    }
+                } catch (\Throwable $e) {
+                    $setupBuckets['no_date']++;
+                }
+            }
+
+            // ========= Talaba boshlanish vaqti tahlili =========
+            // hemis_quiz_results bilan solishtirib, talabalar imtihonni vaqtida yoki kechikib boshlashganini aniqlaymiz
+            $testOnTime = 0;
+            $testLate = 0;
+            $oskiOnTime = 0;
+            $oskiLate = 0;
+
+            $testTypesQz = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypesQz = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+            // Faqat sanalar belgilangan schedule'larni qayta ishlaymiz
+            $scheduledTestPairs = [];  // [group_hemis_id, subject_id] => ['scheduled_dt' => 'YYYY-MM-DD HH:MM:SS', 'test_date' => 'YYYY-MM-DD']
+            $scheduledOskiPairs = [];  // [group_hemis_id, subject_id] => ['oski_date' => 'YYYY-MM-DD']
+            $groupIdsForPunctuality = [];
+            $subjectIdsForPunctuality = [];
+
+            foreach ($rows as $r) {
+                if ($r->test_date && !$r->test_na) {
+                    $testTime = $hasTestTime && !empty($r->test_time) ? $r->test_time : '00:00:00';
+                    if (strlen($testTime) === 5) $testTime .= ':00';
+                    $key = $r->group_hemis_id . '|' . $r->subject_id;
+                    $scheduledTestPairs[$key] = [
+                        'scheduled_dt' => $r->test_date . ' ' . $testTime,
+                        'test_date' => $r->test_date,
+                        'has_time' => $hasTestTime && !empty($r->test_time),
+                    ];
+                    $groupIdsForPunctuality[$r->group_hemis_id] = true;
+                    $subjectIdsForPunctuality[$r->subject_id] = true;
+                }
+                if ($r->oski_date && !$r->oski_na) {
+                    $key = $r->group_hemis_id . '|' . $r->subject_id;
+                    $scheduledOskiPairs[$key] = [
+                        'oski_date' => $r->oski_date,
+                    ];
+                    $groupIdsForPunctuality[$r->group_hemis_id] = true;
+                    $subjectIdsForPunctuality[$r->subject_id] = true;
+                }
+            }
+
+            $punctualityAvailable = count($scheduledTestPairs) > 0 || count($scheduledOskiPairs) > 0;
+
+            if ($punctualityAvailable && \Illuminate\Support\Facades\Schema::hasTable('hemis_quiz_results')) {
+                try {
+                    $groupIds = array_keys($groupIdsForPunctuality);
+                    $subjectIds = array_keys($subjectIdsForPunctuality);
+
+                    $quizRows = DB::table('hemis_quiz_results as hqr')
+                        ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
+                        ->whereIn('st.group_id', $groupIds)
+                        ->whereIn('hqr.fan_id', $subjectIds)
+                        ->where('hqr.is_active', 1)
+                        ->whereNotNull('hqr.date_start')
+                        ->select(
+                            'st.group_id',
+                            'hqr.fan_id',
+                            'hqr.quiz_type',
+                            'hqr.date_start'
+                        )
+                        ->get();
+
+                    foreach ($quizRows as $q) {
+                        $key = $q->group_id . '|' . $q->fan_id;
+                        if (in_array($q->quiz_type, $testTypesQz)) {
+                            if (!isset($scheduledTestPairs[$key])) continue;
+                            $sched = $scheduledTestPairs[$key];
+                            // Agar vaqt belgilanmagan bo'lsa, sana bo'yicha solishtiramiz
+                            if ($sched['has_time']) {
+                                if ($q->date_start <= $sched['scheduled_dt']) {
+                                    $testOnTime++;
+                                } else {
+                                    $testLate++;
+                                }
+                            } else {
+                                $startDate = substr($q->date_start, 0, 10);
+                                if ($startDate <= $sched['test_date']) {
+                                    $testOnTime++;
+                                } else {
+                                    $testLate++;
+                                }
+                            }
+                        } elseif (in_array($q->quiz_type, $oskiTypesQz)) {
+                            if (!isset($scheduledOskiPairs[$key])) continue;
+                            $sched = $scheduledOskiPairs[$key];
+                            $startDate = substr($q->date_start, 0, 10);
+                            if ($startDate <= $sched['oski_date']) {
+                                $oskiOnTime++;
+                            } else {
+                                $oskiLate++;
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('testMarkaziTimesData: hemis_quiz_results so\'rovi xatolik: ' . $e->getMessage());
+                }
+            }
+
+            // Sort
+            $subjectData = array_values($subjectAgg);
+            usort($subjectData, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+            $kafedraData = array_values($kafedraAgg);
+            usort($kafedraData, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+            $facultyData = array_values($facultyAgg);
+            usort($facultyData, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+            return response()->json([
+                'overall' => [
+                    'total_schedules' => $rows->count(),
+                    'total' => $total,
+                    'oski_complete' => $oskiCompleted,
+                    'oski_missing' => $oskiMissing,
+                    'oski_na' => $oskiNa,
+                    'test_complete' => $testCompleted,
+                    'test_missing_date' => $testMissingDate,
+                    'test_missing_time' => $testMissingTime,
+                    'test_na' => $testNa,
+                    'has_test_time' => $hasTestTime,
+                ],
+                'setup_timing' => $setupBuckets,
+                'punctuality' => [
+                    'test_on_time' => $testOnTime,
+                    'test_late' => $testLate,
+                    'oski_on_time' => $oskiOnTime,
+                    'oski_late' => $oskiLate,
+                ],
+                'hourly' => $hourlyData,
+                'hourly_total' => $hourTotal,
+                'by_subject' => $subjectData,
+                'by_kafedra' => $kafedraData,
+                'by_faculty' => $facultyData,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Test markazi vaqtlari - Excel export
+     */
+    private function exportTestMarkaziTimesExcel($request, $dateFrom, $dateTo, $facultyDepartmentHemisId, $allowedSubjectIds, $subjectFilter, $semesterFilter, $statusFilter, $currentSemesterCodes, $subjectKafedraMap)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $borderStyle = [
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+        ];
+
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Test markazi vaqtlari');
+
+        $headers = [
+            '#',
+            'Fakultet',
+            'Kafedra',
+            'Guruh',
+            'Fan',
+            'Semestr',
+            'OSKI sanasi',
+            'OSKI holati',
+            'Test sanasi',
+            'Test vaqti',
+            'Test holati',
+        ];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+
+        $hasTestTime = \Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'test_time');
+
+        $selects = [
+            'es.id',
+            'd.name as faculty_name',
+            'es.subject_id',
+            'es.subject_name',
+            'es.group_hemis_id',
+            'es.semester_code',
+            'es.oski_date',
+            'es.oski_na',
+            'es.test_date',
+            'es.test_na',
+        ];
+        if ($hasTestTime) {
+            $selects[] = 'es.test_time';
+        }
+
+        $query = DB::table('exam_schedules as es')
+            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 'es.department_hemis_id')
+            ->select($selects)
+            ->orderBy('es.department_hemis_id')
+            ->orderBy('es.subject_name');
+
+        if ($dateFrom || $dateTo) {
+            $query->where(function ($q) use ($dateFrom, $dateTo) {
+                $q->where(function ($q2) use ($dateFrom, $dateTo) {
+                    if ($dateFrom) $q2->where('es.oski_date', '>=', $dateFrom);
+                    if ($dateTo) $q2->where('es.oski_date', '<=', $dateTo);
+                })->orWhere(function ($q2) use ($dateFrom, $dateTo) {
+                    if ($dateFrom) $q2->where('es.test_date', '>=', $dateFrom);
+                    if ($dateTo) $q2->where('es.test_date', '<=', $dateTo);
+                });
+            });
+        }
+
+        if ($facultyDepartmentHemisId) {
+            $query->where('es.department_hemis_id', $facultyDepartmentHemisId);
+        }
+        if ($allowedSubjectIds !== null) {
+            $query->whereIn('es.subject_id', $allowedSubjectIds);
+        }
+        if ($subjectFilter) {
+            $query->where('es.subject_id', $subjectFilter);
+        }
+        if ($semesterFilter) {
+            $query->where('es.semester_code', $semesterFilter);
+        } elseif ($currentSemesterCodes !== null && count($currentSemesterCodes) > 0) {
+            $query->whereIn('es.semester_code', $currentSemesterCodes);
+        }
+
+        // Guruh nomlarini tayyorlaymiz
+        $groupIds = $query->pluck('es.group_hemis_id')->unique()->toArray();
+        $groupMap = DB::table('groups')
+            ->whereIn('group_hemis_id', $groupIds)
+            ->pluck('name', 'group_hemis_id')
+            ->toArray();
+
+        $semesterMap = DB::table('semesters')
+            ->pluck('name', 'code')
+            ->toArray();
+
+        $row = 2;
+        $num = 0;
+        $query->chunk(2000, function ($records) use ($sheet, &$row, &$num, $subjectKafedraMap, $groupMap, $semesterMap, $hasTestTime, $statusFilter) {
+            foreach ($records as $t) {
+                $oskiState = $t->oski_na ? 'Kerak emas' : ($t->oski_date ? 'Belgilangan' : 'Belgilanmagan');
+
+                if ($t->test_na) {
+                    $testState = 'Kerak emas';
+                } elseif ($t->test_date) {
+                    if ($hasTestTime && !empty($t->test_time)) {
+                        $testState = 'Toliq';
+                    } elseif (!$hasTestTime) {
+                        $testState = 'Belgilangan';
+                    } else {
+                        $testState = "Vaqti belgilanmagan";
+                    }
+                } else {
+                    $testState = 'Belgilanmagan';
+                }
+
+                if ($statusFilter !== null) {
+                    $stateMap = [
+                        'complete' => ['Belgilangan', 'Toliq'],
+                        'missing_date' => ['Belgilanmagan'],
+                        'missing_time' => ['Vaqti belgilanmagan'],
+                        'na' => ['Kerak emas'],
+                    ];
+                    $allowed = $stateMap[$statusFilter] ?? [];
+                    if (!in_array($oskiState, $allowed) && !in_array($testState, $allowed)) {
+                        continue;
+                    }
+                }
+
+                $num++;
+                $kafedra = $subjectKafedraMap[$t->subject_id] ?? null;
+                $sheet->setCellValue([1, $row], $num);
+                $sheet->setCellValue([2, $row], $t->faculty_name ?? '-');
+                $sheet->setCellValue([3, $row], $kafedra->department_name ?? '-');
+                $sheet->setCellValue([4, $row], $groupMap[$t->group_hemis_id] ?? $t->group_hemis_id);
+                $sheet->setCellValue([5, $row], $t->subject_name);
+                $sheet->setCellValue([6, $row], $semesterMap[$t->semester_code] ?? $t->semester_code);
+                $sheet->setCellValue([7, $row], $t->oski_date ?? '-');
+                $sheet->setCellValue([8, $row], $oskiState);
+                $sheet->setCellValue([9, $row], $t->test_date ?? '-');
+                $sheet->setCellValue([10, $row], $hasTestTime ? (!empty($t->test_time) ? substr($t->test_time, 0, 5) : '-') : '-');
+                $sheet->setCellValue([11, $row], $testState);
+                $row++;
+            }
+        });
+
+        $lastRow = $row - 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray($borderStyle);
+        }
+        $widths = [5, 28, 28, 14, 30, 14, 14, 16, 14, 12, 18];
+        foreach ($widths as $i => $w) {
+            $sheet->getColumnDimensionByColumn($i + 1)->setWidth($w);
+        }
+
+        $fileName = 'Test_markazi_vaqtlari_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'tmt_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
 }

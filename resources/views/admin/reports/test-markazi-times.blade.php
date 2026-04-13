@@ -102,6 +102,7 @@
                             <button class="tab-btn" onclick="switchTab('faculty')">Fakultetlar kesimida</button>
                             <button class="tab-btn" onclick="switchTab('kafedra')">Kafedralar kesimida</button>
                             <button class="tab-btn" onclick="switchTab('subject')">Fanlar kesimida</button>
+                            <button class="tab-btn" onclick="switchTab('student')">Talabalar kesimida</button>
                         </div>
 
                         <!-- Umumiy tab -->
@@ -142,6 +143,25 @@
                         <!-- Fan tab -->
                         <div id="tab-subject" class="tab-content">
                             <div id="subject-content"></div>
+                        </div>
+
+                        <!-- Talabalar tab -->
+                        <div id="tab-student" class="tab-content">
+                            <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+                                <input type="text" id="student-search" placeholder="Guruh, talaba ismi yoki fan bo'yicha qidirish..." style="flex:1;min-width:250px;height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:0 12px;font-size:13px;" />
+                                <select id="student-type-filter" style="height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:0 12px;font-size:13px;background:#fff;">
+                                    <option value="">Barcha turlar</option>
+                                    <option value="TEST">TEST</option>
+                                    <option value="OSKI">OSKI</option>
+                                </select>
+                                <select id="student-status-filter" style="height:36px;border:1px solid #cbd5e1;border-radius:8px;padding:0 12px;font-size:13px;background:#fff;">
+                                    <option value="">Barcha holatlar</option>
+                                    <option value="on_time">Vaqtida</option>
+                                    <option value="late">Kechikib</option>
+                                </select>
+                                <span id="student-count" style="font-size:13px;color:#64748b;font-weight:600;"></span>
+                            </div>
+                            <div id="student-content"></div>
                         </div>
 
                     </div>
@@ -216,6 +236,7 @@
                     renderGrouped(res.by_faculty, 'faculty');
                     renderGrouped(res.by_kafedra, 'kafedra');
                     renderGrouped(res.by_subject, 'subject', true);
+                    renderStudents(res.by_student || [], res.by_student_total || 0, res.by_student_truncated || false);
                     $('#report-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
@@ -463,6 +484,95 @@
             });
         }
 
+        var studentsAll = [];
+        var studentsTotal = 0;
+        var studentsTruncated = false;
+
+        function renderStudents(items, totalCount, truncated) {
+            studentsAll = items || [];
+            studentsTotal = totalCount;
+            studentsTruncated = truncated;
+            renderStudentsTable();
+        }
+
+        function formatDt(dt) {
+            if (!dt) return '-';
+            // dt - "YYYY-MM-DD HH:MM:SS" yoki "YYYY-MM-DD HH:MM" yoki "YYYY-MM-DD"
+            dt = String(dt);
+            if (dt.length >= 16) return dt.substring(0, 16);
+            return dt;
+        }
+
+        function renderStudentsTable() {
+            var q = ($('#student-search').val() || '').trim().toLowerCase();
+            var typeF = $('#student-type-filter').val() || '';
+            var statusF = $('#student-status-filter').val() || '';
+
+            var filtered = studentsAll.filter(function(s) {
+                if (typeF && s.type !== typeF) return false;
+                if (statusF && s.status !== statusF) return false;
+                if (q) {
+                    var hay = ((s.group || '') + ' ' + (s.student || '') + ' ' + (s.student_id || '') + ' ' + (s.subject || '')).toLowerCase();
+                    if (hay.indexOf(q) < 0) return false;
+                }
+                return true;
+            });
+
+            var info = 'Ko\'rsatilmoqda: ' + filtered.length.toLocaleString() + ' / ' + studentsTotal.toLocaleString();
+            if (studentsTruncated) info += ' (Excel orqali to\'liq yuklab oling)';
+            $('#student-count').text(info);
+
+            var container = $('#student-content');
+            if (filtered.length === 0) {
+                container.html('<div style="padding:40px;text-align:center;color:#94a3b8;">Ma\'lumot topilmadi</div>');
+                return;
+            }
+
+            var html = '<div style="overflow-x:auto;max-height:600px;overflow-y:auto;">';
+            html += '<table class="stats-table"><thead style="position:sticky;top:0;z-index:1;"><tr>';
+            html += '<th class="th-hour">#</th>';
+            html += '<th class="th-hour" style="text-align:left;">Guruh</th>';
+            html += '<th class="th-hour" style="text-align:left;">Talaba (FISH)</th>';
+            html += '<th class="th-hour" style="text-align:left;">Fan</th>';
+            html += '<th class="th-hour">Tur</th>';
+            html += '<th class="th-hour">Belgilangan vaqt</th>';
+            html += '<th class="th-hour">Boshlangan vaqt</th>';
+            html += '<th class="th-hour">Urinish</th>';
+            html += '<th class="th-hour">Baho</th>';
+            html += '<th class="th-hour">Holat</th>';
+            html += '</tr></thead><tbody>';
+
+            // Show first 500 rendered rows to avoid browser slowness
+            var limit = Math.min(filtered.length, 500);
+            for (var i = 0; i < limit; i++) {
+                var s = filtered[i];
+                var statusBadge = s.status === 'on_time'
+                    ? '<span class="status-badge status-on-time">Vaqtida</span>'
+                    : '<span class="status-badge status-late">Kechikish</span>';
+                var typeBadge = s.type === 'TEST'
+                    ? '<span class="type-badge type-test">TEST</span>'
+                    : '<span class="type-badge type-oski">OSKI</span>';
+
+                html += '<tr>';
+                html += '<td class="td-num">' + (i + 1) + '</td>';
+                html += '<td style="text-align:left;font-weight:600;color:#1e293b;padding:8px 12px;">' + esc(s.group) + '</td>';
+                html += '<td style="text-align:left;color:#1e293b;padding:8px 12px;">' + esc(s.student) + '<br><span style="font-size:11px;color:#94a3b8;">ID: ' + esc(s.student_id) + '</span></td>';
+                html += '<td style="text-align:left;color:#475569;padding:8px 12px;font-size:12px;">' + esc(s.subject) + '</td>';
+                html += '<td class="td-num">' + typeBadge + '</td>';
+                html += '<td class="td-num" style="font-size:12px;font-family:monospace;">' + esc(formatDt(s.scheduled)) + '</td>';
+                html += '<td class="td-num" style="font-size:12px;font-family:monospace;">' + esc(formatDt(s.date_start)) + '</td>';
+                html += '<td class="td-num">' + (s.attempt || '-') + '</td>';
+                html += '<td class="td-num">' + (s.grade !== null && s.grade !== undefined ? s.grade : '-') + '</td>';
+                html += '<td class="td-num">' + statusBadge + '</td>';
+                html += '</tr>';
+            }
+            if (filtered.length > limit) {
+                html += '<tr><td colspan="10" style="text-align:center;padding:14px;color:#94a3b8;font-size:12px;">Yana ' + (filtered.length - limit).toLocaleString() + ' ta qator mavjud. To\'liq ro\'yxat uchun Excel yuklab oling.</td></tr>';
+            }
+            html += '</tbody></table></div>';
+            container.html(html);
+        }
+
         function renderGrouped(items, prefix, showKafedra) {
             var container = $('#' + prefix + '-content');
             if (!items || items.length === 0) {
@@ -538,6 +648,14 @@
             new ScrollCalendar('date_to');
 
             $('#department').change(function() { loadSubjects(); });
+
+            // Student tab filterlari
+            var searchTimer = null;
+            $('#student-search').on('input', function() {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(renderStudentsTable, 200);
+            });
+            $('#student-type-filter, #student-status-filter').change(renderStudentsTable);
         });
     </script>
 
@@ -591,6 +709,14 @@
         .tab-content.active { display: block; }
 
         .section-heading { font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 10px; }
+
+        /* Status and type badges */
+        .status-badge { display:inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+        .status-on-time { background: #d1fae5; color: #065f46; }
+        .status-late { background: #fee2e2; color: #991b1b; }
+        .type-badge { display:inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+        .type-test { background: #dbeafe; color: #1e40af; }
+        .type-oski { background: #f3e8ff; color: #6b21a8; }
 
         /* Summary cards */
         .stats-summary { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }

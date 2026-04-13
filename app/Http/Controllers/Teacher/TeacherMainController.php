@@ -107,16 +107,38 @@ class TeacherMainController extends Controller
             return null;
         }
 
-        $currentSemesterCodes = Semester::where('current', true)
-            ->pluck('code')
-            ->unique()
-            ->filter()
+        // (semester_code, education_year) juftliklarini olamiz.
+        // Faqat semester_code bo'yicha filtrlash xato bo'lar edi: code "11" har
+        // akademik yili takrorlanadi, oqibatda oldingi yillar baholari ham
+        // qo'shilib ketardi. Shu sababli (code + year) juftligini birga taqqoslaymiz.
+        $currentSemesterPairs = Semester::where('current', true)
+            ->whereNotNull('code')
+            ->whereNotNull('education_year')
+            ->select('code', 'education_year')
+            ->distinct()
+            ->get()
+            ->map(fn($s) => [
+                'code' => (string) $s->code,
+                'education_year' => (string) $s->education_year,
+            ])
+            ->unique(fn($p) => $p['code'] . '|' . $p['education_year'])
             ->values()
             ->toArray();
 
-        if (empty($currentSemesterCodes)) {
+        if (empty($currentSemesterPairs)) {
             return null;
         }
+
+        $semesterPairFilter = function ($query) use ($currentSemesterPairs) {
+            $query->where(function ($q) use ($currentSemesterPairs) {
+                foreach ($currentSemesterPairs as $pair) {
+                    $q->orWhere(function ($qq) use ($pair) {
+                        $qq->where('semester_code', $pair['code'])
+                           ->where('education_year_code', $pair['education_year']);
+                    });
+                }
+            });
+        };
 
         // SQL ifoda: juftlik tugash vaqti va 18:00 deadline
         $driver = DB::connection()->getDriverName();
@@ -144,7 +166,7 @@ class TeacherMainController extends Controller
         // Joriy o'qituvchining statistikasi
         $mine = DB::table('student_grades')
             ->whereNull('deleted_at')
-            ->whereIn('semester_code', $currentSemesterCodes)
+            ->where($semesterPairFilter)
             ->where('employee_id', $teacher->hemis_id)
             ->whereNotNull('created_at_api')
             ->whereNotNull('lesson_date')
@@ -165,29 +187,23 @@ class TeacherMainController extends Controller
         $total       = (int) ($mine->total        ?? 0);
 
         // Barcha o'qituvchilar bo'yicha reyting (score = during*1 + work*0.5 + after*0)
-        // CACHE: 10 daqiqa — bu og'ir so'rov (GROUP BY employee_id butun student_grades bo'yicha).
-        // Har o'qituvchi dashboardga kirganda qayta ishlatilmasligi uchun cache'lanadi.
-        $cacheKey = 'teacher:grading_time_stats:all:' . md5(implode(',', $currentSemesterCodes));
-        $allTeachers = Cache::remember($cacheKey, 600, function () use (
-            $currentSemesterCodes, $caseDuringClass, $caseWorkHours, $caseAfterHours
-        ) {
-            return DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('semester_code', $currentSemesterCodes)
-                ->whereNotNull('created_at_api')
-                ->whereNotNull('lesson_date')
-                ->whereNotNull('lesson_pair_end_time')
-                ->where('lesson_pair_end_time', '!=', '')
-                ->selectRaw("
-                    employee_id,
-                    {$caseDuringClass} as during_class,
-                    {$caseWorkHours}   as work_hours,
-                    {$caseAfterHours}  as after_hours,
-                    COUNT(*)           as total
-                ")
-                ->groupBy('employee_id')
-                ->get();
-        });
+        $allTeachers = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where($semesterPairFilter)
+            ->whereNotNull('created_at_api')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('lesson_pair_end_time')
+            ->where('lesson_pair_end_time', '!=', '')
+            ->where($joriyFilter)
+            ->selectRaw("
+                employee_id,
+                {$caseDuringClass} as during_class,
+                {$caseWorkHours}   as work_hours,
+                {$caseAfterHours}  as after_hours,
+                COUNT(*)           as total
+            ")
+            ->groupBy('employee_id')
+            ->get();
 
         $ranked = $allTeachers->map(function ($row) {
             $row->score = ((int) $row->during_class) * 1.0

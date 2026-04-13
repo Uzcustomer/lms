@@ -107,37 +107,39 @@ class TeacherMainController extends Controller
             return null;
         }
 
-        // (semester_code, education_year) juftliklarini olamiz.
-        // Faqat semester_code bo'yicha filtrlash xato bo'lar edi: code "11" har
-        // akademik yili takrorlanadi, oqibatda oldingi yillar baholari ham
-        // qo'shilib ketardi. Shu sababli (code + year) juftligini birga taqqoslaymiz.
-        $currentSemesterPairs = Semester::where('current', true)
+        // Joriy semestrlarning kodlari va sana oralig'ini olamiz.
+        // Faqat semester_code (masalan "11") bo'yicha filtrlash xato bo'lar edi:
+        // bu kod har akademik yili takrorlanadi, oqibatda oldingi yillar baholari
+        // ham qo'shilib ketardi. education_year_code formatlari turlicha bo'lishi
+        // mumkinligi sababli, eng ishonchli usul: semester_code + lesson_date
+        // sana oralig'i (CurriculumWeek'dan).
+        $currentSemesters = Semester::where('current', true)
             ->whereNotNull('code')
-            ->whereNotNull('education_year')
-            ->select('code', 'education_year')
-            ->distinct()
-            ->get()
-            ->map(fn($s) => [
-                'code' => (string) $s->code,
-                'education_year' => (string) $s->education_year,
-            ])
-            ->unique(fn($p) => $p['code'] . '|' . $p['education_year'])
-            ->values()
-            ->toArray();
+            ->get(['semester_hemis_id', 'code']);
 
-        if (empty($currentSemesterPairs)) {
+        if ($currentSemesters->isEmpty()) {
             return null;
         }
 
-        $semesterPairFilter = function ($query) use ($currentSemesterPairs) {
-            $query->where(function ($q) use ($currentSemesterPairs) {
-                foreach ($currentSemesterPairs as $pair) {
-                    $q->orWhere(function ($qq) use ($pair) {
-                        $qq->where('semester_code', $pair['code'])
-                           ->where('education_year_code', $pair['education_year']);
-                    });
-                }
-            });
+        $currentSemesterCodes = $currentSemesters->pluck('code')->unique()->values()->toArray();
+        $currentSemesterHemisIds = $currentSemesters->pluck('semester_hemis_id')->unique()->values()->toArray();
+
+        // Joriy semestrlarning sana oralig'ini CurriculumWeek'dan olamiz
+        $dateRange = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
+            ->selectRaw('MIN(start_date) as min_date, MAX(end_date) as max_date')
+            ->first();
+
+        $dateFrom = $dateRange->min_date ?? null;
+        $dateTo   = $dateRange->max_date ?? null;
+
+        // Filtr: semester_code IN (joriy kodlar) AND lesson_date sana oralig'ida.
+        // Sana oralig'i avvalgi yilning xuddi shu kodli semestrini chiqarib tashlaydi.
+        $semesterFilter = function ($query) use ($currentSemesterCodes, $dateFrom, $dateTo) {
+            $query->whereIn('semester_code', $currentSemesterCodes);
+            if ($dateFrom && $dateTo) {
+                $query->whereBetween('lesson_date', [$dateFrom, $dateTo]);
+            }
         };
 
         // SQL ifoda: juftlik tugash vaqti va 18:00 deadline
@@ -166,7 +168,7 @@ class TeacherMainController extends Controller
         // Joriy o'qituvchining statistikasi
         $mine = DB::table('student_grades')
             ->whereNull('deleted_at')
-            ->where($semesterPairFilter)
+            ->where($semesterFilter)
             ->where('employee_id', $teacher->hemis_id)
             ->whereNotNull('created_at_api')
             ->whereNotNull('lesson_date')
@@ -189,14 +191,14 @@ class TeacherMainController extends Controller
         // Barcha o'qituvchilar bo'yicha reyting (score = during*1 + work*0.5 + after*0)
         // CACHE: 10 daqiqa — bu og'ir so'rov (GROUP BY employee_id butun student_grades bo'yicha).
         // Har o'qituvchi dashboardga kirganda qayta ishlatilmasligi uchun cache'lanadi.
-        // v3: (semester_code + education_year_code) juftligi va joriy filtr ishlatiladi.
-        $cacheKey = 'teacher:grading_time_stats:all:v3:' . md5(json_encode($currentSemesterPairs));
+        // v4: semester_code + lesson_date oralig'i (CurriculumWeek'dan) bo'yicha filtr.
+        $cacheKey = 'teacher:grading_time_stats:all:v4:' . md5(implode(',', $currentSemesterCodes) . '|' . $dateFrom . '|' . $dateTo);
         $allTeachers = Cache::remember($cacheKey, 600, function () use (
-            $semesterPairFilter, $caseDuringClass, $caseWorkHours, $caseAfterHours, $joriyFilter
+            $semesterFilter, $caseDuringClass, $caseWorkHours, $caseAfterHours, $joriyFilter
         ) {
             return DB::table('student_grades')
                 ->whereNull('deleted_at')
-                ->where($semesterPairFilter)
+                ->where($semesterFilter)
                 ->whereNotNull('created_at_api')
                 ->whereNotNull('lesson_date')
                 ->whereNotNull('lesson_pair_end_time')

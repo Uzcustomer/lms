@@ -809,7 +809,6 @@
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
-        $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -1173,26 +1172,8 @@
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            @php
-                                                $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
-                                                $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
-                                            @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
-                                                @if($canAdminEditExam && $oskiRounded !== null)
-                                                    <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
-                                                @else
-                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
-                                                @endif
-                                            </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
-                                                @if($canAdminEditExam && $testRounded !== null)
-                                                    <span class="font-bold text-blue-600">{{ $testRounded }}</span>
-                                                @else
-                                                    {{ $testRounded !== null ? $testRounded : '' }}
-                                                @endif
-                                            </td>
+                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1346,11 +1327,10 @@
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                                        $isSuperAdminRole = auth()->user()?->hasRole('superadmin') ?? false;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRateAdmin = !$isDekan && (($isAdminRole && !$isYnSubmitted) || $isSuperAdminRole);
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted || $isSuperAdminRole;
+                                                        $canRateAdmin = !$isDekan && $isAdminRole && !$isYnSubmitted;
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted;
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;
@@ -1416,8 +1396,7 @@
                                                                 $origVal = round($gradeData['original_grade'], 0);
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
                                                             @endphp
-                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-blue-50 @endif" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($canRateAdmin) onclick="makeEditable(this, {{ $gradeData['id'] }})" @endif>
+                                                            <div class="split-cell" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1425,14 +1404,12 @@
                                                         @elseif($hasRetake && $retakeType === 'absent')
                                                             {{-- NB + retake baho --}}
                                                             @php
-                                                                $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                                 $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
                                                                 $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
-                                                            <div class="split-cell @if($isSuperAdmin) cursor-pointer hover:bg-amber-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}{{ $isSuperAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($isSuperAdmin && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ round($grade, 0) }})" @elseif($isSuperAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
+                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>
@@ -1442,13 +1419,7 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            @if($canRateAdmin && $gradeData)
-                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="adminEditGrade(this, {{ $gradeData['id'] }}, {{ round($grade, 0) }})" title="Bosib o'zgartirish yoki o'chirish">
-                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                                </div>
-                                                            @else
-                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                            @endif
+                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -1490,10 +1461,8 @@
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php
                                                                 $retakeVal = round($absenceData['retake_grade'], 0);
-                                                                $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
                                                             @endphp
-                                                            <div class="split-cell @if($isSuperAdmin) cursor-pointer hover:bg-amber-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $isSuperAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($isSuperAdmin && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ $retakeVal }})" @elseif($isSuperAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
+                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1530,26 +1499,8 @@
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            @php
-                                                $oskiRounded2 = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
-                                                $testRounded2 = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
-                                            @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded2 !== null ? $oskiRounded2 : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
-                                                @if($canAdminEditExam && $oskiRounded2 !== null)
-                                                    <span class="font-bold text-blue-600">{{ $oskiRounded2 }}</span>
-                                                @else
-                                                    {{ $oskiRounded2 !== null ? $oskiRounded2 : '' }}
-                                                @endif
-                                            </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded2 !== null ? $testRounded2 : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
-                                                @if($canAdminEditExam && $testRounded2 !== null)
-                                                    <span class="font-bold text-blue-600">{{ $testRounded2 }}</span>
-                                                @else
-                                                    {{ $testRounded2 !== null ? $testRounded2 : '' }}
-                                                @endif
-                                            </td>
+                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1948,15 +1899,14 @@
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                            $isSuperAdminMt = auth()->user()?->hasRole('superadmin') ?? false;
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? !$isSuperAdminMt
+                                                ? true
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
-                                            // YN yuborilgan bo'lsa hamma action bloklash (superadmin bundan mustasno)
-                                            if ($isYnSubmittedMt && !$isSuperAdminMt) {
+                                            // YN yuborilgan bo'lsa hamma action bloklash
+                                            if ($isYnSubmittedMt) {
                                                 $canRegrade = false;
                                             }
 
@@ -2003,7 +1953,7 @@
                                                         @elseif($urgency === 'danger')
                                                             <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
                                                         @endif
-                                                        @if($isSuperAdminMt)
+                                                        @if(auth()->user()?->hasRole('superadmin') && !$isYnSubmittedMt)
                                                             <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"
                                                                 class="mt-file-delete-btn"
                                                                 title="Faylni o'chirish">&#10005;</button>
@@ -2951,56 +2901,6 @@
             }
         }
 
-        // Admin: ON/OSKI/Test baho kiritish
-        function editExamGrade(cell, studentHemisId, typeCode, currentValue) {
-            if (cell.querySelector('input')) return;
-            var typeNames = {100: 'ON%', 101: 'OSKI', 102: 'Test'};
-            var original = cell.innerHTML;
-            var input = document.createElement('input');
-            input.type = 'number'; input.min = '0'; input.max = '100'; input.step = '1';
-            input.value = currentValue !== null ? currentValue : '';
-            input.placeholder = '0-100';
-            input.style.cssText = 'width:50px;padding:2px 4px;text-align:center;font-size:12px;border:2px solid #3b82f6;border-radius:4px;outline:none;';
-            cell.innerHTML = '';
-            cell.appendChild(input);
-            input.focus();
-            input.select();
-
-            function save() {
-                var val = input.value.trim();
-                if (val === '') { cell.innerHTML = original; return; }
-                if (isNaN(val) || val < 0 || val > 100) { alert('0-100 orasida kiriting'); input.focus(); return; }
-                cell.innerHTML = '<span style="color:#6b7280;">...</span>';
-                fetch('{{ route("admin.journal.save-exam-grade") }}', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json'},
-                    body: JSON.stringify({
-                        student_hemis_id: studentHemisId,
-                        subject_id: '{{ $subject->subject_id ?? "" }}',
-                        semester_code: '{{ $semesterCode ?? "" }}',
-                        training_type_code: typeCode,
-                        grade: parseFloat(val)
-                    })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        cell.innerHTML = '<span class="font-bold text-blue-600">' + Math.round(data.grade) + '</span>';
-                    } else {
-                        alert(data.message || 'Xatolik');
-                        cell.innerHTML = original;
-                    }
-                })
-                .catch(() => { alert('Tarmoq xatosi'); cell.innerHTML = original; });
-            }
-
-            input.addEventListener('blur', save);
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-                if (e.key === 'Escape') { cell.innerHTML = original; }
-            });
-        }
-
         function saveMtGrade(studentHemisId, isRegrade, adminEdit) {
             if (isDekan) return;
             const input = document.getElementById('mt-grade-' + studentHemisId);
@@ -3635,113 +3535,6 @@
             });
         }
 
-        function adminEditGrade(cellDiv, gradeId, currentGrade) {
-            if (currentEditingCell) return;
-            currentEditingCell = cellDiv;
-            const originalContent = cellDiv.innerHTML;
-            let saving = false;
-
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'display:flex; align-items:center; gap:2px;';
-
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.min = '0';
-            input.max = '100';
-            input.value = currentGrade;
-            input.className = 'text-center border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-300';
-            input.style.cssText = 'width:42px; height:26px; padding:1px 2px; font-size:12px;';
-
-            const delBtn = document.createElement('button');
-            delBtn.innerHTML = '&times;';
-            delBtn.title = "O'chirish";
-            delBtn.className = 'text-red-500 hover:text-red-700 font-bold';
-            delBtn.style.cssText = 'font-size:16px; line-height:1; padding:0 2px; cursor:pointer; border:none; background:none;';
-
-            wrapper.appendChild(input);
-            wrapper.appendChild(delBtn);
-            cellDiv.innerHTML = '';
-            cellDiv.appendChild(wrapper);
-            input.focus();
-            input.select();
-
-            function doSave() {
-                if (saving) return;
-                saving = true;
-                const val = input.value.trim();
-                if (val === '' || val == currentGrade) {
-                    cellDiv.innerHTML = originalContent;
-                    currentEditingCell = null;
-                    return;
-                }
-                const gradeNum = parseFloat(val);
-                if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
-                    alert('0 dan 100 gacha baho kiriting');
-                    cellDiv.innerHTML = originalContent;
-                    currentEditingCell = null;
-                    return;
-                }
-                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
-                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                    body: JSON.stringify({ grade_id: gradeId, grade: gradeNum, action: 'update' })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const v = Math.round(data.grade);
-                        const minLimit = {{ $minimumLimit ?? 60 }};
-                        const colorClass = v < minLimit ? 'text-red-600' : 'text-gray-900';
-                        cellDiv.innerHTML = `<span class="${colorClass} font-medium">${v}</span>`;
-                        cellDiv.onclick = function() { adminEditGrade(this, gradeId, v); };
-                        currentEditingCell = null;
-                    } else {
-                        alert(data.message || 'Xatolik');
-                        cellDiv.innerHTML = originalContent;
-                        currentEditingCell = null;
-                    }
-                })
-                .catch(() => { alert('Xatolik'); cellDiv.innerHTML = originalContent; currentEditingCell = null; });
-            }
-
-            function doDelete() {
-                if (saving) return;
-                if (!confirm('Bahoni butunlay o\'chirmoqchimisiz?')) return;
-                saving = true;
-                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
-                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                    body: JSON.stringify({ grade_id: gradeId, action: 'delete' })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        cellDiv.innerHTML = '<span class="text-gray-300">-</span>';
-                        cellDiv.onclick = null;
-                        cellDiv.className = '';
-                        currentEditingCell = null;
-                    } else {
-                        alert(data.message || 'Xatolik');
-                        cellDiv.innerHTML = originalContent;
-                        currentEditingCell = null;
-                    }
-                })
-                .catch(() => { alert('Xatolik'); cellDiv.innerHTML = originalContent; currentEditingCell = null; });
-            }
-
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); input.removeEventListener('blur', blurHandler); doSave(); }
-                else if (e.key === 'Escape') { saving = true; cellDiv.innerHTML = originalContent; currentEditingCell = null; }
-            });
-
-            function blurHandler() {
-                setTimeout(() => { if (!saving) { cellDiv.innerHTML = originalContent; currentEditingCell = null; } }, 150);
-            }
-            input.addEventListener('blur', blurHandler);
-            delBtn.addEventListener('click', function(e) { e.stopPropagation(); input.removeEventListener('blur', blurHandler); doDelete(); });
-        }
     </script>
 
     {{-- ===== DARS OCHISH MODAL ===== --}}

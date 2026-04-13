@@ -495,7 +495,7 @@
             renderStudentsTable();
         }
 
-        function formatDt(dt, ensureTime) {
+        function formatDt(dt, ensureTime, placeholderTime) {
             if (!dt) return '-';
             dt = String(dt);
             // "YYYY-MM-DD HH:MM:SS" yoki "YYYY-MM-DD HH:MM" yoki "YYYY-MM-DD"
@@ -505,7 +505,7 @@
             if (m[4] && m[5]) {
                 out += ' ' + m[4] + ':' + m[5];
             } else if (ensureTime) {
-                out += ' 00:00';
+                out += ' ' + (placeholderTime || '--:--');
             }
             return out;
         }

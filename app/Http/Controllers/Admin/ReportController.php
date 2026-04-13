@@ -6450,7 +6450,7 @@ class ReportController extends Controller
                 $testDateTimeDisplay = '-';
                 if ($t->test_date) {
                     try {
-                        $tt = ($hasTestTime && !empty($t->test_time)) ? substr($t->test_time, 0, 5) : '00:00';
+                        $tt = ($hasTestTime && !empty($t->test_time)) ? substr($t->test_time, 0, 5) : '--:--';
                         $testDateTimeDisplay = Carbon::parse($t->test_date)->format('d.m.Y') . ' ' . $tt;
                     } catch (\Throwable $e) {}
                 }
@@ -6622,16 +6622,16 @@ class ReportController extends Controller
                                 $scheduledDisplay = Carbon::parse($m['test_date'] . ' ' . $m['test_time'])->format('d.m.Y H:i');
                                 $onTime = $q->date_start <= $scheduledRaw;
                             } else {
-                                // Vaqt belgilanmagan - DD.MM.YYYY 00:00 deb ko'rsatamiz
-                                $scheduledDisplay = Carbon::parse($m['test_date'])->format('d.m.Y') . ' 00:00';
+                                // Vaqt belgilanmagan - DD.MM.YYYY --:-- deb ko'rsatamiz
+                                $scheduledDisplay = Carbon::parse($m['test_date'])->format('d.m.Y') . ' --:--';
                                 // lekin solishtirish uchun kun oxirigacha ruxsat beramiz
                                 $onTime = substr($q->date_start, 0, 10) <= $m['test_date'];
                             }
                         } elseif ($isOski && isset($oskiMap[$key])) {
                             $m = $oskiMap[$key];
                             $type = 'OSKI';
-                            // OSKI vaqti jadvalda mavjud emas - DD.MM.YYYY 00:00 deb ko'rsatamiz
-                            $scheduledDisplay = Carbon::parse($m['oski_date'])->format('d.m.Y') . ' 00:00';
+                            // OSKI vaqti jadvalda mavjud emas - DD.MM.YYYY --:-- deb ko'rsatamiz
+                            $scheduledDisplay = Carbon::parse($m['oski_date'])->format('d.m.Y') . ' --:--';
                             $onTime = substr($q->date_start, 0, 10) <= $m['oski_date'];
                         } else {
                             continue;

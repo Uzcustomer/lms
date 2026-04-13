@@ -519,7 +519,7 @@
                 if (typeF && s.type !== typeF) return false;
                 if (statusF && s.status !== statusF) return false;
                 if (q) {
-                    var hay = ((s.group || '') + ' ' + (s.student || '') + ' ' + (s.student_id || '') + ' ' + (s.subject || '')).toLowerCase();
+                    var hay = ((s.faculty || '') + ' ' + (s.group || '') + ' ' + (s.student || '') + ' ' + (s.student_id || '') + ' ' + (s.subject || '')).toLowerCase();
                     if (hay.indexOf(q) < 0) return false;
                 }
                 return true;
@@ -538,6 +538,7 @@
             var html = '<div style="overflow-x:auto;max-height:600px;overflow-y:auto;">';
             html += '<table class="stats-table"><thead style="position:sticky;top:0;z-index:1;"><tr>';
             html += '<th class="th-hour">#</th>';
+            html += '<th class="th-hour" style="text-align:left;">Fakultet</th>';
             html += '<th class="th-hour" style="text-align:left;">Guruh</th>';
             html += '<th class="th-hour" style="text-align:left;">Talaba (FISH)</th>';
             html += '<th class="th-hour" style="text-align:left;">Fan</th>';
@@ -562,6 +563,7 @@
 
                 html += '<tr>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
+                html += '<td style="text-align:left;color:#475569;padding:8px 12px;font-size:12px;">' + esc(s.faculty) + '</td>';
                 html += '<td style="text-align:left;font-weight:600;color:#1e293b;padding:8px 12px;">' + esc(s.group) + '</td>';
                 html += '<td style="text-align:left;color:#1e293b;padding:8px 12px;">' + esc(s.student) + '<br><span style="font-size:11px;color:#94a3b8;">ID: ' + esc(s.student_id) + '</span></td>';
                 html += '<td style="text-align:left;color:#475569;padding:8px 12px;font-size:12px;">' + esc(s.subject) + '</td>';
@@ -574,7 +576,7 @@
                 html += '</tr>';
             }
             if (filtered.length > limit) {
-                html += '<tr><td colspan="10" style="text-align:center;padding:14px;color:#94a3b8;font-size:12px;">Yana ' + (filtered.length - limit).toLocaleString() + ' ta qator mavjud. To\'liq ro\'yxat uchun Excel yuklab oling.</td></tr>';
+                html += '<tr><td colspan="11" style="text-align:center;padding:14px;color:#94a3b8;font-size:12px;">Yana ' + (filtered.length - limit).toLocaleString() + ' ta qator mavjud. To\'liq ro\'yxat uchun Excel yuklab oling.</td></tr>';
             }
             html += '</tbody></table></div>';
             container.html(html);

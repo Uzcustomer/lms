@@ -6184,6 +6184,7 @@ class ReportController extends Controller
                         ->select(
                             'st.group_id',
                             'st.group_name',
+                            'st.department_name as faculty_name',
                             'st.full_name',
                             'st.student_id_number',
                             'hqr.fan_id',
@@ -6215,6 +6216,7 @@ class ReportController extends Controller
                             if ($onTime) $testOnTime++; else $testLate++;
 
                             $studentDetails[] = [
+                                'faculty' => $q->faculty_name,
                                 'group' => $q->group_name,
                                 'student' => $q->full_name,
                                 'student_id' => $q->student_id_number,
@@ -6238,6 +6240,7 @@ class ReportController extends Controller
                             if ($onTime) $oskiOnTime++; else $oskiLate++;
 
                             $studentDetails[] = [
+                                'faculty' => $q->faculty_name,
                                 'group' => $q->group_name,
                                 'student' => $q->full_name,
                                 'student_id' => $q->student_id_number,
@@ -6502,6 +6505,7 @@ class ReportController extends Controller
 
             $studentHeaders = [
                 '#',
+                'Fakultet',
                 'Guruh',
                 'Talaba (FISH)',
                 'Student ID',
@@ -6517,7 +6521,7 @@ class ReportController extends Controller
             foreach ($studentHeaders as $col => $header) {
                 $sheet2->setCellValue([$col + 1, 1], $header);
             }
-            $sheet2->getStyle('A1:L1')->applyFromArray($headerStyle);
+            $sheet2->getStyle('A1:M1')->applyFromArray($headerStyle);
 
             $testTypesQz = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
             $oskiTypesQz = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
@@ -6595,6 +6599,7 @@ class ReportController extends Controller
                     ->select(
                         'st.group_id',
                         'st.group_name',
+                        'st.department_name as faculty_name',
                         'st.full_name',
                         'st.student_id_number',
                         'hqr.fan_id',
@@ -6605,6 +6610,7 @@ class ReportController extends Controller
                         'hqr.attempt_number',
                         'hqr.grade'
                     )
+                    ->orderBy('st.department_name')
                     ->orderBy('st.group_name')
                     ->orderBy('st.full_name')
                     ->orderBy('hqr.date_start');
@@ -6655,17 +6661,18 @@ class ReportController extends Controller
 
                         $num2++;
                         $sheet2->setCellValue([1, $row2], $num2);
-                        $sheet2->setCellValue([2, $row2], $q->group_name);
-                        $sheet2->setCellValue([3, $row2], $q->full_name);
-                        $sheet2->setCellValue([4, $row2], $q->student_id_number);
-                        $sheet2->setCellValue([5, $row2], $q->fan_name);
-                        $sheet2->setCellValue([6, $row2], $type);
-                        $sheet2->setCellValueExplicit([7, $row2], $scheduledDisplay, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                        $sheet2->setCellValueExplicit([8, $row2], $fmt($q->date_start), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                        $sheet2->setCellValueExplicit([9, $row2], $fmt($q->date_finish), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                        $sheet2->setCellValue([10, $row2], $q->attempt_number);
-                        $sheet2->setCellValue([11, $row2], $q->grade);
-                        $sheet2->setCellValue([12, $row2], $onTime ? 'Vaqtida' : 'Kechikish');
+                        $sheet2->setCellValue([2, $row2], $q->faculty_name ?? '-');
+                        $sheet2->setCellValue([3, $row2], $q->group_name);
+                        $sheet2->setCellValue([4, $row2], $q->full_name);
+                        $sheet2->setCellValue([5, $row2], $q->student_id_number);
+                        $sheet2->setCellValue([6, $row2], $q->fan_name);
+                        $sheet2->setCellValue([7, $row2], $type);
+                        $sheet2->setCellValueExplicit([8, $row2], $scheduledDisplay, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                        $sheet2->setCellValueExplicit([9, $row2], $fmt($q->date_start), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                        $sheet2->setCellValueExplicit([10, $row2], $fmt($q->date_finish), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                        $sheet2->setCellValue([11, $row2], $q->attempt_number);
+                        $sheet2->setCellValue([12, $row2], $q->grade);
+                        $sheet2->setCellValue([13, $row2], $onTime ? 'Vaqtida' : 'Kechikish');
                         $row2++;
                     }
                 });
@@ -6673,9 +6680,9 @@ class ReportController extends Controller
 
             $lastRow2 = $row2 - 1;
             if ($lastRow2 > 1) {
-                $sheet2->getStyle("A2:L{$lastRow2}")->applyFromArray($borderStyle);
+                $sheet2->getStyle("A2:M{$lastRow2}")->applyFromArray($borderStyle);
             }
-            $widths2 = [5, 16, 30, 14, 30, 8, 18, 20, 20, 10, 10, 14];
+            $widths2 = [5, 26, 16, 30, 14, 30, 8, 18, 20, 20, 10, 10, 14];
             foreach ($widths2 as $i => $w) {
                 $sheet2->getColumnDimensionByColumn($i + 1)->setWidth($w);
             }

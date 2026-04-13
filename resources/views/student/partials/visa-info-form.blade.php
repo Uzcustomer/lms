@@ -15,8 +15,8 @@
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><span class="text-[10px] text-gray-400">{{ __('F.I.Sh') }}</span><br><b class="text-sm text-gray-800">{{ $student->full_name }}</b></div>
             <div><span class="text-[10px] text-gray-400">{{ __('Tug\'ilgan sana') }}</span><br><span class="text-sm text-gray-800">{{ $student->birth_date?->format('d.m.Y') ?? '—' }}</span></div>
-            <div><span class="text-[10px] text-gray-400">{{ __('Fuqaroligi') }}</span><br><span class="text-sm text-gray-800">{{ $student->citizenship_name ?? '—' }}</span></div>
-            <div><span class="text-[10px] text-gray-400">{{ __('Davlat') }}</span><br><span class="text-sm text-gray-800">{{ $student->country_name ?? '—' }}</span></div>
+            <div><span class="text-[10px] text-gray-400">{{ __('Fuqaroligi') }}</span><br><span class="text-sm text-gray-800">{{ $student->citizenship_name ? __($student->citizenship_name) : '—' }}</span></div>
+            <div><span class="text-[10px] text-gray-400">{{ __('Davlat') }}</span><br><span class="text-sm text-gray-800">{{ $student->country_name ? __($student->country_name) : '—' }}</span></div>
         </div>
     </div>
 

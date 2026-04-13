@@ -366,10 +366,16 @@
                                     </td>
                                     <td>
                                         @if($visa?->registration_end_date)
-                                            <span class="int-date {{ $regDays <= 3 ? 'int-date-danger' : ($regDays <= 5 ? 'int-date-warn' : ($regDays <= 7 ? 'int-date-ok' : '')) }}">
+                                            @php
+                                                $regProc = $visa->registration_process_status ?? 'none';
+                                                $regRenewing = in_array($regProc, ['passport_accepted','registering']);
+                                            @endphp
+                                            <span class="int-date {{ $regRenewing ? '' : ($regDays <= 3 ? 'int-date-danger' : ($regDays <= 5 ? 'int-date-warn' : ($regDays <= 7 ? 'int-date-ok' : ''))) }}">
                                                 {{ $visa->registration_end_date->format('d.m.Y') }}
                                             </span>
-                                            @if($regDays !== null && $regDays <= 7)
+                                            @if($regRenewing)
+                                                <span class="int-days-badge" style="background:#dbeafe;color:#1e40af;">YANGILANMOQDA</span>
+                                            @elseif($regDays !== null && $regDays <= 7)
                                                 <span class="int-days-badge {{ $regDays <= 0 ? 'int-days-expired' : ($regDays <= 3 ? 'int-days-danger' : ($regDays <= 5 ? 'int-days-warn' : 'int-days-ok')) }}">
                                                     {{ $regDays <= 0 ? 'TUGAGAN' : $regDays . ' kun' }}
                                                 </span>
@@ -380,10 +386,16 @@
                                     </td>
                                     <td>
                                         @if($visa?->visa_end_date)
-                                            <span class="int-date {{ $visaDays <= 15 ? 'int-date-danger' : ($visaDays <= 20 ? 'int-date-warn' : ($visaDays <= 30 ? 'int-date-ok' : '')) }}">
+                                            @php
+                                                $visaProc = $visa->visa_process_status ?? 'none';
+                                                $visaRenewing = in_array($visaProc, ['passport_accepted','registering']);
+                                            @endphp
+                                            <span class="int-date {{ $visaRenewing ? '' : ($visaDays <= 15 ? 'int-date-danger' : ($visaDays <= 20 ? 'int-date-warn' : ($visaDays <= 30 ? 'int-date-ok' : ''))) }}">
                                                 {{ $visa->visa_end_date->format('d.m.Y') }}
                                             </span>
-                                            @if($visaDays !== null && $visaDays <= 30)
+                                            @if($visaRenewing)
+                                                <span class="int-days-badge" style="background:#dbeafe;color:#1e40af;">YANGILANMOQDA</span>
+                                            @elseif($visaDays !== null && $visaDays <= 30)
                                                 <span class="int-days-badge {{ $visaDays <= 0 ? 'int-days-expired' : ($visaDays <= 15 ? 'int-days-danger' : ($visaDays <= 20 ? 'int-days-warn' : 'int-days-ok')) }}">
                                                     {{ $visaDays <= 0 ? 'TUGAGAN' : $visaDays . ' kun' }}
                                                 </span>

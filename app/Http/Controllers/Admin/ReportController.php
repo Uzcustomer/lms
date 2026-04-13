@@ -6441,16 +6441,30 @@ class ReportController extends Controller
 
                 $num++;
                 $kafedra = $subjectKafedraMap[$t->subject_id] ?? null;
+
+                // Sanalarni DD.MM.YYYY formatida ko'rsatamiz
+                $oskiDateDisplay = '-';
+                if ($t->oski_date) {
+                    try { $oskiDateDisplay = Carbon::parse($t->oski_date)->format('d.m.Y'); } catch (\Throwable $e) {}
+                }
+                $testDateTimeDisplay = '-';
+                if ($t->test_date) {
+                    try {
+                        $tt = ($hasTestTime && !empty($t->test_time)) ? substr($t->test_time, 0, 5) : '00:00';
+                        $testDateTimeDisplay = Carbon::parse($t->test_date)->format('d.m.Y') . ' ' . $tt;
+                    } catch (\Throwable $e) {}
+                }
+
                 $sheet->setCellValue([1, $row], $num);
                 $sheet->setCellValue([2, $row], $t->faculty_name ?? '-');
                 $sheet->setCellValue([3, $row], $kafedra->department_name ?? '-');
                 $sheet->setCellValue([4, $row], $groupMap[$t->group_hemis_id] ?? $t->group_hemis_id);
                 $sheet->setCellValue([5, $row], $t->subject_name);
                 $sheet->setCellValue([6, $row], $semesterMap[$t->semester_code] ?? $t->semester_code);
-                $sheet->setCellValue([7, $row], $t->oski_date ?? '-');
+                $sheet->setCellValueExplicit([7, $row], $oskiDateDisplay, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 $sheet->setCellValue([8, $row], $oskiState);
-                $sheet->setCellValue([9, $row], $t->test_date ?? '-');
-                $sheet->setCellValue([10, $row], $hasTestTime ? (!empty($t->test_time) ? substr($t->test_time, 0, 5) : '-') : '-');
+                $sheet->setCellValueExplicit([9, $row], $testDateTimeDisplay, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit([10, $row], $hasTestTime && !empty($t->test_time) ? substr($t->test_time, 0, 5) : '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 $sheet->setCellValue([11, $row], $testState);
                 $row++;
             }
@@ -6580,12 +6594,23 @@ class ReportController extends Controller
                     ->orderBy('hqr.date_start');
 
                 $studentQuery->chunk(3000, function ($records) use ($sheet2, &$row2, &$num2, $testMap, $oskiMap, $testTypesQz, $oskiTypesQz) {
+                    // Vaqtni DD.MM.YYYY HH:MM formatiga keltiradigan yordamchi
+                    $fmt = function ($val) {
+                        if (empty($val)) return '-';
+                        try {
+                            return Carbon::parse($val)->format('d.m.Y H:i');
+                        } catch (\Throwable $e) {
+                            return (string) $val;
+                        }
+                    };
+
                     foreach ($records as $q) {
                         $key = $q->group_id . '|' . $q->fan_id;
                         $isTest = in_array($q->quiz_type, $testTypesQz);
                         $isOski = in_array($q->quiz_type, $oskiTypesQz);
 
-                        $scheduled = null;
+                        $scheduledRaw = null;   // solishtirish uchun
+                        $scheduledDisplay = null; // ko'rsatish uchun
                         $type = null;
                         $onTime = null;
 
@@ -6593,16 +6618,20 @@ class ReportController extends Controller
                             $m = $testMap[$key];
                             $type = 'TEST';
                             if ($m['test_time']) {
-                                $scheduled = $m['test_date'] . ' ' . substr($m['test_time'], 0, 5);
-                                $onTime = $q->date_start <= $m['test_date'] . ' ' . $m['test_time'];
+                                $scheduledRaw = $m['test_date'] . ' ' . $m['test_time'];
+                                $scheduledDisplay = Carbon::parse($m['test_date'] . ' ' . $m['test_time'])->format('d.m.Y H:i');
+                                $onTime = $q->date_start <= $scheduledRaw;
                             } else {
-                                $scheduled = $m['test_date'];
+                                // Vaqt belgilanmagan - DD.MM.YYYY 00:00 deb ko'rsatamiz
+                                $scheduledDisplay = Carbon::parse($m['test_date'])->format('d.m.Y') . ' 00:00';
+                                // lekin solishtirish uchun kun oxirigacha ruxsat beramiz
                                 $onTime = substr($q->date_start, 0, 10) <= $m['test_date'];
                             }
                         } elseif ($isOski && isset($oskiMap[$key])) {
                             $m = $oskiMap[$key];
                             $type = 'OSKI';
-                            $scheduled = $m['oski_date'];
+                            // OSKI vaqti jadvalda mavjud emas - DD.MM.YYYY 00:00 deb ko'rsatamiz
+                            $scheduledDisplay = Carbon::parse($m['oski_date'])->format('d.m.Y') . ' 00:00';
                             $onTime = substr($q->date_start, 0, 10) <= $m['oski_date'];
                         } else {
                             continue;
@@ -6615,9 +6644,9 @@ class ReportController extends Controller
                         $sheet2->setCellValue([4, $row2], $q->student_id_number);
                         $sheet2->setCellValue([5, $row2], $q->fan_name);
                         $sheet2->setCellValue([6, $row2], $type);
-                        $sheet2->setCellValue([7, $row2], $scheduled);
-                        $sheet2->setCellValue([8, $row2], $q->date_start);
-                        $sheet2->setCellValue([9, $row2], $q->date_finish);
+                        $sheet2->setCellValueExplicit([7, $row2], $scheduledDisplay, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                        $sheet2->setCellValueExplicit([8, $row2], $fmt($q->date_start), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                        $sheet2->setCellValueExplicit([9, $row2], $fmt($q->date_finish), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                         $sheet2->setCellValue([10, $row2], $q->attempt_number);
                         $sheet2->setCellValue([11, $row2], $q->grade);
                         $sheet2->setCellValue([12, $row2], $onTime ? 'Vaqtida' : 'Kechikish');

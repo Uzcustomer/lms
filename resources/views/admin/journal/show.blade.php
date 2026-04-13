@@ -809,6 +809,7 @@
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
+        $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -1172,8 +1173,26 @@
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            @php
+                                                $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $oskiRounded !== null)
+                                                    <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
+                                                @else
+                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $testRounded !== null)
+                                                    <span class="font-bold text-blue-600">{{ $testRounded }}</span>
+                                                @else
+                                                    {{ $testRounded !== null ? $testRounded : '' }}
+                                                @endif
+                                            </td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1511,8 +1530,26 @@
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
-                                            <td class="px-1 py-1 text-center">{{ $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
+                                            @php
+                                                $oskiRounded2 = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testRounded2 = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded2 !== null ? $oskiRounded2 : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $oskiRounded2 !== null)
+                                                    <span class="font-bold text-blue-600">{{ $oskiRounded2 }}</span>
+                                                @else
+                                                    {{ $oskiRounded2 !== null ? $oskiRounded2 : '' }}
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded2 !== null ? $testRounded2 : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
+                                                @if($canAdminEditExam && $testRounded2 !== null)
+                                                    <span class="font-bold text-blue-600">{{ $testRounded2 }}</span>
+                                                @else
+                                                    {{ $testRounded2 !== null ? $testRounded2 : '' }}
+                                                @endif
+                                            </td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);

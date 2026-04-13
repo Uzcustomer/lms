@@ -131,6 +131,15 @@ class TeacherMainController extends Controller
         $caseWorkHours   = "SUM(CASE WHEN created_at_api > {$pairEndExpr} AND created_at_api <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
         $caseAfterHours  = "SUM(CASE WHEN created_at_api > {$dayLimitExpr} THEN 1 ELSE 0 END)";
 
+        // Faqat joriy baholar: OSKI, test, oraliq, mustaqil va hokazo chiqariladi
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+        // Otrabotka va yo'qlama placeholder'lari chiqariladi - faqat asl 'recorded' status
+        $joriyFilter = function ($query) use ($excludedTrainingCodes) {
+            $query->whereNotIn('training_type_code', $excludedTrainingCodes)
+                  ->where('status', 'recorded');
+        };
+
         // Joriy o'qituvchining statistikasi
         $mine = DB::table('student_grades')
             ->whereNull('deleted_at')
@@ -140,6 +149,7 @@ class TeacherMainController extends Controller
             ->whereNotNull('lesson_date')
             ->whereNotNull('lesson_pair_end_time')
             ->where('lesson_pair_end_time', '!=', '')
+            ->where($joriyFilter)
             ->selectRaw("
                 {$caseDuringClass} as during_class,
                 {$caseWorkHours}   as work_hours,
@@ -161,6 +171,7 @@ class TeacherMainController extends Controller
             ->whereNotNull('lesson_date')
             ->whereNotNull('lesson_pair_end_time')
             ->where('lesson_pair_end_time', '!=', '')
+            ->where($joriyFilter)
             ->selectRaw("
                 employee_id,
                 {$caseDuringClass} as during_class,

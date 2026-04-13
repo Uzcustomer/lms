@@ -24,6 +24,7 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
@@ -186,23 +187,31 @@ class TeacherMainController extends Controller
         $total       = (int) ($mine->total        ?? 0);
 
         // Barcha o'qituvchilar bo'yicha reyting (score = during*1 + work*0.5 + after*0)
-        $allTeachers = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->where($semesterPairFilter)
-            ->whereNotNull('created_at_api')
-            ->whereNotNull('lesson_date')
-            ->whereNotNull('lesson_pair_end_time')
-            ->where('lesson_pair_end_time', '!=', '')
-            ->where($joriyFilter)
-            ->selectRaw("
-                employee_id,
-                {$caseDuringClass} as during_class,
-                {$caseWorkHours}   as work_hours,
-                {$caseAfterHours}  as after_hours,
-                COUNT(*)           as total
-            ")
-            ->groupBy('employee_id')
-            ->get();
+        // CACHE: 10 daqiqa — bu og'ir so'rov (GROUP BY employee_id butun student_grades bo'yicha).
+        // Har o'qituvchi dashboardga kirganda qayta ishlatilmasligi uchun cache'lanadi.
+        // v3: (semester_code + education_year_code) juftligi va joriy filtr ishlatiladi.
+        $cacheKey = 'teacher:grading_time_stats:all:v3:' . md5(json_encode($currentSemesterPairs));
+        $allTeachers = Cache::remember($cacheKey, 600, function () use (
+            $semesterPairFilter, $caseDuringClass, $caseWorkHours, $caseAfterHours, $joriyFilter
+        ) {
+            return DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where($semesterPairFilter)
+                ->whereNotNull('created_at_api')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('lesson_pair_end_time')
+                ->where('lesson_pair_end_time', '!=', '')
+                ->where($joriyFilter)
+                ->selectRaw("
+                    employee_id,
+                    {$caseDuringClass} as during_class,
+                    {$caseWorkHours}   as work_hours,
+                    {$caseAfterHours}  as after_hours,
+                    COUNT(*)           as total
+                ")
+                ->groupBy('employee_id')
+                ->get();
+        });
 
         $ranked = $allTeachers->map(function ($row) {
             $row->score = ((int) $row->during_class) * 1.0

@@ -12,7 +12,7 @@
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                         <h3 style="font-size: 15px; font-weight: 700; color: #1e293b; margin: 0;">
                             Baho qo'yish vaqti tahlili
-                            <span style="font-size: 11px; font-weight: 500; color: #64748b; margin-left: 6px;">(joriy semestr)</span>
+                            <span style="font-size: 11px; font-weight: 500; color: #64748b; margin-left: 6px;">(joriy semestr, faqat joriy baholar; otrabotka, OSKI, test, ON, mustaqil chiqarilgan)</span>
                         </h3>
                         <span style="font-size: 12px; color: #64748b;">
                             Jami: <strong style="color: #1e293b;">{{ $gradingTimeStats['total'] }}</strong> ta baho

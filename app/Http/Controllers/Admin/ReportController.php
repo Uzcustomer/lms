@@ -755,6 +755,26 @@ class ReportController extends Controller
             return $this->startLessonAssignmentExport($request);
         }
 
+        try {
+            return $this->lessonAssignmentDataInner($request);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[lessonAssignmentData] ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'params' => $request->all(),
+                'trace' => mb_substr($e->getTraceAsString(), 0, 2000),
+            ]);
+
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'file' => basename($e->getFile()) . ':' . $e->getLine(),
+            ], 500);
+        }
+    }
+
+    private function lessonAssignmentDataInner(Request $request)
+    {
         // Dekan uchun fakultet majburiy filtr
         $dekanFacultyIds = get_dekan_faculty_ids();
         if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {

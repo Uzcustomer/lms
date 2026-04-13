@@ -136,6 +136,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
         Route::post('/students/{student}/toggle-five-candidate', [AdminStudentController::class, 'toggleFiveCandidate'])->name('students.toggle-five-candidate');
         Route::post('/students/bulk-reset-password', [AdminStudentController::class, 'bulkResetLocalPassword'])->name('students.bulk-reset-password');
+        Route::post('/students/{student}/files', [AdminStudentController::class, 'uploadFile'])->name('students.files.upload');
+        Route::get('/students/{student}/files/{file}/download', [AdminStudentController::class, 'downloadFile'])->name('students.files.download');
+        Route::delete('/students/{student}/files/{file}', [AdminStudentController::class, 'deleteFile'])->name('students.files.delete');
+        Route::post('/students/{student}/admission-data', [AdminStudentController::class, 'saveAdmissionData'])->name('students.admission-data.save');
+        Route::post('/students/{student}/admission-files', [AdminStudentController::class, 'uploadAdmissionFile'])->name('students.admission-files.upload');
+        Route::delete('/students/{student}/admission-files/{file}', [AdminStudentController::class, 'deleteAdmissionFile'])->name('students.admission-files.delete');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');
@@ -390,6 +396,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{studentContract}/regenerate', [AdminStudentContractController::class, 'regenerate'])->name('regenerate');
         });
 
+        // Bitiruvchilar passport ma'lumotlari
+        Route::get('/graduate-passports', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'index'])->name('graduate-passports.index');
+        Route::get('/graduate-passports/data', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'data'])->name('graduate-passports.data');
+        Route::get('/graduate-passports/{id}/file/{field}', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'showFile'])->name('graduate-passports.file');
+
         // Ish e'lonlari (Admin/Registrator)
         Route::get('/job-listings', function () {
             return view('admin.job-listings');
@@ -546,6 +557,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/grading-time-stats', [ReportController::class, 'gradingTimeStats'])->name('reports.grading-time-stats');
         Route::get('/reports/grading-time-stats/data', [ReportController::class, 'gradingTimeStatsData'])->name('reports.grading-time-stats.data');
+
+        Route::get('/reports/test-markazi-times', [ReportController::class, 'testMarkaziTimes'])->name('reports.test-markazi-times');
+        Route::get('/reports/test-markazi-times/data', [ReportController::class, 'testMarkaziTimesData'])->name('reports.test-markazi-times.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
@@ -844,6 +858,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'store'])->name('passport.store');
         Route::get('/passport/file/{field}', [\App\Http\Controllers\Student\StudentPassportController::class, 'showFile'])->name('passport.file');
         Route::post('/passport/file/{field}/delete', [\App\Http\Controllers\Student\StudentPassportController::class, 'deleteFile'])->name('passport.file.delete');
+        Route::post('/passport/clear', [\App\Http\Controllers\Student\StudentPassportController::class, 'clear'])->name('passport.clear');
 
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {

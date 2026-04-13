@@ -113,8 +113,11 @@
 
             if ($isXd) {
                 $onVisaPage = request()->routeIs('student.visa-info.*');
+                // "Haqiqiy ma'lumot" — firma biriktirilgan bo'lsa ham, agar haqiqiy viza
+                // ma'lumotlari kiritilmagan bo'lsa, $vi mavjud hisoblanmaydi.
+                $hasRealData = $vi && ($vi->passport_number || $vi->visa_number || $vi->registration_end_date);
 
-                if (!$vi) {
+                if (!$vi || !$hasRealData) {
                     // Ma'lumotlar umuman kiritilmagan — 3 kun o'tgan bo'lsa bloklash
                     $studentCreated = $vs->created_at ?? $vs->hemis_created_at;
                     $daysSinceCreated = $studentCreated ? (int) $studentCreated->diffInDays(now()) : 0;

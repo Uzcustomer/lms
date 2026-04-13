@@ -135,6 +135,29 @@ class StudentPassportController extends Controller
             ->with('success', 'Pasport ma\'lumotlari saqlandi.');
     }
 
+    public function clear()
+    {
+        $student = Auth::guard('student')->user();
+
+        if (!$student->is_graduate) {
+            abort(403);
+        }
+
+        $passport = StudentPassport::where('student_id', $student->id)->first();
+        if ($passport) {
+            // Fayllarni o'chirish
+            foreach (['passport_front_path', 'passport_back_path', 'foreign_passport_path'] as $field) {
+                if ($passport->$field) {
+                    Storage::disk('public')->delete($passport->$field);
+                }
+            }
+            $passport->delete();
+        }
+
+        return redirect()->route('student.passport.index')
+            ->with('success', 'Ma\'lumotlar tozalandi. Qaytadan to\'ldiring.');
+    }
+
     public function showFile(string $field)
     {
         $student = Auth::guard('student')->user();

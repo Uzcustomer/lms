@@ -259,7 +259,18 @@ class StudentController extends Controller
                 ->get();
         }
 
-        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo'));
+        $canUploadFiles = in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin']);
+        $studentFiles = collect();
+        if ($canUploadFiles && \Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+            $studentFiles = $student->files()->latest()->get();
+        }
+
+        $admissionData = null;
+        if ($canUploadFiles && \Illuminate\Support\Facades\Schema::hasTable('student_admission_data')) {
+            $admissionData = \App\Models\StudentAdmissionData::where('student_id', $student->id)->first();
+        }
+
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo', 'canUploadFiles', 'studentFiles', 'admissionData'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)
@@ -353,6 +364,192 @@ class StudentController extends Controller
         }
     }
 
+
+    public function uploadFile(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl yuklash huquqi yo'q.");
+        }
+
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+            return back()->with('error', "student_files jadvali topilmadi. Iltimos, migratsiyani ishga tushiring: php artisan migrate");
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:10240',
+            'file_name' => 'required|string|max:255',
+        ]);
+
+        try {
+            $file = $request->file('file');
+            $path = $file->store('student-files/' . $student->id, 'public');
+
+            \App\Models\StudentFile::create([
+                'student_id' => $student->id,
+                'name' => $request->file_name,
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $user?->id,
+            ]);
+
+            return back()->with('success', "Fayl muvaffaqiyatli yuklandi.");
+        } catch (\Exception $e) {
+            Log::error('Fayl yuklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Fayl yuklashda xatolik yuz berdi: " . $e->getMessage());
+        }
+    }
+
+    public function downloadFile(Student $student, \App\Models\StudentFile $file)
+    {
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        if (!$disk->exists($file->path)) {
+            return back()->with('error', "Fayl topilmadi.");
+        }
+
+        return $disk->download($file->path, $file->original_name);
+    }
+
+    public function deleteFile(Student $student, \App\Models\StudentFile $file)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl o'chirish huquqi yo'q.");
+        }
+
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        \Illuminate\Support\Facades\Storage::disk('public')->delete($file->path);
+        $file->delete();
+
+        return back()->with('success', "Fayl muvaffaqiyatli o'chirildi.");
+    }
+
+    public function saveAdmissionData(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda bu ma'lumotlarni saqlash huquqi yo'q.");
+        }
+
+        $data = $request->only([
+            'familya', 'ism', 'otasining_ismi', 'tugilgan_sana', 'jshshir', 'jinsi',
+            'tel1', 'tel2', 'email', 'millat',
+            'tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman',
+            'doimiy_manzil',
+            'yashash_davlat', 'yashash_viloyat', 'yashash_tuman', 'yashash_manzil',
+            'passport_seriya', 'passport_raqam', 'passport_sana', 'passport_joy',
+            'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik',
+            'toplagan_ball', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',
+            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat',
+            'ota_familiya', 'ota_ismi', 'ota_sharifi', 'ota_tel', 'ota_ish_joyi', 'ota_lavozimi',
+            'ona_familiya', 'ona_ismi', 'ona_sharifi', 'ona_tel', 'ona_ish_joyi', 'ona_lavozimi',
+        ]);
+
+        // Nullify empty date fields
+        foreach (['tugilgan_sana', 'passport_sana'] as $df) {
+            if (empty($data[$df])) {
+                $data[$df] = null;
+            }
+        }
+
+        $data['updated_by'] = $user?->id;
+
+        \App\Models\StudentAdmissionData::updateOrCreate(
+            ['student_id' => $student->id],
+            $data
+        );
+
+        return back()->with('success', "Qabul ma'lumotlari saqlandi.");
+    }
+
+    public function uploadAdmissionFile(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl yuklash huquqi yo'q.");
+        }
+
+        $request->validate([
+            'admission_file' => 'required|file|max:20480|mimes:pdf,jpg,jpeg,png',
+            'admission_file_name' => 'required|string|max:255',
+        ]);
+
+        try {
+            $file = $request->file('admission_file');
+            $path = $file->store('student-files/' . $student->id, 'public');
+
+            \App\Models\StudentFile::create([
+                'student_id' => $student->id,
+                'name' => $request->admission_file_name,
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $user?->id,
+            ]);
+
+            return back()->with('success', "Fayl muvaffaqiyatli yuklandi.");
+        } catch (\Exception $e) {
+            Log::error('Qabul fayl yuklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Fayl yuklashda xatolik: " . $e->getMessage());
+        }
+    }
+
+    public function deleteAdmissionFile(Student $student, \App\Models\StudentFile $file)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl o'chirish huquqi yo'q.");
+        }
+
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        \Illuminate\Support\Facades\Storage::disk('public')->delete($file->path);
+        $file->delete();
+
+        return back()->with('success', "Fayl o'chirildi.");
+    }
 
     public function getCurricula(Request $request)
     {

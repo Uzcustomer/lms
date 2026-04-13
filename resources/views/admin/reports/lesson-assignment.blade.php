@@ -259,7 +259,18 @@
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
-                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    var errMsg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                    var errDetail = '';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errMsg = xhr.responseJSON.message;
+                        if (xhr.responseJSON.file) errDetail = ' (' + xhr.responseJSON.file + ')';
+                    } else if (xhr.status === 0) {
+                        errMsg = "Serverga ulanib bo'lmadi yoki vaqt tugadi.";
+                    } else if (xhr.status === 504 || xhr.status === 502) {
+                        errMsg = "Server javob bermadi (timeout). Kamroq kun tanlab ko'ring.";
+                    }
+                    $('#empty-state').show().find('p:first').html("<b>" + errMsg + "</b>" + (errDetail ? '<br><span style=\"font-size:11px;color:#94a3b8;\">' + errDetail + '</span>' : ''));
+                    console.error('[loadReport] xhr.status=' + xhr.status, xhr.responseJSON || xhr.responseText);
                     calcReset();
                 }
             });

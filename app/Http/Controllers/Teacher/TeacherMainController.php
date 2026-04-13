@@ -86,7 +86,123 @@ class TeacherMainController extends Controller
             ];
         }
 
-        return view('teacher.dashboard', compact('tutorStats'));
+        // O'qituvchining joriy semestrdagi baho qo'yish vaqti statistikasi
+        $gradingTimeStats = $this->buildGradingTimeStats($teacher);
+
+        return view('teacher.dashboard', compact('tutorStats', 'gradingTimeStats'));
+    }
+
+    /**
+     * O'qituvchining joriy semestr uchun baho qo'yish vaqti bo'yicha
+     * 3 toifaga ajratilgan statistikasini va umumiy reytingdagi o'rnini hisoblaydi.
+     *
+     *  1) Dars vaqtida        - created_at_api <= lesson_date + lesson_pair_end_time
+     *  2) Ish vaqtida (18:00) - pair tugaganidan keyin, shu kuni 18:00 gacha
+     *  3) 18:00 dan so'ng     - lesson_date kunning 18:00 idan keyin
+     */
+    private function buildGradingTimeStats($teacher)
+    {
+        if (!$teacher || !$teacher->hemis_id) {
+            return null;
+        }
+
+        $currentSemesterCodes = Semester::where('current', true)
+            ->pluck('code')
+            ->unique()
+            ->filter()
+            ->values()
+            ->toArray();
+
+        if (empty($currentSemesterCodes)) {
+            return null;
+        }
+
+        // SQL ifoda: juftlik tugash vaqti va 18:00 deadline
+        $driver = DB::connection()->getDriverName();
+        if ($driver === 'pgsql') {
+            $pairEndExpr   = "(DATE(lesson_date)::text || ' ' || lesson_pair_end_time)::timestamp";
+            $dayLimitExpr  = "(DATE(lesson_date)::text || ' 18:00:00')::timestamp";
+        } else {
+            $pairEndExpr   = "CONCAT(DATE(lesson_date), ' ', lesson_pair_end_time)";
+            $dayLimitExpr  = "CONCAT(DATE(lesson_date), ' 18:00:00')";
+        }
+
+        $caseDuringClass = "SUM(CASE WHEN created_at_api <= {$pairEndExpr} THEN 1 ELSE 0 END)";
+        $caseWorkHours   = "SUM(CASE WHEN created_at_api > {$pairEndExpr} AND created_at_api <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
+        $caseAfterHours  = "SUM(CASE WHEN created_at_api > {$dayLimitExpr} THEN 1 ELSE 0 END)";
+
+        // Joriy o'qituvchining statistikasi
+        $mine = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('semester_code', $currentSemesterCodes)
+            ->where('employee_id', $teacher->hemis_id)
+            ->whereNotNull('created_at_api')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('lesson_pair_end_time')
+            ->where('lesson_pair_end_time', '!=', '')
+            ->selectRaw("
+                {$caseDuringClass} as during_class,
+                {$caseWorkHours}   as work_hours,
+                {$caseAfterHours}  as after_hours,
+                COUNT(*)           as total
+            ")
+            ->first();
+
+        $duringClass = (int) ($mine->during_class ?? 0);
+        $workHours   = (int) ($mine->work_hours   ?? 0);
+        $afterHours  = (int) ($mine->after_hours  ?? 0);
+        $total       = (int) ($mine->total        ?? 0);
+
+        // Barcha o'qituvchilar bo'yicha reyting (score = during*1 + work*0.5 + after*0)
+        $allTeachers = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('semester_code', $currentSemesterCodes)
+            ->whereNotNull('created_at_api')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('lesson_pair_end_time')
+            ->where('lesson_pair_end_time', '!=', '')
+            ->selectRaw("
+                employee_id,
+                {$caseDuringClass} as during_class,
+                {$caseWorkHours}   as work_hours,
+                {$caseAfterHours}  as after_hours,
+                COUNT(*)           as total
+            ")
+            ->groupBy('employee_id')
+            ->get();
+
+        $ranked = $allTeachers->map(function ($row) {
+            $row->score = ((int) $row->during_class) * 1.0
+                        + ((int) $row->work_hours)   * 0.5
+                        + ((int) $row->after_hours)  * 0.0;
+            return $row;
+        })->sortByDesc(function ($row) {
+            // score bo'yicha kamayuvchi, teng bo'lsa during_class ko'p bo'lgani oldinda
+            return [$row->score, (int) $row->during_class, (int) $row->total];
+        })->values();
+
+        $totalTeachers = $ranked->count();
+        $rank = null;
+        foreach ($ranked as $idx => $row) {
+            if ((string) $row->employee_id === (string) $teacher->hemis_id) {
+                $rank = $idx + 1;
+                break;
+            }
+        }
+
+        $pct = fn($n) => $total > 0 ? round($n / $total * 100, 1) : 0;
+
+        return [
+            'total'          => $total,
+            'during_class'   => $duringClass,
+            'work_hours'     => $workHours,
+            'after_hours'    => $afterHours,
+            'during_class_percent' => $pct($duringClass),
+            'work_hours_percent'   => $pct($workHours),
+            'after_hours_percent'  => $pct($afterHours),
+            'rank'           => $rank,
+            'total_teachers' => $totalTeachers,
+        ];
     }
 
     public function info()

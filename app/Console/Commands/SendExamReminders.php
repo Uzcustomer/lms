@@ -193,7 +193,8 @@ class SendExamReminders extends Command
                 $dateKey = $schedule->oski_date->format('Y-m-d');
                 $daysLeft = $today->diffInDays($schedule->oski_date);
                 if ($daysLeft <= 3) {
-                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'OSKI', 'time' => null];
+                    $oskiTime = $schedule->oski_time ? Carbon::parse($schedule->oski_time)->format('H:i') : null;
+                    $examsByDate[$dateKey]['exams'][] = ['name' => $schedule->subject_name, 'type' => 'OSKI', 'time' => $oskiTime];
                     $examsByDate[$dateKey]['days'] = $daysLeft;
                     $examsByDate[$dateKey]['date'] = $schedule->oski_date->format('d.m.Y');
                 }

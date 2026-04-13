@@ -55,6 +55,7 @@ class AbsenceExcuseMakeup extends Model
             'pending' => 'Kutilmoqda',
             'scheduled' => 'Rejalashtirilgan',
             'completed' => 'Bajarilgan',
+            'missed' => 'Bajarilmagan (qayta rejalashtirildi)',
             default => $this->status,
         };
     }
@@ -65,6 +66,7 @@ class AbsenceExcuseMakeup extends Model
             'pending' => 'yellow',
             'scheduled' => 'blue',
             'completed' => 'green',
+            'missed' => 'gray',
             default => 'gray',
         };
     }

@@ -525,6 +525,13 @@
                                                     Joriy nazoratdan keyingi test kunlari
                                                 </span>
                                             </template>
+                                            <template x-if="item.is_previous_makeup">
+                                                <span class="px-2 py-0.5 text-[10px] font-bold rounded-lg inline-flex items-center gap-1 bg-amber-50 text-amber-700 border border-amber-200"
+                                                      :title="'Avvalgi arizada ' + fmtDate(item.previous_makeup_date) + ' kuniga rejalashtirilgan edi'">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                                    Avvalgi arizadagi bajarilmagan retake
+                                                </span>
+                                            </template>
                                         </div>
                                         @include('student.absence-excuses._calendar-cell')
                                     </div>
@@ -842,6 +849,8 @@
                             ...a, makeup_date: '', makeup_start: '', makeup_end: '',
                             jn_selecting: 'start', cal_month: cm, cal_year: cy, show_cal: false,
                             is_makeup_period: a.is_makeup_period || false,
+                            is_previous_makeup: a.is_previous_makeup || false,
+                            previous_makeup_date: a.previous_makeup_date || null,
                             jn_submitted: false
                         }));
                         // Serverdan JN topilmagan fanlar uchun JN card qo'shish

@@ -126,12 +126,18 @@
                                             @endif
                                         </td>
                                         <td class="px-3 py-2">
-                                            <div class="flex flex-wrap gap-1.5">
+                                            <div class="flex flex-col gap-1.5">
                                                 @foreach($slot['groups'] as $grp)
-                                                    <span class="inline-flex items-center px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs" title="{{ $grp['subject_name'] }}">
-                                                        <span class="font-medium">{{ $grp['group_name'] }}</span>
-                                                        <span class="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">{{ $grp['student_count'] }}</span>
-                                                    </span>
+                                                    <div class="inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-50 border border-gray-200">
+                                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                                                            {{ $grp['student_count'] }}
+                                                        </span>
+                                                        <span class="font-semibold text-gray-900 text-xs whitespace-nowrap">{{ $grp['group_name'] }}</span>
+                                                        @if(!empty($grp['subject_name']))
+                                                            <span class="text-gray-400 text-xs">—</span>
+                                                            <span class="text-gray-700 text-xs">{{ $grp['subject_name'] }}</span>
+                                                        @endif
+                                                    </div>
                                                 @endforeach
                                             </div>
                                         </td>

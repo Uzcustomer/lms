@@ -100,6 +100,75 @@
                             @endif
                         </div>
                     </div>
+
+                    {{-- Top 100 o'qituvchilar --}}
+                    @if(!empty($gradingTimeStats['top_list']))
+                        <div style="margin-top: 16px; background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; overflow: hidden;">
+                            <div style="padding: 14px 16px; border-bottom: 2px solid #ede9fe; background: linear-gradient(135deg, #f5f3ff, #faf5ff); display: flex; justify-content: space-between; align-items: center;">
+                                <h3 style="font-size: 14px; font-weight: 700; color: #5b21b6; margin: 0;">
+                                    Top 100 o'qituvchilar
+                                    <span style="font-size: 11px; font-weight: 500; color: #7c3aed; margin-left: 6px;">(joriy semestr)</span>
+                                </h3>
+                                <span style="font-size: 11px; color: #7c3aed;">
+                                    Ball = Dars vaqtida×1 + 18:00 gacha×0.5 + 18:00 dan so'ng×0
+                                </span>
+                            </div>
+                            <div style="overflow-x: auto;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                    <thead>
+                                        <tr style="background: #f8fafc; color: #475569; text-align: left;">
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0; width: 50px;">#</th>
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0;">Kafedra</th>
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0;">O'qituvchi F.I.SH</th>
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0; text-align: center; color: #065f46;" title="Juftlik tugagunicha qo'yilgan">Dars vaqtida</th>
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0; text-align: center; color: #92400e;" title="Juftlik tugaganidan keyin 18:00 gacha">18:00 gacha</th>
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0; text-align: center; color: #991b1b;" title="Shu kun 18:00 dan keyin">18:00 dan so'ng</th>
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0; text-align: center;">Jami</th>
+                                            <th style="padding: 10px 12px; font-weight: 700; border-bottom: 1px solid #e2e8f0; text-align: center; color: #5b21b6;">Ball</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($gradingTimeStats['top_list'] as $row)
+                                            <tr style="{{ $row['is_me'] ? 'background: #eff6ff; font-weight: 600;' : '' }}">
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #64748b;">
+                                                    @if($row['rank'] === 1)
+                                                        <span style="display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #fff; font-weight: 700;">1</span>
+                                                    @elseif($row['rank'] === 2)
+                                                        <span style="display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: linear-gradient(135deg, #94a3b8, #cbd5e1); color: #fff; font-weight: 700;">2</span>
+                                                    @elseif($row['rank'] === 3)
+                                                        <span style="display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: linear-gradient(135deg, #b45309, #d97706); color: #fff; font-weight: 700;">3</span>
+                                                    @else
+                                                        {{ $row['rank'] }}
+                                                    @endif
+                                                </td>
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #475569;">{{ $row['department'] }}</td>
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b;">
+                                                    {{ $row['full_name'] }}
+                                                    @if($row['is_me'])
+                                                        <span style="display: inline-block; padding: 1px 6px; font-size: 10px; background: #3b82f6; color: #fff; border-radius: 4px; margin-left: 4px;">siz</span>
+                                                    @endif
+                                                </td>
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; text-align: center;">
+                                                    <span style="color: #065f46; font-weight: 600;">{{ $row['during_class'] }}</span>
+                                                    <span style="color: #94a3b8; font-size: 10px;">({{ $row['during_class_percent'] }}%)</span>
+                                                </td>
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; text-align: center;">
+                                                    <span style="color: #92400e; font-weight: 600;">{{ $row['work_hours'] }}</span>
+                                                    <span style="color: #94a3b8; font-size: 10px;">({{ $row['work_hours_percent'] }}%)</span>
+                                                </td>
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; text-align: center;">
+                                                    <span style="color: #991b1b; font-weight: 600;">{{ $row['after_hours'] }}</span>
+                                                    <span style="color: #94a3b8; font-size: 10px;">({{ $row['after_hours_percent'] }}%)</span>
+                                                </td>
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; text-align: center; color: #1e293b; font-weight: 600;">{{ $row['total'] }}</td>
+                                                <td style="padding: 8px 12px; border-bottom: 1px solid #f1f5f9; text-align: center; color: #5b21b6; font-weight: 700;">{{ $row['score'] }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             @endif
 

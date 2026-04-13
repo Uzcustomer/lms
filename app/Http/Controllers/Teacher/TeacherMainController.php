@@ -192,6 +192,40 @@ class TeacherMainController extends Controller
 
         $pct = fn($n) => $total > 0 ? round($n / $total * 100, 1) : 0;
 
+        // Top 100 o'qituvchilar ro'yxatini boyitamiz (F.I.SH va kafedra bilan)
+        $top100 = $ranked->take(100)->values();
+        $topEmployeeIds = $top100->pluck('employee_id')->filter()->unique()->toArray();
+
+        $teacherInfoMap = collect();
+        if (!empty($topEmployeeIds)) {
+            $teacherInfoMap = DB::table('teachers')
+                ->whereIn('hemis_id', $topEmployeeIds)
+                ->select('hemis_id', 'full_name', 'short_name', 'department')
+                ->get()
+                ->keyBy('hemis_id');
+        }
+
+        $topList = [];
+        foreach ($top100 as $idx => $row) {
+            $info = $teacherInfoMap[$row->employee_id] ?? null;
+            $rowTotal = (int) $row->total;
+            $topList[] = [
+                'rank'         => $idx + 1,
+                'hemis_id'     => $row->employee_id,
+                'full_name'    => $info->full_name ?? $info->short_name ?? '—',
+                'department'   => $info->department ?? '—',
+                'during_class' => (int) $row->during_class,
+                'work_hours'   => (int) $row->work_hours,
+                'after_hours'  => (int) $row->after_hours,
+                'total'        => $rowTotal,
+                'score'        => round((float) $row->score, 1),
+                'during_class_percent' => $rowTotal > 0 ? round(((int) $row->during_class) / $rowTotal * 100, 1) : 0,
+                'work_hours_percent'   => $rowTotal > 0 ? round(((int) $row->work_hours)   / $rowTotal * 100, 1) : 0,
+                'after_hours_percent'  => $rowTotal > 0 ? round(((int) $row->after_hours)  / $rowTotal * 100, 1) : 0,
+                'is_me'        => (string) $row->employee_id === (string) $teacher->hemis_id,
+            ];
+        }
+
         return [
             'total'          => $total,
             'during_class'   => $duringClass,
@@ -202,6 +236,7 @@ class TeacherMainController extends Controller
             'after_hours_percent'  => $pct($afterHours),
             'rank'           => $rank,
             'total_teachers' => $totalTeachers,
+            'top_list'       => $topList,
         ];
     }
 

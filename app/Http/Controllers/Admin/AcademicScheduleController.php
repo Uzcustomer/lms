@@ -135,6 +135,176 @@ class AcademicScheduleController extends Controller
      * Filtrlari by default bugungi sanaga o'rnatiladi va avtomatik qidiriladi
      * OSKI/Test alohida ustun emas — YN turi va YN sanasi sifatida ko'rsatiladi
      */
+    /**
+     * Test-center uchun umumiy ma'lumot yuklash (testCenterView va export uchun)
+     * Qaytaradi: ['scheduleData' => Collection, 'currentEducationYear' => int|null]
+     */
+    private function buildTestCenterData(Request $request): array
+    {
+        $today = now()->format('Y-m-d');
+
+        $selectedEducationType = $request->get('education_type');
+        $selectedDepartment = $request->get('department_id');
+        $selectedSpecialty = $request->get('specialty_id');
+        $selectedLevelCode = $request->get('level_code');
+        $selectedSemester = $request->get('semester_code');
+        $selectedGroup = $request->get('group_id');
+        $selectedSubject = $request->get('subject_id');
+        $selectedStatus = $request->get('status');
+        $dateFrom = $request->get('date_from', $today);
+        $dateTo = $request->get('date_to', $today);
+        $currentSemesterToggle = $request->get('current_semester', '1');
+
+        $currentSemesters = Semester::where('current', true)->get();
+        $currentEducationYear = $currentSemesters->first()?->education_year;
+
+        $scheduleData = $this->loadScheduleData(
+            $currentSemesters, $selectedDepartment, $selectedSpecialty,
+            $selectedSemester, $selectedGroup, $selectedEducationType,
+            $selectedLevelCode, $selectedSubject, $selectedStatus,
+            $currentSemesterToggle, true, $dateFrom, $dateTo, true
+        );
+
+        $semesterMap = $currentSemesters->keyBy('code');
+        $curriculumHemisIds = collect();
+        foreach ($scheduleData as $groupHemisId => $items) {
+            foreach ($items as $item) {
+                $curriculumHemisIds->push($item['group']->curriculum_hemis_id);
+            }
+        }
+        $curriculumFormMap = Curriculum::whereIn('curricula_hemis_id', $curriculumHemisIds->unique())
+            ->pluck('education_form_name', 'curricula_hemis_id');
+
+        $transformedData = collect();
+        foreach ($scheduleData as $groupHemisId => $items) {
+            foreach ($items as $item) {
+                $oskiDate = $item['oski_date'] ?? null;
+                $testDate = $item['test_date'] ?? null;
+                $oskiNa = $item['oski_na'] ?? false;
+                $testNa = $item['test_na'] ?? false;
+
+                $sem = $semesterMap->get($item['subject']->semester_code);
+                $extraFields = [
+                    'subject_code' => $item['subject']->subject_id ?? '',
+                    'level_name' => $sem?->level_name ?? '',
+                    'semester_name' => $item['subject']->semester_name ?? ($sem?->name ?? ''),
+                    'education_form_name' => $curriculumFormMap->get($item['group']->curriculum_hemis_id) ?? '',
+                ];
+
+                $oskiInRange = $oskiDate && (!$dateFrom || $oskiDate >= $dateFrom) && (!$dateTo || $oskiDate <= $dateTo);
+                if ($oskiInRange || ($oskiNa && !$dateFrom && !$dateTo)) {
+                    $ynItem = array_merge($item, $extraFields);
+                    $ynItem['yn_type'] = 'OSKI';
+                    $ynItem['yn_date'] = $oskiDate;
+                    $ynItem['yn_date_carbon'] = $item['oski_date_carbon'] ?? null;
+                    $ynItem['yn_na'] = $oskiNa;
+                    $ynItem['test_time'] = $item['oski_time'] ?? null;
+                    $transformedData->push($ynItem);
+                }
+
+                $testInRange = $testDate && (!$dateFrom || $testDate >= $dateFrom) && (!$dateTo || $testDate <= $dateTo);
+                if ($testInRange || ($testNa && !$dateFrom && !$dateTo)) {
+                    $ynItem = array_merge($item, $extraFields);
+                    $ynItem['yn_type'] = 'Test';
+                    $ynItem['yn_date'] = $testDate;
+                    $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;
+                    $ynItem['yn_na'] = $testNa;
+                    $ynItem['test_time'] = $item['test_time'] ?? null;
+                    $transformedData->push($ynItem);
+                }
+            }
+        }
+
+        $groupHemisIds = $transformedData->pluck('group')->pluck('group_hemis_id')->unique()->toArray();
+        $studentCounts = DB::table('students')
+            ->whereIn('group_id', $groupHemisIds)
+            ->where('student_status_code', 11)
+            ->groupBy('group_id')
+            ->select('group_id', DB::raw('COUNT(*) as cnt'))
+            ->pluck('cnt', 'group_id');
+
+        $subjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->toArray();
+        $ynSubmissions = [];
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
+            $ynSubmissionRows = DB::table('yn_submissions')
+                ->whereIn('group_hemis_id', $groupHemisIds)
+                ->whereIn('subject_id', $subjectIds)
+                ->get();
+            foreach ($ynSubmissionRows as $row) {
+                $ynSubmissions[$row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] = $row->submitted_at;
+            }
+        }
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $quizCounts = [];
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
+            try {
+                $quizRows = DB::table('hemis_quiz_results as hqr')
+                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
+                    ->whereIn('st.group_id', $groupHemisIds)
+                    ->whereIn('hqr.fan_id', $subjectIds)
+                    ->where('hqr.is_active', 1)
+                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                    ->get();
+
+                foreach ($quizRows as $row) {
+                    if (in_array($row->quiz_type, $testTypes)) {
+                        $key = $row->group_id . '|' . $row->fan_id . '|Test';
+                    } elseif (in_array($row->quiz_type, $oskiTypes)) {
+                        $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
+                    } else {
+                        continue;
+                    }
+                    $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('buildTestCenterData: hemis_quiz_results so\'rovi xatolik berdi: ' . $e->getMessage());
+            }
+        }
+
+        $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions) {
+            $item['student_count'] = $studentCounts[$item['group']->group_hemis_id] ?? 0;
+            $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '');
+            $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
+            $ynKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['subject']->semester_code ?? '');
+            $item['yn_submitted'] = isset($ynSubmissions[$ynKey]);
+            return $item;
+        });
+
+        $excuseCounts = [];
+        if (!empty($groupHemisIds) && !empty($subjectIds)) {
+            $excuseRows = AbsenceExcuseMakeup::join('absence_excuses as ae', 'ae.id', '=', 'absence_excuse_makeups.absence_excuse_id')
+                ->where('ae.status', 'approved')
+                ->whereIn('absence_excuse_makeups.subject_id', $subjectIds)
+                ->whereIn('absence_excuse_makeups.assessment_type', ['jn', 'mt'])
+                ->join('students as st', 'st.id', '=', 'absence_excuse_makeups.student_id')
+                ->whereIn('st.group_id', $groupHemisIds)
+                ->groupBy('st.group_id', 'absence_excuse_makeups.subject_id')
+                ->select('st.group_id', 'absence_excuse_makeups.subject_id', DB::raw('COUNT(DISTINCT ae.student_hemis_id) as cnt'))
+                ->get();
+
+            foreach ($excuseRows as $row) {
+                $excuseCounts[$row->group_id . '|' . $row->subject_id] = $row->cnt;
+            }
+        }
+
+        $transformedData = $transformedData->map(function ($item) use ($excuseCounts) {
+            $excuseKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '');
+            $item['excuse_student_count'] = $excuseCounts[$excuseKey] ?? 0;
+            return $item;
+        });
+
+        $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
+
+        return [
+            'scheduleData' => $scheduleData,
+            'currentEducationYear' => $currentEducationYear,
+        ];
+    }
+
     public function testCenterView(Request $request)
     {
         \Illuminate\Support\Facades\Log::info('testCenterView: metod boshlandi', [
@@ -161,164 +331,9 @@ class AcademicScheduleController extends Controller
         $routePrefix = $this->routePrefix();
 
         try {
-
-        $currentSemesters = Semester::where('current', true)->get();
-        $currentEducationYear = $currentSemesters->first()?->education_year;
-
-        // Ma'lumotlarni yuklash (YN sanasi bo'yicha filtr)
-        $scheduleData = $this->loadScheduleData(
-            $currentSemesters, $selectedDepartment, $selectedSpecialty,
-            $selectedSemester, $selectedGroup, $selectedEducationType,
-            $selectedLevelCode, $selectedSubject, $selectedStatus,
-            $currentSemesterToggle, true, $dateFrom, $dateTo, true
-        );
-
-        // OSKI/Test ma'lumotlarini alohida qatorlarga ajratish (YN turi + 1-urinish sanasi)
-        // Qo'shimcha ustunlar uchun: semester -> kurs, curriculum -> shakl
-        $semesterMap = $currentSemesters->keyBy('code');
-        $curriculumHemisIds = collect();
-        foreach ($scheduleData as $groupHemisId => $items) {
-            foreach ($items as $item) {
-                $curriculumHemisIds->push($item['group']->curriculum_hemis_id);
-            }
-        }
-        $curriculumFormMap = Curriculum::whereIn('curricula_hemis_id', $curriculumHemisIds->unique())
-            ->pluck('education_form_name', 'curricula_hemis_id');
-
-        $transformedData = collect();
-        foreach ($scheduleData as $groupHemisId => $items) {
-            foreach ($items as $item) {
-                $oskiDate = $item['oski_date'] ?? null;
-                $testDate = $item['test_date'] ?? null;
-                $oskiNa = $item['oski_na'] ?? false;
-                $testNa = $item['test_na'] ?? false;
-
-                // Qo'shimcha ma'lumotlar
-                $sem = $semesterMap->get($item['subject']->semester_code);
-                $extraFields = [
-                    'subject_code' => $item['subject']->subject_id ?? '',
-                    'level_name' => $sem?->level_name ?? '',
-                    'semester_name' => $item['subject']->semester_name ?? ($sem?->name ?? ''),
-                    'education_form_name' => $curriculumFormMap->get($item['group']->curriculum_hemis_id) ?? '',
-                ];
-
-                // OSKI qatori: sana oraliqqa to'g'ri kelsa yoki N/A bo'lsa
-                $oskiInRange = $oskiDate && (!$dateFrom || $oskiDate >= $dateFrom) && (!$dateTo || $oskiDate <= $dateTo);
-                if ($oskiInRange || ($oskiNa && !$dateFrom && !$dateTo)) {
-                    $ynItem = array_merge($item, $extraFields);
-                    $ynItem['yn_type'] = 'OSKI';
-                    $ynItem['yn_date'] = $oskiDate;
-                    $ynItem['yn_date_carbon'] = $item['oski_date_carbon'] ?? null;
-                    $ynItem['yn_na'] = $oskiNa;
-                    $ynItem['test_time'] = $item['oski_time'] ?? null;
-                    $transformedData->push($ynItem);
-                }
-
-                // Test qatori: sana oraliqqa to'g'ri kelsa yoki N/A bo'lsa
-                $testInRange = $testDate && (!$dateFrom || $testDate >= $dateFrom) && (!$dateTo || $testDate <= $dateTo);
-                if ($testInRange || ($testNa && !$dateFrom && !$dateTo)) {
-                    $ynItem = array_merge($item, $extraFields);
-                    $ynItem['yn_type'] = 'Test';
-                    $ynItem['yn_date'] = $testDate;
-                    $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;
-                    $ynItem['yn_na'] = $testNa;
-                    $ynItem['test_time'] = $item['test_time'] ?? null;
-                    $transformedData->push($ynItem);
-                }
-            }
-        }
-
-        // Guruh talabalar sonini hisoblash
-        $groupHemisIds = $transformedData->pluck('group')->pluck('group_hemis_id')->unique()->toArray();
-        $studentCounts = DB::table('students')
-            ->whereIn('group_id', $groupHemisIds)
-            ->where('student_status_code', 11)
-            ->groupBy('group_id')
-            ->select('group_id', DB::raw('COUNT(*) as cnt'))
-            ->pluck('cnt', 'group_id');
-
-        // YN yuborilgan holati (o'qituvchi YN ga yuborish tugmasini bosganmi)
-        $subjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->toArray();
-        $ynSubmissions = [];
-        if (!empty($groupHemisIds) && !empty($subjectIds)) {
-            $ynSubmissionRows = DB::table('yn_submissions')
-                ->whereIn('group_hemis_id', $groupHemisIds)
-                ->whereIn('subject_id', $subjectIds)
-                ->get();
-            foreach ($ynSubmissionRows as $row) {
-                $ynSubmissions[$row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] = $row->submitted_at;
-            }
-        }
-
-        // Quiz natijalarini hisoblash (guruh + fan + yn_turi bo'yicha nechta talaba topshirgan)
-        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
-        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-
-        $subjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->toArray();
-
-        $quizCounts = [];
-        if (!empty($groupHemisIds) && !empty($subjectIds)) {
-            try {
-                $quizRows = DB::table('hemis_quiz_results as hqr')
-                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
-                    ->whereIn('st.group_id', $groupHemisIds)
-                    ->whereIn('hqr.fan_id', $subjectIds)
-                    ->where('hqr.is_active', 1)
-                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
-                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
-                    ->get();
-
-                foreach ($quizRows as $row) {
-                    if (in_array($row->quiz_type, $testTypes)) {
-                        $key = $row->group_id . '|' . $row->fan_id . '|Test';
-                    } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                        $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
-                    } else {
-                        continue;
-                    }
-                    $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
-                }
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('testCenterView: hemis_quiz_results so\'rovi xatolik berdi: ' . $e->getMessage());
-            }
-        }
-
-        // Ma'lumotlarga qo'shish
-        $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions) {
-            $item['student_count'] = $studentCounts[$item['group']->group_hemis_id] ?? 0;
-            $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '');
-            $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
-            $ynKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['subject']->semester_code ?? '');
-            $item['yn_submitted'] = isset($ynSubmissions[$ynKey]);
-            return $item;
-        });
-
-        // Sababli talabalar sonini hisoblash (YN ga yuborilgan sabablilar)
-        $excuseCounts = [];
-        if (!empty($groupHemisIds) && !empty($subjectIds)) {
-            $excuseRows = AbsenceExcuseMakeup::join('absence_excuses as ae', 'ae.id', '=', 'absence_excuse_makeups.absence_excuse_id')
-                ->where('ae.status', 'approved')
-                ->whereIn('absence_excuse_makeups.subject_id', $subjectIds)
-                ->whereIn('absence_excuse_makeups.assessment_type', ['jn', 'mt'])
-                ->join('students as st', 'st.id', '=', 'absence_excuse_makeups.student_id')
-                ->whereIn('st.group_id', $groupHemisIds)
-                ->groupBy('st.group_id', 'absence_excuse_makeups.subject_id')
-                ->select('st.group_id', 'absence_excuse_makeups.subject_id', DB::raw('COUNT(DISTINCT ae.student_hemis_id) as cnt'))
-                ->get();
-
-            foreach ($excuseRows as $row) {
-                $excuseCounts[$row->group_id . '|' . $row->subject_id] = $row->cnt;
-            }
-        }
-
-        $transformedData = $transformedData->map(function ($item) use ($excuseCounts) {
-            $excuseKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '');
-            $item['excuse_student_count'] = $excuseCounts[$excuseKey] ?? 0;
-            return $item;
-        });
-
-        $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
-
+            $result = $this->buildTestCenterData($request);
+            $scheduleData = $result['scheduleData'];
+            $currentEducationYear = $result['currentEducationYear'];
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView xatolik: ' . $e->getMessage(), [
                 'file' => $e->getFile() . ':' . $e->getLine(),
@@ -1726,5 +1741,16 @@ class AcademicScheduleController extends Controller
             'time_changed' => $timeChanged,
             'message' => $statusMsg . ($students->count() > 0 ? " va {$students->count()} ta talabaga xabar yuborildi" : ''),
         ]);
+    }
+
+    public function exportTestCenter(Request $request)
+    {
+        $result = $this->buildTestCenterData($request);
+        $scheduleData = $result['scheduleData'];
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\TestCenterExport($scheduleData),
+            'yn_jadvali_' . date('Y-m-d_H-i') . '.xlsx'
+        );
     }
 }

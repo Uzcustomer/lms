@@ -119,6 +119,14 @@
                                 </div>
                                 <p id="chart-note" style="font-size:12px;color:#64748b;margin-top:8px;"></p>
                             </div>
+
+                            <h3 class="section-heading" style="margin-top:24px;">Jadval qachon belgilangan (imtihondan oldinroq)</h3>
+                            <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Test markazi tomonidan imtihon sanasi/vaqti imtihondan necha kun oldin belgilangan</p>
+                            <div class="stats-summary" id="overall-setup"></div>
+
+                            <h3 class="section-heading" style="margin-top:24px;">Talaba boshlanish vaqti tahlili</h3>
+                            <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Talabalar OSKI yoki Test imtihonini belgilangan vaqtda boshlaganmi yoki kechikibmi</p>
+                            <div class="stats-summary" id="overall-punctuality"></div>
                         </div>
 
                         <!-- Fakultet tab -->
@@ -203,6 +211,8 @@
                     reportData = res;
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
                     renderOverall(res.overall, res.hourly, res.hourly_total);
+                    renderSetup(res.setup_timing || {});
+                    renderPunctuality(res.punctuality || {});
                     renderGrouped(res.by_faculty, 'faculty');
                     renderGrouped(res.by_kafedra, 'kafedra');
                     renderGrouped(res.by_subject, 'subject', true);
@@ -316,6 +326,92 @@
         function percentOf(n, total) {
             if (!total) return 0;
             return Math.round(n * 1000 / total) / 10;
+        }
+
+        function renderSetup(s) {
+            var labels = {
+                early: '30+ kun oldin',
+                month: '15-30 kun oldin',
+                two_weeks: '8-14 kun oldin',
+                week_before: '2-7 kun oldin',
+                day_before: '1 kun oldin',
+                same_day: "Xuddi o'sha kuni",
+                late: "Imtihondan keyin o'zgartirilgan",
+                no_date: "Sana belgilanmagan"
+            };
+            var colors = {
+                early: 'summary-green',
+                month: 'summary-green',
+                two_weeks: 'summary-blue',
+                week_before: 'summary-blue',
+                day_before: 'summary-orange',
+                same_day: 'summary-red',
+                late: 'summary-red',
+                no_date: 'summary-gray'
+            };
+            var order = ['early', 'month', 'two_weeks', 'week_before', 'day_before', 'same_day', 'late', 'no_date'];
+            var total = 0;
+            order.forEach(function(k) { total += (s[k] || 0); });
+            var html = '';
+            order.forEach(function(k) {
+                var cnt = s[k] || 0;
+                html += '<div class="summary-card ' + colors[k] + '" style="min-width:140px;">' +
+                    '<div class="summary-num" style="font-size:20px;">' + cnt.toLocaleString() + '</div>' +
+                    '<div class="summary-label">' + labels[k] + '</div>' +
+                    '<div class="summary-sub">' + percentOf(cnt, total) + '%</div>' +
+                '</div>';
+            });
+            $('#overall-setup').html(html);
+        }
+
+        function renderPunctuality(p) {
+            var testTotal = (p.test_on_time || 0) + (p.test_late || 0);
+            var oskiTotal = (p.oski_on_time || 0) + (p.oski_late || 0);
+
+            var html = '';
+            if (testTotal === 0 && oskiTotal === 0) {
+                html = '<div style="padding:20px;text-align:center;color:#94a3b8;flex:1;">Talabalarning boshlanish vaqti bo\'yicha ma\'lumot topilmadi</div>';
+                $('#overall-punctuality').html(html);
+                return;
+            }
+
+            // Test
+            html +=
+                '<div class="summary-card summary-gray" style="min-width:180px;">' +
+                    '<div class="summary-label" style="font-weight:700;color:#334155;">TEST</div>' +
+                    '<div class="summary-num" style="font-size:18px;margin-top:4px;">' + testTotal.toLocaleString() + '</div>' +
+                    '<div class="summary-sub">Jami urinishlar</div>' +
+                '</div>' +
+                '<div class="summary-card summary-green">' +
+                    '<div class="summary-num">' + (p.test_on_time || 0).toLocaleString() + '</div>' +
+                    '<div class="summary-label">Test: vaqtida boshlangan</div>' +
+                    '<div class="summary-sub">' + percentOf(p.test_on_time || 0, testTotal) + '%</div>' +
+                '</div>' +
+                '<div class="summary-card summary-red">' +
+                    '<div class="summary-num">' + (p.test_late || 0).toLocaleString() + '</div>' +
+                    '<div class="summary-label">Test: kechikib boshlangan</div>' +
+                    '<div class="summary-sub">' + percentOf(p.test_late || 0, testTotal) + '%</div>' +
+                '</div>';
+
+            // OSKI
+            html +=
+                '<div class="summary-card summary-gray" style="min-width:180px;">' +
+                    '<div class="summary-label" style="font-weight:700;color:#334155;">OSKI</div>' +
+                    '<div class="summary-num" style="font-size:18px;margin-top:4px;">' + oskiTotal.toLocaleString() + '</div>' +
+                    '<div class="summary-sub">Jami urinishlar</div>' +
+                '</div>' +
+                '<div class="summary-card summary-green">' +
+                    '<div class="summary-num">' + (p.oski_on_time || 0).toLocaleString() + '</div>' +
+                    '<div class="summary-label">OSKI: vaqtida boshlangan</div>' +
+                    '<div class="summary-sub">' + percentOf(p.oski_on_time || 0, oskiTotal) + '%</div>' +
+                '</div>' +
+                '<div class="summary-card summary-red">' +
+                    '<div class="summary-num">' + (p.oski_late || 0).toLocaleString() + '</div>' +
+                    '<div class="summary-label">OSKI: kechikib boshlangan</div>' +
+                    '<div class="summary-sub">' + percentOf(p.oski_late || 0, oskiTotal) + '%</div>' +
+                '</div>';
+
+            $('#overall-punctuality').html(html);
         }
 
         function renderHourChart(data, total) {

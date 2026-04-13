@@ -5912,41 +5912,25 @@ class ReportController extends Controller
 
             // Har bir exam_schedules qatori 2 ta nazorat turini (OSKI va Test) o'z ichiga oladi
             // Ularni alohida holatlarga (completed/missing_date/missing_time/na) bo'lib chiqaramiz
-
-            $rows = (clone $baseQuery)
-                ->select(
-                    'id',
-                    'department_hemis_id',
-                    'subject_id',
-                    'subject_name',
-                    'group_hemis_id',
-                    'semester_code',
-                    'oski_date',
-                    'oski_na',
-                    'test_date',
-                    'test_na'
-                )
-                ->get();
-
-            // Test_time bilan birga olamiz (agar ustun mavjud bo'lsa)
             $hasTestTime = \Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'test_time');
+            $selectCols = [
+                'id',
+                'department_hemis_id',
+                'subject_id',
+                'subject_name',
+                'group_hemis_id',
+                'semester_code',
+                'oski_date',
+                'oski_na',
+                'test_date',
+                'test_na',
+                'created_at',
+                'updated_at',
+            ];
             if ($hasTestTime) {
-                $rows = (clone $baseQuery)
-                    ->select(
-                        'id',
-                        'department_hemis_id',
-                        'subject_id',
-                        'subject_name',
-                        'group_hemis_id',
-                        'semester_code',
-                        'oski_date',
-                        'oski_na',
-                        'test_date',
-                        'test_na',
-                        'test_time'
-                    )
-                    ->get();
+                $selectCols[] = 'test_time';
             }
+            $rows = (clone $baseQuery)->select($selectCols)->get();
 
             // Umumiy ko'rsatkichlar va fan kesimida yig'ish
             $total = 0;            // Jami nazorat turlari (OSKI + Test)
@@ -6099,6 +6083,147 @@ class ReportController extends Controller
                 ];
             }
 
+            // ========= Rejalashtirish vaqti tahlili =========
+            // Test markazi jadvalni imtihondan necha kun oldin belgilagan
+            $setupBuckets = [
+                'same_day' => 0,     // 0 kun - xuddi o'sha kuni
+                'day_before' => 0,   // 1 kun oldin
+                'week_before' => 0,  // 2-7 kun oldin
+                'two_weeks' => 0,    // 8-14 kun oldin
+                'month' => 0,        // 15-30 kun oldin
+                'early' => 0,        // 30+ kun oldin
+                'late' => 0,         // jadvalga imtihondan keyin o'zgartirish kiritilgan
+                'no_date' => 0,      // imtihon sanasi yo'q
+            ];
+            foreach ($rows as $r) {
+                $examDate = $r->test_date ?: $r->oski_date;
+                if (!$examDate) {
+                    $setupBuckets['no_date']++;
+                    continue;
+                }
+                $setDate = $r->updated_at ?: $r->created_at;
+                if (!$setDate) {
+                    $setupBuckets['no_date']++;
+                    continue;
+                }
+                try {
+                    $diff = Carbon::parse($setDate)->startOfDay()->diffInDays(Carbon::parse($examDate)->startOfDay(), false);
+                    if ($diff < 0) {
+                        $setupBuckets['late']++;
+                    } elseif ($diff === 0) {
+                        $setupBuckets['same_day']++;
+                    } elseif ($diff === 1) {
+                        $setupBuckets['day_before']++;
+                    } elseif ($diff <= 7) {
+                        $setupBuckets['week_before']++;
+                    } elseif ($diff <= 14) {
+                        $setupBuckets['two_weeks']++;
+                    } elseif ($diff <= 30) {
+                        $setupBuckets['month']++;
+                    } else {
+                        $setupBuckets['early']++;
+                    }
+                } catch (\Throwable $e) {
+                    $setupBuckets['no_date']++;
+                }
+            }
+
+            // ========= Talaba boshlanish vaqti tahlili =========
+            // hemis_quiz_results bilan solishtirib, talabalar imtihonni vaqtida yoki kechikib boshlashganini aniqlaymiz
+            $testOnTime = 0;
+            $testLate = 0;
+            $oskiOnTime = 0;
+            $oskiLate = 0;
+
+            $testTypesQz = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypesQz = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+            // Faqat sanalar belgilangan schedule'larni qayta ishlaymiz
+            $scheduledTestPairs = [];  // [group_hemis_id, subject_id] => ['scheduled_dt' => 'YYYY-MM-DD HH:MM:SS', 'test_date' => 'YYYY-MM-DD']
+            $scheduledOskiPairs = [];  // [group_hemis_id, subject_id] => ['oski_date' => 'YYYY-MM-DD']
+            $groupIdsForPunctuality = [];
+            $subjectIdsForPunctuality = [];
+
+            foreach ($rows as $r) {
+                if ($r->test_date && !$r->test_na) {
+                    $testTime = $hasTestTime && !empty($r->test_time) ? $r->test_time : '00:00:00';
+                    if (strlen($testTime) === 5) $testTime .= ':00';
+                    $key = $r->group_hemis_id . '|' . $r->subject_id;
+                    $scheduledTestPairs[$key] = [
+                        'scheduled_dt' => $r->test_date . ' ' . $testTime,
+                        'test_date' => $r->test_date,
+                        'has_time' => $hasTestTime && !empty($r->test_time),
+                    ];
+                    $groupIdsForPunctuality[$r->group_hemis_id] = true;
+                    $subjectIdsForPunctuality[$r->subject_id] = true;
+                }
+                if ($r->oski_date && !$r->oski_na) {
+                    $key = $r->group_hemis_id . '|' . $r->subject_id;
+                    $scheduledOskiPairs[$key] = [
+                        'oski_date' => $r->oski_date,
+                    ];
+                    $groupIdsForPunctuality[$r->group_hemis_id] = true;
+                    $subjectIdsForPunctuality[$r->subject_id] = true;
+                }
+            }
+
+            $punctualityAvailable = count($scheduledTestPairs) > 0 || count($scheduledOskiPairs) > 0;
+
+            if ($punctualityAvailable && \Illuminate\Support\Facades\Schema::hasTable('hemis_quiz_results')) {
+                try {
+                    $groupIds = array_keys($groupIdsForPunctuality);
+                    $subjectIds = array_keys($subjectIdsForPunctuality);
+
+                    $quizRows = DB::table('hemis_quiz_results as hqr')
+                        ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
+                        ->whereIn('st.group_id', $groupIds)
+                        ->whereIn('hqr.fan_id', $subjectIds)
+                        ->where('hqr.is_active', 1)
+                        ->whereNotNull('hqr.date_start')
+                        ->select(
+                            'st.group_id',
+                            'hqr.fan_id',
+                            'hqr.quiz_type',
+                            'hqr.date_start'
+                        )
+                        ->get();
+
+                    foreach ($quizRows as $q) {
+                        $key = $q->group_id . '|' . $q->fan_id;
+                        if (in_array($q->quiz_type, $testTypesQz)) {
+                            if (!isset($scheduledTestPairs[$key])) continue;
+                            $sched = $scheduledTestPairs[$key];
+                            // Agar vaqt belgilanmagan bo'lsa, sana bo'yicha solishtiramiz
+                            if ($sched['has_time']) {
+                                if ($q->date_start <= $sched['scheduled_dt']) {
+                                    $testOnTime++;
+                                } else {
+                                    $testLate++;
+                                }
+                            } else {
+                                $startDate = substr($q->date_start, 0, 10);
+                                if ($startDate <= $sched['test_date']) {
+                                    $testOnTime++;
+                                } else {
+                                    $testLate++;
+                                }
+                            }
+                        } elseif (in_array($q->quiz_type, $oskiTypesQz)) {
+                            if (!isset($scheduledOskiPairs[$key])) continue;
+                            $sched = $scheduledOskiPairs[$key];
+                            $startDate = substr($q->date_start, 0, 10);
+                            if ($startDate <= $sched['oski_date']) {
+                                $oskiOnTime++;
+                            } else {
+                                $oskiLate++;
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('testMarkaziTimesData: hemis_quiz_results so\'rovi xatolik: ' . $e->getMessage());
+                }
+            }
+
             // Sort
             $subjectData = array_values($subjectAgg);
             usort($subjectData, fn($a, $b) => strcmp($a['name'], $b['name']));
@@ -6121,6 +6246,13 @@ class ReportController extends Controller
                     'test_missing_time' => $testMissingTime,
                     'test_na' => $testNa,
                     'has_test_time' => $hasTestTime,
+                ],
+                'setup_timing' => $setupBuckets,
+                'punctuality' => [
+                    'test_on_time' => $testOnTime,
+                    'test_late' => $testLate,
+                    'oski_on_time' => $oskiOnTime,
+                    'oski_late' => $oskiLate,
                 ],
                 'hourly' => $hourlyData,
                 'hourly_total' => $hourTotal,

@@ -6258,9 +6258,25 @@ class ReportController extends Controller
                 }
             }
 
-            // JSON hajmini kichikroq qilish uchun 2000 qator bilan cheklaymiz
-            $studentDetailsLimited = array_slice($studentDetails, 0, 2000);
-            $studentDetailsTruncated = count($studentDetails) > 2000;
+            // "Kechikib" holatdagilarni oldinga qo'yamiz - shunda foydalanuvchi ularni ko'ra oladi
+            // Keyin vaqtida boshlaganlarni qo'shamiz
+            $lateRows = [];
+            $onTimeRows = [];
+            foreach ($studentDetails as $sd) {
+                if ($sd['status'] === 'late') {
+                    $lateRows[] = $sd;
+                } else {
+                    $onTimeRows[] = $sd;
+                }
+            }
+            $sortedDetails = array_merge($lateRows, $onTimeRows);
+
+            // JSON hajmini cheklash: barcha kechikkanlar + birinchi 3000 ta vaqtida
+            $maxRows = 15000;
+            $studentDetailsLimited = array_slice($sortedDetails, 0, $maxRows);
+            $studentDetailsTruncated = count($sortedDetails) > $maxRows;
+            $totalLate = count($lateRows);
+            $totalOnTime = count($onTimeRows);
 
             // Sort
             $subjectData = array_values($subjectAgg);

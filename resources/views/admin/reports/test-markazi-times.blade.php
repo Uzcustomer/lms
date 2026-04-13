@@ -526,7 +526,7 @@
             });
 
             var info = 'Ko\'rsatilmoqda: ' + filtered.length.toLocaleString() + ' / ' + studentsTotal.toLocaleString();
-            if (studentsTruncated) info += ' (Excel orqali to\'liq yuklab oling)';
+            if (studentsTruncated) info += ' — kechikkanlar to\'liq, vaqtida boshlaganlarning bir qismi (Excel orqali hammasini yuklab oling)';
             $('#student-count').text(info);
 
             var container = $('#student-content');
@@ -549,8 +549,8 @@
             html += '<th class="th-hour">Holat</th>';
             html += '</tr></thead><tbody>';
 
-            // Show first 500 rendered rows to avoid browser slowness
-            var limit = Math.min(filtered.length, 500);
+            // Brauzerni sekinlashuvdan saqlash uchun 1000 qator bilan cheklanamiz
+            var limit = Math.min(filtered.length, 1000);
             for (var i = 0; i < limit; i++) {
                 var s = filtered[i];
                 var statusBadge = s.status === 'on_time'

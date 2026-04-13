@@ -126,7 +126,7 @@
                             <div class="stats-summary" id="overall-setup"></div>
 
                             <h3 class="section-heading" style="margin-top:24px;">Talaba boshlanish vaqti tahlili</h3>
-                            <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Talabalar OSKI yoki Test imtihonini belgilangan vaqtda boshlaganmi yoki kechikibmi</p>
+                            <p style="font-size:12px;color:#64748b;margin-bottom:10px;">Talabalar OSKI yoki Test imtihonini belgilangan vaqtda boshlaganmi yoki kechikibmi. <b>Eslatma:</b> TEST uchun belgilangan vaqtdan keyin 30 daqiqa grace period qo'llaniladi (masalan, 11:30 ga belgilangan bo'lsa, 12:00 gacha boshlash "Vaqtida" hisoblanadi).</p>
                             <div class="stats-summary" id="overall-punctuality"></div>
                         </div>
 

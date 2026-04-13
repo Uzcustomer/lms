@@ -6170,6 +6170,10 @@ class ReportController extends Controller
             $punctualityAvailable = count($scheduledTestPairs) > 0 || count($scheduledOskiPairs) > 0;
             $studentDetails = [];
 
+            // Kechikish uchun grace period (daqiqa)
+            // Belgilangan vaqtdan keyin shuncha daqiqa ichida boshlagan - vaqtida hisoblanadi
+            $toleranceMin = 30;
+
             if ($punctualityAvailable && \Illuminate\Support\Facades\Schema::hasTable('hemis_quiz_results')) {
                 try {
                     $groupIds = array_keys($groupIdsForPunctuality);
@@ -6206,12 +6210,14 @@ class ReportController extends Controller
                         if ($isTest) {
                             if (!isset($scheduledTestPairs[$key])) continue;
                             $sched = $scheduledTestPairs[$key];
-                            $scheduledDt = $sched['has_time']
-                                ? $sched['scheduled_dt']
-                                : ($sched['test_date'] . ' 23:59:59');
-                            $onTime = $sched['has_time']
-                                ? ($q->date_start <= $sched['scheduled_dt'])
-                                : (substr($q->date_start, 0, 10) <= $sched['test_date']);
+                            if ($sched['has_time']) {
+                                // Belgilangan vaqt + tolerance (30 daqiqa)
+                                $cutoff = Carbon::parse($sched['scheduled_dt'])->addMinutes($toleranceMin)->format('Y-m-d H:i:s');
+                                $onTime = $q->date_start <= $cutoff;
+                            } else {
+                                // Vaqt belgilanmagan - faqat sana bo'yicha
+                                $onTime = substr($q->date_start, 0, 10) <= $sched['test_date'];
+                            }
 
                             if ($onTime) $testOnTime++; else $testLate++;
 
@@ -6615,7 +6621,8 @@ class ReportController extends Controller
                     ->orderBy('st.full_name')
                     ->orderBy('hqr.date_start');
 
-                $studentQuery->chunk(3000, function ($records) use ($sheet2, &$row2, &$num2, $testMap, $oskiMap, $testTypesQz, $oskiTypesQz) {
+                $toleranceMin = 30;
+                $studentQuery->chunk(3000, function ($records) use ($sheet2, &$row2, &$num2, $testMap, $oskiMap, $testTypesQz, $oskiTypesQz, $toleranceMin) {
                     // Vaqtni DD.MM.YYYY HH:MM formatiga keltiradigan yordamchi
                     $fmt = function ($val) {
                         if (empty($val)) return '-';
@@ -6631,7 +6638,6 @@ class ReportController extends Controller
                         $isTest = in_array($q->quiz_type, $testTypesQz);
                         $isOski = in_array($q->quiz_type, $oskiTypesQz);
 
-                        $scheduledRaw = null;   // solishtirish uchun
                         $scheduledDisplay = null; // ko'rsatish uchun
                         $type = null;
                         $onTime = null;
@@ -6640,9 +6646,11 @@ class ReportController extends Controller
                             $m = $testMap[$key];
                             $type = 'TEST';
                             if ($m['test_time']) {
-                                $scheduledRaw = $m['test_date'] . ' ' . $m['test_time'];
-                                $scheduledDisplay = Carbon::parse($m['test_date'] . ' ' . $m['test_time'])->format('d.m.Y H:i');
-                                $onTime = $q->date_start <= $scheduledRaw;
+                                $scheduledDt = $m['test_date'] . ' ' . $m['test_time'];
+                                $scheduledDisplay = Carbon::parse($scheduledDt)->format('d.m.Y H:i');
+                                // Tolerance qo'shib solishtiramiz (30 daqiqa)
+                                $cutoff = Carbon::parse($scheduledDt)->addMinutes($toleranceMin)->format('Y-m-d H:i:s');
+                                $onTime = $q->date_start <= $cutoff;
                             } else {
                                 // Vaqt belgilanmagan - DD.MM.YYYY --:-- deb ko'rsatamiz
                                 $scheduledDisplay = Carbon::parse($m['test_date'])->format('d.m.Y') . ' --:--';

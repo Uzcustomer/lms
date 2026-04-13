@@ -1756,6 +1756,115 @@ class AcademicScheduleController extends Controller
 
     public function bandlikKursatkichi(Request $request)
     {
-        return view('admin.academic-schedule.bandlik-kursatkichi');
+        $totalComputers = 60;
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
+        $isSearched = $request->has('search');
+
+        $slots = collect();
+
+        if ($isSearched && $dateFrom && $dateTo) {
+            $schedules = ExamSchedule::with(['group'])
+                ->where(function ($q) use ($dateFrom, $dateTo) {
+                    $q->where(function ($q2) use ($dateFrom, $dateTo) {
+                        $q2->whereNotNull('oski_date')
+                           ->whereNotNull('oski_time')
+                           ->where('oski_na', false)
+                           ->whereBetween('oski_date', [$dateFrom, $dateTo]);
+                    })->orWhere(function ($q2) use ($dateFrom, $dateTo) {
+                        $q2->whereNotNull('test_date')
+                           ->whereNotNull('test_time')
+                           ->where('test_na', false)
+                           ->whereBetween('test_date', [$dateFrom, $dateTo]);
+                    });
+                })
+                ->get();
+
+            // Yig'iladigan qatorlar: (date, time) bo'yicha guruhlarni birlashtirish
+            $rows = [];
+            foreach ($schedules as $schedule) {
+                // OSKI
+                $oskiDateStr = $schedule->oski_date?->format('Y-m-d');
+                if ($oskiDateStr && $schedule->oski_time && !$schedule->oski_na
+                    && $oskiDateStr >= $dateFrom && $oskiDateStr <= $dateTo) {
+                    $timeStr = \Carbon\Carbon::parse($schedule->oski_time)->format('H:i');
+                    $key = $oskiDateStr . '|' . $timeStr . '|OSKI';
+                    if (!isset($rows[$key])) {
+                        $rows[$key] = [
+                            'date' => $schedule->oski_date,
+                            'time' => $timeStr,
+                            'yn_type' => 'OSKI',
+                            'groups' => [],
+                        ];
+                    }
+                    $rows[$key]['groups'][] = [
+                        'group_hemis_id' => $schedule->group_hemis_id,
+                        'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
+                        'subject_name' => $schedule->subject_name ?? '',
+                    ];
+                }
+                // Test
+                $testDateStr = $schedule->test_date?->format('Y-m-d');
+                if ($testDateStr && $schedule->test_time && !$schedule->test_na
+                    && $testDateStr >= $dateFrom && $testDateStr <= $dateTo) {
+                    $timeStr = \Carbon\Carbon::parse($schedule->test_time)->format('H:i');
+                    $key = $testDateStr . '|' . $timeStr . '|Test';
+                    if (!isset($rows[$key])) {
+                        $rows[$key] = [
+                            'date' => $schedule->test_date,
+                            'time' => $timeStr,
+                            'yn_type' => 'Test',
+                            'groups' => [],
+                        ];
+                    }
+                    $rows[$key]['groups'][] = [
+                        'group_hemis_id' => $schedule->group_hemis_id,
+                        'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
+                        'subject_name' => $schedule->subject_name ?? '',
+                    ];
+                }
+            }
+
+            // Har bir guruh uchun faol talabalar sonini yig'amiz
+            $allGroupIds = collect($rows)->pluck('groups')->flatten(1)->pluck('group_hemis_id')->unique()->toArray();
+            $studentCounts = [];
+            if (!empty($allGroupIds)) {
+                $studentCounts = \Illuminate\Support\Facades\DB::table('students')
+                    ->whereIn('group_id', $allGroupIds)
+                    ->where('student_status_code', 11)
+                    ->groupBy('group_id')
+                    ->select('group_id', \Illuminate\Support\Facades\DB::raw('COUNT(*) as cnt'))
+                    ->pluck('cnt', 'group_id')
+                    ->toArray();
+            }
+
+            foreach ($rows as &$row) {
+                $occupied = 0;
+                foreach ($row['groups'] as &$grp) {
+                    $cnt = (int) ($studentCounts[$grp['group_hemis_id']] ?? 0);
+                    $grp['student_count'] = $cnt;
+                    $occupied += $cnt;
+                }
+                unset($grp);
+                $row['occupied'] = $occupied;
+                $row['free'] = max(0, $totalComputers - $occupied);
+                $row['overflow'] = max(0, $occupied - $totalComputers);
+                $row['usage_percent'] = $totalComputers > 0 ? round(($occupied / $totalComputers) * 100, 1) : 0;
+            }
+            unset($row);
+
+            // Sana va vaqt bo'yicha saralash
+            $slots = collect($rows)->sortBy(function ($r) {
+                return $r['date']->format('Y-m-d') . ' ' . $r['time'];
+            })->values();
+        }
+
+        return view('admin.academic-schedule.bandlik-kursatkichi', [
+            'slots' => $slots,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'totalComputers' => $totalComputers,
+            'isSearched' => $isSearched,
+        ]);
     }
 }

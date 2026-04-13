@@ -210,6 +210,7 @@ class AcademicScheduleController extends Controller
                     $ynItem['yn_date'] = $oskiDate;
                     $ynItem['yn_date_carbon'] = $item['oski_date_carbon'] ?? null;
                     $ynItem['yn_na'] = $oskiNa;
+                    $ynItem['test_time'] = $item['oski_time'] ?? null;
                     $transformedData->push($ynItem);
                 }
 
@@ -221,6 +222,7 @@ class AcademicScheduleController extends Controller
                     $ynItem['yn_date'] = $testDate;
                     $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;
                     $ynItem['yn_na'] = $testNa;
+                    $ynItem['test_time'] = $item['test_time'] ?? null;
                     $transformedData->push($ynItem);
                 }
             }
@@ -567,6 +569,7 @@ class AcademicScheduleController extends Controller
                     'lesson_end_date' => $lessonInfo?->lesson_end ? substr($lessonInfo->lesson_end, 0, 10) : null,
                     'oski_date' => $existing?->oski_date?->format('Y-m-d'),
                     'oski_na' => (bool) $existing?->oski_na,
+                    'oski_time' => $existing?->oski_time,
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
                     'test_na' => (bool) $existing?->test_na,
                     'test_time' => $existing?->test_time,
@@ -1633,6 +1636,7 @@ class AcademicScheduleController extends Controller
             'subject_id' => 'required|string',
             'semester_code' => 'required|string',
             'test_time' => 'required|date_format:H:i',
+            'yn_type' => 'nullable|string|in:OSKI,Test',
         ]);
 
         $examSchedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
@@ -1644,11 +1648,17 @@ class AcademicScheduleController extends Controller
             return response()->json(['success' => false, 'message' => 'Jadval topilmadi'], 404);
         }
 
-        $oldTime = $examSchedule->test_time;
+        // YN turiga qarab tegishli vaqt ustunini yangilash
+        $ynType = $request->input('yn_type', 'Test');
+        $timeColumn = $ynType === 'OSKI' ? 'oski_time' : 'test_time';
+        $ynLabel = $ynType === 'OSKI' ? 'OSKI' : 'Test';
+        $relatedDate = $ynType === 'OSKI' ? $examSchedule->oski_date : $examSchedule->test_date;
+
+        $oldTime = $examSchedule->{$timeColumn};
         $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
         $ynSubmitted = (bool) $request->input('yn_submitted', false);
 
-        $examSchedule->update(['test_time' => $request->test_time]);
+        $examSchedule->update([$timeColumn => $request->test_time]);
 
         // Shu guruhdagi Telegram tasdiqlangan talabalarga notification yuborish
         $students = Student::where('group_id', $request->group_hemis_id)
@@ -1659,30 +1669,30 @@ class AcademicScheduleController extends Controller
         if ($students->isNotEmpty()) {
             $telegram = app(TelegramService::class);
             $subjectName = $examSchedule->subject_name ?? 'Fan';
-            $testDate = $examSchedule->test_date ? \Carbon\Carbon::parse($examSchedule->test_date)->format('d.m.Y') : '';
+            $testDate = $relatedDate ? \Carbon\Carbon::parse($relatedDate)->format('d.m.Y') : '';
             $timeFormatted = $request->test_time;
 
             // Ogohlantirish faqat YN yuborilmagan holatlarda Telegram xabarga ham qo'shiladi
-            $warningText = !$ynSubmitted ? "\n\n⚠️ <i>Test vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>" : '';
-            $warningPlain = !$ynSubmitted ? " Test vaqti o'zgarishi mumkin, habardor bo'lib turing!" : '';
+            $warningText = !$ynSubmitted ? "\n\n⚠️ <i>{$ynLabel} vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>" : '';
+            $warningPlain = !$ynSubmitted ? " {$ynLabel} vaqti o'zgarishi mumkin, habardor bo'lib turing!" : '';
 
             if ($timeChanged) {
                 $oldTimeFormatted = $oldTime;
-                $message = "📋 <b>Test vaqti o'zgartirildi!</b>\n\n"
+                $message = "📋 <b>{$ynLabel} vaqti o'zgartirildi!</b>\n\n"
                     . "📌 Fan: <b>{$subjectName}</b>\n"
                     . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
                     . "⏰ Eski vaqt: <s>{$oldTimeFormatted}</s>\n"
                     . "⏰ Yangi vaqt: <b>{$timeFormatted}</b>"
                     . $warningText;
-                $notifTitle = "Test vaqti o'zgartirildi: {$subjectName}";
+                $notifTitle = "{$ynLabel} vaqti o'zgartirildi: {$subjectName}";
                 $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}." . $warningPlain;
             } else {
-                $message = "📋 <b>Test vaqti belgilandi!</b>\n\n"
+                $message = "📋 <b>{$ynLabel} vaqti belgilandi!</b>\n\n"
                     . "📌 Fan: <b>{$subjectName}</b>\n"
                     . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
                     . "⏰ Vaqt: <b>{$timeFormatted}</b>"
                     . $warningText;
-                $notifTitle = "Test vaqti belgilandi: {$subjectName}";
+                $notifTitle = "{$ynLabel} vaqti belgilandi: {$subjectName}";
                 $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}." . $warningPlain;
             }
 
@@ -1697,7 +1707,7 @@ class AcademicScheduleController extends Controller
                     'title' => $notifTitle,
                     'message' => $notifMessage,
                     'link' => '/student/exam-schedule',
-                    'data' => json_encode(['subject' => $subjectName, 'test_time' => $timeFormatted, 'test_date' => $testDate, 'time_changed' => $timeChanged]),
+                    'data' => json_encode(['subject' => $subjectName, 'yn_type' => $ynType, 'test_time' => $timeFormatted, 'test_date' => $testDate, 'time_changed' => $timeChanged]),
                     'read_at' => null,
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -1709,7 +1719,7 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $statusMsg = $timeChanged ? 'Test vaqti o\'zgartirildi' : 'Test vaqti saqlandi';
+        $statusMsg = $timeChanged ? ($ynLabel . ' vaqti o\'zgartirildi') : ($ynLabel . ' vaqti saqlandi');
 
         return response()->json([
             'success' => true,

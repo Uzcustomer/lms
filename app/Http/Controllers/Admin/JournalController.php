@@ -1266,28 +1266,29 @@ class JournalController extends Controller
                 ->max('lesson_date');
         }
 
-        // Sababli: tasdiqlangan sababli hujjatlarni olish (YN yuborilgandan keyin)
+        // Sababli: tasdiqlangan sababli hujjatlarni olish (YN yuborilgan/yuborilmagan, har holda)
         $approvedExcuses = collect();
         $excuseGradeSnapshots = collect();
+
+        try {
+            $approvedExcuses = AbsenceExcuse::where('status', 'approved')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereHas('makeups', function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId)
+                        ->whereIn('assessment_type', ['jn', 'mt']);
+                })
+                ->with(['makeups' => function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId);
+                }])
+                ->get()
+                ->keyBy('student_hemis_id');
+        } catch (\Exception $e) {
+            Log::warning('AbsenceExcuse query failed: ' . $e->getMessage());
+        }
+
         if ($ynSubmission) {
             try {
-                $approvedExcuses = AbsenceExcuse::where('status', 'approved')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereHas('makeups', function ($q) use ($subjectId) {
-                        $q->where('subject_id', $subjectId)
-                            ->whereIn('assessment_type', ['jn', 'mt']);
-                    })
-                    ->with(['makeups' => function ($q) use ($subjectId) {
-                        $q->where('subject_id', $subjectId);
-                    }])
-                    ->get()
-                    ->keyBy('student_hemis_id');
-            } catch (\Exception $e) {
-                Log::warning('AbsenceExcuse query failed: ' . $e->getMessage());
-            }
-
-            try {
-                // Avval kiritilgan sababli baholarni olish
+                // Avval kiritilgan sababli baholarni olish (faqat YN yuborilgan bo'lsa)
                 $excuseGradeSnapshots = YnStudentGrade::where('yn_submission_id', $ynSubmission->id)
                     ->where('source', 'like', 'absence_excuse:%')
                     ->get()
@@ -4881,20 +4882,9 @@ class JournalController extends Controller
                 }
             }
 
-            // YN yuborilganligini tekshirish (sababli faqat YN yuborilgandan keyin ishlaydi)
-            $ynSubmission = YnSubmission::where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->where('group_hemis_id', $request->group_hemis_id)
-                ->first();
-
-            if (!$ynSubmission) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'YN hali yuborilmagan. Avval YN ga yuborilishi kerak.',
-                ], 400);
-            }
-
             // student_grades jadvalida retake baho qo'yish
+            // YN yuborilgan/yuborilmaganligidan qat'iy nazar — sababli ariza tasdiqlangan
+            // bo'lsa va deadline o'tmagan bo'lsa (yoki admin) — baho qo'yiladi
             $studentGrade = DB::table('student_grades')
                 ->where('id', $request->grade_id)
                 ->where('student_hemis_id', $studentHemisId)

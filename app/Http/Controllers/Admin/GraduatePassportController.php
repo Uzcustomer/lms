@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Department;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -11,17 +10,64 @@ class GraduatePassportController extends Controller
 {
     public function index()
     {
-        // Bakalavr bitiruvchi guruhlarni olish
-        $groups = DB::table('students as s')
+        // Umumiy statistika (barcha bakalavr bitiruvchilar)
+        $stats = (object) [
+            'total' => 0,
+            'male' => 0,
+            'female' => 0,
+            'filled' => 0,
+        ];
+
+        $agg = DB::table('students as s')
+            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
             ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11') // Bakalavr
-            ->select('s.group_name', 's.group_id', DB::raw('COUNT(*) as total'),
-                DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled'))
-            ->groupBy('s.group_name', 's.group_id')
+            ->where('s.education_type_code', '11')
+            ->select(
+                DB::raw('COUNT(*) as total'),
+                DB::raw("SUM(CASE WHEN s.gender_code = '11' THEN 1 ELSE 0 END) as male"),
+                DB::raw("SUM(CASE WHEN s.gender_code = '12' THEN 1 ELSE 0 END) as female"),
+                DB::raw('SUM(CASE WHEN gp.id IS NOT NULL THEN 1 ELSE 0 END) as filled')
+            )
+            ->first();
+
+        if ($agg) {
+            $stats->total = (int) $agg->total;
+            $stats->male = (int) $agg->male;
+            $stats->female = (int) $agg->female;
+            $stats->filled = (int) $agg->filled;
+        }
+
+        // Fakultetlar ro'yxati (faqat bakalavr bitiruvchilari bor fakultetlar)
+        $faculties = DB::table('students as s')
+            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
+            ->leftJoin('departments as f', 'f.id', '=', 'd.parent_id')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11')
+            ->whereNotNull('f.id')
+            ->select('f.id', 'f.name', DB::raw('COUNT(*) as total'))
+            ->groupBy('f.id', 'f.name')
+            ->orderBy('f.name')
+            ->get();
+
+        // Guruhlar ro'yxati (fakultet tanlanganda client tomondan filterlanadi)
+        $groups = DB::table('students as s')
+            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
+            ->leftJoin('departments as f', 'f.id', '=', 'd.parent_id')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11')
+            ->whereNotNull('s.group_id')
+            ->select(
+                's.group_name',
+                's.group_id',
+                'f.id as faculty_id',
+                DB::raw('COUNT(*) as total'),
+                DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled')
+            )
+            ->groupBy('s.group_name', 's.group_id', 'f.id')
             ->orderBy('s.group_name')
             ->get();
 
-        return view('admin.graduate-passports.index', compact('groups'));
+        return view('admin.graduate-passports.index', compact('stats', 'faculties', 'groups'));
     }
 
     public function data(Request $request)
@@ -33,11 +79,28 @@ class GraduatePassportController extends Controller
             ->where('s.is_graduate', true)
             ->where('s.education_type_code', '11');
 
-        // Agar group_id berilsa — faqat shu guruh, aks holda faqat to'ldirganlar
+        if ($request->filled('faculty_id')) {
+            $query->where('f.id', $request->faculty_id);
+        }
+
         if ($request->filled('group_id')) {
             $query->where('s.group_id', $request->group_id);
-        } else {
-            $query->whereNotNull('gp.id');
+        }
+
+        if ($request->filled('search')) {
+            $s = trim($request->search);
+            $query->where(function ($q) use ($s) {
+                $q->where('s.full_name', 'like', "%{$s}%")
+                  ->orWhere('s.student_id_number', 'like', "%{$s}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            if ($request->status === 'filled') {
+                $query->whereNotNull('gp.id');
+            } elseif ($request->status === 'empty') {
+                $query->whereNull('gp.id');
+            }
         }
 
         $students = $query->select(

@@ -11,37 +11,17 @@ class GraduatePassportController extends Controller
 {
     public function index()
     {
-        // Bakalavr bitiruvchi fakultetlarni olish (har bir fakultet uchun to'lgan/jami)
-        $faculties = DB::table('students as s')
-            ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11') // Bakalavr
-            ->whereNotNull('s.department_id')
-            ->select(
-                's.department_id',
-                's.department_name',
-                DB::raw('COUNT(*) as total'),
-                DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled')
-            )
-            ->groupBy('s.department_id', 's.department_name')
-            ->orderBy('s.department_name')
-            ->get();
-
         // Bakalavr bitiruvchi guruhlarni olish
         $groups = DB::table('students as s')
             ->where('s.is_graduate', true)
             ->where('s.education_type_code', '11') // Bakalavr
-            ->select(
-                's.group_name',
-                's.group_id',
-                's.department_id',
-                DB::raw('COUNT(*) as total'),
-                DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled')
-            )
-            ->groupBy('s.group_name', 's.group_id', 's.department_id')
+            ->select('s.group_name', 's.group_id', DB::raw('COUNT(*) as total'),
+                DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled'))
+            ->groupBy('s.group_name', 's.group_id')
             ->orderBy('s.group_name')
             ->get();
 
-        return view('admin.graduate-passports.index', compact('groups', 'faculties'));
+        return view('admin.graduate-passports.index', compact('groups'));
     }
 
     public function data(Request $request)
@@ -53,18 +33,10 @@ class GraduatePassportController extends Controller
             ->where('s.is_graduate', true)
             ->where('s.education_type_code', '11');
 
-        // Guruh filtri
+        // Agar group_id berilsa — faqat shu guruh, aks holda faqat to'ldirganlar
         if ($request->filled('group_id')) {
             $query->where('s.group_id', $request->group_id);
-        }
-
-        // Fakultet filtri
-        if ($request->filled('department_id')) {
-            $query->where('s.department_id', $request->department_id);
-        }
-
-        // Agar hech qanday filtr yo'q bo'lsa — faqat to'ldirganlar
-        if (!$request->filled('group_id') && !$request->filled('department_id')) {
+        } else {
             $query->whereNotNull('gp.id');
         }
 

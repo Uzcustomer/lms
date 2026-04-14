@@ -5628,53 +5628,13 @@ class ReportController extends Controller
         @ini_set('memory_limit', '1024M');
         @set_time_limit(600);
 
-        try {
-            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $fileName = 'Vaqtlar_statistikasi_' . date('Y-m-d_H-i') . '.xlsx';
+        $tempPath = tempnam(sys_get_temp_dir(), 'gts_') . '.xlsx';
 
-            $headerStyle = [
-                'font' => ['bold' => true, 'size' => 11],
-                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
-                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
-                'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
-            ];
-            $borderStyle = [
-                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
-            ];
-
-            // ========== Sheet 1: Baholar ==========
-            $sheet = $spreadsheet->getActiveSheet();
-            $sheet->setTitle('Baholar');
-
-            $gradeHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Baho', 'Dars sanasi', "Baho qo'yilgan sana", "Baho qo'yilgan vaqt"];
-            foreach ($gradeHeaders as $col => $header) {
-                $sheet->setCellValue([$col + 1, 1], $header);
-            }
-            $sheet->getStyle('A1:N1')->applyFromArray($headerStyle);
-
-            $gradeQuery = DB::table('student_grades as sg')
-            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
-            ->whereNull('sg.deleted_at')
-            ->whereBetween('sg.created_at_api', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
-            ->select(
-                's.full_name',
-                's.department_name as faculty_name',
-                's.specialty_name',
-                's.level_name',
-                'sg.semester_name',
-                's.group_name',
-                'sg.subject_name',
-                'sg.employee_name',
-                'sg.subject_id',
-                'sg.grade',
-                DB::raw("DATE(sg.lesson_date) as lesson_date"),
-                DB::raw("DATE(sg.created_at_api) as graded_date"),
-                DB::raw("TIME(sg.created_at_api) as graded_time")
-            )
-            ->orderBy('sg.created_at_api');
-
+        $writer = null;
         try {
             $writer = \Box\Spout\Writer\Common\Creator\WriterEntityFactory::createXLSXWriter();
-            $writer->openToBrowser($fileName);
+            $writer->openToFile($tempPath);
 
             // ========== Sheet 1: Baholar ==========
             $sheet = $writer->getCurrentSheet();
@@ -5794,40 +5754,29 @@ class ReportController extends Controller
             }
 
             $writer->close();
+            $writer = null;
         } catch (\Throwable $e) {
-            if (isset($writer)) {
+            if ($writer !== null) {
                 try { $writer->close(); } catch (\Throwable $ignored) {}
             }
-            \Log::error('Grading time stats Excel export failed: ' . $e->getMessage(), [
-                'date_from' => $dateFrom,
-                'date_to' => $dateTo,
-                'faculty' => $facultyDepartmentHemisId,
-                'subject' => $subjectFilter,
-                'trace' => $e->getTraceAsString(),
-            ]);
-            throw $e;
-        }
-
-            $fileName = 'Vaqtlar_statistikasi_' . date('Y-m-d_H-i') . '.xlsx';
-            $temp = tempnam(sys_get_temp_dir(), 'gts_');
-
-            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-            $writer->save($temp);
-            $spreadsheet->disconnectWorksheets();
-
-            return response()->download($temp, $fileName, [
-                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ])->deleteFileAfterSend(true);
-        } catch (\Throwable $e) {
+            if (file_exists($tempPath)) {
+                @unlink($tempPath);
+            }
             \Illuminate\Support\Facades\Log::error('exportGradingTimeStatsExcel xatolik: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'date_from' => $dateFrom,
                 'date_to' => $dateTo,
+                'faculty' => $facultyDepartmentHemisId,
+                'subject' => $subjectFilter,
             ]);
             return response()->json([
                 'error' => 'Excel fayli tayyorlashda xatolik: ' . $e->getMessage(),
             ], 500);
         }
+
+        return response()->download($tempPath, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     /**

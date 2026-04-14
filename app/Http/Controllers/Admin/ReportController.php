@@ -5770,39 +5770,46 @@ class ReportController extends Controller
     {
         $dekanFacultyIds = get_dekan_faculty_ids();
 
-        $facultyQuery = Department::where('structure_type_code', 11)
-            ->where('active', true)
-            ->orderBy('name');
+        // Fakultetlar - yengil so'rov
+        $cacheKey = 'tmt_faculties_' . (empty($dekanFacultyIds) ? 'all' : implode(',', $dekanFacultyIds));
+        $faculties = \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function () use ($dekanFacultyIds) {
+            $facultyQuery = Department::where('structure_type_code', 11)
+                ->where('active', true)
+                ->orderBy('name');
 
-        if (!empty($dekanFacultyIds)) {
-            $facultyQuery->whereIn('id', $dekanFacultyIds);
-        }
+            if (!empty($dekanFacultyIds)) {
+                $facultyQuery->whereIn('id', $dekanFacultyIds);
+            }
+            return $facultyQuery->get();
+        });
 
-        $faculties = $facultyQuery->get();
+        // Kafedralar ro'yxati - og'ir so'rov bo'lgani uchun 10 daqiqa keshlaymiz
+        $kafedraCacheKey = 'tmt_kafedras_' . (empty($dekanFacultyIds) ? 'all' : implode(',', $dekanFacultyIds));
+        $kafedras = \Illuminate\Support\Facades\Cache::remember($kafedraCacheKey, 600, function () use ($dekanFacultyIds) {
+            $kafedraQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as s', function ($join) {
+                    $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('s.code', '=', 'cs.semester_code');
+                })
+                ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+                ->where('g.department_active', true)
+                ->where('g.active', true)
+                ->whereNotNull('cs.department_id')
+                ->whereNotNull('cs.department_name')
+                ->where('s.current', true);
 
-        $kafedraQuery = DB::table('curriculum_subjects as cs')
-            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-            ->join('semesters as s', function ($join) {
-                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                    ->on('s.code', '=', 'cs.semester_code');
-            })
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-            ->where('g.department_active', true)
-            ->where('g.active', true)
-            ->whereNotNull('cs.department_id')
-            ->whereNotNull('cs.department_name');
+            if (!empty($dekanFacultyIds)) {
+                $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
+            }
 
-        if (!empty($dekanFacultyIds)) {
-            $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
-        }
-        $kafedraQuery->where('s.current', true);
-
-        $kafedras = $kafedraQuery
-            ->select('cs.department_id', 'cs.department_name')
-            ->groupBy('cs.department_id', 'cs.department_name')
-            ->orderBy('cs.department_name')
-            ->get();
+            return $kafedraQuery
+                ->select('cs.department_id', 'cs.department_name')
+                ->groupBy('cs.department_id', 'cs.department_name')
+                ->orderBy('cs.department_name')
+                ->get();
+        });
 
         return view('admin.reports.test-markazi-times', compact(
             'faculties',

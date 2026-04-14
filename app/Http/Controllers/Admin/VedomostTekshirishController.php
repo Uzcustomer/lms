@@ -652,11 +652,15 @@ class VedomostTekshirishController extends Controller
                 $jn = $dav >= 25 ? 0 : $jnOrig;
 
                 // Balllar
+                // OSKI va Test baholar yaxlitlanmaydi — YN qaydnoma shablonida
+                // Q va T ustun formulalari (IF(P>=60, P*P19/100, 0)) yaxlitlashsiz
+                // chiqadi (masalan 13.5). Tekshirish Excel'i ham xuddi shunday
+                // chiqishi uchun float qiymat 1 kasr xonasi bilan saqlanadi.
                 $jnBall   = $jn >= 60   ? $roundHalfUp($jn * $wJn / 100)     : 0;
                 $mtBall   = $mt >= 60   ? $roundHalfUp($mt * $wMt / 100)     : 0;
                 $onBall   = $on >= 60   ? $roundHalfUp($on * $wOn / 100)     : 0;
-                $oskiBall = $oski >= 60 ? $roundHalfUp($oski * $wOski / 100) : 0;
-                $testBall = $test >= 60 ? $roundHalfUp($test * $wTest / 100) : 0;
+                $oskiBall = $oski >= 60 ? round($oski * $wOski / 100, 1)     : 0;
+                $testBall = $test >= 60 ? round($test * $wTest / 100, 1)     : 0;
 
                 $sumBall = $jnBall + $mtBall + $onBall;
                 $maxSum  = $wJn + $wMt + $wOn;

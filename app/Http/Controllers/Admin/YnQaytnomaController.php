@@ -1137,6 +1137,81 @@ class YnQaytnomaController extends Controller
                 if ($test !== '' && $test !== null) {
                     $sheet->setCellValue('S' . $row, round((float) $test));
                 }
+
+                // --- V (O'zlashtirish), W (ECTS), Y (Baho) ni PHP da hisoblash ---
+                // Shablondagi V20 formulasi juda murakkab (nested IF/AND/OR) va
+                // PhpSpreadsheet uni to'g'ri hisoblay olmaydi — natijada OSKI
+                // yoki Test < 60 bo'lganda ham V 0 emas, balki xato qiymat
+                // chiqadi. Shu bois mantiqni PHPda takrorlab, hujayra qiymatini
+                // to'g'ridan-to'g'ri yozib qo'yamiz (formulani bekor qiladi).
+                $jnVal   = ($jn   !== '' && $jn   !== null) ? (int) $jn                   : null;
+                $mtVal   = ($mt   !== '' && $mt   !== null) ? (int) $mt                   : null;
+                $onVal   = ($on   !== '' && $on   !== null) ? (int) round((float) $on)    : null;
+                $oskiVal = ($oski !== '' && $oski !== null) ? (int) round((float) $oski)  : null;
+                $testVal = ($test !== '' && $test !== null) ? (int) round((float) $test)  : null;
+
+                // Shablondagi qattiq og'irliklar: D19=50, G19=20, J19=0, P19=15, S19=15
+                $wJn = 50; $wMt = 20; $wOn = 0; $wOski = 15; $wTest = 15;
+
+                // Ballarni hisoblash (yaxlitlashsiz, 1 kasr xonasigacha)
+                $eBall = ($jnVal   !== null && $jnVal   >= 60) ? round($jnVal   * $wJn   / 100, 1) : 0;
+                $hBall = ($mtVal   !== null && $mtVal   >= 60) ? round($mtVal   * $wMt   / 100, 1) : 0;
+                $kBall = ($onVal   !== null && $onVal   >= 60) ? round($onVal   * $wOn   / 100, 1) : 0;
+                $qBall = ($oskiVal !== null && $oskiVal >= 60) ? round($oskiVal * $wOski / 100, 1) : 0;
+                $tBall = ($testVal !== null && $testVal >= 60) ? round($testVal * $wTest / 100, 1) : 0;
+
+                // JB+MT+ON ball
+                $maxJbMtOn = $wJn + $wMt + $wOn;
+                $mSum = (($jnVal !== null && $jnVal < 60) || ($mtVal !== null && $mtVal < 60))
+                    ? 0
+                    : round($eBall + $hBall + $kBall, 1);
+                $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+                // V (O'zlashtirish ko'rsatkichi)
+                if ($jnVal === null && $mtVal === null) {
+                    $v = '';
+                } elseif ($nPct < 0.6) {
+                    $v = -2; // qo'yilmadi
+                } elseif (($wOski > 0 && ($oskiVal === null || $oskiVal == 0))
+                       || ($wTest > 0 && ($testVal === null || $testVal == 0))) {
+                    $v = -1; // kelmadi
+                } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < 60)
+                       || ($wMt > 0   && $mtVal   !== null && $mtVal   < 60)
+                       || ($wOn > 0   && $onVal   !== null && $onVal   < 60)
+                       || ($wOski > 0 && $oskiVal !== null && $oskiVal < 60)
+                       || ($wTest > 0 && $testVal !== null && $testVal < 60)) {
+                    $v = 0;
+                } else {
+                    $v = round($eBall + $hBall + $kBall + $qBall + $tBall, 1);
+                }
+
+                // W (ECTS) — shablon mantig'i bilan bir xil
+                $w = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)      $w = 'A';
+                    elseif ($v >= 85)               $w = 'B+';
+                    elseif ($v >= 70)               $w = 'B';
+                    elseif ($v >= 60)               $w = 'C';
+                    elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                    elseif ($v == -1)               $w = '';
+                    else                            $w = 'FX'; // -2 va boshqalar
+                }
+
+                // Y (Baho)
+                $y = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
+                    elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
+                    elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                    elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
+                    elseif ($v == -1)                 $y = 'kelmadi';
+                    elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+                }
+
+                // Qiymatlarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)
+                $sheet->setCellValue('V' . $row, $v);
+                $sheet->setCellValue('W' . $row, $w);
+                $sheet->setCellValue('Y' . $row, $y);
             }
 
             // Faylni saqlash

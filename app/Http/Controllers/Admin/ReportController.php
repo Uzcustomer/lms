@@ -5619,18 +5619,24 @@ class ReportController extends Controller
      *
      * Katta hajmdagi ma'lumotlar (yuz minglab yozuvlar) uchun PhpSpreadsheet o'rniga
      * xotirada to'planmaydigan oqim (streaming) rejimidagi Box\Spout ishlatiladi.
+     * StudentGradeBox va TeacherExport bilan bir xil shaklda openToBrowser orqali
+     * to'g'ridan-to'g'ri javobga yoziladi.
      */
     private function exportGradingTimeStatsExcel($request, $dateFrom, $dateTo, $facultyDepartmentHemisId, $allowedSubjectIds, $subjectFilter, $subjectKafedraMap)
     {
         ini_set('memory_limit', '1024M');
         set_time_limit(600);
 
+        // Yuklab olish so'rovi: hech qanday oldingi output bo'lmasligi uchun buffer tozalanadi.
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
         $fileName = 'Vaqtlar_statistikasi_' . date('Y-m-d_H-i') . '.xlsx';
-        $temp = tempnam(sys_get_temp_dir(), 'gts_') . '.xlsx';
 
         try {
             $writer = \Box\Spout\Writer\Common\Creator\WriterEntityFactory::createXLSXWriter();
-            $writer->openToFile($temp);
+            $writer->openToBrowser($fileName);
 
             // ========== Sheet 1: Baholar ==========
             $sheet = $writer->getCurrentSheet();
@@ -5754,9 +5760,6 @@ class ReportController extends Controller
             if (isset($writer)) {
                 try { $writer->close(); } catch (\Throwable $ignored) {}
             }
-            if (is_file($temp)) {
-                @unlink($temp);
-            }
             \Log::error('Grading time stats Excel export failed: ' . $e->getMessage(), [
                 'date_from' => $dateFrom,
                 'date_to' => $dateTo,
@@ -5767,9 +5770,8 @@ class ReportController extends Controller
             throw $e;
         }
 
-        return response()->download($temp, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ])->deleteFileAfterSend(true);
+        // openToBrowser javobni o'zi yozadi; Laravel'ga bo'sh javob qaytaramiz.
+        return response('', 200);
     }
 
     /**

@@ -11,8 +11,6 @@ use App\Models\Group;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Teacher;
-use App\Models\YnStudentGrade;
-use App\Models\YnSubmission;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -564,63 +562,24 @@ class VedomostTekshirishController extends Controller
                 }
             }
 
-            // --- YN snapshot (yn_student_grades) bo'lsa, JN/MT ni snapshot bilan
-            // almashtiramiz. Bu YN qaydnoma yaratish bilan bir xil qiymat berishi
-            // uchun zarur — qaydnoma yuborilgan paytda olingan baho qulflanadi va
-            // tekshirish Excel'i shu qulflangan qiymatni ko'rsatishi kerak.
-            $ynSubmission = YnSubmission::where('group_hemis_id', $groupHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->first();
-            if ($ynSubmission) {
-                $snapshots = YnStudentGrade::latestPerStudent($ynSubmission->id)->get();
-                foreach ($snapshots as $snap) {
-                    if ($snap->jn !== null) {
-                        $jnGrades[$snap->student_hemis_id] = (int) $snap->jn;
-                    }
-                    if ($snap->mt !== null) {
-                        $mtGrades[$snap->student_hemis_id] = (int) $snap->mt;
-                    }
-                }
-            }
-
             // --- ON, OSKI, Test baholar ---
-            $otherRaw = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $studentHemisIds)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereIn('training_type_code', [100, 101, 102, 103])
-                ->when($educationYearCode, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $educationYearCode)
-                        ->orWhere(fn($q3) => $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate)));
-                }))
-                ->when(!$educationYearCode && $minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-                ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
-                ->get();
-
-            $otherGrouped = [];
-            foreach ($otherRaw as $g) {
-                $eff = $getEffectiveGrade($g);
-                if ($eff === null) continue;
-                $typeCode = $g->training_type_code;
-                if ($typeCode == 103 && $g->quiz_result_id) {
-                    $qt = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
-                    if (in_array($qt, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'])) $typeCode = 101;
-                    elseif (in_array($qt, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'])) $typeCode = 102;
-                }
-                $otherGrouped[$g->student_hemis_id][$typeCode][] = $eff;
-            }
+            // YN qaydnoma yaratish bilan bir xil qiymat chiqishi uchun
+            // YnQaytnomaController::generateYnQaydnoma() dagi logikani
+            // aynan takrorlaymiz: har bir training_type_code uchun MAX(grade)
+            // to'g'ridan-to'g'ri SQL darajasida, education_year_code/
+            // lesson_date filtrlarisiz.
             $gradesByType = [100 => [], 101 => [], 102 => []];
-            foreach ($otherGrouped as $sId => $types) {
-                foreach ([100, 101, 102] as $tc) {
-                    if (!empty($types[$tc])) {
-                        // YN qaydnoma yaratish ham MAX(grade) ishlatadi — bir
-                        // xil qiymat chiqishi uchun shu yerda ham MAX olamiz.
-                        $gradesByType[$tc][$sId] = max($types[$tc]);
-                    }
-                }
+            foreach ([100, 101, 102] as $tc) {
+                $gradesByType[$tc] = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->where('training_type_code', $tc)
+                    ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
+                    ->groupBy('student_hemis_id')
+                    ->pluck('grade', 'student_hemis_id')
+                    ->toArray();
             }
 
             // --- O'qituvchilar ---

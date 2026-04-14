@@ -4729,16 +4729,43 @@ class JournalController extends Controller
                 ]);
             } else {
                 $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+                if (!$student) {
+                    return response()->json(['success' => false, 'message' => 'Talaba topilmadi'], 404);
+                }
+
+                // Fan ma'lumotlarini olish
+                $subject = DB::table('curriculum_subjects')
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->first();
+
+                // Joriy o'quv yili
+                $semester = DB::table('semesters')->where('code', $semesterCode)->first();
 
                 DB::table('student_grades')->insert([
+                    'hemis_id' => 0, // Manual kiritilgan baholar uchun marker
+                    'student_id' => $student->id,
                     'student_hemis_id' => $studentHemisId,
-                    'student_id' => $student->id ?? null,
-                    'subject_id' => $subjectId,
                     'semester_code' => $semesterCode,
+                    'semester_name' => $subject->semester_name ?? ($semester->name ?? ''),
+                    'education_year_code' => $student->education_year_code ?? ($semester->education_year ?? null),
+                    'education_year_name' => $semester->education_year_name ?? null,
+                    'subject_schedule_id' => 0,
+                    'subject_id' => $subjectId,
+                    'subject_name' => $subject->subject_name ?? '',
+                    'subject_code' => $subject->subject_code ?? '',
                     'training_type_code' => $typeCode,
+                    'training_type_name' => $typeNames[$typeCode] ?? 'Manual',
+                    'employee_id' => 0,
+                    'employee_name' => 'Manual Entry',
+                    'lesson_pair_code' => '1',
+                    'lesson_pair_name' => 'Manual',
+                    'lesson_pair_start_time' => '00:00',
+                    'lesson_pair_end_time' => '00:00',
                     'grade' => $grade,
                     'lesson_date' => now()->toDateString(),
-                    'education_year_code' => $student->education_year_code ?? null,
+                    'created_at_api' => now(),
+                    'status' => 'recorded',
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);

@@ -11,6 +11,8 @@ use App\Models\Group;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Models\YnStudentGrade;
+use App\Models\YnSubmission;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -562,6 +564,26 @@ class VedomostTekshirishController extends Controller
                 }
             }
 
+            // --- YN snapshot (yn_student_grades) bo'lsa, JN/MT ni snapshot bilan
+            // almashtiramiz. Bu YN qaydnoma yaratish bilan bir xil qiymat berishi
+            // uchun zarur — qaydnoma yuborilgan paytda olingan baho qulflanadi va
+            // tekshirish Excel'i shu qulflangan qiymatni ko'rsatishi kerak.
+            $ynSubmission = YnSubmission::where('group_hemis_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->first();
+            if ($ynSubmission) {
+                $snapshots = YnStudentGrade::latestPerStudent($ynSubmission->id)->get();
+                foreach ($snapshots as $snap) {
+                    if ($snap->jn !== null) {
+                        $jnGrades[$snap->student_hemis_id] = (int) $snap->jn;
+                    }
+                    if ($snap->mt !== null) {
+                        $mtGrades[$snap->student_hemis_id] = (int) $snap->mt;
+                    }
+                }
+            }
+
             // --- ON, OSKI, Test baholar ---
             $otherRaw = DB::table('student_grades')
                 ->whereNull('deleted_at')
@@ -594,7 +616,9 @@ class VedomostTekshirishController extends Controller
             foreach ($otherGrouped as $sId => $types) {
                 foreach ([100, 101, 102] as $tc) {
                     if (!empty($types[$tc])) {
-                        $gradesByType[$tc][$sId] = array_sum($types[$tc]) / count($types[$tc]);
+                        // YN qaydnoma yaratish ham MAX(grade) ishlatadi — bir
+                        // xil qiymat chiqishi uchun shu yerda ham MAX olamiz.
+                        $gradesByType[$tc][$sId] = max($types[$tc]);
                     }
                 }
             }

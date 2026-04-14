@@ -5684,6 +5684,12 @@ class ReportController extends Controller
                 if (!empty($g->lesson_pair_start_time) || !empty($g->lesson_pair_end_time)) {
                     $pairTime = trim(($g->lesson_pair_start_time ?? '') . ' - ' . ($g->lesson_pair_end_time ?? ''), ' -');
                 }
+                // HEMIS student_grades'da lesson_pair_name faqat raqam bo'lib keladi
+                // ("8" kabi) — uni "8-juftlik" formatiga keltiramiz
+                $pairName = $g->lesson_pair_name ?? '';
+                if ($pairName !== '' && is_numeric(str_replace(',', '.', $pairName))) {
+                    $pairName = $pairName . '-juftlik';
+                }
                 $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray([
                     $num,
                     $g->full_name,
@@ -5698,7 +5704,7 @@ class ReportController extends Controller
                     $g->grade,
                     $g->lesson_date,
                     $pairTime,
-                    $g->lesson_pair_name ?? '',
+                    $pairName,
                     $g->graded_at,
                 ]));
             }

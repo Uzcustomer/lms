@@ -4688,6 +4688,77 @@ class JournalController extends Controller
     }
 
     /**
+     * Admin/Superadmin: OSKI (101) va Test (102) baholarini kiritish yoki yangilash.
+     * YN yuborilgan bo'lsa ham ruxsat beriladi — faqat admin va superadmin uchun.
+     */
+    public function saveExamGrade(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'student_hemis_id' => 'required|string',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'training_type_code' => 'required|in:101,102',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $studentHemisId = $request->student_hemis_id;
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $typeCode = (int) $request->training_type_code;
+        $grade = round($request->grade, 2);
+
+        $typeNames = [101 => 'OSKI', 102 => 'Test'];
+
+        try {
+            $existing = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', $typeCode)
+                ->first();
+
+            if ($existing) {
+                DB::table('student_grades')->where('id', $existing->id)->update([
+                    'grade' => $grade,
+                    'updated_at' => now(),
+                ]);
+            } else {
+                $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+
+                DB::table('student_grades')->insert([
+                    'student_hemis_id' => $studentHemisId,
+                    'student_id' => $student->id ?? null,
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'training_type_code' => $typeCode,
+                    'grade' => $grade,
+                    'lesson_date' => now()->toDateString(),
+                    'education_year_code' => $student->education_year_code ?? null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => ($typeNames[$typeCode] ?? 'Baho') . ' saqlandi: ' . $grade,
+                'grade' => $grade,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('saveExamGrade xatolik: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Sababli talabaning bahosini saqlash (retake_grade sifatida)
      * YN qulflangan bo'lsa ham, tasdiqlangan sababli uchun ruxsat beriladi.
      */

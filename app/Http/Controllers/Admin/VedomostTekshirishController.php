@@ -11,8 +11,6 @@ use App\Models\Group;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Teacher;
-use App\Models\YnStudentGrade;
-use App\Models\YnSubmission;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -561,26 +559,6 @@ class VedomostTekshirishController extends Controller
                 // Manual MT ustun turadi
                 if (isset($manualMt[$hId])) {
                     $mtGrades[$hId] = $roundHalfUp((float) $manualMt[$hId]->grade);
-                }
-            }
-
-            // --- YN snapshot (yn_student_grades) bo'lsa, JN/MT ni snapshot bilan
-            // almashtiramiz. Bu YN qaydnoma yaratish bilan bir xil qiymat berishi
-            // uchun zarur — qaydnoma yuborilgan paytda olingan baho qulflanadi va
-            // tekshirish Excel'i shu qulflangan qiymatni ko'rsatishi kerak.
-            $ynSubmission = YnSubmission::where('group_hemis_id', $groupHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->first();
-            if ($ynSubmission) {
-                $snapshots = YnStudentGrade::latestPerStudent($ynSubmission->id)->get();
-                foreach ($snapshots as $snap) {
-                    if ($snap->jn !== null) {
-                        $jnGrades[$snap->student_hemis_id] = (int) $snap->jn;
-                    }
-                    if ($snap->mt !== null) {
-                        $mtGrades[$snap->student_hemis_id] = (int) $snap->mt;
-                    }
                 }
             }
 

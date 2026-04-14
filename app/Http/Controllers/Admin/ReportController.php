@@ -5636,11 +5636,11 @@ class ReportController extends Controller
             $writer = \Box\Spout\Writer\Common\Creator\WriterEntityFactory::createXLSXWriter();
             $writer->openToFile($tempPath);
 
-            // ========== Sheet 1: Baholar ==========
+            // ========== Sheet: Baholar ==========
             $sheet = $writer->getCurrentSheet();
             $sheet->setName('Baholar');
 
-            $gradeHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Baho', 'Dars sanasi', "Baho qo'yilgan sana", "Baho qo'yilgan vaqt"];
+            $gradeHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Baho', 'Dars sanasi', 'Juftlik vaqti', 'Juftlik nomi', "Baho qo'yilgan sana va vaqt"];
             $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray($gradeHeaders));
 
             $gradeQuery = DB::table('student_grades as sg')
@@ -5658,9 +5658,11 @@ class ReportController extends Controller
                     'sg.employee_name',
                     'sg.subject_id',
                     'sg.grade',
+                    'sg.lesson_pair_name',
+                    'sg.lesson_pair_start_time',
+                    'sg.lesson_pair_end_time',
                     DB::raw("DATE(sg.lesson_date) as lesson_date"),
-                    DB::raw("DATE(sg.created_at_api) as graded_date"),
-                    DB::raw("TIME(sg.created_at_api) as graded_time")
+                    DB::raw("DATE_FORMAT(sg.created_at_api, '%Y-%m-%d %H:%i:%s') as graded_at")
                 )
                 ->orderBy('sg.id');
 
@@ -5678,6 +5680,10 @@ class ReportController extends Controller
             foreach ($gradeQuery->cursor() as $g) {
                 $num++;
                 $kafedra = $subjectKafedraMap[$g->subject_id] ?? null;
+                $pairTime = '';
+                if (!empty($g->lesson_pair_start_time) || !empty($g->lesson_pair_end_time)) {
+                    $pairTime = trim(($g->lesson_pair_start_time ?? '') . ' - ' . ($g->lesson_pair_end_time ?? ''), ' -');
+                }
                 $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray([
                     $num,
                     $g->full_name,
@@ -5691,65 +5697,9 @@ class ReportController extends Controller
                     $kafedra->department_name ?? '-',
                     $g->grade,
                     $g->lesson_date,
-                    $g->graded_date,
-                    $g->graded_time,
-                ]));
-            }
-
-            // ========== Sheet 2: Davomat ==========
-            $sheet2 = $writer->addNewSheetAndMakeItCurrent();
-            $sheet2->setName('Davomat');
-
-            $attHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Dars sanasi', 'Davomat belgilangan sana', 'Davomat belgilangan vaqt'];
-            $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray($attHeaders));
-
-            $attQuery = DB::table('attendances as a')
-                ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
-                ->whereBetween('a.updated_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
-                ->select(
-                    's.full_name',
-                    's.department_name as faculty_name',
-                    's.specialty_name',
-                    's.level_name',
-                    'a.semester_name',
-                    's.group_name',
-                    'a.subject_name',
-                    'a.employee_name',
-                    'a.subject_id',
-                    DB::raw("DATE(a.lesson_date) as lesson_date"),
-                    DB::raw("DATE(a.updated_at) as att_date"),
-                    DB::raw("TIME(a.updated_at) as att_time")
-                )
-                ->orderBy('a.id');
-
-            if ($facultyDepartmentHemisId) {
-                $attQuery->where('s.department_id', $facultyDepartmentHemisId);
-            }
-            if ($allowedSubjectIds !== null) {
-                $attQuery->whereIn('a.subject_id', $allowedSubjectIds);
-            }
-            if ($subjectFilter) {
-                $attQuery->where('a.subject_id', $subjectFilter);
-            }
-
-            $num2 = 0;
-            foreach ($attQuery->cursor() as $a) {
-                $num2++;
-                $kafedra = $subjectKafedraMap[$a->subject_id] ?? null;
-                $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray([
-                    $num2,
-                    $a->full_name,
-                    $a->faculty_name,
-                    $a->specialty_name,
-                    $a->level_name,
-                    $a->semester_name,
-                    $a->group_name,
-                    $a->subject_name,
-                    $a->employee_name,
-                    $kafedra->department_name ?? '-',
-                    $a->lesson_date,
-                    $a->att_date,
-                    $a->att_time,
+                    $pairTime,
+                    $g->lesson_pair_name ?? '',
+                    $g->graded_at,
                 ]));
             }
 

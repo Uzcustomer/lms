@@ -5610,172 +5610,149 @@ class ReportController extends Controller
 
     /**
      * Excel export - batafsil talaba bo'yicha davomat va baho vaqtlari
+     *
+     * Katta hajmdagi ma'lumotlar (yuz minglab yozuvlar) uchun PhpSpreadsheet o'rniga
+     * xotirada to'planmaydigan oqim (streaming) rejimidagi Box\Spout ishlatiladi.
      */
     private function exportGradingTimeStatsExcel($request, $dateFrom, $dateTo, $facultyDepartmentHemisId, $allowedSubjectIds, $subjectFilter, $subjectKafedraMap)
     {
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-
-        $headerStyle = [
-            'font' => ['bold' => true, 'size' => 11],
-            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
-            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
-            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
-        ];
-        $borderStyle = [
-            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
-        ];
-
-        // ========== Sheet 1: Baholar ==========
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Baholar');
-
-        $gradeHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Baho', 'Dars sanasi', "Baho qo'yilgan sana", "Baho qo'yilgan vaqt"];
-        foreach ($gradeHeaders as $col => $header) {
-            $sheet->setCellValue([$col + 1, 1], $header);
-        }
-        $sheet->getStyle('A1:N1')->applyFromArray($headerStyle);
-
-        $gradeQuery = DB::table('student_grades as sg')
-            ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
-            ->whereNull('sg.deleted_at')
-            ->whereBetween('sg.created_at_api', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
-            ->select(
-                's.full_name',
-                's.department_name as faculty_name',
-                's.specialty_name',
-                's.level_name',
-                'sg.semester_name',
-                's.group_name',
-                'sg.subject_name',
-                'sg.employee_name',
-                'sg.subject_id',
-                'sg.grade',
-                DB::raw("DATE(sg.lesson_date) as lesson_date"),
-                DB::raw("DATE(sg.created_at_api) as graded_date"),
-                DB::raw("TIME(sg.created_at_api) as graded_time")
-            )
-            ->orderBy('sg.created_at_api');
-
-        if ($facultyDepartmentHemisId) {
-            $gradeQuery->where('s.department_id', $facultyDepartmentHemisId);
-        }
-        if ($allowedSubjectIds !== null) {
-            $gradeQuery->whereIn('sg.subject_id', $allowedSubjectIds);
-        }
-        if ($subjectFilter) {
-            $gradeQuery->where('sg.subject_id', $subjectFilter);
-        }
-
-        $row = 2;
-        $num = 0;
-        $gradeQuery->chunk(5000, function ($grades) use ($sheet, &$row, &$num, $subjectKafedraMap) {
-            foreach ($grades as $g) {
-                $num++;
-                $kafedra = $subjectKafedraMap[$g->subject_id] ?? null;
-                $sheet->setCellValue([1, $row], $num);
-                $sheet->setCellValue([2, $row], $g->full_name);
-                $sheet->setCellValue([3, $row], $g->faculty_name);
-                $sheet->setCellValue([4, $row], $g->specialty_name);
-                $sheet->setCellValue([5, $row], $g->level_name);
-                $sheet->setCellValue([6, $row], $g->semester_name);
-                $sheet->setCellValue([7, $row], $g->group_name);
-                $sheet->setCellValue([8, $row], $g->subject_name);
-                $sheet->setCellValue([9, $row], $g->employee_name);
-                $sheet->setCellValue([10, $row], $kafedra->department_name ?? '-');
-                $sheet->setCellValue([11, $row], $g->grade);
-                $sheet->setCellValue([12, $row], $g->lesson_date);
-                $sheet->setCellValue([13, $row], $g->graded_date);
-                $sheet->setCellValue([14, $row], $g->graded_time);
-                $row++;
-            }
-        });
-
-        $lastRow = $row - 1;
-        if ($lastRow > 1) {
-            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray($borderStyle);
-        }
-        $gradeWidths = [5, 28, 22, 28, 8, 10, 14, 30, 28, 28, 8, 14, 14, 12];
-        foreach ($gradeWidths as $i => $w) {
-            $sheet->getColumnDimensionByColumn($i + 1)->setWidth($w);
-        }
-
-        // ========== Sheet 2: Davomat ==========
-        $sheet2 = $spreadsheet->createSheet();
-        $sheet2->setTitle('Davomat');
-
-        $attHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Dars sanasi', 'Davomat belgilangan sana', 'Davomat belgilangan vaqt'];
-        foreach ($attHeaders as $col => $header) {
-            $sheet2->setCellValue([$col + 1, 1], $header);
-        }
-        $sheet2->getStyle('A1:M1')->applyFromArray($headerStyle);
-
-        $attQuery = DB::table('attendances as a')
-            ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
-            ->whereBetween('a.updated_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
-            ->select(
-                's.full_name',
-                's.department_name as faculty_name',
-                's.specialty_name',
-                's.level_name',
-                'a.semester_name',
-                's.group_name',
-                'a.subject_name',
-                'a.employee_name',
-                'a.subject_id',
-                DB::raw("DATE(a.lesson_date) as lesson_date"),
-                DB::raw("DATE(a.updated_at) as att_date"),
-                DB::raw("TIME(a.updated_at) as att_time")
-            )
-            ->orderBy('a.updated_at');
-
-        if ($facultyDepartmentHemisId) {
-            $attQuery->where('s.department_id', $facultyDepartmentHemisId);
-        }
-        if ($allowedSubjectIds !== null) {
-            $attQuery->whereIn('a.subject_id', $allowedSubjectIds);
-        }
-        if ($subjectFilter) {
-            $attQuery->where('a.subject_id', $subjectFilter);
-        }
-
-        $row2 = 2;
-        $num2 = 0;
-        $attQuery->chunk(5000, function ($records) use ($sheet2, &$row2, &$num2, $subjectKafedraMap) {
-            foreach ($records as $a) {
-                $num2++;
-                $kafedra = $subjectKafedraMap[$a->subject_id] ?? null;
-                $sheet2->setCellValue([1, $row2], $num2);
-                $sheet2->setCellValue([2, $row2], $a->full_name);
-                $sheet2->setCellValue([3, $row2], $a->faculty_name);
-                $sheet2->setCellValue([4, $row2], $a->specialty_name);
-                $sheet2->setCellValue([5, $row2], $a->level_name);
-                $sheet2->setCellValue([6, $row2], $a->semester_name);
-                $sheet2->setCellValue([7, $row2], $a->group_name);
-                $sheet2->setCellValue([8, $row2], $a->subject_name);
-                $sheet2->setCellValue([9, $row2], $a->employee_name);
-                $sheet2->setCellValue([10, $row2], $kafedra->department_name ?? '-');
-                $sheet2->setCellValue([11, $row2], $a->lesson_date);
-                $sheet2->setCellValue([12, $row2], $a->att_date);
-                $sheet2->setCellValue([13, $row2], $a->att_time);
-                $row2++;
-            }
-        });
-
-        $lastRow2 = $row2 - 1;
-        if ($lastRow2 > 1) {
-            $sheet2->getStyle("A2:M{$lastRow2}")->applyFromArray($borderStyle);
-        }
-        $attWidths = [5, 28, 22, 28, 8, 10, 14, 30, 28, 28, 14, 14, 12];
-        foreach ($attWidths as $i => $w) {
-            $sheet2->getColumnDimensionByColumn($i + 1)->setWidth($w);
-        }
+        ini_set('memory_limit', '1024M');
+        set_time_limit(600);
 
         $fileName = 'Vaqtlar_statistikasi_' . date('Y-m-d_H-i') . '.xlsx';
-        $temp = tempnam(sys_get_temp_dir(), 'gts_');
+        $temp = tempnam(sys_get_temp_dir(), 'gts_') . '.xlsx';
 
-        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-        $writer->save($temp);
-        $spreadsheet->disconnectWorksheets();
+        try {
+            $writer = \Box\Spout\Writer\Common\Creator\WriterEntityFactory::createXLSXWriter();
+            $writer->openToFile($temp);
+
+            // ========== Sheet 1: Baholar ==========
+            $sheet = $writer->getCurrentSheet();
+            $sheet->setName('Baholar');
+
+            $gradeHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Baho', 'Dars sanasi', "Baho qo'yilgan sana", "Baho qo'yilgan vaqt"];
+            $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray($gradeHeaders));
+
+            $gradeQuery = DB::table('student_grades as sg')
+                ->join('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+                ->whereNull('sg.deleted_at')
+                ->whereBetween('sg.created_at_api', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
+                ->select(
+                    's.full_name',
+                    's.department_name as faculty_name',
+                    's.specialty_name',
+                    's.level_name',
+                    'sg.semester_name',
+                    's.group_name',
+                    'sg.subject_name',
+                    'sg.employee_name',
+                    'sg.subject_id',
+                    'sg.grade',
+                    DB::raw("DATE(sg.lesson_date) as lesson_date"),
+                    DB::raw("DATE(sg.created_at_api) as graded_date"),
+                    DB::raw("TIME(sg.created_at_api) as graded_time")
+                )
+                ->orderBy('sg.id');
+
+            if ($facultyDepartmentHemisId) {
+                $gradeQuery->where('s.department_id', $facultyDepartmentHemisId);
+            }
+            if ($allowedSubjectIds !== null) {
+                $gradeQuery->whereIn('sg.subject_id', $allowedSubjectIds);
+            }
+            if ($subjectFilter) {
+                $gradeQuery->where('sg.subject_id', $subjectFilter);
+            }
+
+            $num = 0;
+            foreach ($gradeQuery->cursor() as $g) {
+                $num++;
+                $kafedra = $subjectKafedraMap[$g->subject_id] ?? null;
+                $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray([
+                    $num,
+                    $g->full_name,
+                    $g->faculty_name,
+                    $g->specialty_name,
+                    $g->level_name,
+                    $g->semester_name,
+                    $g->group_name,
+                    $g->subject_name,
+                    $g->employee_name,
+                    $kafedra->department_name ?? '-',
+                    $g->grade,
+                    $g->lesson_date,
+                    $g->graded_date,
+                    $g->graded_time,
+                ]));
+            }
+
+            // ========== Sheet 2: Davomat ==========
+            $sheet2 = $writer->addNewSheetAndMakeItCurrent();
+            $sheet2->setName('Davomat');
+
+            $attHeaders = ['#', 'Talaba FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Guruh', 'Fan', "O'qituvchi", 'Kafedra', 'Dars sanasi', 'Davomat belgilangan sana', 'Davomat belgilangan vaqt'];
+            $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray($attHeaders));
+
+            $attQuery = DB::table('attendances as a')
+                ->join('students as s', 's.hemis_id', '=', 'a.student_hemis_id')
+                ->whereBetween('a.updated_at', [$dateFrom . ' 00:00:00', $dateTo . ' 23:59:59'])
+                ->select(
+                    's.full_name',
+                    's.department_name as faculty_name',
+                    's.specialty_name',
+                    's.level_name',
+                    'a.semester_name',
+                    's.group_name',
+                    'a.subject_name',
+                    'a.employee_name',
+                    'a.subject_id',
+                    DB::raw("DATE(a.lesson_date) as lesson_date"),
+                    DB::raw("DATE(a.updated_at) as att_date"),
+                    DB::raw("TIME(a.updated_at) as att_time")
+                )
+                ->orderBy('a.id');
+
+            if ($facultyDepartmentHemisId) {
+                $attQuery->where('s.department_id', $facultyDepartmentHemisId);
+            }
+            if ($allowedSubjectIds !== null) {
+                $attQuery->whereIn('a.subject_id', $allowedSubjectIds);
+            }
+            if ($subjectFilter) {
+                $attQuery->where('a.subject_id', $subjectFilter);
+            }
+
+            $num2 = 0;
+            foreach ($attQuery->cursor() as $a) {
+                $num2++;
+                $kafedra = $subjectKafedraMap[$a->subject_id] ?? null;
+                $writer->addRow(\Box\Spout\Writer\Common\Creator\WriterEntityFactory::createRowFromArray([
+                    $num2,
+                    $a->full_name,
+                    $a->faculty_name,
+                    $a->specialty_name,
+                    $a->level_name,
+                    $a->semester_name,
+                    $a->group_name,
+                    $a->subject_name,
+                    $a->employee_name,
+                    $kafedra->department_name ?? '-',
+                    $a->lesson_date,
+                    $a->att_date,
+                    $a->att_time,
+                ]));
+            }
+
+            $writer->close();
+        } catch (\Throwable $e) {
+            if (isset($writer)) {
+                try { $writer->close(); } catch (\Throwable $ignored) {}
+            }
+            if (is_file($temp)) {
+                @unlink($temp);
+            }
+            throw $e;
+        }
 
         return response()->download($temp, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

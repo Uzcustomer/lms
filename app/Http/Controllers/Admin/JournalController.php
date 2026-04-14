@@ -2120,11 +2120,45 @@ class JournalController extends Controller
             ->exists();
 
         if ($ynLocked) {
-            return response()->json([
-                'success' => false,
-                'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
-                'yn_locked' => true,
-            ], 403);
+            // Sababli ariza orqali MT bahosi: tasdiqlangan sababli + MT makeup turi
+            // mavjud bo'lsa va deadline ichida (yoki admin) bo'lsa — ruxsat
+            $sababliMtAllowed = false;
+            $sababliExcuse = AbsenceExcuse::where('status', 'approved')
+                ->where('student_hemis_id', $studentHemisId)
+                ->whereHas('makeups', function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId)
+                        ->where('assessment_type', 'mt');
+                })
+                ->latest('reviewed_at')
+                ->first();
+
+            if ($sababliExcuse) {
+                if ($isAdminRole) {
+                    $sababliMtAllowed = true;
+                } elseif ($sababliExcuse->reviewed_at) {
+                    $sababliDays = \Carbon\Carbon::parse($sababliExcuse->start_date)
+                        ->diffInDays(\Carbon\Carbon::parse($sababliExcuse->end_date)) + 1;
+                    $sababliDeadline = \Carbon\Carbon::parse($sababliExcuse->reviewed_at)
+                        ->addDays($sababliDays)->endOfDay();
+                    if (now()->lessThanOrEqualTo($sababliDeadline)) {
+                        $sababliMtAllowed = true;
+                    } else {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Sababli MT bahosi muddati o\'tgan (' . $sababliDeadline->format('d.m.Y H:i') . '). Faqat admin tahrirlash mumkin.',
+                            'deadline_expired' => true,
+                        ], 403);
+                    }
+                }
+            }
+
+            if (!$sababliMtAllowed) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
         }
 
         // Get student info
@@ -4788,9 +4822,18 @@ class JournalController extends Controller
     /**
      * Sababli talabaning bahosini saqlash (retake_grade sifatida)
      * YN qulflangan bo'lsa ham, tasdiqlangan sababli uchun ruxsat beriladi.
+     * Dekan bu amalni bajara olmaydi — faqat ko'rish.
      */
     public function saveExcuseGrade(Request $request)
     {
+        // Dekan — sababli baho qo'yishga ruxsat yo'q
+        if (is_active_dekan()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dekan sababli baho qo\'ya olmaydi.',
+            ], 403);
+        }
+
         try {
             $request->validate([
                 'student_hemis_id' => 'required|string',
@@ -4818,6 +4861,24 @@ class JournalController extends Controller
                     'success' => false,
                     'message' => 'Tasdiqlangan sababli hujjat topilmadi.',
                 ], 403);
+            }
+
+            // Sababli baho kiritish deadline: ariza tasdiqlangan kundan boshlab
+            // sababli kunlar soniga teng vaqt o'qituvchiga beriladi.
+            // Admin va superadmin uchun deadline yo'q.
+            $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+            if (!$isAdminRole && $excuse->reviewed_at) {
+                $excuseDays = \Carbon\Carbon::parse($excuse->start_date)
+                    ->diffInDays(\Carbon\Carbon::parse($excuse->end_date)) + 1;
+                $deadline = \Carbon\Carbon::parse($excuse->reviewed_at)
+                    ->addDays($excuseDays)->endOfDay();
+                if (now()->greaterThan($deadline)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Sababli baho kiritish muddati o\'tgan (' . $deadline->format('d.m.Y H:i') . '). Faqat admin tahrirlash mumkin.',
+                        'deadline_expired' => true,
+                    ], 403);
+                }
             }
 
             // YN yuborilganligini tekshirish (sababli faqat YN yuborilgandan keyin ishlaydi)

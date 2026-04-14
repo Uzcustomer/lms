@@ -4788,15 +4788,15 @@ class JournalController extends Controller
     /**
      * Sababli talabaning bahosini saqlash (retake_grade sifatida)
      * YN qulflangan bo'lsa ham, tasdiqlangan sababli uchun ruxsat beriladi.
-     * Dekan va registrator (dekanat) bu amalni bajara olmaydi — faqat ko'rish.
+     * Dekan bu amalni bajara olmaydi — faqat ko'rish.
      */
     public function saveExcuseGrade(Request $request)
     {
-        // Dekan va registrator (dekanat) — sababli baho qo'yishga ruxsat yo'q
-        if (is_active_dekan() || is_active_registrator()) {
+        // Dekan — sababli baho qo'yishga ruxsat yo'q
+        if (is_active_dekan()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Dekan va registrator sababli baho qo\'ya olmaydi.',
+                'message' => 'Dekan sababli baho qo\'ya olmaydi.',
             ], 403);
         }
 

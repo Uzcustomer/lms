@@ -107,16 +107,40 @@ class TeacherMainController extends Controller
             return null;
         }
 
-        $currentSemesterCodes = Semester::where('current', true)
-            ->pluck('code')
-            ->unique()
-            ->filter()
-            ->values()
-            ->toArray();
+        // Joriy semestrlarning kodlari va sana oralig'ini olamiz.
+        // Faqat semester_code (masalan "11") bo'yicha filtrlash xato bo'lar edi:
+        // bu kod har akademik yili takrorlanadi, oqibatda oldingi yillar baholari
+        // ham qo'shilib ketardi. education_year_code formatlari turlicha bo'lishi
+        // mumkinligi sababli, eng ishonchli usul: semester_code + lesson_date
+        // sana oralig'i (CurriculumWeek'dan).
+        $currentSemesters = Semester::where('current', true)
+            ->whereNotNull('code')
+            ->get(['semester_hemis_id', 'code']);
 
-        if (empty($currentSemesterCodes)) {
+        if ($currentSemesters->isEmpty()) {
             return null;
         }
+
+        $currentSemesterCodes = $currentSemesters->pluck('code')->unique()->values()->toArray();
+        $currentSemesterHemisIds = $currentSemesters->pluck('semester_hemis_id')->unique()->values()->toArray();
+
+        // Joriy semestrlarning sana oralig'ini CurriculumWeek'dan olamiz
+        $dateRange = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
+            ->selectRaw('MIN(start_date) as min_date, MAX(end_date) as max_date')
+            ->first();
+
+        $dateFrom = $dateRange->min_date ?? null;
+        $dateTo   = $dateRange->max_date ?? null;
+
+        // Filtr: semester_code IN (joriy kodlar) AND lesson_date sana oralig'ida.
+        // Sana oralig'i avvalgi yilning xuddi shu kodli semestrini chiqarib tashlaydi.
+        $semesterFilter = function ($query) use ($currentSemesterCodes, $dateFrom, $dateTo) {
+            $query->whereIn('semester_code', $currentSemesterCodes);
+            if ($dateFrom && $dateTo) {
+                $query->whereBetween('lesson_date', [$dateFrom, $dateTo]);
+            }
+        };
 
         // SQL ifoda: juftlik tugash vaqti va 18:00 deadline
         $driver = DB::connection()->getDriverName();
@@ -144,8 +168,9 @@ class TeacherMainController extends Controller
         // Joriy o'qituvchining statistikasi
         $mine = DB::table('student_grades')
             ->whereNull('deleted_at')
-            ->whereIn('semester_code', $currentSemesterCodes)
+            ->where($semesterFilter)
             ->where('employee_id', $teacher->hemis_id)
+            ->where('training_type_code', 100)
             ->whereNotNull('created_at_api')
             ->whereNotNull('lesson_date')
             ->whereNotNull('lesson_pair_end_time')
@@ -167,17 +192,19 @@ class TeacherMainController extends Controller
         // Barcha o'qituvchilar bo'yicha reyting (score = during*1 + work*0.5 + after*0)
         // CACHE: 10 daqiqa — bu og'ir so'rov (GROUP BY employee_id butun student_grades bo'yicha).
         // Har o'qituvchi dashboardga kirganda qayta ishlatilmasligi uchun cache'lanadi.
-        $cacheKey = 'teacher:grading_time_stats:all:' . md5(implode(',', $currentSemesterCodes));
+        $cacheKey = 'teacher:grading_time_stats:all:jn:' . md5(implode(',', $currentSemesterCodes));
         $allTeachers = Cache::remember($cacheKey, 600, function () use (
-            $currentSemesterCodes, $caseDuringClass, $caseWorkHours, $caseAfterHours
+            $semesterFilter, $caseDuringClass, $caseWorkHours, $caseAfterHours, $joriyFilter
         ) {
             return DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('semester_code', $currentSemesterCodes)
+                ->where('training_type_code', 100)
                 ->whereNotNull('created_at_api')
                 ->whereNotNull('lesson_date')
                 ->whereNotNull('lesson_pair_end_time')
                 ->where('lesson_pair_end_time', '!=', '')
+                ->where($joriyFilter)
                 ->selectRaw("
                     employee_id,
                     {$caseDuringClass} as during_class,

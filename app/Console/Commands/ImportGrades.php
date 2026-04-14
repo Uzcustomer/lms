@@ -1495,13 +1495,7 @@ class ImportGrades extends Command
             'lesson_pair_start_time' => $item['lessonPair']['start_time'],
         ])->first();
 
-        if ($existingGrade) {
-            // DIAGNOSTIKA: existing grade topildi — NB yaratish skip qilinadi
-            Log::info("[NB-DIAG] SKIP: student={$student->hemis_id}, date={$lessonDate->toDateString()}, pair={$item['lessonPair']['code']}, existing_reason={$existingGrade->reason}, existing_grade={$existingGrade->grade}, existing_status={$existingGrade->status}, hemis_id={$existingGrade->hemis_id}");
-        }
-
         if (!$existingGrade) {
-            Log::info("[NB-DIAG] CREATE: student={$student->hemis_id}, date={$lessonDate->toDateString()}, pair={$item['lessonPair']['code']}");
             $this->retryOnLockTimeout(function () use ($item, $student, $lessonDate, $isFinal) {
                 StudentGrade::create([
                     'hemis_id' => 111,

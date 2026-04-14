@@ -290,6 +290,7 @@
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Turi</th>
                                     <th class="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Baho</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Holat</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Kelgan sana</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ko'rib chiqgan</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amallar</th>
                                 </tr>
@@ -317,6 +318,9 @@
                                                 bg-{{ $appeal->getStatusColor() }}-100 text-{{ $appeal->getStatusColor() }}-800">
                                                 {{ $appeal->getStatusLabel() }}
                                             </span>
+                                        </td>
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {{ $appeal->created_at ? \Carbon\Carbon::parse($appeal->created_at)->format('d.m.Y H:i') : '-' }}
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                             @if($appeal->reviewed_by_name)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Department;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -46,9 +47,11 @@ class GraduatePassportController extends Controller
     public function data(Request $request)
     {
         $query = DB::table('students as s')
+            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
+            ->leftJoin('departments as f', 'f.id', '=', 'd.parent_id')
             ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11')
-            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id');
+            ->where('s.education_type_code', '11');
 
         // Guruh filtri
         if ($request->filled('group_id')) {
@@ -67,7 +70,8 @@ class GraduatePassportController extends Controller
 
         $students = $query->select(
                 's.id', 's.hemis_id', 's.student_id_number', 's.full_name',
-                's.department_name', 's.group_name',
+                's.department_name', 's.group_name', 's.gender_code', 's.gender_name',
+                'd.name as kafedra_name', 'f.name as faculty_name',
                 'gp.id as gp_id', 'gp.first_name', 'gp.last_name', 'gp.father_name',
                 'gp.first_name_en', 'gp.last_name_en',
                 'gp.passport_series', 'gp.passport_number', 'gp.jshshir',
@@ -82,6 +86,10 @@ class GraduatePassportController extends Controller
                     'full_name' => $st->full_name,
                     'student_id_number' => $st->student_id_number,
                     'group_name' => $st->group_name ?? '',
+                    'faculty_name' => $st->faculty_name ?? '',
+                    'kafedra_name' => $st->kafedra_name ?? ($st->department_name ?? ''),
+                    'gender_code' => $st->gender_code,
+                    'gender_name' => $st->gender_name,
                     'filled' => $filled,
                     'gp_id' => $st->gp_id,
                     'name_uz' => $filled ? trim(($st->last_name ?? '') . ' ' . ($st->first_name ?? '') . ' ' . ($st->father_name ?? '')) : '',
@@ -95,7 +103,21 @@ class GraduatePassportController extends Controller
                 ];
             });
 
-        return response()->json(['students' => $students]);
+        $total = $students->count();
+        $male = $students->where('gender_code', '11')->count();
+        $female = $students->where('gender_code', '12')->count();
+        $filled = $students->where('filled', true)->count();
+
+        return response()->json([
+            'students' => $students,
+            'stats' => [
+                'total' => $total,
+                'male' => $male,
+                'female' => $female,
+                'filled' => $filled,
+                'empty' => $total - $filled,
+            ],
+        ]);
     }
 
     public function showFile($id, $field)

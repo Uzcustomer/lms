@@ -96,6 +96,12 @@
                                     </svg>
                                     YN oldi word
                                 </button>
+                                <button type="button" class="btn-export-excel" onclick="tcExportExcel()">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    Excel
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -220,7 +226,7 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 6px;">
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
-                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;" oninput="formatTimeInput(this)" onblur="validateTimeInput(this)">
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;" oninput="formatTimeInput(this)" onblur="validateTimeInput(this)">
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
@@ -391,6 +397,7 @@
                     group_hemis_id: input.getAttribute('data-group-hemis-id'),
                     subject_id: input.getAttribute('data-subject-id'),
                     semester_code: input.getAttribute('data-semester-code'),
+                    yn_type: input.getAttribute('data-yn-type') || 'Test',
                     test_time: timeVal,
                     yn_submitted: input.getAttribute('data-yn-submitted') === '1'
                 })
@@ -602,6 +609,33 @@
         function applyFilter() {
             var url = new URL(window.location.href.split('?')[0]);
             url.searchParams.set('searched', '1');
+            var et = $('#education_type').val();
+            var dept = $('#department_id').val();
+            var spec = $('#specialty_id').val();
+            var lc = $('#level_code').val();
+            var sem = $('#semester_code').val();
+            var grp = $('#group_id').val();
+            var subj = $('#subject_id').val();
+            var status = $('#status').val();
+            var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
+            var dateFrom = $('#date_from').val();
+            var dateTo = $('#date_to').val();
+            if (et) url.searchParams.set('education_type', et);
+            if (dept) url.searchParams.set('department_id', dept);
+            if (spec) url.searchParams.set('specialty_id', spec);
+            if (lc) url.searchParams.set('level_code', lc);
+            if (sem) url.searchParams.set('semester_code', sem);
+            if (grp) url.searchParams.set('group_id', grp);
+            if (subj) url.searchParams.set('subject_id', subj);
+            if (status) url.searchParams.set('status', status);
+            if (dateFrom) url.searchParams.set('date_from', dateFrom);
+            if (dateTo) url.searchParams.set('date_to', dateTo);
+            url.searchParams.set('current_semester', cs);
+            window.location.href = url.toString();
+        }
+
+        function tcExportExcel() {
+            var url = new URL('{{ route($routePrefix . ".academic-schedule.test-center.export-excel") }}');
             var et = $('#education_type').val();
             var dept = $('#department_id').val();
             var spec = $('#specialty_id').val();
@@ -936,6 +970,9 @@
         .btn-yn-oldi-word { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(37,99,235,0.3); white-space: nowrap; height: 36px; }
         .btn-yn-oldi-word:hover:not(:disabled) { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 4px 12px rgba(37,99,235,0.4); transform: translateY(-1px); }
         .btn-yn-oldi-word:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-export-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); white-space: nowrap; height: 36px; }
+        .btn-export-excel:hover { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }

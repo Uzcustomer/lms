@@ -38,6 +38,7 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Fan nomi') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('OSKI sanasi') }}</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('OSKI vaqti') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Test sanasi') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Test vaqti') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Holat') }}</th>
@@ -79,6 +80,15 @@
                                                     </span>
                                                 @else
                                                     <span class="text-gray-400">{{ __('Belgilanmagan') }}</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                                                @if($schedule->oski_time)
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                        {{ \Carbon\Carbon::parse($schedule->oski_time)->format('H:i') }}
+                                                    </span>
+                                                @else
+                                                    <span class="text-gray-400">—</span>
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
@@ -205,6 +215,12 @@
                                                 <span class="text-gray-400 ml-1">{{ __('Belgilanmagan') }}</span>
                                             @endif
                                         </div>
+                                        @if($schedule->oski_time)
+                                        <div>
+                                            <span class="text-gray-500">{{ __('OSKI vaqti') }}:</span>
+                                            <span class="font-medium ml-1 text-indigo-700">{{ \Carbon\Carbon::parse($schedule->oski_time)->format('H:i') }}</span>
+                                        </div>
+                                        @endif
                                         @if($schedule->test_time)
                                         <div>
                                             <span class="text-gray-500">{{ __('Test vaqti') }}:</span>

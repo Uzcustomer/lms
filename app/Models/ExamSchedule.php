@@ -19,6 +19,7 @@ class ExamSchedule extends Model
         'subject_name',
         'oski_date',
         'oski_na',
+        'oski_time',
         'test_date',
         'test_na',
         'test_time',

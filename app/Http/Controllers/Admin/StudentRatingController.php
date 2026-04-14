@@ -3,16 +3,17 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Exports\StudentRatingExport;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\StudentRating;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StudentRatingController extends Controller
 {
     public function index(Request $request)
     {
-        // Filtrlar uchun unique qiymatlarni olish
         $departments = StudentRating::whereNotNull('department_name')
             ->select('department_code', 'department_name')
             ->distinct()
@@ -23,6 +24,7 @@ class StudentRatingController extends Controller
         $selectedDepartment = $request->input('department');
         $selectedSpecialty = $request->input('specialty');
         $selectedLevel = $request->input('level');
+        $search = $request->input('search');
 
         if ($selectedDepartment) {
             $specialties = StudentRating::where('department_code', $selectedDepartment)
@@ -33,7 +35,6 @@ class StudentRatingController extends Controller
                 ->get();
         }
 
-        // Top 10 va qolganlar
         $query = StudentRating::query();
 
         if ($selectedDepartment) {
@@ -45,19 +46,45 @@ class StudentRatingController extends Controller
         if ($selectedLevel) {
             $query->where('level_code', $selectedLevel);
         }
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('full_name', 'like', '%' . $search . '%')
+                  ->orWhere('group_name', 'like', '%' . $search . '%');
+            });
+        }
 
-        $query->orderBy('rank')->orderByDesc('jn_average');
+        $query->orderByDesc('jn_average');
+        $totalStudents = (clone $query)->count();
 
         $top10 = (clone $query)->limit(10)->get();
-        $others = (clone $query)->offset(10)->paginate(20)->withQueryString();
-        $totalStudents = (clone $query)->count();
+
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 20;
+        $othersQuery = (clone $query)->offset(10 + ($page - 1) * $perPage)->limit($perPage)->get();
+        $others = new \Illuminate\Pagination\LengthAwarePaginator(
+            $othersQuery, max(0, $totalStudents - 10), $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         $lastUpdated = StudentRating::max('calculated_at');
 
         return view('admin.student-ratings.index', compact(
             'departments', 'specialties', 'top10', 'others', 'totalStudents',
-            'selectedDepartment', 'selectedSpecialty', 'selectedLevel', 'lastUpdated'
+            'selectedDepartment', 'selectedSpecialty', 'selectedLevel', 'search', 'lastUpdated'
         ));
+    }
+
+    public function exportExcel(Request $request)
+    {
+        return Excel::download(
+            new StudentRatingExport(
+                $request->input('department'),
+                $request->input('specialty'),
+                $request->input('level'),
+                $request->input('search')
+            ),
+            'talabalar_reytingi_' . date('Y-m-d') . '.xlsx'
+        );
     }
 
     public function subjectDetails(string $studentHemisId)

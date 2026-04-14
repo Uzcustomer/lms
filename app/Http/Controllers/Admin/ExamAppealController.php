@@ -22,28 +22,6 @@ class ExamAppealController extends Controller
             return view('admin.exam-appeals.index', ['appeals' => new \Illuminate\Pagination\LengthAwarePaginator([], 0, 20), 'stats' => $stats]);
         }
 
-        // Test markazi roli uchun faqat tasdiqlangan apellyatsiyalar
-        if (session('active_role') === 'test_markazi') {
-            $query = ExamAppeal::with('student')
-                ->where('status', 'approved')
-                ->orderByDesc('reviewed_at');
-
-            if ($request->filled('search')) {
-                $search = $request->search;
-                $query->where(function ($q) use ($search) {
-                    $q->where('subject_name', 'like', "%{$search}%")
-                      ->orWhereHas('student', function ($sq) use ($search) {
-                          $sq->where('full_name', 'like', "%{$search}%")
-                             ->orWhere('student_id_number', 'like', "%{$search}%");
-                      });
-                });
-            }
-
-            $appeals = $query->paginate(20)->withQueryString();
-
-            return view('admin.exam-appeals.test-center', compact('appeals'));
-        }
-
         $query = ExamAppeal::with('student')->orderByDesc('created_at');
 
         if ($request->filled('status')) {

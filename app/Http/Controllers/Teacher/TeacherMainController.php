@@ -24,6 +24,7 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
@@ -86,7 +87,202 @@ class TeacherMainController extends Controller
             ];
         }
 
-        return view('teacher.dashboard', compact('tutorStats'));
+        // O'qituvchining joriy semestrdagi baho qo'yish vaqti statistikasi
+        $gradingTimeStats = $this->buildGradingTimeStats($teacher);
+
+        return view('teacher.dashboard', compact('tutorStats', 'gradingTimeStats'));
+    }
+
+    /**
+     * O'qituvchining joriy semestr uchun baho qo'yish vaqti bo'yicha
+     * 3 toifaga ajratilgan statistikasini va umumiy reytingdagi o'rnini hisoblaydi.
+     *
+     *  1) Dars vaqtida        - created_at_api <= lesson_date + lesson_pair_end_time
+     *  2) Ish vaqtida (18:00) - pair tugaganidan keyin, shu kuni 18:00 gacha
+     *  3) 18:00 dan so'ng     - lesson_date kunning 18:00 idan keyin
+     */
+    private function buildGradingTimeStats($teacher)
+    {
+        if (!$teacher || !$teacher->hemis_id) {
+            return null;
+        }
+
+        // Joriy semestrlarning kodlari va sana oralig'ini olamiz.
+        // Faqat semester_code (masalan "11") bo'yicha filtrlash xato bo'lar edi:
+        // bu kod har akademik yili takrorlanadi, oqibatda oldingi yillar baholari
+        // ham qo'shilib ketardi. education_year_code formatlari turlicha bo'lishi
+        // mumkinligi sababli, eng ishonchli usul: semester_code + lesson_date
+        // sana oralig'i (CurriculumWeek'dan).
+        $currentSemesters = Semester::where('current', true)
+            ->whereNotNull('code')
+            ->get(['semester_hemis_id', 'code']);
+
+        if ($currentSemesters->isEmpty()) {
+            return null;
+        }
+
+        $currentSemesterCodes = $currentSemesters->pluck('code')->unique()->values()->toArray();
+        $currentSemesterHemisIds = $currentSemesters->pluck('semester_hemis_id')->unique()->values()->toArray();
+
+        // Joriy semestrlarning sana oralig'ini CurriculumWeek'dan olamiz
+        $dateRange = DB::table('curriculum_weeks')
+            ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
+            ->selectRaw('MIN(start_date) as min_date, MAX(end_date) as max_date')
+            ->first();
+
+        $dateFrom = $dateRange->min_date ?? null;
+        $dateTo   = $dateRange->max_date ?? null;
+
+        // Filtr: semester_code IN (joriy kodlar) AND lesson_date sana oralig'ida.
+        // Sana oralig'i avvalgi yilning xuddi shu kodli semestrini chiqarib tashlaydi.
+        $semesterFilter = function ($query) use ($currentSemesterCodes, $dateFrom, $dateTo) {
+            $query->whereIn('semester_code', $currentSemesterCodes);
+            if ($dateFrom && $dateTo) {
+                $query->whereBetween('lesson_date', [$dateFrom, $dateTo]);
+            }
+        };
+
+        // SQL ifoda: juftlik tugash vaqti va 18:00 deadline
+        $driver = DB::connection()->getDriverName();
+        if ($driver === 'pgsql') {
+            $pairEndExpr   = "(DATE(lesson_date)::text || ' ' || lesson_pair_end_time)::timestamp";
+            $dayLimitExpr  = "(DATE(lesson_date)::text || ' 18:00:00')::timestamp";
+        } else {
+            $pairEndExpr   = "CONCAT(DATE(lesson_date), ' ', lesson_pair_end_time)";
+            $dayLimitExpr  = "CONCAT(DATE(lesson_date), ' 18:00:00')";
+        }
+
+        $caseDuringClass = "SUM(CASE WHEN created_at_api <= {$pairEndExpr} THEN 1 ELSE 0 END)";
+        $caseWorkHours   = "SUM(CASE WHEN created_at_api > {$pairEndExpr} AND created_at_api <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
+        $caseAfterHours  = "SUM(CASE WHEN created_at_api > {$dayLimitExpr} THEN 1 ELSE 0 END)";
+
+        // Faqat joriy baholar: OSKI, test, oraliq, mustaqil va hokazo chiqariladi
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+        // Otrabotka va yo'qlama placeholder'lari chiqariladi - faqat asl 'recorded' status
+        $joriyFilter = function ($query) use ($excludedTrainingCodes) {
+            $query->whereNotIn('training_type_code', $excludedTrainingCodes)
+                  ->where('status', 'recorded');
+        };
+
+        // Joriy o'qituvchining statistikasi
+        $mine = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where($semesterFilter)
+            ->where('employee_id', $teacher->hemis_id)
+            ->where('training_type_code', 100)
+            ->whereNotNull('created_at_api')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('lesson_pair_end_time')
+            ->where('lesson_pair_end_time', '!=', '')
+            ->where($joriyFilter)
+            ->selectRaw("
+                {$caseDuringClass} as during_class,
+                {$caseWorkHours}   as work_hours,
+                {$caseAfterHours}  as after_hours,
+                COUNT(*)           as total
+            ")
+            ->first();
+
+        $duringClass = (int) ($mine->during_class ?? 0);
+        $workHours   = (int) ($mine->work_hours   ?? 0);
+        $afterHours  = (int) ($mine->after_hours  ?? 0);
+        $total       = (int) ($mine->total        ?? 0);
+
+        // Barcha o'qituvchilar bo'yicha reyting (score = during*1 + work*0.5 + after*0)
+        // CACHE: 10 daqiqa — bu og'ir so'rov (GROUP BY employee_id butun student_grades bo'yicha).
+        // Har o'qituvchi dashboardga kirganda qayta ishlatilmasligi uchun cache'lanadi.
+        $cacheKey = 'teacher:grading_time_stats:all:jn:' . md5(implode(',', $currentSemesterCodes));
+        $allTeachers = Cache::remember($cacheKey, 600, function () use (
+            $semesterFilter, $caseDuringClass, $caseWorkHours, $caseAfterHours, $joriyFilter
+        ) {
+            return DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->where('training_type_code', 100)
+                ->whereNotNull('created_at_api')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('lesson_pair_end_time')
+                ->where('lesson_pair_end_time', '!=', '')
+                ->where($joriyFilter)
+                ->selectRaw("
+                    employee_id,
+                    {$caseDuringClass} as during_class,
+                    {$caseWorkHours}   as work_hours,
+                    {$caseAfterHours}  as after_hours,
+                    COUNT(*)           as total
+                ")
+                ->groupBy('employee_id')
+                ->get();
+        });
+
+        $ranked = $allTeachers->map(function ($row) {
+            $row->score = ((int) $row->during_class) * 1.0
+                        + ((int) $row->work_hours)   * 0.5
+                        + ((int) $row->after_hours)  * 0.0;
+            return $row;
+        })->sortByDesc(function ($row) {
+            // score bo'yicha kamayuvchi, teng bo'lsa during_class ko'p bo'lgani oldinda
+            return [$row->score, (int) $row->during_class, (int) $row->total];
+        })->values();
+
+        $totalTeachers = $ranked->count();
+        $rank = null;
+        foreach ($ranked as $idx => $row) {
+            if ((string) $row->employee_id === (string) $teacher->hemis_id) {
+                $rank = $idx + 1;
+                break;
+            }
+        }
+
+        $pct = fn($n) => $total > 0 ? round($n / $total * 100, 1) : 0;
+
+        // Top 100 o'qituvchilar ro'yxatini boyitamiz (F.I.SH va kafedra bilan)
+        $top100 = $ranked->take(100)->values();
+        $topEmployeeIds = $top100->pluck('employee_id')->filter()->unique()->toArray();
+
+        $teacherInfoMap = collect();
+        if (!empty($topEmployeeIds)) {
+            $teacherInfoMap = DB::table('teachers')
+                ->whereIn('hemis_id', $topEmployeeIds)
+                ->select('hemis_id', 'full_name', 'short_name', 'department')
+                ->get()
+                ->keyBy('hemis_id');
+        }
+
+        $topList = [];
+        foreach ($top100 as $idx => $row) {
+            $info = $teacherInfoMap[$row->employee_id] ?? null;
+            $rowTotal = (int) $row->total;
+            $topList[] = [
+                'rank'         => $idx + 1,
+                'hemis_id'     => $row->employee_id,
+                'full_name'    => $info->full_name ?? $info->short_name ?? '—',
+                'department'   => $info->department ?? '—',
+                'during_class' => (int) $row->during_class,
+                'work_hours'   => (int) $row->work_hours,
+                'after_hours'  => (int) $row->after_hours,
+                'total'        => $rowTotal,
+                'score'        => round((float) $row->score, 1),
+                'during_class_percent' => $rowTotal > 0 ? round(((int) $row->during_class) / $rowTotal * 100, 1) : 0,
+                'work_hours_percent'   => $rowTotal > 0 ? round(((int) $row->work_hours)   / $rowTotal * 100, 1) : 0,
+                'after_hours_percent'  => $rowTotal > 0 ? round(((int) $row->after_hours)  / $rowTotal * 100, 1) : 0,
+                'is_me'        => (string) $row->employee_id === (string) $teacher->hemis_id,
+            ];
+        }
+
+        return [
+            'total'          => $total,
+            'during_class'   => $duringClass,
+            'work_hours'     => $workHours,
+            'after_hours'    => $afterHours,
+            'during_class_percent' => $pct($duringClass),
+            'work_hours_percent'   => $pct($workHours),
+            'after_hours_percent'  => $pct($afterHours),
+            'rank'           => $rank,
+            'total_teachers' => $totalTeachers,
+            'top_list'       => $topList,
+        ];
     }
 
     public function info()

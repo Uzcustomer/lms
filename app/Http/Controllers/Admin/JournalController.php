@@ -4829,6 +4829,24 @@ class JournalController extends Controller
                 ], 403);
             }
 
+            // Sababli baho kiritish deadline: ariza tasdiqlangan kundan boshlab
+            // sababli kunlar soniga teng vaqt o'qituvchiga beriladi.
+            // Admin va superadmin uchun deadline yo'q.
+            $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+            if (!$isAdminRole && $excuse->reviewed_at) {
+                $excuseDays = \Carbon\Carbon::parse($excuse->start_date)
+                    ->diffInDays(\Carbon\Carbon::parse($excuse->end_date)) + 1;
+                $deadline = \Carbon\Carbon::parse($excuse->reviewed_at)
+                    ->addDays($excuseDays)->endOfDay();
+                if (now()->greaterThan($deadline)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Sababli baho kiritish muddati o\'tgan (' . $deadline->format('d.m.Y H:i') . '). Faqat admin tahrirlash mumkin.',
+                        'deadline_expired' => true,
+                    ], 403);
+                }
+            }
+
             // YN yuborilganligini tekshirish (sababli faqat YN yuborilgandan keyin ishlaydi)
             $ynSubmission = YnSubmission::where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)

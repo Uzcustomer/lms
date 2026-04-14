@@ -37,33 +37,34 @@ class GraduatePassportController extends Controller
             $stats->filled = (int) $agg->filled;
         }
 
-        // Fakultetlar ro'yxati (faqat bakalavr bitiruvchilari bor fakultetlar)
+        // Fakultetlar ro'yxati — students.department_id bo'yicha
+        // (HEMIS'da student'ning department_id odatda fakultet hemis_id'sini bildiradi)
         $faculties = DB::table('students as s')
-            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
-            ->leftJoin('departments as f', 'f.id', '=', 'd.parent_id')
             ->where('s.is_graduate', true)
             ->where('s.education_type_code', '11')
-            ->whereNotNull('f.id')
-            ->select('f.id', 'f.name', DB::raw('COUNT(*) as total'))
-            ->groupBy('f.id', 'f.name')
-            ->orderBy('f.name')
+            ->whereNotNull('s.department_id')
+            ->select(
+                's.department_id as id',
+                's.department_name as name',
+                DB::raw('COUNT(*) as total')
+            )
+            ->groupBy('s.department_id', 's.department_name')
+            ->orderBy('s.department_name')
             ->get();
 
         // Guruhlar ro'yxati (fakultet tanlanganda client tomondan filterlanadi)
         $groups = DB::table('students as s')
-            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
-            ->leftJoin('departments as f', 'f.id', '=', 'd.parent_id')
             ->where('s.is_graduate', true)
             ->where('s.education_type_code', '11')
             ->whereNotNull('s.group_id')
             ->select(
                 's.group_name',
                 's.group_id',
-                'f.id as faculty_id',
+                's.department_id as faculty_id',
                 DB::raw('COUNT(*) as total'),
                 DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled')
             )
-            ->groupBy('s.group_name', 's.group_id', 'f.id')
+            ->groupBy('s.group_name', 's.group_id', 's.department_id')
             ->orderBy('s.group_name')
             ->get();
 
@@ -80,7 +81,7 @@ class GraduatePassportController extends Controller
             ->where('s.education_type_code', '11');
 
         if ($request->filled('faculty_id')) {
-            $query->where('f.id', $request->faculty_id);
+            $query->where('s.department_id', $request->faculty_id);
         }
 
         if ($request->filled('group_id')) {

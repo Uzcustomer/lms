@@ -20,38 +20,25 @@
                 {{-- Filters --}}
                 <div class="filter-container">
                     <div class="filter-row">
-                        <div class="filter-item" style="flex:1; min-width:180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
-                            <select id="faculty_id" class="filter-input">
-                                <option value="">Barchasi</option>
+                        <div class="filter-item" style="flex:1; min-width:300px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet (bakalavr)</label>
+                            <select id="faculty-select" class="filter-input" style="height:38px;" onchange="onFacultyChange()">
+                                <option value="">— Barcha fakultetlar —</option>
                                 @foreach($faculties as $f)
-                                    <option value="{{ $f->department_hemis_id }}">{{ $f->name }}</option>
+                                    <option value="{{ $f->department_id }}" data-total="{{ $f->total }}" data-filled="{{ $f->filled }}">
+                                        {{ $f->department_name }} ({{ $f->filled }}/{{ $f->total }} to'ldirgan)
+                                    </option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex:1; min-width:180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Kafedra</label>
-                            <select id="department_id" class="filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($departments as $d)
-                                    <option value="{{ $d->department_hemis_id }}" data-faculty="{{ $d->faculty_hemis_id }}">{{ $d->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-item" style="min-width:130px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Jinsi</label>
-                            <select id="gender_code" class="filter-input">
-                                <option value="">Barchasi</option>
-                                <option value="11">Erkak</option>
-                                <option value="12">Ayol</option>
-                            </select>
-                        </div>
-                        <div class="filter-item" style="flex:1; min-width:180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select id="group_id" class="filter-input">
-                                <option value="">Barchasi</option>
+                        <div class="filter-item" style="flex:1; min-width:300px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Guruhni tanlang</label>
+                            <select id="group-select" class="filter-input" style="height:38px;" onchange="loadGroup()">
+                                <option value="">— Guruh tanlang —</option>
                                 @foreach($groups as $g)
-                                    <option value="{{ $g->group_id }}">{{ $g->group_name }} ({{ $g->total }})</option>
+                                    <option value="{{ $g->group_id }}" data-department-id="{{ $g->department_id }}">
+                                        {{ $g->group_name }} ({{ $g->filled }}/{{ $g->total }} to'ldirgan)
+                                    </option>
                                 @endforeach
                             </select>
                         </div>
@@ -146,30 +133,39 @@
 
         function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-        // Fakultet → Kafedra cascade
-        $('#faculty_id').on('change', function() {
-            var fid = $(this).val();
-            $('#department_id option').each(function() {
-                var faculty = $(this).data('faculty');
-                if (!$(this).val()) {
-                    $(this).show();
-                    return;
-                }
-                if (!fid || String(faculty) === String(fid)) {
-                    $(this).show();
-                } else {
-                    $(this).hide();
+        // Barcha guruh option'larini saqlash (fakultet filtrida qayta tiklash uchun)
+        var allGroupOptions = [];
+        $(document).ready(function() {
+            $('#group-select option').each(function() {
+                allGroupOptions.push({
+                    value: $(this).val(),
+                    text: $(this).text(),
+                    departmentId: $(this).data('department-id') || ''
+                });
+            });
+        });
+
+        function onFacultyChange() {
+            var facultyId = $('#faculty-select').val();
+            var $groupSelect = $('#group-select');
+
+            // Guruh dropdownni fakultetga moslab qayta to'ldirish
+            $groupSelect.empty();
+            $groupSelect.append('<option value="">— Guruh tanlang —</option>');
+            allGroupOptions.forEach(function(opt) {
+                if (!opt.value) return; // "Guruh tanlang"
+                if (!facultyId || String(opt.departmentId) === String(facultyId)) {
+                    $groupSelect.append('<option value="' + opt.value + '" data-department-id="' + opt.departmentId + '">' + esc(opt.text) + '</option>');
                 }
             });
-            // Agar tanlangan kafedra fakultetga tegishli bo'lmasa — reset
-            var curDep = $('#department_id').val();
-            if (curDep && fid) {
-                var depFaculty = $('#department_id option:selected').data('faculty');
-                if (String(depFaculty) !== String(fid)) {
-                    $('#department_id').val('');
-                }
-            }
-        });
+
+            // Fakultet tanlanganda — o'sha fakultet bitiruvchilarini ko'rsatish
+            loadGroup();
+        }
+
+        function loadGroup() {
+            var groupId = $('#group-select').val();
+            var facultyId = $('#faculty-select').val();
 
         // Qidiruv input — Enter
         $('#search').on('keydown', function(e) {
@@ -179,14 +175,9 @@
         function applyFilter() {
             $('#empty').hide(); $('#table-area').hide(); $('#loading').show();
 
-            var params = {
-                faculty_id: $('#faculty_id').val(),
-                department_id: $('#department_id').val(),
-                gender_code: $('#gender_code').val(),
-                group_id: $('#group_id').val(),
-                status: $('#status').val(),
-                search: $('#search').val().trim(),
-            };
+            var params = {};
+            if (groupId) params.group_id = groupId;
+            if (facultyId) params.department_id = facultyId;
 
             $.get(dataUrl, params, function(res) {
                 $('#loading').hide();
@@ -201,9 +192,29 @@
                 $('#summary-row').show();
 
                 if (students.length === 0) {
-                    $('#empty').show();
+                    $('#loading').hide();
+                    var emptyMsg = "To'ldirgan talaba yo'q";
+                    if (groupId) emptyMsg = "Talabalar topilmadi";
+                    else if (facultyId) emptyMsg = "Bu fakultetda bitiruvchi topilmadi";
+                    $('#empty').show().find('p').text(emptyMsg);
                     return;
                 }
+
+                var filled = students.filter(function(s) { return s.filled; }).length;
+                var emptyCount = students.length - filled;
+                var title;
+                if (groupId) {
+                    title = $('#group-select option:selected').text().split('(')[0].trim();
+                } else if (facultyId) {
+                    title = $('#faculty-select option:selected').text().split('(')[0].trim() + ' — barcha bitiruvchilar';
+                } else {
+                    title = 'Barcha to\'ldirganlar';
+                }
+                var groupName = title;
+
+                $('#group-info').text(groupName + ' — ' + students.length + ' ta talaba');
+                $('#stat-filled').text("To'ldirgan: " + filled);
+                $('#stat-empty').text("To'ldirilmagan: " + emptyCount);
 
                 var html = '';
                 for (var i = 0; i < students.length; i++) {

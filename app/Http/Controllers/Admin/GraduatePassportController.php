@@ -11,53 +11,37 @@ class GraduatePassportController extends Controller
 {
     public function index()
     {
-        // Fakultetlar (structure_type_code = 11)
-        $faculties = Department::where('structure_type_code', 11)
-            ->where('active', true)
-            ->orderBy('name')
-            ->get(['department_hemis_id', 'name']);
-
-        // Kafedralar (structure_type_code = 12)
-        $departments = Department::where('structure_type_code', 12)
-            ->where('active', true)
-            ->orderBy('name')
-            ->get(['department_hemis_id', 'name', 'parent_id']);
-
-        // Fakultet id -> parent_id ni department jadvalida topib, kafedrani fakultet bilan bog'lash
-        // parent_id — departments.id (ichki). Uni department_hemis_id ga map qilish uchun:
-        $deptIdToHemis = Department::whereIn('id', $departments->pluck('parent_id')->filter()->unique())
-            ->pluck('department_hemis_id', 'id');
-
-        // Umumiy statistika
-        $stats = DB::table('students')
-            ->where('is_graduate', true)
-            ->where('education_type_code', '11')
-            ->selectRaw("
-                COUNT(*) as total,
-                SUM(CASE WHEN gender_code = '11' THEN 1 ELSE 0 END) as male,
-                SUM(CASE WHEN gender_code = '12' THEN 1 ELSE 0 END) as female,
-                SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = students.id) THEN 1 ELSE 0 END) as filled
-            ")
-            ->first();
-
-        // Guruhlar — default ro'yxat
-        $groups = DB::table('students')
-            ->where('is_graduate', true)
-            ->where('education_type_code', '11')
-            ->select('group_id', 'group_name', DB::raw('COUNT(*) as total'))
-            ->groupBy('group_id', 'group_name')
-            ->orderBy('group_name')
+        // Bakalavr bitiruvchi fakultetlarni olish (har bir fakultet uchun to'lgan/jami)
+        $faculties = DB::table('students as s')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11') // Bakalavr
+            ->whereNotNull('s.department_id')
+            ->select(
+                's.department_id',
+                's.department_name',
+                DB::raw('COUNT(*) as total'),
+                DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled')
+            )
+            ->groupBy('s.department_id', 's.department_name')
+            ->orderBy('s.department_name')
             ->get();
 
-        return view('admin.graduate-passports.index', [
-            'faculties' => $faculties,
-            'departments' => $departments->map(function ($d) use ($deptIdToHemis) {
-                $d->faculty_hemis_id = $d->parent_id ? ($deptIdToHemis[$d->parent_id] ?? null) : null;
-                return $d;
-            }),
-            'groups' => $groups,
-            'stats' => $stats,
-        ]);
+        // Bakalavr bitiruvchi guruhlarni olish
+        $groups = DB::table('students as s')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11') // Bakalavr
+            ->select(
+                's.group_name',
+                's.group_id',
+                's.department_id',
+                DB::raw('COUNT(*) as total'),
+                DB::raw('SUM(CASE WHEN EXISTS(SELECT 1 FROM graduate_student_passports gp WHERE gp.student_id = s.id) THEN 1 ELSE 0 END) as filled')
+            )
+            ->groupBy('s.group_name', 's.group_id', 's.department_id')
+            ->orderBy('s.group_name')
+            ->get();
+
+        return view('admin.graduate-passports.index', compact('groups', 'faculties'));
     }
 
     public function data(Request $request)
@@ -69,32 +53,19 @@ class GraduatePassportController extends Controller
             ->where('s.is_graduate', true)
             ->where('s.education_type_code', '11');
 
-        // Filtrlash
-        if ($request->filled('faculty_id')) {
-            $query->where('f.department_hemis_id', $request->faculty_id);
-        }
-        if ($request->filled('department_id')) {
-            $query->where('s.department_id', $request->department_id);
-        }
-        if ($request->filled('gender_code')) {
-            $query->where('s.gender_code', $request->gender_code);
-        }
+        // Guruh filtri
         if ($request->filled('group_id')) {
             $query->where('s.group_id', $request->group_id);
         }
-        if ($request->filled('status')) {
-            if ($request->status === 'filled') {
-                $query->whereNotNull('gp.id');
-            } elseif ($request->status === 'empty') {
-                $query->whereNull('gp.id');
-            }
+
+        // Fakultet filtri
+        if ($request->filled('department_id')) {
+            $query->where('s.department_id', $request->department_id);
         }
-        if ($request->filled('search')) {
-            $search = '%' . $request->search . '%';
-            $query->where(function ($q) use ($search) {
-                $q->where('s.full_name', 'like', $search)
-                  ->orWhere('s.student_id_number', 'like', $search);
-            });
+
+        // Agar hech qanday filtr yo'q bo'lsa — faqat to'ldirganlar
+        if (!$request->filled('group_id') && !$request->filled('department_id')) {
+            $query->whereNotNull('gp.id');
         }
 
         $students = $query->select(

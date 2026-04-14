@@ -5342,60 +5342,66 @@ class ReportController extends Controller
      */
     public function gradingTimeStatsData(Request $request)
     {
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyIds[0]]);
+        }
+
+        $dateFrom = $request->filled('date_from') ? $request->date_from : null;
+        $dateTo = $request->filled('date_to') ? $request->date_to : null;
+
+        if (!$dateFrom || !$dateTo) {
+            if ($request->get('export') === 'excel') {
+                abort(422, "Sana oralig'ini tanlang");
+            }
+            return response()->json(['error' => 'Sana oralig\'ini tanlang'], 422);
+        }
+
+        // Faculty filter uchun department_hemis_id
+        $facultyDepartmentHemisId = null;
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $facultyDepartmentHemisId = $faculty->department_hemis_id;
+            }
+        }
+
+        // Kafedra filter: subject_ids
+        $allowedSubjectIds = null;
+        if ($request->filled('department')) {
+            $allowedSubjectIds = DB::table('curriculum_subjects')
+                ->where('department_id', $request->department)
+                ->pluck('subject_id')
+                ->unique()
+                ->toArray();
+        }
+
+        // Fan filter
+        $subjectFilter = $request->filled('subject') ? $request->subject : null;
+
+        // Subject -> kafedra mapping
+        $subjectKafedraMap = DB::table('curriculum_subjects')
+            ->whereNotNull('department_id')
+            ->whereNotNull('department_name')
+            ->select('subject_id', 'department_id', 'department_name')
+            ->groupBy('subject_id', 'department_id', 'department_name')
+            ->get()
+            ->groupBy('subject_id')
+            ->map(fn($items) => $items->first());
+
+        // Excel export - batafsil talaba ma'lumotlari
+        // NOTE: Excel eksport try/catch dan TASHQARIDA ishlaydi, aks holda
+        // xatolik JSON sifatida qaytariladi va foydalanuvchi window.location.href
+        // orqali yuklab olishga harakat qilganda chalkash javob ko'rsatadi.
+        if ($request->get('export') === 'excel') {
+            return $this->exportGradingTimeStatsExcel($request, $dateFrom, $dateTo, $facultyDepartmentHemisId, $allowedSubjectIds, $subjectFilter, $subjectKafedraMap);
+        }
+
         try {
-            $dekanFacultyIds = get_dekan_faculty_ids();
-            if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
-                $request->merge(['faculty' => $dekanFacultyIds[0]]);
-            }
-
-            $dateFrom = $request->filled('date_from') ? $request->date_from : null;
-            $dateTo = $request->filled('date_to') ? $request->date_to : null;
-
-            if (!$dateFrom || !$dateTo) {
-                return response()->json(['error' => 'Sana oralig\'ini tanlang'], 422);
-            }
-
             // student_grades uchun created_at_api (haqiqiy baho qo'yilgan vaqt)
             // attendances uchun updated_at (oxirgi yangilangan vaqt - import/sinxron paytida)
             $gradeHourExpr = "HOUR(created_at_api)";
             $attHourExpr = "HOUR(updated_at)";
-
-            // Faculty filter uchun department_hemis_id
-            $facultyDepartmentHemisId = null;
-            if ($request->filled('faculty')) {
-                $faculty = Department::find($request->faculty);
-                if ($faculty) {
-                    $facultyDepartmentHemisId = $faculty->department_hemis_id;
-                }
-            }
-
-            // Kafedra filter: subject_ids
-            $allowedSubjectIds = null;
-            if ($request->filled('department')) {
-                $allowedSubjectIds = DB::table('curriculum_subjects')
-                    ->where('department_id', $request->department)
-                    ->pluck('subject_id')
-                    ->unique()
-                    ->toArray();
-            }
-
-            // Fan filter
-            $subjectFilter = $request->filled('subject') ? $request->subject : null;
-
-            // Subject -> kafedra mapping
-            $subjectKafedraMap = DB::table('curriculum_subjects')
-                ->whereNotNull('department_id')
-                ->whereNotNull('department_name')
-                ->select('subject_id', 'department_id', 'department_name')
-                ->groupBy('subject_id', 'department_id', 'department_name')
-                ->get()
-                ->groupBy('subject_id')
-                ->map(fn($items) => $items->first());
-
-            // Excel export - batafsil talaba ma'lumotlari
-            if ($request->get('export') === 'excel') {
-                return $this->exportGradingTimeStatsExcel($request, $dateFrom, $dateTo, $facultyDepartmentHemisId, $allowedSubjectIds, $subjectFilter, $subjectKafedraMap);
-            }
 
             // ===================== ATTENDANCE =====================
             $attQuery = DB::table('attendances')
@@ -5613,18 +5619,24 @@ class ReportController extends Controller
      *
      * Katta hajmdagi ma'lumotlar (yuz minglab yozuvlar) uchun PhpSpreadsheet o'rniga
      * xotirada to'planmaydigan oqim (streaming) rejimidagi Box\Spout ishlatiladi.
+     * StudentGradeBox va TeacherExport bilan bir xil shaklda openToBrowser orqali
+     * to'g'ridan-to'g'ri javobga yoziladi.
      */
     private function exportGradingTimeStatsExcel($request, $dateFrom, $dateTo, $facultyDepartmentHemisId, $allowedSubjectIds, $subjectFilter, $subjectKafedraMap)
     {
         ini_set('memory_limit', '1024M');
         set_time_limit(600);
 
+        // Yuklab olish so'rovi: hech qanday oldingi output bo'lmasligi uchun buffer tozalanadi.
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
         $fileName = 'Vaqtlar_statistikasi_' . date('Y-m-d_H-i') . '.xlsx';
-        $temp = tempnam(sys_get_temp_dir(), 'gts_') . '.xlsx';
 
         try {
             $writer = \Box\Spout\Writer\Common\Creator\WriterEntityFactory::createXLSXWriter();
-            $writer->openToFile($temp);
+            $writer->openToBrowser($fileName);
 
             // ========== Sheet 1: Baholar ==========
             $sheet = $writer->getCurrentSheet();
@@ -5748,15 +5760,18 @@ class ReportController extends Controller
             if (isset($writer)) {
                 try { $writer->close(); } catch (\Throwable $ignored) {}
             }
-            if (is_file($temp)) {
-                @unlink($temp);
-            }
+            \Log::error('Grading time stats Excel export failed: ' . $e->getMessage(), [
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'faculty' => $facultyDepartmentHemisId,
+                'subject' => $subjectFilter,
+                'trace' => $e->getTraceAsString(),
+            ]);
             throw $e;
         }
 
-        return response()->download($temp, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ])->deleteFileAfterSend(true);
+        // openToBrowser javobni o'zi yozadi; Laravel'ga bo'sh javob qaytaramiz.
+        return response('', 200);
     }
 
     /**

@@ -20,19 +20,19 @@
                 {{-- Filters --}}
                 <div class="filter-container">
                     <div class="filter-row">
-                        <div class="filter-item" style="min-width:260px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
+                        <div class="filter-item" style="flex:1; min-width:300px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet (bakalavr)</label>
                             <select id="faculty-select" class="filter-input" style="height:38px;" onchange="onFacultyChange()">
                                 <option value="">— Barcha fakultetlar —</option>
                                 @foreach($faculties as $f)
                                     <option value="{{ $f->department_id }}" data-total="{{ $f->total }}" data-filled="{{ $f->filled }}">
-                                        {{ $f->department_name }} ({{ $f->filled }}/{{ $f->total }})
+                                        {{ $f->department_name }} ({{ $f->filled }}/{{ $f->total }} to'ldirgan)
                                     </option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex:1; min-width:400px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Guruhni tanlang (bakalavr bitiruvchilari)</label>
+                        <div class="filter-item" style="flex:1; min-width:300px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Guruhni tanlang</label>
                             <select id="group-select" class="filter-input" style="height:38px;" onchange="loadGroup()">
                                 <option value="">— Guruh tanlang —</option>
                                 @foreach($groups as $g)

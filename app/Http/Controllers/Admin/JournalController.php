@@ -2120,11 +2120,45 @@ class JournalController extends Controller
             ->exists();
 
         if ($ynLocked) {
-            return response()->json([
-                'success' => false,
-                'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
-                'yn_locked' => true,
-            ], 403);
+            // Sababli ariza orqali MT bahosi: tasdiqlangan sababli + MT makeup turi
+            // mavjud bo'lsa va deadline ichida (yoki admin) bo'lsa — ruxsat
+            $sababliMtAllowed = false;
+            $sababliExcuse = AbsenceExcuse::where('status', 'approved')
+                ->where('student_hemis_id', $studentHemisId)
+                ->whereHas('makeups', function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId)
+                        ->where('assessment_type', 'mt');
+                })
+                ->latest('reviewed_at')
+                ->first();
+
+            if ($sababliExcuse) {
+                if ($isAdminRole) {
+                    $sababliMtAllowed = true;
+                } elseif ($sababliExcuse->reviewed_at) {
+                    $sababliDays = \Carbon\Carbon::parse($sababliExcuse->start_date)
+                        ->diffInDays(\Carbon\Carbon::parse($sababliExcuse->end_date)) + 1;
+                    $sababliDeadline = \Carbon\Carbon::parse($sababliExcuse->reviewed_at)
+                        ->addDays($sababliDays)->endOfDay();
+                    if (now()->lessThanOrEqualTo($sababliDeadline)) {
+                        $sababliMtAllowed = true;
+                    } else {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Sababli MT bahosi muddati o\'tgan (' . $sababliDeadline->format('d.m.Y H:i') . '). Faqat admin tahrirlash mumkin.',
+                            'deadline_expired' => true,
+                        ], 403);
+                    }
+                }
+            }
+
+            if (!$sababliMtAllowed) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
         }
 
         // Get student info

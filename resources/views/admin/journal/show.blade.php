@@ -1957,13 +1957,38 @@
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
+
+                                            // Sababli ariza orqali MT bahosi: talaba uchun tasdiqlangan
+                                            // sababli ariza bo'lsa va MT makeup turi belgilangan bo'lsa,
+                                            // YN yuborilgandan keyin ham deadline ichida baho qo'yish ochiq
+                                            $hasMtSababli = false;
+                                            $mtSababliDeadlinePassed = false;
+                                            $mtExcuseInfo = $approvedExcuses[$student->hemis_id] ?? null;
+                                            if ($mtExcuseInfo && $mtExcuseInfo->makeups) {
+                                                foreach ($mtExcuseInfo->makeups as $mk) {
+                                                    if (($mk->assessment_type ?? null) === 'mt' && ($mk->subject_id ?? null) == $subjectId) {
+                                                        $hasMtSababli = true;
+                                                        break;
+                                                    }
+                                                }
+                                                if ($hasMtSababli && $mtExcuseInfo->reviewed_at) {
+                                                    $mtExcuseDays = \Carbon\Carbon::parse($mtExcuseInfo->start_date)
+                                                        ->diffInDays(\Carbon\Carbon::parse($mtExcuseInfo->end_date)) + 1;
+                                                    $mtExcuseDeadline = \Carbon\Carbon::parse($mtExcuseInfo->reviewed_at)
+                                                        ->addDays($mtExcuseDays)->endOfDay();
+                                                    $mtSababliDeadlinePassed = now()->greaterThan($mtExcuseDeadline);
+                                                }
+                                            }
+                                            $mtSababliCanGrade = $hasMtSababli && !$isDekan && !$isRegistrator
+                                                && (!$mtSababliDeadlinePassed || $isAdminMt);
+
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? true
+                                                ? !$mtSababliCanGrade
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
-                                            // YN yuborilgan bo'lsa hamma action bloklash
-                                            if ($isYnSubmittedMt) {
+                                            // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
+                                            if ($isYnSubmittedMt && !$mtSababliCanGrade) {
                                                 $canRegrade = false;
                                             }
 

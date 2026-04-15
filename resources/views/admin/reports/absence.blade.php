@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            25% sababsiz davomat hisoboti
+            <span id="page-title-percent">25</span>% sababsiz davomat hisoboti
         </h2>
     </x-slot>
 
@@ -122,7 +122,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Auditoriya soatining 25% va undan ko'p sababsiz dars qoldirgan talabalar ro'yxati</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Auditoriya soatining <span id="empty-state-percent">25</span>% va undan ko'p sababsiz dars qoldirgan talabalar ro'yxati</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -335,7 +335,17 @@
             $('#pagination-area').html(html);
         }
 
+        function syncTitlePercent() {
+            var v = $('#min_percent').val() || '25';
+            $('#page-title-percent').text(v);
+            $('#empty-state-percent').text(v);
+        }
+
         $(document).ready(function() {
+            // Sarlavha va tagmatndagi foizni filtr qiymatiga moslashtirish
+            syncTitlePercent();
+            $('#min_percent').on('change', syncTitlePercent);
+
             // Sort links
             $(document).on('click', '.sort-link', function(e) {
                 e.preventDefault();

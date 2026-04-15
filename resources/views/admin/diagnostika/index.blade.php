@@ -1064,6 +1064,23 @@
                                 html += '</ul></div>';
                             }
                             $('#upload-result').html(html).show();
+
+                            // Yuklangan qatorlarni yashil rangga bo'yash (huddi /upload kabi)
+                            if (data.success_count > 0) {
+                                ids.forEach(function(id) {
+                                    var hasError = false;
+                                    if (data.errors) {
+                                        data.errors.forEach(function(err) { if (err.id == id) hasError = true; });
+                                    }
+                                    if (!hasError) {
+                                        $('#row-' + id).addClass('row-uploaded')
+                                            .find('.row-checkbox').prop('checked', false).prop('disabled', true);
+                                        var row = allData.find(function(r) { return r.id === id; });
+                                        if (row) { row.xulosa_code = 'uploaded'; row.xulosa = 'Oldin yuklangan'; }
+                                        $('#row-' + id).find('td:last').html(getXulosaBadge('uploaded', 'Oldin yuklangan'));
+                                    }
+                                });
+                            }
                             updateButtons();
                         },
                         error: function(xhr) {

@@ -271,7 +271,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
-            Route::post('/admin-edit-grade', [JournalController::class, 'adminEditGrade'])->name('admin-edit-grade');
             Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade');
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
@@ -613,6 +612,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
             Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/reupload-preview', [QuizResultController::class, 'getReuploadPreview'])->name('reupload-preview');
             Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
             Route::post('/compare-grades', [QuizResultController::class, 'compareGrades'])->name('compare-grades');
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
@@ -1030,6 +1030,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
             Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/reupload-preview', [QuizResultController::class, 'getReuploadPreview'])->name('reupload-preview');
             Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
             Route::post('/compare-grades', [QuizResultController::class, 'compareGrades'])->name('compare-grades');
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');

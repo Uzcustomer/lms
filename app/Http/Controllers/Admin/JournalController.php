@@ -1266,28 +1266,29 @@ class JournalController extends Controller
                 ->max('lesson_date');
         }
 
-        // Sababli: tasdiqlangan sababli hujjatlarni olish (YN yuborilgandan keyin)
+        // Sababli: tasdiqlangan sababli hujjatlarni olish (YN yuborilgan/yuborilmagan, har holda)
         $approvedExcuses = collect();
         $excuseGradeSnapshots = collect();
+
+        try {
+            $approvedExcuses = AbsenceExcuse::where('status', 'approved')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereHas('makeups', function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId)
+                        ->whereIn('assessment_type', ['jn', 'mt']);
+                })
+                ->with(['makeups' => function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId);
+                }])
+                ->get()
+                ->keyBy('student_hemis_id');
+        } catch (\Exception $e) {
+            Log::warning('AbsenceExcuse query failed: ' . $e->getMessage());
+        }
+
         if ($ynSubmission) {
             try {
-                $approvedExcuses = AbsenceExcuse::where('status', 'approved')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->whereHas('makeups', function ($q) use ($subjectId) {
-                        $q->where('subject_id', $subjectId)
-                            ->whereIn('assessment_type', ['jn', 'mt']);
-                    })
-                    ->with(['makeups' => function ($q) use ($subjectId) {
-                        $q->where('subject_id', $subjectId);
-                    }])
-                    ->get()
-                    ->keyBy('student_hemis_id');
-            } catch (\Exception $e) {
-                Log::warning('AbsenceExcuse query failed: ' . $e->getMessage());
-            }
-
-            try {
-                // Avval kiritilgan sababli baholarni olish
+                // Avval kiritilgan sababli baholarni olish (faqat YN yuborilgan bo'lsa)
                 $excuseGradeSnapshots = YnStudentGrade::where('yn_submission_id', $ynSubmission->id)
                     ->where('source', 'like', 'absence_excuse:%')
                     ->get()
@@ -2111,8 +2112,7 @@ class JournalController extends Controller
         $isRegrade = (bool) $request->input('regrade', false);
         $isAdminEdit = (bool) $request->input('admin_edit', false);
 
-        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas (superadmin bundan mustasno)
-        $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
+        // YN ga yuborilganligini tekshirish — qulflangan bo'lsa tahrirlash mumkin emas
         $ynLocked = DB::table('student_grades')
             ->where('student_hemis_id', $studentHemisId)
             ->where('subject_id', $subjectId)
@@ -2120,12 +2120,46 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked && !$isSuperAdmin) {
-            return response()->json([
-                'success' => false,
-                'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
-                'yn_locked' => true,
-            ], 403);
+        if ($ynLocked) {
+            // Sababli ariza orqali MT bahosi: tasdiqlangan sababli + MT makeup turi
+            // mavjud bo'lsa va deadline ichida (yoki admin) bo'lsa — ruxsat
+            $sababliMtAllowed = false;
+            $sababliExcuse = AbsenceExcuse::where('status', 'approved')
+                ->where('student_hemis_id', $studentHemisId)
+                ->whereHas('makeups', function ($q) use ($subjectId) {
+                    $q->where('subject_id', $subjectId)
+                        ->where('assessment_type', 'mt');
+                })
+                ->latest('reviewed_at')
+                ->first();
+
+            if ($sababliExcuse) {
+                if ($isAdminRole) {
+                    $sababliMtAllowed = true;
+                } elseif ($sababliExcuse->reviewed_at) {
+                    $sababliDays = \Carbon\Carbon::parse($sababliExcuse->start_date)
+                        ->diffInDays(\Carbon\Carbon::parse($sababliExcuse->end_date)) + 1;
+                    $sababliDeadline = \Carbon\Carbon::parse($sababliExcuse->reviewed_at)
+                        ->addDays($sababliDays)->endOfDay();
+                    if (now()->lessThanOrEqualTo($sababliDeadline)) {
+                        $sababliMtAllowed = true;
+                    } else {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Sababli MT bahosi muddati o\'tgan (' . $sababliDeadline->format('d.m.Y H:i') . '). Faqat admin tahrirlash mumkin.',
+                            'deadline_expired' => true,
+                        ], 403);
+                    }
+                }
+            }
+
+            if (!$sababliMtAllowed) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
         }
 
         // Get student info
@@ -2547,6 +2581,22 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Submission topilmadi'], 404);
         }
 
+        // YN qulflangan bo'lsa — fayl o'chirishga ruxsat berilmaydi
+        $ynLocked = DB::table('student_grades')
+            ->where('student_hemis_id', $submission->student_hemis_id)
+            ->where('subject_id', $submission->subject_id)
+            ->where('semester_code', $submission->semester_code)
+            ->where('is_yn_locked', true)
+            ->exists();
+
+        if ($ynLocked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'YN ga yuborilgan. Fayllarni o\'chirish mumkin emas.',
+                'yn_locked' => true,
+            ], 403);
+        }
+
         // Faylni diskdan o'chirish
         if ($submission->file_path) {
             Storage::disk('public')->delete($submission->file_path);
@@ -2691,8 +2741,8 @@ class JournalController extends Controller
                 }
             }
 
-            // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
-            if ($studentGrade->is_yn_locked && !auth()->user()->hasRole('superadmin')) {
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
                 return response()->json([
                     'success' => false,
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -2700,8 +2750,8 @@ class JournalController extends Controller
                 ], 403);
             }
 
-            // Check if retake grade already exists — admin o'zgartira oladi
-            if ($studentGrade->retake_grade !== null && !$isAdmin) {
+            // Retake bahosi allaqachon qo'yilgan bo'lsa — o'zgartirishga ruxsat berilmagan
+            if ($studentGrade->retake_grade !== null) {
                 return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
             }
 
@@ -4673,11 +4723,118 @@ class JournalController extends Controller
     }
 
     /**
+     * Admin/Superadmin: OSKI (101) va Test (102) baholarini kiritish yoki yangilash.
+     * YN yuborilgan bo'lsa ham ruxsat beriladi — faqat admin va superadmin uchun.
+     */
+    public function saveExamGrade(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'student_hemis_id' => 'required|string',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'training_type_code' => 'required|in:101,102',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $studentHemisId = $request->student_hemis_id;
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $typeCode = (int) $request->training_type_code;
+        $grade = round($request->grade, 2);
+
+        $typeNames = [101 => 'OSKI', 102 => 'Test'];
+
+        try {
+            $existing = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', $typeCode)
+                ->first();
+
+            if ($existing) {
+                DB::table('student_grades')->where('id', $existing->id)->update([
+                    'grade' => $grade,
+                    'updated_at' => now(),
+                ]);
+            } else {
+                $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+                if (!$student) {
+                    return response()->json(['success' => false, 'message' => 'Talaba topilmadi'], 404);
+                }
+
+                // Fan ma'lumotlarini olish
+                $subject = DB::table('curriculum_subjects')
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->first();
+
+                // Joriy o'quv yili
+                $semester = DB::table('semesters')->where('code', $semesterCode)->first();
+
+                DB::table('student_grades')->insert([
+                    'hemis_id' => 0, // Manual kiritilgan baholar uchun marker
+                    'student_id' => $student->id,
+                    'student_hemis_id' => $studentHemisId,
+                    'semester_code' => $semesterCode,
+                    'semester_name' => $subject->semester_name ?? ($semester->name ?? ''),
+                    'education_year_code' => $student->education_year_code ?? ($semester->education_year ?? null),
+                    'education_year_name' => $semester->education_year_name ?? null,
+                    'subject_schedule_id' => 0,
+                    'subject_id' => $subjectId,
+                    'subject_name' => $subject->subject_name ?? '',
+                    'subject_code' => $subject->subject_code ?? '',
+                    'training_type_code' => $typeCode,
+                    'training_type_name' => $typeNames[$typeCode] ?? 'Manual',
+                    'employee_id' => 0,
+                    'employee_name' => 'Manual Entry',
+                    'lesson_pair_code' => '1',
+                    'lesson_pair_name' => 'Manual',
+                    'lesson_pair_start_time' => '00:00',
+                    'lesson_pair_end_time' => '00:00',
+                    'grade' => $grade,
+                    'lesson_date' => now()->toDateString(),
+                    'created_at_api' => now(),
+                    'status' => 'recorded',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => ($typeNames[$typeCode] ?? 'Baho') . ' saqlandi: ' . $grade,
+                'grade' => $grade,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('saveExamGrade xatolik: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Sababli talabaning bahosini saqlash (retake_grade sifatida)
      * YN qulflangan bo'lsa ham, tasdiqlangan sababli uchun ruxsat beriladi.
+     * Dekan bu amalni bajara olmaydi — faqat ko'rish.
      */
     public function saveExcuseGrade(Request $request)
     {
+        // Dekan — sababli baho qo'yishga ruxsat yo'q
+        if (is_active_dekan()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dekan sababli baho qo\'ya olmaydi.',
+            ], 403);
+        }
+
         try {
             $request->validate([
                 'student_hemis_id' => 'required|string',
@@ -4707,20 +4864,27 @@ class JournalController extends Controller
                 ], 403);
             }
 
-            // YN yuborilganligini tekshirish (sababli faqat YN yuborilgandan keyin ishlaydi)
-            $ynSubmission = YnSubmission::where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->where('group_hemis_id', $request->group_hemis_id)
-                ->first();
-
-            if (!$ynSubmission) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'YN hali yuborilmagan. Avval YN ga yuborilishi kerak.',
-                ], 400);
+            // Sababli baho kiritish deadline: ariza tasdiqlangan kundan boshlab
+            // sababli kunlar soniga teng vaqt o'qituvchiga beriladi.
+            // Admin va superadmin uchun deadline yo'q.
+            $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+            if (!$isAdminRole && $excuse->reviewed_at) {
+                $excuseDays = \Carbon\Carbon::parse($excuse->start_date)
+                    ->diffInDays(\Carbon\Carbon::parse($excuse->end_date)) + 1;
+                $deadline = \Carbon\Carbon::parse($excuse->reviewed_at)
+                    ->addDays($excuseDays)->endOfDay();
+                if (now()->greaterThan($deadline)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Sababli baho kiritish muddati o\'tgan (' . $deadline->format('d.m.Y H:i') . '). Faqat admin tahrirlash mumkin.',
+                        'deadline_expired' => true,
+                    ], 403);
+                }
             }
 
             // student_grades jadvalida retake baho qo'yish
+            // YN yuborilgan/yuborilmaganligidan qat'iy nazar — sababli ariza tasdiqlangan
+            // bo'lsa va deadline o'tmagan bo'lsa (yoki admin) — baho qo'yiladi
             $studentGrade = DB::table('student_grades')
                 ->where('id', $request->grade_id)
                 ->where('student_hemis_id', $studentHemisId)

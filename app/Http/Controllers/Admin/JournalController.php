@@ -6280,9 +6280,9 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             $oskiRaw = $gradesByType[101][$hemisId] ?? null;
             $testRaw = $gradesByType[102][$hemisId] ?? null;
 
-            $onVal = $onRaw !== null ? round((float) $onRaw) : 0;
-            $oskiVal = $oskiRaw !== null ? round((float) $oskiRaw) : 0;
-            $testVal = $testRaw !== null ? round((float) $testRaw) : 0;
+            $onVal = $onRaw !== null ? (int) round((float) $onRaw) : 0;
+            $oskiVal = $oskiRaw !== null ? (int) round((float) $oskiRaw) : 0;
+            $testVal = $testRaw !== null ? (int) round((float) $testRaw) : 0;
 
             $sheet->setCellValue('D' . $row, $jnVal);
             $sheet->setCellValue('G' . $row, $mtVal);
@@ -6296,25 +6296,99 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 $sheet->setCellValue('S' . $row, $testVal);
             }
 
-            // Vaznli yakuniy ball hisoblash
-            // Agar vaznli komponent bahosi 0 bo'lsa, yakuniy ball hisoblanmasin
-            $hasAllRequired = true;
-            if ($weightJn > 0 && $jnVal == 0) $hasAllRequired = false;
-            if ($weightMt > 0 && $mtVal == 0) $hasAllRequired = false;
-            if ($weightOn > 0 && $onVal == 0) $hasAllRequired = false;
-            if ($weightOski > 0 && $oskiVal == 0) $hasAllRequired = false;
-            if ($weightTest > 0 && $testVal == 0) $hasAllRequired = false;
+            // --- Ball, V (O'zlashtirish), W (ECTS), Y (Baho) ni PHP da hisoblash ---
+            // Shablondagi V20 formulasi murakkab nested IF/AND/OR bo'lib,
+            // PhpSpreadsheet uni to'g'ri evaluate qilmaydi (masalan Test < 60
+            // bo'lganda ham V=80 chiqadi). Mantiqni PHPda takrorlab,
+            // hujayralarga to'g'ridan-to'g'ri yozamiz.
 
-            if ($hasAllRequired) {
-                $yakuniyBall = round(
-                    ($jnVal * $weightJn / 100) +
-                    ($mtVal * $weightMt / 100) +
-                    ($onVal * $weightOn / 100) +
-                    ($oskiVal * $weightOski / 100) +
-                    ($testVal * $weightTest / 100)
-                );
-                $sheet->setCellValue('V' . $row, $yakuniyBall);
+            // JB/MT/ON ball — 1 kasrgacha
+            $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
+            $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
+            $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+
+            // OSKI/Test ball — vazn sxemasiga qarab raw yoki butun son
+            if ($weightOski > 0 && $weightTest > 0) {
+                $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
+                $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+            } elseif ($weightOski > 0) {
+                $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+                $tBall = 0;
+            } elseif ($weightTest > 0) {
+                $qBall = 0;
+                $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+            } else {
+                $qBall = 0;
+                $tBall = 0;
             }
+
+            // JB+MT+ON ball va N% — V branchlari uchun
+            $maxJbMtOn = $weightJn + $weightMt + $weightOn;
+            $mSum = (($jnVal < 60) || ($mtVal < 60))
+                ? 0
+                : round($eBall + $hBall + $kBall, 1);
+            $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+            // V (O'zlashtirish ko'rsatkichi)
+            if ($jnVal === 0 && $mtVal === 0) {
+                $v = '';
+            } elseif ($nPct < 0.6) {
+                $v = -2; // qo'yilmadi
+            } elseif (($weightOski > 0 && $oskiVal == 0)
+                   || ($weightTest > 0 && $testVal == 0)) {
+                $v = -1; // kelmadi
+            } elseif (($weightJn   > 0 && $jnVal   < 60)
+                   || ($weightMt   > 0 && $mtVal   < 60)
+                   || ($weightOn   > 0 && $onVal   < 60)
+                   || ($weightOski > 0 && $oskiVal < 60)
+                   || ($weightTest > 0 && $testVal < 60)) {
+                $v = 0;
+            } else {
+                $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $examSum = round($qBall + $tBall, 1);
+                } elseif ($weightOski > 0) {
+                    $examSum = round($qBall, 1);
+                } elseif ($weightTest > 0) {
+                    $examSum = round($tBall, 1);
+                } else {
+                    $examSum = 0;
+                }
+                $v = $jbMtOnSum + $examSum;
+            }
+
+            // W (ECTS) — shablon mantig'i
+            $w = '';
+            if (is_numeric($v)) {
+                if ($v >= 90 && $v <= 100)      $w = 'A';
+                elseif ($v >= 85)               $w = 'B+';
+                elseif ($v >= 70)               $w = 'B';
+                elseif ($v >= 60)               $w = 'C';
+                elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                elseif ($v == -1)               $w = '';
+                else                            $w = 'FX';
+            }
+
+            // Y (Baho)
+            $y = '';
+            if (is_numeric($v)) {
+                if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
+                elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
+                elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
+                elseif ($v == -1)                 $y = 'kelmadi';
+                elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+            }
+
+            // Ball va natijalarni shablon formulasi ustiga yozamiz
+            $sheet->setCellValue('E' . $row, $eBall);
+            $sheet->setCellValue('H' . $row, $hBall);
+            $sheet->setCellValue('K' . $row, $kBall);
+            $sheet->setCellValue('Q' . $row, $qBall);
+            $sheet->setCellValue('T' . $row, $tBall);
+            $sheet->setCellValue('V' . $row, $v);
+            $sheet->setCellValue('W' . $row, $w);
+            $sheet->setCellValue('Y' . $row, $y);
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

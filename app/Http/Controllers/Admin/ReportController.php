@@ -1940,16 +1940,40 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
+        // Fatal errorlarni (OOM / max_execution_time) ham ushlab, foydalanuvchiga
+        // JSON javob qaytarish uchun shutdown funksiya ro'yxatdan o'tkaziladi.
+        // Try/catch fatal xatolarni ushlay olmaydi — shu sababli bu kerak.
+        $fatalCaught = false;
+        register_shutdown_function(function () use (&$fatalCaught) {
+            $err = error_get_last();
+            if (!$err || $fatalCaught) return;
+            $fatalTypes = [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR, E_PARSE];
+            if (!in_array($err['type'], $fatalTypes, true)) return;
+
+            \Log::error('Absence report fatal error', $err);
+            if (!headers_sent()) {
+                http_response_code(500);
+                header('Content-Type: application/json');
+            }
+            echo json_encode([
+                'error' => 'Server xatosi: ' . ($err['message'] ?? 'fatal') . ' (' . basename($err['file'] ?? '') . ':' . ($err['line'] ?? '?') . ')',
+            ]);
+        });
+
         try {
-        ini_set('memory_limit', '512M');
-        set_time_limit(120);
+        ini_set('memory_limit', '1024M');
+        set_time_limit(300);
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1-QADAM: Schedule dan unique (group, subject, semester) kombinatsiyalarini olish
+        // MUHIM: fakultet/ta'lim turi/kurs/guruh filtrlari shu yerda qo'llaniladi,
+        // aks holda butun universitetning schedule yozuvlari yuklanib, timeout/OOM
+        // sodir bo'lishi mumkin.
         $scheduleQuery = DB::table('schedules as sch')
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
+            ->whereNull('sch.deleted_at')
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
             ->distinct();
 
@@ -1972,9 +1996,40 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.subject_id', $request->subject);
         }
 
+        // Fakultet filtri: schedules.faculty_id = departments.department_hemis_id
+        if ($request->filled('faculty')) {
+            $facultyForSchedule = Department::find($request->faculty);
+            if ($facultyForSchedule) {
+                $scheduleQuery->where('sch.faculty_id', $facultyForSchedule->department_hemis_id);
+            }
+        }
+
+        // Ta'lim turi filtri: faqat shu ta'lim turiga tegishli guruhlar
+        if ($request->filled('education_type')) {
+            $eduGroupIds = DB::table('groups')
+                ->whereIn('curriculum_hemis_id',
+                    Curriculum::where('education_type_code', $request->education_type)
+                        ->pluck('curricula_hemis_id')
+                )
+                ->pluck('group_hemis_id')
+                ->toArray();
+            $scheduleQuery->whereIn('sch.group_id', $eduGroupIds);
+        }
+
+        // Guruh filtri: to'g'ridan-to'g'ri schedule da filtrlash
+        if ($request->filled('group')) {
+            $scheduleQuery->where('sch.group_id', $request->group);
+        }
+
+        // Kafedra filtri: schedules.department_id bo'yicha filter
+        if ($request->filled('department')) {
+            $scheduleQuery->where('sch.department_id', $request->department);
+        }
+
         $scheduleCombos = $scheduleQuery->get();
 
         if ($scheduleCombos->isEmpty()) {
+            $fatalCaught = true;
             return response()->json(['data' => [], 'total' => 0]);
         }
 
@@ -2088,6 +2143,7 @@ class ReportController extends Controller
         $students = $studentQuery->get();
 
         if ($students->isEmpty()) {
+            $fatalCaught = true;
             return response()->json(['data' => [], 'total' => 0]);
         }
 
@@ -2101,6 +2157,7 @@ class ReportController extends Controller
         if ($allowedSubjectIds !== null) {
             $filteredSubjectIds = array_intersect($validSubjectIds, $allowedSubjectIds);
             if (empty($filteredSubjectIds)) {
+                $fatalCaught = true;
                 return response()->json(['data' => [], 'total' => 0]);
             }
         }
@@ -2320,6 +2377,7 @@ class ReportController extends Controller
         });
 
         if ($request->get('export') === 'excel') {
+            $fatalCaught = true;
             return $this->exportAbsenceExcel($finalResults);
         }
 
@@ -2334,6 +2392,7 @@ class ReportController extends Controller
         }
         unset($item);
 
+        $fatalCaught = true;
         return response()->json([
             'data' => $pageData,
             'total' => $total,
@@ -2342,8 +2401,14 @@ class ReportController extends Controller
             'last_page' => ceil($total / $perPage),
         ]);
         } catch (\Throwable $e) {
-            \Log::error('Absence report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return response()->json(['error' => $e->getMessage()], 500);
+            $fatalCaught = true;
+            \Log::error('Absence report error: ' . $e->getMessage(), [
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'error' => $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')',
+            ], 500);
         }
     }
 

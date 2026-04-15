@@ -650,20 +650,34 @@ class VedomostTekshirishController extends Controller
                 $dav     = $davomatByStudent[$hId] ?? 0;
 
                 // JN soni — shu talaba JN (JB) darslaridan nechta kunda baho
-                // olganini sanaydi. Bir kunda bir nechta pair bo'lsa ham 1 kun
-                // sifatida sanaladi. Faqat effektiv baho > 0 bo'lgan kunlar
-                // qo'shiladi (qo'yilmagan yoki 0 bo'lgan kunlar sanalmaydi;
-                // nb → retake_grade orqali olingan baho ham getEffectiveGrade
-                // ishida hisobga olinadi).
-                $jnCount = 0;
-                foreach (($jbGrades[$hId] ?? []) as $date => $pairGrades) {
-                    foreach ($pairGrades as $g) {
-                        if ($g > 0) {
-                            $jnCount++;
-                            break; // kun bir marta sanaladi
-                        }
+                // yoki nb (yo'q) belgilangan bo'lsa, shuni sanaydi. Bir kunda
+                // bir nechta pair bo'lsa ham 1 kun sifatida sanaladi.
+                // Sanash qoidasi:
+                //   * kiritilgan numerik baho (>0) — sanaladi;
+                //   * nb (reason='absent') — sanaladi (retake bo'lsa yoki
+                //     bo'lmasa ham);
+                //   * retake_grade (otrabotka) mavjud — sanaladi;
+                //   * grade = 0 va nb emas (ya'ni bo'sh ham emas) — sanaladi
+                //     (o'qituvchi aniq 0 qo'ygan);
+                //   * umuman yozuv yo'q yoki status='pending' — sanalmaydi.
+                $jnDaysAttended = [];
+                foreach ($allGradesRaw as $g) {
+                    $date = Carbon::parse($g->lesson_date)->format('Y-m-d');
+                    $key  = $date . '_' . $g->lesson_pair_code;
+                    if (!isset($jbDatePairSet[$key])) continue;          // faqat JB jadvalidagi kunlar
+                    if ($g->student_hemis_id !== $hId) continue;
+                    if ($g->status === 'pending') continue;               // tugallanmagan
+                    // "Yozuv mavjud" deb hisoblaymiz agar biror ma'lumot bor:
+                    //   grade not null (nol ham mayli), retake_grade not null,
+                    //   yoki reason='absent' (nb).
+                    $hasEntry = ($g->grade !== null)
+                        || ($g->retake_grade !== null)
+                        || ($g->reason === 'absent');
+                    if ($hasEntry) {
+                        $jnDaysAttended[$date] = true;
                     }
                 }
+                $jnCount = count($jnDaysAttended);
 
                 // Davomat >= 25% bo'lsa JN = 0
                 $jn = $dav >= 25 ? 0 : $jnOrig;

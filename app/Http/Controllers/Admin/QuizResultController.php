@@ -1894,63 +1894,71 @@ class QuizResultController extends Controller
         $targetDate = $lessonDates[$mavzuN - 1];
         $moodleGrade = (int) round((float) $result->grade);
 
-        // Shu sanadagi jurnal yozuvi (JN type)
-        $sg = DB::table('student_grades')
+        // Shu sanadagi jurnal yozuvlari (JN type) — bir kunda bir nechta juftlik bo'lishi mumkin
+        $sgRecords = DB::table('student_grades')
             ->where('student_hemis_id', $student->hemis_id)
             ->where('subject_id', $result->fan_id)
             ->where('semester_code', $semesterCode)
             ->whereDate('lesson_date', $targetDate)
             ->whereNotIn('training_type_code', [11, 17, 99, 100, 101, 102, 103])
             ->whereNull('deleted_at')
-            ->first();
+            ->get();
 
-        if (!$sg) {
+        if ($sgRecords->isEmpty()) {
             $rowInfo['error'] = "Jurnal yozuvi topilmadi (sana {$targetDate})";
             $errors[] = $rowInfo;
             return;
         }
 
-        // YN qulflangan bo'lsa — skip
-        if (!empty($sg->is_yn_locked)) {
-            $rowInfo['error'] = "YN qulflangan, tahrirlash mumkin emas";
-            $errors[] = $rowInfo;
-            return;
-        }
+        $moodleGrade = (int) round((float) $result->grade);
+        $updatedAnyPair = false;
+        $skipReasons = [];
 
-        // Hozirgi effektiv baho: retake_grade ustun, aks holda grade
-        $currentValue = $sg->retake_grade ?? $sg->grade;
-        $newReason = $sg->reason;
-        $shouldUpdate = false;
-
-        if ($sg->reason === 'absent' && $sg->grade === null && $sg->retake_grade === null) {
-            // NB bo'sh — retake qo'yiladi, reason=absent qoladi (jurnalda NB/grade diagonal)
-            $shouldUpdate = true;
-        } elseif ($currentValue !== null && $currentValue < $moodleGrade) {
-            // Past baho — retake yangilanadi
-            $shouldUpdate = true;
-            if ($sg->reason === null) {
-                $newReason = 'low_grade';
+        foreach ($sgRecords as $sg) {
+            // YN qulflangan juftlikni o'tkazib yuboramiz
+            if (!empty($sg->is_yn_locked)) {
+                $skipReasons[] = "juftlik {$sg->lesson_pair_code}: YN qulflangan";
+                continue;
             }
+
+            $currentValue = $sg->retake_grade ?? $sg->grade;
+            $newReason = $sg->reason;
+            $shouldUpdate = false;
+
+            if ($sg->reason === 'absent' && $sg->grade === null && $sg->retake_grade === null) {
+                // NB — retake qo'yiladi
+                $shouldUpdate = true;
+            } elseif ($currentValue !== null && $currentValue < $moodleGrade) {
+                // Past baho — retake yangilanadi
+                $shouldUpdate = true;
+                if ($sg->reason === null) {
+                    $newReason = 'low_grade';
+                }
+            } else {
+                $cur = $currentValue === null ? 'null' : $currentValue;
+                $skipReasons[] = "juftlik {$sg->lesson_pair_code}: hozirgi ({$cur}) >= Moodle ({$moodleGrade})";
+                continue;
+            }
+
+            if (!$shouldUpdate) continue;
+
+            DB::table('student_grades')->where('id', $sg->id)->update([
+                'retake_grade'   => $moodleGrade,
+                'retake_comment' => "Moodle mavzu: {$result->quiz_type} / {$result->shakl} (quiz_result#{$result->id})",
+                'reason'         => $newReason,
+                'quiz_result_id' => $result->id,
+                'updated_at'     => now(),
+            ]);
+            $updatedAnyPair = true;
+        }
+
+        if ($updatedAnyPair) {
+            $successCount++;
         } else {
-            $cur = $currentValue === null ? 'null' : $currentValue;
-            $rowInfo['error'] = "Hozirgi baho ({$cur}) >= Moodle ({$moodleGrade}) — skip";
+            // Hech qaysi juftlik yangilanmadi
+            $rowInfo['error'] = implode('; ', $skipReasons) ?: 'Barcha juftliklar skip qilindi';
             $errors[] = $rowInfo;
-            return;
         }
-
-        if (!$shouldUpdate) {
-            return;
-        }
-
-        DB::table('student_grades')->where('id', $sg->id)->update([
-            'retake_grade'   => $moodleGrade,
-            'retake_comment' => "Moodle mavzu: {$result->quiz_type} / {$result->shakl} (quiz_result#{$result->id})",
-            'reason'         => $newReason,
-            'quiz_result_id' => $result->id,
-            'updated_at'     => now(),
-        ]);
-
-        $successCount++;
     }
 
     /**

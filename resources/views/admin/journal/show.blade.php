@@ -1470,8 +1470,8 @@
                                                                 <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                                                             </div>
-                                                        @elseif($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
-                                                            {{-- Sababli NB — modal orqali baho kiritish --}}
+                                                        @elseif($hasApprovedExcuse && !$hasRetake && (!$excuseAlreadySaved || $isSuperAdminRole))
+                                                            {{-- Sababli NB — modal orqali baho kiritish (superadmin YN ga yuborilgandan keyin ham kira oladi) --}}
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
                                                                  onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
                                                                  title="Sababli — bosib baho kiriting">

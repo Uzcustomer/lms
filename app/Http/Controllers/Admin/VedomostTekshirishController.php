@@ -651,12 +651,27 @@ class VedomostTekshirishController extends Controller
                 // Davomat >= 25% bo'lsa JN = 0
                 $jn = $dav >= 25 ? 0 : $jnOrig;
 
-                // Balllar
-                $jnBall   = $jn >= 60   ? $roundHalfUp($jn * $wJn / 100)     : 0;
-                $mtBall   = $mt >= 60   ? $roundHalfUp($mt * $wMt / 100)     : 0;
-                $onBall   = $on >= 60   ? $roundHalfUp($on * $wOn / 100)     : 0;
-                $oskiBall = $oski >= 60 ? $roundHalfUp($oski * $wOski / 100) : 0;
-                $testBall = $test >= 60 ? $roundHalfUp($test * $wTest / 100) : 0;
+                // Balllar (YN qaydnoma shablonidagi ball logikasiga mos):
+                //  JB/MT/ON ball — 1 kasr xonasigacha;
+                //  OSKI/Test ball — ikkalasi ham vaznga ega bo'lsa yaxlitlashsiz
+                //  (raw qiymat), faqat bittasi vaznga ega bo'lsa butun songacha.
+                $jnBall = $jn >= 60 ? round($jn * $wJn / 100, 1) : 0;
+                $mtBall = $mt >= 60 ? round($mt * $wMt / 100, 1) : 0;
+                $onBall = $on >= 60 ? round($on * $wOn / 100, 1) : 0;
+
+                if ($wOski > 0 && $wTest > 0) {
+                    $oskiBall = $oski >= 60 ? $oski * $wOski / 100 : 0;
+                    $testBall = $test >= 60 ? $test * $wTest / 100 : 0;
+                } elseif ($wOski > 0) {
+                    $oskiBall = $oski >= 60 ? (int) round($oski * $wOski / 100) : 0;
+                    $testBall = 0;
+                } elseif ($wTest > 0) {
+                    $oskiBall = 0;
+                    $testBall = $test >= 60 ? (int) round($test * $wTest / 100) : 0;
+                } else {
+                    $oskiBall = 0;
+                    $testBall = 0;
+                }
 
                 $sumBall = $jnBall + $mtBall + $onBall;
                 $maxSum  = $wJn + $wMt + $wOn;
@@ -762,7 +777,7 @@ class VedomostTekshirishController extends Controller
         return $row?->employee_name ?? '';
     }
 
-    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav): string|int
+    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav): string|int|float
     {
         // Bo'sh talaba
         if ($jn === 0 && $mt === 0) return '';
@@ -787,21 +802,33 @@ class VedomostTekshirishController extends Controller
             return 0;
         }
 
-        // Yakuniy ball
-        $sum = 0;
-        if ($wJn > 0)   $sum += $jn * $wJn / 100;
-        if ($wMt > 0)   $sum += $mt * $wMt / 100;
-        if ($wOn > 0)   $sum += $on * $wOn / 100;
-        if ($wOski > 0) $sum += $oski * $wOski / 100;
-        if ($wTest > 0) $sum += $test * $wTest / 100;
+        // Yakuniy ball — YN qaydnoma shablonidagi mantiq bilan bir xil:
+        //  JB+MT+ON ball bir marta yaxlitlanadi, OSKI+Test ball ham bir marta
+        //  birga yaxlitlanadi (ikkalasi ham vaznga ega bo'lsa). Aks holda
+        //  yaxlitlash alohida: faqat vaznga ega komponent hisobga olinadi.
+        $jbMtOnSum = 0;
+        if ($wJn > 0)   $jbMtOnSum += $jn * $wJn / 100;
+        if ($wMt > 0)   $jbMtOnSum += $mt * $wMt / 100;
+        if ($wOn > 0)   $jbMtOnSum += $on * $wOn / 100;
+        $jbMtOnSum = round($jbMtOnSum, 1);
 
-        return (int) floor($sum + 0.5);
+        if ($wOski > 0 && $wTest > 0) {
+            $examSum = round($oski * $wOski / 100 + $test * $wTest / 100, 1);
+        } elseif ($wOski > 0) {
+            $examSum = round($oski * $wOski / 100, 1);
+        } elseif ($wTest > 0) {
+            $examSum = round($test * $wTest / 100, 1);
+        } else {
+            $examSum = 0;
+        }
+
+        return $jbMtOnSum + $examSum;
     }
 
-    private function toEcts(string|int $yn): string
+    private function toEcts(string|int|float $yn): string
     {
         if (!is_numeric($yn) || $yn < 0) return '';
-        $yn = (int) $yn;
+        $yn = (float) $yn;
         if ($yn >= 90) return 'A';
         if ($yn >= 85) return 'B+';
         if ($yn >= 70) return 'B';
@@ -809,12 +836,12 @@ class VedomostTekshirishController extends Controller
         return 'F';
     }
 
-    private function toBaho(string|int $yn): string
+    private function toBaho(string|int|float $yn): string
     {
         if ($yn === '' || $yn === -2) return "qo'yilmadi";
         if ($yn === -1) return 'kelmadi';
         if (!is_numeric($yn)) return '';
-        $yn = (int) $yn;
+        $yn = (float) $yn;
         if ($yn >= 90) return "a\u{02BC}lo";
         if ($yn >= 70) return 'yaxshi';
         if ($yn >= 60) return "o\u{02BB}rta";
@@ -843,7 +870,7 @@ class VedomostTekshirishController extends Controller
         return implode(', ', $warnings);
     }
 
-    private function applyRowStyle($sheet, int $row, string|int $yn, float $dav): void
+    private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {
         $range = "A{$row}:AY{$row}";
 

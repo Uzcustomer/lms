@@ -6389,9 +6389,7 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
      * Admin uchun istalgan bahoni o'zgartirish yoki o'chirish
      */
     /**
-     * Admin: ON baholarini kiritish yoki yangilash.
-     * OSKI (101) va Test (102) baholarini LMS orqali o'zgartirish bloklangan —
-     * ular HEMIS dan import qilinadi, qo'lda kiritish mumkin emas.
+     * Admin: ON/OSKI/Test baholarini kiritish yoki yangilash
      */
     public function saveExamGrade(Request $request)
     {
@@ -6406,14 +6404,6 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             'training_type_code' => 'required|in:100,101,102',
             'grade' => 'required|numeric|min:0|max:100',
         ]);
-
-        // OSKI va Test baholari LMS orqali tahrirlanmaydi
-        if (in_array((int) $request->training_type_code, [101, 102], true)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'OSKI va Test baholarini LMS orqali o\'zgartirish mumkin emas.',
-            ], 403);
-        }
 
         $studentHemisId = $request->student_hemis_id;
         $subjectId = $request->subject_id;

@@ -1300,7 +1300,7 @@ class YnQaytnomaController extends Controller
                     elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
                     elseif ($v == -1)                 $y = 'kelmadi';
                     elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
-                    elseif ($v == -3)                 $y = "Davomat \u{2265}25%";
+                    elseif ($v == -3)                 $y = "davomat \u{2265}25%";
                 }
 
                 // Ball va natijalarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)

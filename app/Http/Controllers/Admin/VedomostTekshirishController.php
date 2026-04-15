@@ -416,8 +416,8 @@ class VedomostTekshirishController extends Controller
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             if (empty($studentHemisIds)) continue;
 
-            // Education year (schedules dan)
-            $scheduleYear = DB::table('schedules')
+            // Education year (schedules dan — hisobot qilinayotgan joriy yil)
+            $scheduleYearRow = DB::table('schedules')
                 ->where('group_id', $groupHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
@@ -425,8 +425,13 @@ class VedomostTekshirishController extends Controller
                 ->whereNotNull('lesson_date')
                 ->whereNotNull('education_year_code')
                 ->orderBy('lesson_date', 'desc')
-                ->value('education_year_code');
-            if ($scheduleYear) $educationYearCode = $scheduleYear;
+                ->select('education_year_code', 'education_year_name')
+                ->first();
+            $educationYearName = null;
+            if ($scheduleYearRow) {
+                $educationYearCode = $scheduleYearRow->education_year_code;
+                $educationYearName = $scheduleYearRow->education_year_name;
+            }
 
             // --- JN schedule ---
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
@@ -733,8 +738,12 @@ class VedomostTekshirishController extends Controller
                 $sumBall = (int) floor($jnBall + $mtBall + $onBall + 0.5);
                 $maxSum  = $wJn + $wMt + $wOn;
 
-                // YN natija
-                $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav);
+                // YN natija — ekrandagi ball'lardan hisoblanadi, shuning uchun
+                // ularni ham uzatamiz (aks holda 4-5 kurs yoki faqat bitta
+                // imtihon vaznga ega bo'lgan holda V ekran yig'indisi bilan
+                // mos kelmaydi).
+                $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav,
+                    (float) $jnBall, (float) $mtBall, (float) $onBall, (float) $oskiBall, (float) $testBall);
 
                 // Yakuniy qiymatni butun songacha half-up yaxlitlaymiz (V ustun
                 // butun son chiqishi kerak). Maxsus qiymatlar ('', -2, -1, 0)
@@ -804,7 +813,9 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("AA{$r}", $subjectId);
                 $sheet->setCellValue("AB{$r}", $subject->subject_name ?? '');
                 $sheet->setCellValue("AC{$r}", $shaklName);
-                $sheet->setCellValue("AD{$r}", $curriculum?->education_year_name ?? '');
+                // Hisobot qilinayotgan joriy o'quv yili (schedule bo'yicha),
+                // mavjud bo'lmasa curriculum'dagi yilga qaytamiz.
+                $sheet->setCellValue("AD{$r}", $educationYearName ?? ($curriculum?->education_year_name ?? ''));
                 $sheet->setCellValue("AE{$r}", $semester?->name ?? $semesterCode);
                 $sheet->setCellValue("AF{$r}", (string) $groupHemisId);
                 $sheet->setCellValue("AG{$r}", $group->name ?? '');
@@ -867,13 +878,12 @@ class VedomostTekshirishController extends Controller
         return $row?->employee_name ?? '';
     }
 
-    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav): string|int|float
+    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav, float $jnBall = 0.0, float $mtBall = 0.0, float $onBall = 0.0, float $oskiBall = 0.0, float $testBall = 0.0): string|int|float
     {
         // Bo'sh talaba
         if ($jn === 0 && $mt === 0) return '';
 
-        // Davomat >= 25% → qo'yilmadi (-2)
-        // Davomat >= 25% → -3 (Davomat ≥25%)
+        // Davomat >= 25% → -3 (davomat ≥25%)
         if ($dav >= 25) return -3;
 
         // Imtihonga kirmaganlar
@@ -893,22 +903,18 @@ class VedomostTekshirishController extends Controller
             return 0;
         }
 
-        // Yakuniy ball — YN qaydnoma shablonidagi mantiq bilan bir xil:
-        //  JB+MT+ON ball bir marta yaxlitlanadi, OSKI+Test ball ham bir marta
-        //  birga yaxlitlanadi (ikkalasi ham vaznga ega bo'lsa). Aks holda
-        //  yaxlitlash alohida: faqat vaznga ega komponent hisobga olinadi.
-        $jbMtOnSum = 0;
-        if ($wJn > 0)   $jbMtOnSum += $jn * $wJn / 100;
-        if ($wMt > 0)   $jbMtOnSum += $mt * $wMt / 100;
-        if ($wOn > 0)   $jbMtOnSum += $on * $wOn / 100;
-        $jbMtOnSum = round($jbMtOnSum, 1);
+        // Yakuniy ball — ekranga chiqadigan ball'lardan hisoblanadi (4-5 kurs
+        // uchun butun songa yaxlitlangan JN/MT/ON, faqat bittasi vaznga ega
+        // OSKI/Test holatlarida butun songa yaxlitlangan ball). Bu V'ni ekran
+        // ustunlari yig'indisiga mos qiladi.
+        $jbMtOnSum = round($jnBall + $mtBall + $onBall, 1);
 
         if ($wOski > 0 && $wTest > 0) {
-            $examSum = round($oski * $wOski / 100 + $test * $wTest / 100, 1);
+            $examSum = round($oskiBall + $testBall, 1);
         } elseif ($wOski > 0) {
-            $examSum = round($oski * $wOski / 100, 1);
+            $examSum = round($oskiBall, 1);
         } elseif ($wTest > 0) {
-            $examSum = round($test * $wTest / 100, 1);
+            $examSum = round($testBall, 1);
         } else {
             $examSum = 0;
         }
@@ -930,7 +936,7 @@ class VedomostTekshirishController extends Controller
     private function toBaho(string|int|float $yn): string
     {
         if ($yn === '') return '';
-        if ($yn === -3) return "Davomat \u{2265}25%";
+        if ($yn === -3) return "davomat \u{2265}25%";
         if ($yn === -2) return "qo\u{2018}yilmadi";
         if ($yn === -1) return 'kelmadi';
         if (!is_numeric($yn)) return '';

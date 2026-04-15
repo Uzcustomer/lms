@@ -1585,9 +1585,14 @@ class QuizResultController extends Controller
         $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
+            'subject_overrides' => 'nullable|array',
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+
+        // subject_overrides — manual o'zgartirilgan fan_id larni saqlovchi map
+        // Format: { "<original_fan_id>_<group_id>": <new_subject_id> }
+        $subjectOverrides = $request->input('subject_overrides', []);
 
         $successCount = 0;
         $errors = [];
@@ -1632,18 +1637,22 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Fan uchun CurriculumSubject topish (curriculum bo'yicha aniq qidirish)
+            // Fan uchun CurriculumSubject topish (override bilan)
+            // Override mavjud bo'lsa — manual tanlangan subject_id ishlatiladi
+            $overrideKey = $result->fan_id . '_' . ($student->group_id ?? '');
+            $targetFanId = $subjectOverrides[$overrideKey] ?? $result->fan_id;
+
             $subject = null;
-            if ($result->fan_id && $group) {
-                $subject = CurriculumSubject::where('subject_id', $result->fan_id)
+            if ($targetFanId && $group) {
+                $subject = CurriculumSubject::where('subject_id', $targetFanId)
                     ->where('curricula_hemis_id', $group->curriculum_hemis_id)
                     ->first();
             }
-            if (!$subject && $result->fan_id) {
-                $subject = CurriculumSubject::where('subject_id', $result->fan_id)->first();
+            if (!$subject && $targetFanId) {
+                $subject = CurriculumSubject::where('subject_id', $targetFanId)->first();
             }
             if (!$subject) {
-                $rowInfo['error'] = "Fan topilmadi (fan_id: {$result->fan_id})";
+                $rowInfo['error'] = "Fan topilmadi (fan_id: {$targetFanId})";
                 $errors[] = $rowInfo;
                 continue;
             }
@@ -1726,12 +1735,15 @@ class QuizResultController extends Controller
     /**
      * Oldin yuklangan natijalarni qayta yuklash.
      * Eski student_grades yozuvlarini o'chirib, yangidan yaratadi (to'g'ri semester_code bilan).
+     * subject_overrides berilgan bo'lsa, har bir (fan_id, group_id) juftligi uchun
+     * boshqa subject_id ga yuklash mumkin.
      */
     public function reUploadToGrades(Request $request)
     {
         $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
+            'subject_overrides' => 'nullable|array',
         ]);
 
         // Eski student_grades yozuvlarini o'chirish (quiz_result_id bo'yicha)
@@ -1739,6 +1751,94 @@ class QuizResultController extends Controller
 
         // uploadToGrades ni chaqirish (endi eski yozuvlar yo'q — dublikat tekshiruv o'tmaydi)
         return $this->uploadToGrades($request);
+    }
+
+    /**
+     * Qayta yuklash uchun preview: tanlangan natijalarni (fan_id, group_id) bo'yicha
+     * guruhlab, har bir guruh uchun curriculum'da mavjud bo'lgan fanlar ro'yxatini qaytaradi.
+     * Frontend modalda foydalanuvchiga fan_id ni o'zgartirish imkonini beradi.
+     */
+    public function getReuploadPreview(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:hemis_quiz_results,id',
+        ]);
+
+        $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+
+        // (fan_id, group_id) bo'yicha guruhlash
+        $groups = [];
+        foreach ($results as $r) {
+            $student = Student::where('hemis_id', $r->student_id)
+                ->orWhere('student_id_number', $r->student_id)
+                ->first();
+            if (!$student || !$student->group_id) {
+                continue;
+            }
+            $key = $r->fan_id . '_' . $student->group_id;
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'key' => $key,
+                    'original_fan_id' => $r->fan_id,
+                    'original_fan_name' => $r->fan_name,
+                    'group_hemis_id' => $student->group_id,
+                    'group_name' => $student->group_name ?? '',
+                    'curriculum_hemis_id' => null,
+                    'grade_count' => 0,
+                    'sample_grades' => [],
+                    'available_subjects' => [],
+                ];
+            }
+            $groups[$key]['grade_count']++;
+            if (count($groups[$key]['sample_grades']) < 5) {
+                $groups[$key]['sample_grades'][] = [
+                    'student_name' => $r->student_name,
+                    'grade' => $r->grade,
+                ];
+            }
+        }
+
+        // Har bir guruh uchun curriculum subjectlarini olish
+        $groupCurriculumIds = [];
+        foreach ($groups as &$g) {
+            $group = Group::where('group_hemis_id', $g['group_hemis_id'])->first();
+            if ($group) {
+                $g['curriculum_hemis_id'] = $group->curriculum_hemis_id;
+                $groupCurriculumIds[$g['key']] = $group->curriculum_hemis_id;
+            }
+        }
+        unset($g);
+
+        $allCurriculumIds = array_unique(array_filter(array_values($groupCurriculumIds)));
+        $subjectsByCurriculum = [];
+        if (!empty($allCurriculumIds)) {
+            $subjects = CurriculumSubject::whereIn('curricula_hemis_id', $allCurriculumIds)
+                ->select('curricula_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'semester_name')
+                ->get()
+                ->groupBy('curricula_hemis_id');
+            foreach ($subjects as $cId => $subs) {
+                $unique = $subs->unique('subject_id')->values();
+                $subjectsByCurriculum[$cId] = $unique->map(fn($s) => [
+                    'subject_id' => $s->subject_id,
+                    'subject_name' => $s->subject_name,
+                    'semester_name' => $s->semester_name,
+                ])->toArray();
+            }
+        }
+
+        // Har bir guruh uchun mos curriculum'dan subjectlarni biriktirish
+        foreach ($groups as &$g) {
+            if ($g['curriculum_hemis_id'] && isset($subjectsByCurriculum[$g['curriculum_hemis_id']])) {
+                $g['available_subjects'] = $subjectsByCurriculum[$g['curriculum_hemis_id']];
+            }
+        }
+        unset($g);
+
+        return response()->json([
+            'success' => true,
+            'groups' => array_values($groups),
+        ]);
     }
 
     /**

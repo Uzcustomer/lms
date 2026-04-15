@@ -25,6 +25,13 @@ Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(fu
 });
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 
+// Moodle quiz natijalarini har kuni avtomatik import qilish — har kuni ertalab 04:30 da
+// Ushbu cron LMS'da `moodle_sync_requested` flagini qo'yadi.
+// Moodle serverdagi cron (har 3 daqiqada `/moodle/should-sync` ga so'rov yuboradi)
+// flagni ko'radi va push skriptni ishga tushiradi — kechagi kun (oxirgi 24 soat)
+// quiz natijalari LMSga keladi.
+Schedule::command('moodle:trigger-sync')->dailyAt('04:30');
+
 // Akademik ma'lumotnoma: HEMIS dan academic records import (har kuni 02:00 da)
 Schedule::command('import:academic-records')->dailyAt('02:00')->withoutOverlapping(120);
 

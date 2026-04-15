@@ -651,13 +651,14 @@ class VedomostTekshirishController extends Controller
                 // Davomat >= 25% bo'lsa JN = 0
                 $jn = $dav >= 25 ? 0 : $jnOrig;
 
-                // Balllar (YN qaydnoma shablonidagi ball logikasiga mos):
-                //  JB/MT/ON ball — 1 kasr xonasigacha;
-                //  OSKI/Test ball — ikkalasi ham vaznga ega bo'lsa yaxlitlashsiz
-                //  (raw qiymat), faqat bittasi vaznga ega bo'lsa butun songacha.
-                $jnBall = $jn >= 60 ? round($jn * $wJn / 100, 1) : 0;
-                $mtBall = $mt >= 60 ? round($mt * $wMt / 100, 1) : 0;
-                $onBall = $on >= 60 ? round($on * $wOn / 100, 1) : 0;
+                // Balllar:
+                //  JB/MT/ON ball — yaxlitlashsiz raw qiymat (excelda format
+                //  1 kasrni ko'rsatadi);
+                //  OSKI/Test ball — ikkalasi ham vaznga ega bo'lsa raw qiymat,
+                //  faqat bittasi vaznga ega bo'lsa butun songacha yaxlitlanadi.
+                $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
+                $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
+                $onBall = $on >= 60 ? $on * $wOn / 100 : 0;
 
                 if ($wOski > 0 && $wTest > 0) {
                     $oskiBall = $oski >= 60 ? $oski * $wOski / 100 : 0;
@@ -673,11 +674,20 @@ class VedomostTekshirishController extends Controller
                     $testBall = 0;
                 }
 
-                $sumBall = $jnBall + $mtBall + $onBall;
+                // M ustun (JN+MT) — ballarni yig'ib butun songacha half-up
+                // yaxlitlanadi.
+                $sumBall = (int) floor($jnBall + $mtBall + $onBall + 0.5);
                 $maxSum  = $wJn + $wMt + $wOn;
 
                 // YN natija
                 $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav);
+
+                // Yakuniy qiymatni butun songacha half-up yaxlitlaymiz (V ustun
+                // butun son chiqishi kerak). Maxsus qiymatlar ('', -2, -1, 0)
+                // o'zgartirilmaydi — ular shart kodlari.
+                if (is_numeric($yn) && $yn > 0) {
+                    $yn = (int) floor((float) $yn + 0.5);
+                }
 
                 // ECTS
                 $ects = $this->toEcts($yn);
@@ -696,10 +706,15 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
                 $sheet->setCellValue("D{$r}", $jn);
                 $sheet->setCellValue("E{$r}", $jnBall);
+                $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
                 $sheet->setCellValue("G{$r}", $mt);
                 $sheet->setCellValue("H{$r}", $mtBall);
+                $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
                 $sheet->setCellValue("J{$r}", $on);
                 $sheet->setCellValue("K{$r}", $onBall);
+                if ($wOn > 0) {
+                    $sheet->getStyle("K{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("M{$r}", $sumBall);
                 if ($maxSum > 0) {
                     $sheet->setCellValue("N{$r}", $sumBall / $maxSum);
@@ -707,8 +722,15 @@ class VedomostTekshirishController extends Controller
                 }
                 $sheet->setCellValue("P{$r}", $oski);
                 $sheet->setCellValue("Q{$r}", $oskiBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    // Ikkalasi ham vaznga ega — 1 kasr ko'rinishi
+                    $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("S{$r}", $test);
                 $sheet->setCellValue("T{$r}", $testBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("V{$r}", $yn === '' ? '' : $yn);
                 $sheet->setCellValue("W{$r}", $ects);
                 $sheet->setCellValue("X{$r}", $practiceTeacher);

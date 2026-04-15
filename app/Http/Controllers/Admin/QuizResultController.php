@@ -1929,34 +1929,47 @@ class QuizResultController extends Controller
                 continue;
             }
 
+            $isNb = $sg->reason === 'absent' && $sg->grade === null;
             $currentValue = $sg->retake_grade ?? $sg->grade;
-            $newReason = $sg->reason;
-            $shouldUpdate = false;
+            $updates = null;
 
-            if ($sg->reason === 'absent' && $sg->grade === null && $sg->retake_grade === null) {
-                // NB — retake qo'yiladi
-                $shouldUpdate = true;
-            } elseif ($currentValue !== null && $currentValue < $moodleGrade) {
-                // Past baho — retake yangilanadi
-                $shouldUpdate = true;
-                if ($sg->reason === null) {
-                    $newReason = 'low_grade';
+            if ($isNb) {
+                // NB scenario — retake_grade qo'yish, jurnalda diagonal NB/baho
+                if ($sg->retake_grade === null || $sg->retake_grade < $moodleGrade) {
+                    $updates = [
+                        'retake_grade'   => $moodleGrade,
+                        'retake_comment' => "Moodle mavzu: {$result->quiz_type} / {$result->shakl} (quiz_result#{$result->id})",
+                        'reason'         => 'absent',
+                        'quiz_result_id' => $result->id,
+                        'updated_at'     => now(),
+                    ];
+                } else {
+                    $cur = $sg->retake_grade;
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: retake ({$cur}) >= Moodle ({$moodleGrade})";
+                    continue;
                 }
             } else {
-                $cur = $currentValue === null ? 'null' : $currentValue;
-                $skipReasons[] = "juftlik {$sg->lesson_pair_code}: hozirgi ({$cur}) >= Moodle ({$moodleGrade})";
-                continue;
+                // NB emas — oddiy baho bor. Moodle undan baland bo'lsa, grade to'g'ridan-to'g'ri
+                // almashtiriladi (retake_grade null, reason null) — jurnalda diagonal bo'lmaydi
+                if ($currentValue !== null && $currentValue < $moodleGrade) {
+                    $updates = [
+                        'grade'          => $moodleGrade,
+                        'retake_grade'   => null,
+                        'retake_comment' => "Moodle mavzu: {$result->quiz_type} / {$result->shakl} (quiz_result#{$result->id})",
+                        'reason'         => null,
+                        'quiz_result_id' => $result->id,
+                        'updated_at'     => now(),
+                    ];
+                } else {
+                    $cur = $currentValue === null ? 'null' : $currentValue;
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: hozirgi ({$cur}) >= Moodle ({$moodleGrade})";
+                    continue;
+                }
             }
 
-            if (!$shouldUpdate) continue;
+            if (!$updates) continue;
 
-            DB::table('student_grades')->where('id', $sg->id)->update([
-                'retake_grade'   => $moodleGrade,
-                'retake_comment' => "Moodle mavzu: {$result->quiz_type} / {$result->shakl} (quiz_result#{$result->id})",
-                'reason'         => $newReason,
-                'quiz_result_id' => $result->id,
-                'updated_at'     => now(),
-            ]);
+            DB::table('student_grades')->where('id', $sg->id)->update($updates);
             $updatedAnyPair = true;
         }
 

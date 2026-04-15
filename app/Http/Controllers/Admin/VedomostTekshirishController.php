@@ -311,10 +311,11 @@ class VedomostTekshirishController extends Controller
             'AH' => 'Soat',
             'AI' => 'Kredit',
             'AJ' => 'Ma\'ruzachi',
-            'AK' => 'Divisor',
-            'AL' => 'Davomat %',
-            'AM' => 'JN (asl)',
-            'AY' => 'Zanjir',
+            'AK' => 'JN soni',
+            'AL' => 'Divisor',
+            'AM' => 'Davomat %',
+            'AN' => 'JN (asl)',
+            'AZ' => 'Zanjir',
         ];
 
         $sheet->getRowDimension(1)->setRowHeight(30);
@@ -349,8 +350,8 @@ class VedomostTekshirishController extends Controller
             'U' => 2, 'V' => 7, 'W' => 6, 'X' => 20, 'Y' => 10,
             'Z' => 14, 'AA' => 10, 'AB' => 28, 'AC' => 14,
             'AD' => 14, 'AE' => 8, 'AF' => 12, 'AG' => 16,
-            'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 7,
-            'AL' => 8, 'AM' => 8, 'AY' => 25,
+            'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 8,
+            'AL' => 7, 'AM' => 8, 'AN' => 8, 'AZ' => 25,
         ];
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
@@ -648,6 +649,22 @@ class VedomostTekshirishController extends Controller
                 $test    = round($gradesByType[102][$hId] ?? 0, 0, PHP_ROUND_HALF_UP);
                 $dav     = $davomatByStudent[$hId] ?? 0;
 
+                // JN soni — shu talaba JN (JB) darslaridan nechta kunda baho
+                // olganini sanaydi. Bir kunda bir nechta pair bo'lsa ham 1 kun
+                // sifatida sanaladi. Faqat effektiv baho > 0 bo'lgan kunlar
+                // qo'shiladi (qo'yilmagan yoki 0 bo'lgan kunlar sanalmaydi;
+                // nb → retake_grade orqali olingan baho ham getEffectiveGrade
+                // ishida hisobga olinadi).
+                $jnCount = 0;
+                foreach (($jbGrades[$hId] ?? []) as $date => $pairGrades) {
+                    foreach ($pairGrades as $g) {
+                        if ($g > 0) {
+                            $jnCount++;
+                            break; // kun bir marta sanaladi
+                        }
+                    }
+                }
+
                 // Davomat >= 25% bo'lsa JN = 0
                 $jn = $dav >= 25 ? 0 : $jnOrig;
 
@@ -763,13 +780,14 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("AH{$r}", $totalHours);
                 $sheet->setCellValue("AI{$r}", (int) ($subject->credit ?? 0));
                 $sheet->setCellValue("AJ{$r}", $lectureTeacher);
-                $sheet->setCellValue("AK{$r}", $divisor);
-                $sheet->setCellValue("AL{$r}", $dav / 100);
-                $sheet->getStyle("AL{$r}")->getNumberFormat()->setFormatCode('0.00%');
+                $sheet->setCellValue("AK{$r}", $jnCount);
+                $sheet->setCellValue("AL{$r}", $divisor);
+                $sheet->setCellValue("AM{$r}", $dav / 100);
+                $sheet->getStyle("AM{$r}")->getNumberFormat()->setFormatCode('0.00%');
                 if ($dav >= 25 && $jnOrig > 0) {
-                    $sheet->setCellValue("AM{$r}", $jnOrig);
+                    $sheet->setCellValue("AN{$r}", $jnOrig);
                 }
-                $sheet->setCellValue("AY{$r}", $zanjir);
+                $sheet->setCellValue("AZ{$r}", $zanjir);
 
                 // Rang berish
                 $this->applyRowStyle($sheet, $r, $yn, $dav);
@@ -911,7 +929,7 @@ class VedomostTekshirishController extends Controller
 
     private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {
-        $range = "A{$row}:AY{$row}";
+        $range = "A{$row}:AZ{$row}";
 
         $sheet->getStyle($range)->applyFromArray([
             'font' => ['size' => 9],
@@ -934,7 +952,7 @@ class VedomostTekshirishController extends Controller
         } elseif ($yn === 0) {
             $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFCC');
         } elseif ($dav >= 25) {
-            $sheet->getStyle("A{$row}:AY{$row}")->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+            $sheet->getStyle("A{$row}:AZ{$row}")->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
         }
     }
 }

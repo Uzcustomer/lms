@@ -315,6 +315,11 @@ class VedomostTekshirishController extends Controller
             'AL' => 'Divisor',
             'AM' => 'Davomat %',
             'AN' => 'JN (asl)',
+            'AO' => 'jn_vazn',
+            'AP' => 'mt_vazn',
+            'AQ' => 'on_vazn',
+            'AR' => 'oski_vazn',
+            'AS' => 'test_vazn',
             'AZ' => 'Zanjir',
         ];
 
@@ -351,7 +356,9 @@ class VedomostTekshirishController extends Controller
             'Z' => 14, 'AA' => 10, 'AB' => 28, 'AC' => 14,
             'AD' => 14, 'AE' => 8, 'AF' => 12, 'AG' => 16,
             'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 8,
-            'AL' => 7, 'AM' => 8, 'AN' => 8, 'AZ' => 25,
+            'AL' => 7, 'AM' => 8, 'AN' => 8,
+            'AO' => 8, 'AP' => 8, 'AQ' => 8, 'AR' => 9, 'AS' => 9,
+            'AZ' => 25,
         ];
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
@@ -668,10 +675,12 @@ class VedomostTekshirishController extends Controller
                     if ($g->student_hemis_id !== $hId) continue;
                     if ($g->status === 'pending') continue;               // tugallanmagan
                     // "Yozuv mavjud" deb hisoblaymiz agar biror ma'lumot bor:
-                    //   grade not null (nol ham mayli), retake_grade not null,
-                    //   yoki reason='absent' (nb).
-                    $hasEntry = ($g->grade !== null)
-                        || ($g->retake_grade !== null)
+                    //   grade > 0 (HEMIS kamida 1 dan boshlab qabul qiladi,
+                    //     shuning uchun 0 tozalanmagan/xato yozuv deb e'tibor
+                    //     berilmaydi), retake_grade > 0, yoki reason='absent'
+                    //     (nb — o'qituvchi yo'q deb belgilagan, kun sanaladi).
+                    $hasEntry = ($g->grade !== null && (float) $g->grade > 0)
+                        || ($g->retake_grade !== null && (float) $g->retake_grade > 0)
                         || ($g->reason === 'absent');
                     if ($hasEntry) {
                         $jnDaysAttended[$date] = true;
@@ -801,6 +810,11 @@ class VedomostTekshirishController extends Controller
                 if ($dav >= 25 && $jnOrig > 0) {
                     $sheet->setCellValue("AN{$r}", $jnOrig);
                 }
+                $sheet->setCellValue("AO{$r}", $wJn);
+                $sheet->setCellValue("AP{$r}", $wMt);
+                $sheet->setCellValue("AQ{$r}", $wOn);
+                $sheet->setCellValue("AR{$r}", $wOski);
+                $sheet->setCellValue("AS{$r}", $wTest);
                 $sheet->setCellValue("AZ{$r}", $zanjir);
 
                 // Rang berish

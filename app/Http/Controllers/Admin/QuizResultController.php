@@ -1686,7 +1686,7 @@ class QuizResultController extends Controller
             $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
             $isJnType = $result->quiz_type && stripos($result->quiz_type, 'JN') === 0;
             if ($isMavzuShakl && $isJnType) {
-                $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors);
+                $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides);
                 continue;
             }
 
@@ -1829,7 +1829,7 @@ class QuizResultController extends Controller
      *     Mavjud baho >= Moodle: skip
      *     YN qulflangan: skip
      */
-    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors): void
+    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors, array $subjectOverrides = []): void
     {
         // Mavzu raqamini olish
         if (!preg_match('/^(\d+)-mavzu$/i', $result->shakl, $m)) {
@@ -1863,12 +1863,16 @@ class QuizResultController extends Controller
             return;
         }
 
+        // Fan ID ni override qilish (Qayta yuklash modal'idan kelsa)
+        $overrideKey = $result->fan_id . '_' . $student->group_id;
+        $targetFanId = $subjectOverrides[$overrideKey] ?? $result->fan_id;
+
         // Fan o'quv rejada bormi
-        $subject = CurriculumSubject::where('subject_id', $result->fan_id)
+        $subject = CurriculumSubject::where('subject_id', $targetFanId)
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->first();
         if (!$subject) {
-            $rowInfo['error'] = "Fan o'quv rejada yo'q (fan_id: {$result->fan_id})";
+            $rowInfo['error'] = "Fan o'quv rejada yo'q (fan_id: {$targetFanId})";
             $errors[] = $rowInfo;
             return;
         }
@@ -1878,7 +1882,7 @@ class QuizResultController extends Controller
         // Amaliy (JN) dars sanalari — xronologik
         $lessonDates = DB::table('schedules')
             ->where('group_id', $student->group_id)
-            ->where('subject_id', $result->fan_id)
+            ->where('subject_id', $targetFanId)
             ->where('semester_code', $semesterCode)
             ->whereNotIn('training_type_code', [11, 17, 99, 100, 101, 102, 103])
             ->whereNull('deleted_at')
@@ -1901,7 +1905,7 @@ class QuizResultController extends Controller
         // Shu sanadagi jurnal yozuvlari (JN type) — bir kunda bir nechta juftlik bo'lishi mumkin
         $sgRecords = DB::table('student_grades')
             ->where('student_hemis_id', $student->hemis_id)
-            ->where('subject_id', $result->fan_id)
+            ->where('subject_id', $targetFanId)
             ->where('semester_code', $semesterCode)
             ->whereDate('lesson_date', $targetDate)
             ->whereNotIn('training_type_code', [11, 17, 99, 100, 101, 102, 103])
@@ -1979,10 +1983,36 @@ class QuizResultController extends Controller
             'subject_overrides' => 'nullable|array',
         ]);
 
-        // Eski student_grades yozuvlarini o'chirish (quiz_result_id bo'yicha)
-        StudentGrade::whereIn('quiz_result_id', $request->ids)->delete();
+        // Qayta yuklashdan oldin eski yozuvlarni tozalash. Ikki xil mantiq:
+        // - OSKI/Test (reason='quiz_result') — yangi qator sifatida qo'shilgan: butunlay o'chiriladi
+        // - Mavzu retake — mavjud jurnal qatoriga retake_grade qo'yilgan: faqat retake
+        //   maydonlari tozalanadi, qator qoladi (NB/past baho asl holatiga qaytadi)
+        $existingRows = StudentGrade::whereIn('quiz_result_id', $request->ids)
+            ->whereNotNull('quiz_result_id')
+            ->get();
 
-        // uploadToGrades ni chaqirish (endi eski yozuvlar yo'q — dublikat tekshiruv o'tmaydi)
+        foreach ($existingRows as $sg) {
+            if ($sg->reason === 'quiz_result') {
+                // OSKI/Test yozuvi — butunlay o'chirish
+                $sg->delete();
+            } else {
+                // Mavzu retake — retake maydonlarni tozalash
+                $revertReason = $sg->reason;
+                if ($sg->reason === 'low_grade' && $sg->grade === null) {
+                    // low_grade faqat retake uchun qo'yilgan bo'lsa — reason ni ham null qilish
+                    $revertReason = null;
+                }
+                DB::table('student_grades')->where('id', $sg->id)->update([
+                    'retake_grade'   => null,
+                    'retake_comment' => null,
+                    'quiz_result_id' => null,
+                    'reason'         => $revertReason,
+                    'updated_at'     => now(),
+                ]);
+            }
+        }
+
+        // uploadToGrades ni chaqirish (endi eski yozuvlar tozalangan — qayta yuklanadi)
         return $this->uploadToGrades($request);
     }
 

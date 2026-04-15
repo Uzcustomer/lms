@@ -2162,9 +2162,13 @@ class ReportController extends Controller
             }
         }
 
-        // 3-QADAM: student_grades dan ma'lumotlarni olish
-        // Joriy o'quv yili bo'lsa, o'tgan yilgi ma'lumotlar tushmasligi uchun
-        // joriy o'quv yilining eng kichik dars sanasidan filtrlash
+        // 3-QADAM: attendances dan davomat ma'lumotlarini olish
+        // MUHIM: avval bu yerda student_grades ishlatilardi, lekin u jadvalda bir
+        // dars uchun bir nechta yozuv bo'lishi mumkin (HEMIS qayta import, retake,
+        // status o'zgarishlari) — bu sababsiz soat 4-5 baravargacha shishib ketardi
+        // (jurnalda 23% bo'lsa, hisobotda 437% chiqishi mumkin edi).
+        // attendances jadvali esa har bir (talaba, fan, sana, juftlik, training_type)
+        // uchun bitta yagona yozuv saqlaydi va jurnal ham o'shani ishlatadi.
         $minScheduleDate = null;
         if ($isCurrentSemester) {
             $minScheduleDate = DB::table('schedules')
@@ -2174,39 +2178,48 @@ class ReportController extends Controller
                 ->min('lesson_date');
         }
 
+        // Auditoriya bo'lmagan training_type kodlari (JournalController::show
+        // dagi $excludedAttendanceCodes bilan bir xil): 99=MT, 100=ON,
+        // 101=Oski, 102=Test. Bu jurnal "Dav %" hisoblash bilan moslashish
+        // uchun kerak — aks holda foiz farq qilib qoladi.
+        $nonAuditoryAttendanceCodes = [99, 100, 101, 102];
+
         // 4-QADAM: Har bir talaba/fan uchun davomat ma'lumotlarini hisoblash
         $studentSubjectData = [];
         $studentAllAttendanceDates = []; // Talabaning ISTALGAN fandan darsga chiqqan kunlari
         $now = Carbon::now('Asia/Tashkent');
         $spravkaDays = (int) Setting::get('spravka_deadline_days', 10);
 
-        // student_grades ni chunk qilib olish (katta ma'lumot uchun)
+        // attendances ni chunk qilib olish (katta ma'lumot uchun)
         foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
-            $gradesChunk = DB::table('student_grades')
+            $attendanceChunk = DB::table('attendances')
                 ->whereIn('student_hemis_id', $hemisChunk)
                 ->whereIn('subject_id', $filteredSubjectIds)
                 ->whereIn('semester_code', $validSemesterCodes)
-                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotIn('training_type_code', $nonAuditoryAttendanceCodes)
                 ->whereNotNull('lesson_date')
                 ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                 ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
-                    'grade', 'lesson_date', 'lesson_pair_code', 'reason', 'status', 'deadline')
+                    'lesson_date', 'absent_on', 'absent_off')
                 ->get();
 
-            foreach ($gradesChunk as $g) {
-                $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
+            foreach ($attendanceChunk as $a) {
+                $groupId = $studentGroupMap[$a->student_hemis_id] ?? null;
                 if (!$groupId) continue;
 
-                $ssKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
-                $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
-                $dateKey = substr($g->lesson_date, 0, 10);
+                $absentOn  = (int) $a->absent_on;   // sababli (excused)
+                $absentOff = (int) $a->absent_off;  // sababsiz (unexcused)
+
+                $ssKey = $a->student_hemis_id . '|' . $a->subject_id . '|' . $a->semester_code;
+                $comboKey = $groupId . '|' . $a->subject_id . '|' . $a->semester_code;
+                $dateKey = substr($a->lesson_date, 0, 10);
 
                 if (!isset($studentSubjectData[$ssKey])) {
                     $studentSubjectData[$ssKey] = [
-                        'student_hemis_id' => $g->student_hemis_id,
-                        'subject_id' => $g->subject_id,
-                        'subject_name' => $g->subject_name,
-                        'semester_code' => $g->semester_code,
+                        'student_hemis_id' => $a->student_hemis_id,
+                        'subject_id' => $a->subject_id,
+                        'subject_name' => $a->subject_name,
+                        'semester_code' => $a->semester_code,
                         'combo_key' => $comboKey,
                         'group_id' => $groupId,
                         'total_absent_hours' => 0,
@@ -2216,22 +2229,22 @@ class ReportController extends Controller
                     ];
                 }
 
-                if ($g->reason === 'absent') {
-                    $studentSubjectData[$ssKey]['total_absent_hours'] += 2;
-
-                    if ($g->status !== 'retake') {
-                        $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
-                        $studentSubjectData[$ssKey]['unexcused_absent_dates'][] = $dateKey;
+                if ($absentOn > 0 || $absentOff > 0) {
+                    $studentSubjectData[$ssKey]['total_absent_hours'] += $absentOn + $absentOff;
+                    if ($absentOff > 0) {
+                        $studentSubjectData[$ssKey]['unexcused_absent_hours'] += $absentOff;
+                        // Saqlash uchun [sana => shu kungi sababsiz soat] (25% chegarasi
+                        // sanasini aniqlashda kerak)
+                        $studentSubjectData[$ssKey]['unexcused_absent_dates'][$dateKey] =
+                            ($studentSubjectData[$ssKey]['unexcused_absent_dates'][$dateKey] ?? 0) + $absentOff;
                     }
                 } else {
-                    if ($g->grade !== null && $g->grade > 0) {
-                        $studentSubjectData[$ssKey]['attendance_dates'][$dateKey] = true;
-                        // Istalgan fandan grade > 0 bo'lsa, talabaning umumiy davomatiga qo'shish
-                        $studentAllAttendanceDates[$g->student_hemis_id][$dateKey] = true;
-                    }
+                    // Talaba shu darsda bo'lgan
+                    $studentSubjectData[$ssKey]['attendance_dates'][$dateKey] = true;
+                    $studentAllAttendanceDates[$a->student_hemis_id][$dateKey] = true;
                 }
             }
-            unset($gradesChunk);
+            unset($attendanceChunk);
         }
 
         // attendance_controls dan istalgan fandan dars o'tilgan kunlarni olish (load > 0)
@@ -2276,9 +2289,12 @@ class ReportController extends Controller
 
             if ($unexcusedPercent < $minPercent) continue;
 
+            // unexcused_absent_dates: [sana => shu kungi sababsiz soat]
+            $absentDateHours = $data['unexcused_absent_dates'];
+            ksort($absentDateHours);
+            $absentDates = array_keys($absentDateHours);
+
             // Spravka muddati: oxirgi sababsiz dars kunidan boshlab hisoblash
-            $absentDates = $data['unexcused_absent_dates'];
-            sort($absentDates);
             $spravkaStatus = '-';
             if (!empty($absentDates)) {
                 $latestAbsentDate = Carbon::parse(end($absentDates));
@@ -2286,13 +2302,13 @@ class ReportController extends Controller
                 $spravkaStatus = $daysSinceAbsent <= $spravkaDays ? 'Muddat bor' : 'Kechikkan';
             }
 
-            // 25% chegarasiga yetgan sanani aniqlash
+            // 25% chegarasiga yetgan sanani aniqlash (kunma-kun jamlash)
             $firstAttendanceAfter25 = null;
             $cumulativeHours = 0;
             $thresholdDate = null;
 
-            foreach ($absentDates as $aDate) {
-                $cumulativeHours += 2;
+            foreach ($absentDateHours as $aDate => $hoursThatDay) {
+                $cumulativeHours += $hoursThatDay;
                 if (($cumulativeHours / $totalAuditoryHours) * 100 >= 25 && !$thresholdDate) {
                     $thresholdDate = $aDate;
                     break;

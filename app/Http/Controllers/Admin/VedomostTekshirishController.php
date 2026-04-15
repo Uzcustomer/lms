@@ -923,11 +923,16 @@ class VedomostTekshirishController extends Controller
             ],
         ]);
 
-        // Rang
-        if ($yn === -2 || $yn === 0) {
-            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFC7CE');
+        // Rang — YN qaydnoma shabloni bilan bir xil:
+        //  V = -2 → qizil (FFFFC1C1)
+        //  V = -1 → pushti (FFFEC2F1)
+        //  V =  0 → sariq (FFFFFFCC)
+        if ($yn === -2) {
+            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFC1C1');
         } elseif ($yn === -1) {
-            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFEB9C');
+            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEC2F1');
+        } elseif ($yn === 0) {
+            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFCC');
         } elseif ($dav >= 25) {
             $sheet->getStyle("A{$row}:AY{$row}")->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
         }

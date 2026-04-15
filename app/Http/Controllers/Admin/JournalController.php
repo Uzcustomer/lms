@@ -6469,6 +6469,40 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
         $sheet->setCellValue('P19', $weightOski);
         $sheet->setCellValue('S19', $weightTest);
 
+        // Davomat (auditoriya soatlariga nisbatan absent_off foizi)
+        $excludedAttendanceCodes = [99, 100, 101, 102];
+        $attendanceByStudent = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+            ->selectRaw('student_hemis_id, SUM(absent_off) as total_absent_off')
+            ->groupBy('student_hemis_id')
+            ->pluck('total_absent_off', 'student_hemis_id');
+
+        $nonAuditoriumCodes = ['17'];
+        $auditoriumHours = 0;
+        if (is_array($subject->subject_details)) {
+            foreach ($subject->subject_details as $detail) {
+                $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                    $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                }
+            }
+        }
+        if ($auditoriumHours <= 0) {
+            $auditoriumHours = (float) ($subject->total_acload ?? 0);
+        }
+
+        $davomatByStudent = [];
+        foreach ($students as $stu) {
+            $absentOff = (float) ($attendanceByStudent[$stu->hemis_id] ?? 0);
+            $davomatByStudent[$stu->hemis_id] = $auditoriumHours > 0
+                ? round(($absentOff / $auditoriumHours) * 100, 2)
+                : 0.0;
+        }
+
         // Ma'lumotlarni joylashtirish
         $startRow = 20;
         $maxRow = 49;
@@ -6478,8 +6512,12 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             if ($row > $maxRow) break;
 
             $hemisId = $student->hemis_id;
+            $davomatPct = (float) ($davomatByStudent[$hemisId] ?? 0);
+            $davomatFailed = $davomatPct >= 25;
 
-            $sheet->setCellValue('B' . $row, $student->full_name);
+            // Davomat ≥25% bo'lsa FIO'ga izoh qo'shamiz
+            $fioLabel = $student->full_name . ($davomatFailed ? ' (≥25% davomat)' : '');
+            $sheet->setCellValue('B' . $row, $fioLabel);
             $sheet->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
             $jnVal = (int) ($calculatedJnGrades[$hemisId] ?? 0);
@@ -6551,6 +6589,8 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             // V (O'zlashtirish ko'rsatkichi)
             if ($jnVal === 0 && $mtVal === 0) {
                 $v = '';
+            } elseif ($davomatFailed) {
+                $v = -3; // Davomat ≥25%
             } elseif ($nPct < 0.6) {
                 $v = -2; // qo'yilmadi
             } elseif (($weightOski > 0 && $oskiVal == 0)
@@ -6592,6 +6632,7 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 elseif ($v >= 60)               $w = 'C';
                 elseif ($v >= 0 && $v <= 60)    $w = 'F';
                 elseif ($v == -1)               $w = '';
+                elseif ($v == -3)               $w = '';
                 else                            $w = 'FX';
             }
 
@@ -6604,6 +6645,7 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
                 elseif ($v == -1)                 $y = 'kelmadi';
                 elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+                elseif ($v == -3)                 $y = "Davomat \u{2265}25%";
             }
 
             // Ball va natijalarni shablon formulasi ustiga yozamiz
@@ -6630,6 +6672,12 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             $sheet->setCellValue('V' . $row, $v);
             $sheet->setCellValue('W' . $row, $w);
             $sheet->setCellValue('Y' . $row, $y);
+
+            // Davomat ≥25% bo'lgan qatorda kursiv qizil shrift
+            if ($davomatFailed) {
+                $sheet->getStyle('A' . $row . ':Y' . $row)
+                    ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+            }
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

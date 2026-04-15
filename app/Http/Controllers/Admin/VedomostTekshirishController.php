@@ -311,10 +311,15 @@ class VedomostTekshirishController extends Controller
             'AH' => 'Soat',
             'AI' => 'Kredit',
             'AJ' => 'Ma\'ruzachi',
-            'AK' => 'Divisor',
-            'AL' => 'Davomat %',
-            'AM' => 'JN (asl)',
-            'AY' => 'Zanjir',
+            'AK' => 'JN soni',
+            'AL' => 'Divisor',
+            'AM' => 'Davomat %',
+            'AN' => 'jn_vazn',
+            'AO' => 'mt_vazn',
+            'AP' => 'on_vazn',
+            'AQ' => 'oski_vazn',
+            'AR' => 'test_vazn',
+            'AZ' => 'Zanjir',
         ];
 
         $sheet->getRowDimension(1)->setRowHeight(30);
@@ -349,8 +354,10 @@ class VedomostTekshirishController extends Controller
             'U' => 2, 'V' => 7, 'W' => 6, 'X' => 20, 'Y' => 10,
             'Z' => 14, 'AA' => 10, 'AB' => 28, 'AC' => 14,
             'AD' => 14, 'AE' => 8, 'AF' => 12, 'AG' => 16,
-            'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 7,
-            'AL' => 8, 'AM' => 8, 'AY' => 25,
+            'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 8,
+            'AL' => 7, 'AM' => 8,
+            'AN' => 8, 'AO' => 8, 'AP' => 8, 'AQ' => 9, 'AR' => 9,
+            'AZ' => 25,
         ];
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
@@ -648,8 +655,42 @@ class VedomostTekshirishController extends Controller
                 $test    = round($gradesByType[102][$hId] ?? 0, 0, PHP_ROUND_HALF_UP);
                 $dav     = $davomatByStudent[$hId] ?? 0;
 
-                // Davomat >= 25% bo'lsa JN = 0
-                $jn = $dav >= 25 ? 0 : $jnOrig;
+                // JN soni — shu talaba JN (JB) darslaridan nechta kunda baho
+                // yoki nb (yo'q) belgilangan bo'lsa, shuni sanaydi. Bir kunda
+                // bir nechta pair bo'lsa ham 1 kun sifatida sanaladi.
+                // Sanash qoidasi:
+                //   * kiritilgan numerik baho (>0) — sanaladi;
+                //   * nb (reason='absent') — sanaladi (retake bo'lsa yoki
+                //     bo'lmasa ham);
+                //   * retake_grade (otrabotka) mavjud — sanaladi;
+                //   * grade = 0 va nb emas (ya'ni bo'sh ham emas) — sanaladi
+                //     (o'qituvchi aniq 0 qo'ygan);
+                //   * umuman yozuv yo'q yoki status='pending' — sanalmaydi.
+                $jnDaysAttended = [];
+                foreach ($allGradesRaw as $g) {
+                    $date = Carbon::parse($g->lesson_date)->format('Y-m-d');
+                    $key  = $date . '_' . $g->lesson_pair_code;
+                    if (!isset($jbDatePairSet[$key])) continue;          // faqat JB jadvalidagi kunlar
+                    if ($g->student_hemis_id !== $hId) continue;
+                    if ($g->status === 'pending') continue;               // tugallanmagan
+                    // "Yozuv mavjud" deb hisoblaymiz agar biror ma'lumot bor:
+                    //   grade > 0 (HEMIS kamida 1 dan boshlab qabul qiladi,
+                    //     shuning uchun 0 tozalanmagan/xato yozuv deb e'tibor
+                    //     berilmaydi), retake_grade > 0, yoki reason='absent'
+                    //     (nb — o'qituvchi yo'q deb belgilagan, kun sanaladi).
+                    $hasEntry = ($g->grade !== null && (float) $g->grade > 0)
+                        || ($g->retake_grade !== null && (float) $g->retake_grade > 0)
+                        || ($g->reason === 'absent');
+                    if ($hasEntry) {
+                        $jnDaysAttended[$date] = true;
+                    }
+                }
+                $jnCount = count($jnDaysAttended);
+
+                // Davomat >= 25% bo'lsa ham JN o'rtacha qiymati saqlanadi —
+                // ma'muriyatga haqiqiy ko'rsatkich ko'rinib tursin. V esa -3
+                // qaytaradi va talaba FISH'iga "(≥25% davomat)" qo'shiladi.
+                $jn = $jnOrig;
 
                 // Balllar:
                 //  JB/MT/ON ball — yaxlitlashsiz raw qiymat (excelda format
@@ -715,7 +756,8 @@ class VedomostTekshirishController extends Controller
 
                 // Hujayralarga yozish
                 $sheet->setCellValue("A{$r}", $rowIndex);
-                $sheet->setCellValue("B{$r}", $stu->full_name);
+                $fioLabel = $stu->full_name . ($dav >= 25 ? ' (≥25% davomat)' : '');
+                $sheet->setCellValue("B{$r}", $fioLabel);
                 $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
                 $sheet->setCellValue("D{$r}", $jn);
                 $sheet->setCellValue("E{$r}", $jnBall);
@@ -763,13 +805,16 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("AH{$r}", $totalHours);
                 $sheet->setCellValue("AI{$r}", (int) ($subject->credit ?? 0));
                 $sheet->setCellValue("AJ{$r}", $lectureTeacher);
-                $sheet->setCellValue("AK{$r}", $divisor);
-                $sheet->setCellValue("AL{$r}", $dav / 100);
-                $sheet->getStyle("AL{$r}")->getNumberFormat()->setFormatCode('0.00%');
-                if ($dav >= 25 && $jnOrig > 0) {
-                    $sheet->setCellValue("AM{$r}", $jnOrig);
-                }
-                $sheet->setCellValue("AY{$r}", $zanjir);
+                $sheet->setCellValue("AK{$r}", $jnCount);
+                $sheet->setCellValue("AL{$r}", $divisor);
+                $sheet->setCellValue("AM{$r}", $dav / 100);
+                $sheet->getStyle("AM{$r}")->getNumberFormat()->setFormatCode('0.00%');
+                $sheet->setCellValue("AN{$r}", $wJn);
+                $sheet->setCellValue("AO{$r}", $wMt);
+                $sheet->setCellValue("AP{$r}", $wOn);
+                $sheet->setCellValue("AQ{$r}", $wOski);
+                $sheet->setCellValue("AR{$r}", $wTest);
+                $sheet->setCellValue("AZ{$r}", $zanjir);
 
                 // Rang berish
                 $this->applyRowStyle($sheet, $r, $yn, $dav);
@@ -822,7 +867,8 @@ class VedomostTekshirishController extends Controller
         if ($jn === 0 && $mt === 0) return '';
 
         // Davomat >= 25% → qo'yilmadi (-2)
-        if ($dav >= 25) return -2;
+        // Davomat >= 25% → -3 (Davomat ≥25%)
+        if ($dav >= 25) return -3;
 
         // Imtihonga kirmaganlar
         $oskiMissing = $wOski > 0 && $oski == 0;
@@ -877,7 +923,9 @@ class VedomostTekshirishController extends Controller
 
     private function toBaho(string|int|float $yn): string
     {
-        if ($yn === '' || $yn === -2) return "qo'yilmadi";
+        if ($yn === '') return '';
+        if ($yn === -3) return "Davomat \u{2265}25%";
+        if ($yn === -2) return "qo\u{2018}yilmadi";
         if ($yn === -1) return 'kelmadi';
         if (!is_numeric($yn)) return '';
         $yn = (float) $yn;
@@ -911,7 +959,7 @@ class VedomostTekshirishController extends Controller
 
     private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {
-        $range = "A{$row}:AY{$row}";
+        $range = "A{$row}:AZ{$row}";
 
         $sheet->getStyle($range)->applyFromArray([
             'font' => ['size' => 9],
@@ -924,17 +972,18 @@ class VedomostTekshirishController extends Controller
         ]);
 
         // Rang — YN qaydnoma shabloni bilan bir xil:
+        //  V = -3 → davomat ≥25%: butun qator kursiv qizil shrift
         //  V = -2 → qizil (FFFFC1C1)
         //  V = -1 → pushti (FFFEC2F1)
         //  V =  0 → sariq (FFFFFFCC)
-        if ($yn === -2) {
+        if ($yn === -3 || $dav >= 25) {
+            $sheet->getStyle($range)->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+        } elseif ($yn === -2) {
             $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFC1C1');
         } elseif ($yn === -1) {
             $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEC2F1');
         } elseif ($yn === 0) {
             $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFCC');
-        } elseif ($dav >= 25) {
-            $sheet->getStyle("A{$row}:AY{$row}")->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
         }
     }
 }

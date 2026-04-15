@@ -1138,8 +1138,12 @@ class YnQaytnomaController extends Controller
                 $davomatPct = (float) ($data['davomat'][$hemisId] ?? 0);
                 $davomatFailed = $davomatPct >= 25;
 
-                // B ustun - Talaba FIO (davomat ≥25% bo'lsa izoh qo'shiladi)
-                $fioLabel = $student->full_name . ($davomatFailed ? ' (≥25% davomat)' : '');
+                // B ustun - Talaba FIO (davomat ≥25% bo'lsa haqiqiy foiz qo'shiladi)
+                $fioLabel = $student->full_name;
+                if ($davomatFailed) {
+                    $davStr = rtrim(rtrim(number_format($davomatPct, 1, '.', ''), '0'), '.');
+                    $fioLabel .= " ({$davStr}% davomat)";
+                }
                 $sheet->setCellValue('B' . $row, $fioLabel);
 
                 // C ustun - Talaba ID

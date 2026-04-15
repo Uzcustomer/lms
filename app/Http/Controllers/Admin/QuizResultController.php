@@ -585,6 +585,26 @@ class QuizResultController extends Controller
     {
         $query = HemisQuizResult::where('is_active', 1);
 
+        // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga ega bo'lgan
+        // urinishni qoldirish (NOT EXISTS yondashuvi). Tenglik holatida — eng oxirgi
+        // attempt_id (qaysi urinish keyinroq topshirilgan).
+        $query->whereNotExists(function ($sub) {
+            $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                ->from('hemis_quiz_results as h2')
+                ->where('h2.is_active', 1)
+                ->whereColumn('h2.student_id', 'hemis_quiz_results.student_id')
+                ->whereColumn('h2.fan_id', 'hemis_quiz_results.fan_id')
+                ->whereColumn('h2.quiz_type', 'hemis_quiz_results.quiz_type')
+                ->whereColumn('h2.shakl', 'hemis_quiz_results.shakl')
+                ->where(function ($q) {
+                    $q->whereColumn('h2.grade', '>', 'hemis_quiz_results.grade')
+                      ->orWhere(function ($q2) {
+                          $q2->whereColumn('h2.grade', '=', 'hemis_quiz_results.grade')
+                             ->whereColumn('h2.attempt_id', '>', 'hemis_quiz_results.attempt_id');
+                      });
+                });
+        });
+
         if ($request->filled('faculty')) {
             $query->where('faculty', $request->faculty);
         }
@@ -661,6 +681,25 @@ class QuizResultController extends Controller
             ini_set('memory_limit', '512M');
 
             $query = HemisQuizResult::where('is_active', 1);
+
+            // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga ega bo'lgan
+            // urinishni qoldirish — diagnostikaData bilan bir xil mantiq.
+            $query->whereNotExists(function ($sub) {
+                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                    ->from('hemis_quiz_results as h2')
+                    ->where('h2.is_active', 1)
+                    ->whereColumn('h2.student_id', 'hemis_quiz_results.student_id')
+                    ->whereColumn('h2.fan_id', 'hemis_quiz_results.fan_id')
+                    ->whereColumn('h2.quiz_type', 'hemis_quiz_results.quiz_type')
+                    ->whereColumn('h2.shakl', 'hemis_quiz_results.shakl')
+                    ->where(function ($q) {
+                        $q->whereColumn('h2.grade', '>', 'hemis_quiz_results.grade')
+                          ->orWhere(function ($q2) {
+                              $q2->whereColumn('h2.grade', '=', 'hemis_quiz_results.grade')
+                                 ->whereColumn('h2.attempt_id', '>', 'hemis_quiz_results.attempt_id');
+                          });
+                    });
+            });
 
             if ($request->filled('date_from')) {
                 $query->whereDate('date_finish', '>=', $request->date_from);

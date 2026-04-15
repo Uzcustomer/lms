@@ -19,9 +19,15 @@
         </div>
     </div>
 
+    @php
+        $_admHasRealData = $visaInfo && ($visaInfo->passport_number || $visaInfo->visa_number || $visaInfo->registration_end_date);
+        $_admBirthCountry = $_admHasRealData ? ($visaInfo->birth_country ?? '') : '';
+        $_admBirthRegion = $_admHasRealData ? ($visaInfo->birth_region ?? '') : '';
+        $_admBirthCity = $_admHasRealData ? ($visaInfo->birth_city ?? '') : '';
+    @endphp
     <div style="font-size:11px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;">Tug'ilgan joy</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-        <div x-data="adminCountrySelect({ value: '{{ $visaInfo?->birth_country ?? '' }}' })">
+        <div x-data="adminCountrySelect({ value: '{{ $_admBirthCountry }}' })">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Davlat</label>
             <div style="position:relative;">
                 <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" @keydown.enter.prevent="if(filtered.length>0){value=filtered[0];search=filtered[0];open=false;$dispatch('country-changed',{country:filtered[0]})}" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
@@ -33,7 +39,7 @@
                 </div>
             </div>
         </div>
-        <div x-data="adminRegionSelect({ value: '{{ $visaInfo?->birth_region ?? '' }}', country: '{{ $visaInfo?->birth_country ?? '' }}' })" @country-changed.window="country=$event.detail.country;search='';value=''">
+        <div x-data="adminRegionSelect({ value: '{{ $_admBirthRegion }}', country: '{{ $_admBirthCountry }}' })" @country-changed.window="country=$event.detail.country;search='';value=''">
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Viloyat</label>
             <div style="position:relative;">
                 <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true" @keydown.enter.prevent="if(filtered.length>0){value=filtered[0];search=filtered[0];open=false}" placeholder="Qidiring..." style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;" autocomplete="off">
@@ -47,7 +53,7 @@
         </div>
         <div>
             <label style="font-size:11px;color:#64748b;display:block;margin-bottom:3px;">Shahar</label>
-            <input type="text" name="birth_city" value="{{ $visaInfo?->birth_city ?? '' }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
+            <input type="text" name="birth_city" value="{{ $_admBirthCity }}" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;text-transform:uppercase;">
         </div>
     </div>
 

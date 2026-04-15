@@ -21,6 +21,14 @@
     </div>
 
     {{-- Tug'ilgan joy --}}
+    @php
+        // "Haqiqiy ma'lumot" tekshiruvi — firma biriktirilgan, lekin talaba haligacha
+        // to'ldirmagan yozuvlarda birth_country default (India) bo'lsa ko'rsatmaymiz.
+        $hasRealData = $visaInfo && ($visaInfo->passport_number || $visaInfo->visa_number || $visaInfo->registration_end_date);
+        $defBirthCountry = $hasRealData ? ($visaInfo->birth_country ?? '') : '';
+        $defBirthRegion = $hasRealData ? ($visaInfo->birth_region ?? '') : '';
+        $defBirthCity = $hasRealData ? ($visaInfo->birth_city ?? '') : '';
+    @endphp
     <div class="mb-4 p-4 bg-white rounded-lg border border-gray-200">
         <div style="font-size:11px;font-weight:700;color:#0f766e;margin-bottom:10px;">{{ __("Tug'ilgan joy") }}</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -42,7 +50,7 @@
                     'UAE','Uganda','Ukraine','United Kingdom','United States','Uruguay','Uzbekistan',
                     'Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'
                 ]) }},
-                value: '{{ old('birth_country', $visaInfo?->birth_country ?? '') }}'
+                value: '{{ old('birth_country', $defBirthCountry) }}'
             })">
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Davlat') }} <span class="text-red-500">*</span></label>
                 <div class="relative">
@@ -66,7 +74,7 @@
             </div>
 
             {{-- Viloyat --}}
-            <div x-data="regionSelect({ value: '{{ old('birth_region', $visaInfo?->birth_region ?? '') }}' })" x-effect="updateRegions($store.birthCountry)">
+            <div x-data="regionSelect({ value: '{{ old('birth_region', $defBirthRegion) }}' })" x-effect="updateRegions($store.birthCountry)">
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Viloyat') }} <span class="text-red-500">*</span></label>
                 <div class="relative">
                     <input type="text" x-model="search" @focus="open=true" @click="open=true" @input="open=true"
@@ -91,7 +99,7 @@
             {{-- Shahar --}}
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Shahar') }} <span class="text-red-500">*</span></label>
-                <input type="text" name="birth_city" value="{{ old('birth_city', $visaInfo?->birth_city ?? '') }}" required
+                <input type="text" name="birth_city" value="{{ old('birth_city', $defBirthCity) }}" required
                        placeholder="{{ __('Shahar nomini kiriting') }}"
                        class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 uppercase" oninput="this.value=this.value.toUpperCase()">
                 @error('birth_city') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror

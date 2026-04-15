@@ -432,6 +432,7 @@
         function getXulosaBadge(code, text, resultId) {
             var styles = {
                 'ok':               'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+                'mavzu':            'background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;',
                 'uploaded':         'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
                 '2O':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 '2T':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
@@ -545,9 +546,15 @@
 
             renderTable(filteredData);
             // Statistika
-            var okCount = 0, errCount = 0;
-            filteredData.forEach(function(r) { if (r.xulosa_code === 'ok') okCount++; else errCount++; });
-            $('#total-info').html('Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>').show();
+            var okCount = 0, mavzuCount = 0, errCount = 0;
+            filteredData.forEach(function(r) {
+                if (r.xulosa_code === 'ok') okCount++;
+                else if (r.xulosa_code === 'mavzu') mavzuCount++;
+                else errCount++;
+            });
+            var parts = 'Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>';
+            if (mavzuCount > 0) parts += ' | <span style="color:#0369a1;">Mavzu retake: ' + mavzuCount + '</span>';
+            $('#total-info').html(parts).show();
             updateButtons();
         }
 
@@ -869,12 +876,12 @@
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
 
-                // Faqat "ok" xulosa bilan tanlanganlarnigina yuklash
+                // "ok" (OSKI/YN test) va "mavzu" (JN mavzu retake) tanlanganlarini yuklash
                 var okIds = [];
                 var skippedCount = 0;
                 ids.forEach(function(id) {
                     var row = allData.find(function(r) { return r.id === id; });
-                    if (row && row.xulosa_code === 'ok') {
+                    if (row && (row.xulosa_code === 'ok' || row.xulosa_code === 'mavzu')) {
                         okIds.push(id);
                     } else {
                         skippedCount++;

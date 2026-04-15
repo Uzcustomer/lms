@@ -1157,9 +1157,11 @@
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                             $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
                                                             $daySababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $date && $excuseData->end_date >= $date;
+                                                            $dateKeyForSababli = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                                            $hemisSababliDay = !empty($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli] ?? []);
                                                         @endphp
-                                                        @if($hasApprovedExcuse)
-                                                            <span class="excuse-nb-cell font-medium" title="Sababli (tasdiqlangan hujjat)">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
+                                                        @if($hasApprovedExcuse || $hemisSababliDay)
+                                                            <span class="excuse-nb-cell font-medium" title="Sababli">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
                                                         @else
                                                             <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
                                                         @endif
@@ -1425,7 +1427,10 @@
                                                             @php
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                                 $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
-                                                                $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $lmsSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                                $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                                $isSababli = $lmsSababli || $hemisSababli;
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
@@ -1444,7 +1449,10 @@
                                                         @php
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                             $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
-                                                            $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                            $lmsSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                            $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                            $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                            $isSababli = $lmsSababli || $hemisSababli;
                                                             $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
 

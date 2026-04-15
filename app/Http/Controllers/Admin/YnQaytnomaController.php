@@ -1150,17 +1150,37 @@ class YnQaytnomaController extends Controller
                 $oskiVal = ($oski !== '' && $oski !== null) ? (int) round((float) $oski)  : null;
                 $testVal = ($test !== '' && $test !== null) ? (int) round((float) $test)  : null;
 
-                // Shablondagi qattiq og'irliklar: D19=50, G19=20, J19=0, P19=15, S19=15
-                $wJn = 50; $wMt = 20; $wOn = 0; $wOski = 15; $wTest = 15;
+                // Og'irliklarni shablondan o'qiymiz (19-qatordan)
+                $wJn   = (int) ($sheet->getCell('D19')->getValue() ?? 0);
+                $wMt   = (int) ($sheet->getCell('G19')->getValue() ?? 0);
+                $wOn   = (int) ($sheet->getCell('J19')->getValue() ?? 0);
+                $wOski = (int) ($sheet->getCell('P19')->getValue() ?? 0);
+                $wTest = (int) ($sheet->getCell('S19')->getValue() ?? 0);
 
-                // Ballarni hisoblash (yaxlitlashsiz, 1 kasr xonasigacha)
-                $eBall = ($jnVal   !== null && $jnVal   >= 60) ? round($jnVal   * $wJn   / 100, 1) : 0;
-                $hBall = ($mtVal   !== null && $mtVal   >= 60) ? round($mtVal   * $wMt   / 100, 1) : 0;
-                $kBall = ($onVal   !== null && $onVal   >= 60) ? round($onVal   * $wOn   / 100, 1) : 0;
-                $qBall = ($oskiVal !== null && $oskiVal >= 60) ? round($oskiVal * $wOski / 100, 1) : 0;
-                $tBall = ($testVal !== null && $testVal >= 60) ? round($testVal * $wTest / 100, 1) : 0;
+                // JB/MT/ON ball — shablondagi ROUND(x, 0.1) mantig'iga mos (1 kasr)
+                $eBall = ($jnVal !== null && $jnVal >= 60) ? round($jnVal * $wJn / 100, 1) : 0;
+                $hBall = ($mtVal !== null && $mtVal >= 60) ? round($mtVal * $wMt / 100, 1) : 0;
+                $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
 
-                // JB+MT+ON ball
+                // OSKI/Test ball — vazn sxemasiga qarab:
+                //  * ikkalasi ham vaznga ega → yaxlitlashsiz (raw) saqlanadi,
+                //    format 1 kasr ko'rsatadi;
+                //  * faqat bittasi vaznga ega → o'sha butun songacha yaxlitlanadi.
+                if ($wOski > 0 && $wTest > 0) {
+                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? $oskiVal * $wOski / 100 : 0;
+                    $tBall = ($testVal !== null && $testVal >= 60) ? $testVal * $wTest / 100 : 0;
+                } elseif ($wOski > 0) {
+                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? (int) round($oskiVal * $wOski / 100) : 0;
+                    $tBall = 0;
+                } elseif ($wTest > 0) {
+                    $qBall = 0;
+                    $tBall = ($testVal !== null && $testVal >= 60) ? (int) round($testVal * $wTest / 100) : 0;
+                } else {
+                    $qBall = 0;
+                    $tBall = 0;
+                }
+
+                // JB+MT+ON ball va N% — V branchlari uchun
                 $maxJbMtOn = $wJn + $wMt + $wOn;
                 $mSum = (($jnVal !== null && $jnVal < 60) || ($mtVal !== null && $mtVal < 60))
                     ? 0
@@ -1182,7 +1202,19 @@ class YnQaytnomaController extends Controller
                        || ($wTest > 0 && $testVal !== null && $testVal < 60)) {
                     $v = 0;
                 } else {
-                    $v = round($eBall + $hBall + $kBall + $qBall + $tBall, 1);
+                    // JB+MT+ON qismi bir marta yaxlitlanadi, OSKI+Test ham bir
+                    // marta birga yaxlitlanadi (faqat vazni mavjudlari qo'shiladi).
+                    $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                    if ($wOski > 0 && $wTest > 0) {
+                        $examSum = round($qBall + $tBall, 1);
+                    } elseif ($wOski > 0) {
+                        $examSum = round($qBall, 1);
+                    } elseif ($wTest > 0) {
+                        $examSum = round($tBall, 1);
+                    } else {
+                        $examSum = 0;
+                    }
+                    $v = $jbMtOnSum + $examSum;
                 }
 
                 // W (ECTS) — shablon mantig'i bilan bir xil
@@ -1208,7 +1240,12 @@ class YnQaytnomaController extends Controller
                     elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
                 }
 
-                // Qiymatlarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)
+                // Ball va natijalarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)
+                $sheet->setCellValue('E' . $row, $eBall);
+                $sheet->setCellValue('H' . $row, $hBall);
+                $sheet->setCellValue('K' . $row, $kBall);
+                $sheet->setCellValue('Q' . $row, $qBall);
+                $sheet->setCellValue('T' . $row, $tBall);
                 $sheet->setCellValue('V' . $row, $v);
                 $sheet->setCellValue('W' . $row, $w);
                 $sheet->setCellValue('Y' . $row, $y);

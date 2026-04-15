@@ -6386,6 +6386,151 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
     }
 
     /**
+     * Admin uchun istalgan bahoni o'zgartirish yoki o'chirish
+     */
+    /**
+     * Admin: ON baholarini kiritish yoki yangilash.
+     * OSKI (101) va Test (102) baholarini LMS orqali o'zgartirish bloklangan —
+     * ular HEMIS dan import qilinadi, qo'lda kiritish mumkin emas.
+     */
+    public function saveExamGrade(Request $request)
+    {
+        if (!auth()->user()->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'student_hemis_id' => 'required|string',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'training_type_code' => 'required|in:100,101,102',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        // OSKI va Test baholari LMS orqali tahrirlanmaydi
+        if (in_array((int) $request->training_type_code, [101, 102], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OSKI va Test baholarini LMS orqali o\'zgartirish mumkin emas.',
+            ], 403);
+        }
+
+        $studentHemisId = $request->student_hemis_id;
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $typeCode = (int) $request->training_type_code;
+        $grade = round($request->grade, 2);
+
+        $typeNames = [100 => 'ON', 101 => 'OSKI', 102 => 'Test'];
+
+        try {
+            // Mavjud baho bormi?
+            $existing = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', $typeCode)
+                ->first();
+
+            if ($existing) {
+                DB::table('student_grades')->where('id', $existing->id)->update([
+                    'grade' => $grade,
+                    'updated_at' => now(),
+                ]);
+            } else {
+                // Talaba ma'lumotlarini olish
+                $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+
+                DB::table('student_grades')->insert([
+                    'student_hemis_id' => $studentHemisId,
+                    'student_id' => $student->student_id ?? null,
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'training_type_code' => $typeCode,
+                    'grade' => $grade,
+                    'lesson_date' => now()->toDateString(),
+                    'education_year_code' => $student->education_year_code ?? null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => ($typeNames[$typeCode] ?? 'Baho') . ' saqlandi: ' . $grade,
+                'grade' => $grade,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function adminEditGrade(Request $request)
+    {
+        if (!auth()->user()->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'grade_id' => 'required|integer',
+            'grade' => 'nullable|numeric|min:0|max:100',
+            'action' => 'required|in:update,delete',
+        ]);
+
+        try {
+            $gradeId = $request->grade_id;
+            $action = $request->action;
+
+            $studentGrade = DB::table('student_grades')->where('id', $gradeId)->first();
+
+            if (!$studentGrade) {
+                return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
+            }
+
+            // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
+            if ($studentGrade->is_yn_locked && !auth()->user()->hasRole('superadmin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
+
+            if ($action === 'delete') {
+                DB::table('student_grades')->where('id', $gradeId)->delete();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Baho o\'chirildi',
+                    'deleted' => true,
+                ]);
+            }
+
+            // update
+            $newGrade = $request->grade;
+            $updateData = ['updated_at' => now()];
+
+            if ($studentGrade->retake_grade !== null) {
+                // Retake baho bo'lsa — retake_grade ni yangilaymiz
+                $updateData['retake_grade'] = $newGrade;
+            } else {
+                $updateData['grade'] = $newGrade;
+            }
+
+            DB::table('student_grades')->where('id', $gradeId)->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Baho yangilandi',
+                'grade' => $newGrade,
+                'is_retake' => $studentGrade->retake_grade !== null,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Talabaning joriy semestrdagi barcha baholarini Excel ga eksport qilish.
      * student_grades jadvalidagi har bir yozuv alohida qator bo'lib chiqadi.
      * Faqat admin/superadmin uchun.

@@ -1137,6 +1137,118 @@ class YnQaytnomaController extends Controller
                 if ($test !== '' && $test !== null) {
                     $sheet->setCellValue('S' . $row, round((float) $test));
                 }
+
+                // --- V (O'zlashtirish), W (ECTS), Y (Baho) ni PHP da hisoblash ---
+                // Shablondagi V20 formulasi juda murakkab (nested IF/AND/OR) va
+                // PhpSpreadsheet uni to'g'ri hisoblay olmaydi — natijada OSKI
+                // yoki Test < 60 bo'lganda ham V 0 emas, balki xato qiymat
+                // chiqadi. Shu bois mantiqni PHPda takrorlab, hujayra qiymatini
+                // to'g'ridan-to'g'ri yozib qo'yamiz (formulani bekor qiladi).
+                $jnVal   = ($jn   !== '' && $jn   !== null) ? (int) $jn                   : null;
+                $mtVal   = ($mt   !== '' && $mt   !== null) ? (int) $mt                   : null;
+                $onVal   = ($on   !== '' && $on   !== null) ? (int) round((float) $on)    : null;
+                $oskiVal = ($oski !== '' && $oski !== null) ? (int) round((float) $oski)  : null;
+                $testVal = ($test !== '' && $test !== null) ? (int) round((float) $test)  : null;
+
+                // Og'irliklarni shablondan o'qiymiz (19-qatordan)
+                $wJn   = (int) ($sheet->getCell('D19')->getValue() ?? 0);
+                $wMt   = (int) ($sheet->getCell('G19')->getValue() ?? 0);
+                $wOn   = (int) ($sheet->getCell('J19')->getValue() ?? 0);
+                $wOski = (int) ($sheet->getCell('P19')->getValue() ?? 0);
+                $wTest = (int) ($sheet->getCell('S19')->getValue() ?? 0);
+
+                // JB/MT/ON ball — shablondagi ROUND(x, 0.1) mantig'iga mos (1 kasr)
+                $eBall = ($jnVal !== null && $jnVal >= 60) ? round($jnVal * $wJn / 100, 1) : 0;
+                $hBall = ($mtVal !== null && $mtVal >= 60) ? round($mtVal * $wMt / 100, 1) : 0;
+                $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
+
+                // OSKI/Test ball — vazn sxemasiga qarab:
+                //  * ikkalasi ham vaznga ega → yaxlitlashsiz (raw) saqlanadi,
+                //    format 1 kasr ko'rsatadi;
+                //  * faqat bittasi vaznga ega → o'sha butun songacha yaxlitlanadi.
+                if ($wOski > 0 && $wTest > 0) {
+                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? $oskiVal * $wOski / 100 : 0;
+                    $tBall = ($testVal !== null && $testVal >= 60) ? $testVal * $wTest / 100 : 0;
+                } elseif ($wOski > 0) {
+                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? (int) round($oskiVal * $wOski / 100) : 0;
+                    $tBall = 0;
+                } elseif ($wTest > 0) {
+                    $qBall = 0;
+                    $tBall = ($testVal !== null && $testVal >= 60) ? (int) round($testVal * $wTest / 100) : 0;
+                } else {
+                    $qBall = 0;
+                    $tBall = 0;
+                }
+
+                // JB+MT+ON ball va N% — V branchlari uchun
+                $maxJbMtOn = $wJn + $wMt + $wOn;
+                $mSum = (($jnVal !== null && $jnVal < 60) || ($mtVal !== null && $mtVal < 60))
+                    ? 0
+                    : round($eBall + $hBall + $kBall, 1);
+                $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+                // V (O'zlashtirish ko'rsatkichi)
+                if ($jnVal === null && $mtVal === null) {
+                    $v = '';
+                } elseif ($nPct < 0.6) {
+                    $v = -2; // qo'yilmadi
+                } elseif (($wOski > 0 && ($oskiVal === null || $oskiVal == 0))
+                       || ($wTest > 0 && ($testVal === null || $testVal == 0))) {
+                    $v = -1; // kelmadi
+                } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < 60)
+                       || ($wMt > 0   && $mtVal   !== null && $mtVal   < 60)
+                       || ($wOn > 0   && $onVal   !== null && $onVal   < 60)
+                       || ($wOski > 0 && $oskiVal !== null && $oskiVal < 60)
+                       || ($wTest > 0 && $testVal !== null && $testVal < 60)) {
+                    $v = 0;
+                } else {
+                    // JB+MT+ON qismi bir marta yaxlitlanadi, OSKI+Test ham bir
+                    // marta birga yaxlitlanadi (faqat vazni mavjudlari qo'shiladi).
+                    $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                    if ($wOski > 0 && $wTest > 0) {
+                        $examSum = round($qBall + $tBall, 1);
+                    } elseif ($wOski > 0) {
+                        $examSum = round($qBall, 1);
+                    } elseif ($wTest > 0) {
+                        $examSum = round($tBall, 1);
+                    } else {
+                        $examSum = 0;
+                    }
+                    $v = $jbMtOnSum + $examSum;
+                }
+
+                // W (ECTS) — shablon mantig'i bilan bir xil
+                $w = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)      $w = 'A';
+                    elseif ($v >= 85)               $w = 'B+';
+                    elseif ($v >= 70)               $w = 'B';
+                    elseif ($v >= 60)               $w = 'C';
+                    elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                    elseif ($v == -1)               $w = '';
+                    else                            $w = 'FX'; // -2 va boshqalar
+                }
+
+                // Y (Baho)
+                $y = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
+                    elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
+                    elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                    elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
+                    elseif ($v == -1)                 $y = 'kelmadi';
+                    elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+                }
+
+                // Ball va natijalarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)
+                $sheet->setCellValue('E' . $row, $eBall);
+                $sheet->setCellValue('H' . $row, $hBall);
+                $sheet->setCellValue('K' . $row, $kBall);
+                $sheet->setCellValue('Q' . $row, $qBall);
+                $sheet->setCellValue('T' . $row, $tBall);
+                $sheet->setCellValue('V' . $row, $v);
+                $sheet->setCellValue('W' . $row, $w);
+                $sheet->setCellValue('Y' . $row, $y);
             }
 
             // Faylni saqlash

@@ -756,6 +756,16 @@ class JournalController extends Controller
             ];
         }
 
+        // HEMIS sababli lookup — absent_on > 0 bo'lgan (student, Y-m-d sana, juftlik)
+        // kalitlarini normalizatsiya qilib tayyorlaymiz (view'da tez lookup uchun).
+        $hemisSababliByKey = [];
+        foreach (array_merge($jbAttendanceRaw->all(), $mtAttendanceRaw->all()) as $row) {
+            if ((int) ($row->absent_on ?? 0) > 0) {
+                $dateKey = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
+                $hemisSababliByKey[$row->student_hemis_id][$dateKey][$row->lesson_pair_code] = true;
+            }
+        }
+
         // Get students basic info
         // Agar student_subjects jadvalida shu fan uchun biriktirishlar bo'lsa — faqat biriktirilganlarni ko'rsatish
         // Aks holda (import qilinmagan) — guruhdagi barcha talabalarni ko'rsatish (eski logika)
@@ -1326,6 +1336,7 @@ class JournalController extends Controller
             'mtAbsences',
             'jbAttendance',
             'mtAttendance',
+            'hemisSababliByKey',
             'jbColumns',
             'mtColumns',
             'jbPairsPerDay',
@@ -1668,8 +1679,37 @@ class JournalController extends Controller
                         }
                     }
 
-                    // Sababli holat endi faqat tasdiqlangan sababli arizalar asosida aniqlanadi,
-                    // HEMIS absent_on o'zgarishi retake bahosiga ta'sir qilmaydi
+                    // HEMIS absent_on o'zgarganda retake bahosini qayta hisoblash.
+                    // Effektiv sababli holat: HEMIS absent_on > 0 YOKI LMS'da tasdiqlangan sababli ariza bor.
+                    // LMS ariza statusi attendance sinxronizatsiyasi paytida o'zgarmaydi,
+                    // shuning uchun effektiv holat faqat HEMIS tomonidan o'zgarishi mumkin.
+                    if ($oldAbsentOn !== null && $oldAbsentOn !== $newAbsentOn) {
+                        $hasLmsExcuse = DB::table('absence_excuses as ae')
+                            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+                            ->where('ae.student_hemis_id', $item['student']['id'])
+                            ->where('ae.status', 'approved')
+                            ->whereDate('ae.start_date', '<=', $lessonDate->format('Y-m-d'))
+                            ->whereDate('ae.end_date', '>=', $lessonDate->format('Y-m-d'))
+                            ->where('aem.subject_id', $item['subject']['id'])
+                            ->exists();
+
+                        $oldIsExcused = ($oldAbsentOn > 0) || $hasLmsExcuse;
+                        $newIsExcused = ($newAbsentOn > 0) || $hasLmsExcuse;
+
+                        // Faqat effektiv holat haqiqatan ham o'zgargan bo'lsa qayta hisoblash.
+                        // Aks holda allaqachon to'g'ri saqlangan koeffitsient buziladi.
+                        if ($oldIsExcused !== $newIsExcused) {
+                            if ($this->recalculateRetakeGrade(
+                                (string) $item['student']['id'],
+                                (int) $item['subject']['id'],
+                                $lessonDate->format('Y-m-d'),
+                                (string) $item['lessonPair']['code'],
+                                $newIsExcused
+                            )) {
+                                $retakeRecalculated++;
+                            }
+                        }
+                    }
                 }
 
                 $page++;

@@ -766,6 +766,20 @@ class JournalController extends Controller
             }
         }
 
+        // Sahifa yuklanganida: retake bahosi saqlanganidan keyin sababli holati
+        // (HEMIS yoki LMS ariza orqali) o'zgargan talabalar uchun retake bahosini
+        // avtomatik qayta hisoblash.
+        try {
+            $this->reconcileRetakeGradesForJournal(
+                $studentHemisIds,
+                $subjectId,
+                $semesterCode,
+                $hemisSababliByKey
+            );
+        } catch (\Throwable $e) {
+            Log::warning('reconcileRetakeGradesForJournal failed: ' . $e->getMessage());
+        }
+
         // Get students basic info
         // Agar student_subjects jadvalida shu fan uchun biriktirishlar bo'lsa — faqat biriktirilganlarni ko'rsatish
         // Aks holda (import qilinmagan) — guruhdagi barcha talabalarni ko'rsatish (eski logika)
@@ -1735,7 +1749,93 @@ class JournalController extends Controller
     }
 
     /**
-     * Sababli holat o'zgarganda retake bahosini qayta hisoblash
+     * Jurnal yuklangan vaqtda: retake bahosi saqlanganidan beri sababli
+     * holat o'zgargan yozuvlar uchun retake_grade ni avtomatik qayta hisoblash.
+     * HEMIS attendance sinxronlashdan tashqarida (masalan admin panelida)
+     * sababli o'zgartirilganda ham jurnal to'g'ri chiqishini ta'minlaydi.
+     */
+    private function reconcileRetakeGradesForJournal(
+        $studentHemisIds,
+        int $subjectId,
+        string $semesterCode,
+        array $hemisSababliByKey
+    ): void {
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli')) {
+            return; // Migratsiya hali ishga tushmagan
+        }
+
+        $retakes = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('reason', 'absent')
+            ->where('status', 'retake')
+            ->whereNotNull('retake_grade')
+            ->whereNull('deleted_at')
+            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'retake_grade', 'retake_was_sababli')
+            ->get();
+
+        if ($retakes->isEmpty()) {
+            return;
+        }
+
+        // LMS tasdiqlangan arizalar (studentlar bo'yicha, shu fan uchun)
+        $lmsExcuses = \App\Models\AbsenceExcuse::where('status', 'approved')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->whereHas('makeups', fn($q) => $q->where('subject_id', $subjectId))
+            ->get(['student_hemis_id', 'start_date', 'end_date'])
+            ->groupBy('student_hemis_id');
+
+        foreach ($retakes as $row) {
+            $dateKey = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
+
+            // HEMIS sababli?
+            $hemisSababli = isset($hemisSababliByKey[$row->student_hemis_id][$dateKey][$row->lesson_pair_code]);
+
+            // LMS sababli?
+            $lmsSababli = false;
+            $studentExcuses = $lmsExcuses->get($row->student_hemis_id, collect());
+            foreach ($studentExcuses as $ex) {
+                $exStart = \Carbon\Carbon::parse($ex->start_date)->format('Y-m-d');
+                $exEnd = \Carbon\Carbon::parse($ex->end_date)->format('Y-m-d');
+                if ($exStart <= $dateKey && $exEnd >= $dateKey) {
+                    $lmsSababli = true;
+                    break;
+                }
+            }
+
+            $effectiveSababli = $hemisSababli || $lmsSababli;
+            $wasSababli = !is_null($row->retake_was_sababli) ? (bool) $row->retake_was_sababli : false;
+
+            if ($wasSababli === $effectiveSababli) {
+                continue; // Holat o'zgarmagan
+            }
+
+            $oldPercentage = $wasSababli ? 1.0 : 0.8;
+            $newPercentage = $effectiveSababli ? 1.0 : 0.8;
+
+            if ($oldPercentage <= 0) {
+                continue;
+            }
+
+            $originalEnteredGrade = round($row->retake_grade / $oldPercentage, 2);
+            $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
+
+            DB::table('student_grades')
+                ->where('id', $row->id)
+                ->update([
+                    'retake_grade' => $newRetakeGrade,
+                    'retake_was_sababli' => $effectiveSababli,
+                    'updated_at' => now(),
+                ]);
+        }
+    }
+
+    /**
+     * Sababli holat o'zgarganda retake bahosini qayta hisoblash.
+     * retake_was_sababli ustuni saqlash vaqtidagi holatni aniq biladi,
+     * shuning uchun eski koeffitsientni "teskarisi" deb taxmin qilish o'rniga
+     * real saqlangan qiymatdan foydalanamiz.
      */
     private function recalculateRetakeGrade(
         string $studentHemisId,
@@ -1758,31 +1858,36 @@ class JournalController extends Controller
             return false;
         }
 
-        // Hozirgi foiz va yangi foizni aniqlash
-        $oldPercentage = $isExcused ? 0.8 : 1.0; // o'zgarishdan oldingi (teskari)
-        $newPercentage = $isExcused ? 1.0 : 0.8;
+        // Saqlanish vaqtidagi holat: retake_was_sababli ustuni
+        // Null bo'lsa (migratsiya oldidan) — sababsiz deb hisoblaymiz (historic default)
+        $wasSababli = !is_null($grade->retake_was_sababli ?? null)
+            ? (bool) $grade->retake_was_sababli
+            : false;
 
-        // Asl kiritilgan bahoni qayta hisoblash
-        if ($oldPercentage > 0) {
-            $originalEnteredGrade = round($grade->retake_grade / $oldPercentage, 2);
-        } else {
+        if ($wasSababli === $isExcused) {
+            // Holat o'zgarmagan — qayta hisoblash shart emas
             return false;
         }
 
-        $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
+        $oldPercentage = $wasSababli ? 1.0 : 0.8;
+        $newPercentage = $isExcused ? 1.0 : 0.8;
 
-        // Agar baho o'zgargan bo'lsa — yangilash
-        if (abs($newRetakeGrade - $grade->retake_grade) > 0.01) {
-            DB::table('student_grades')
-                ->where('id', $grade->id)
-                ->update([
-                    'retake_grade' => $newRetakeGrade,
-                    'updated_at' => now(),
-                ]);
-            return true;
+        if ($oldPercentage <= 0) {
+            return false;
         }
 
-        return false;
+        $originalEnteredGrade = round($grade->retake_grade / $oldPercentage, 2);
+        $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
+
+        DB::table('student_grades')
+            ->where('id', $grade->id)
+            ->update([
+                'retake_grade' => $newRetakeGrade,
+                'retake_was_sababli' => $isExcused,
+                'updated_at' => now(),
+            ]);
+
+        return true;
     }
 
     /**
@@ -2817,6 +2922,17 @@ class JournalController extends Controller
                     ->whereDate('ae.end_date', '>=', $studentGrade->lesson_date)
                     ->where('aem.subject_id', $studentGrade->subject_id)
                     ->exists();
+
+                // HEMIS attendance ham inobatga olinadi — absent_on > 0 = sababli
+                if (!$isExcused) {
+                    $isExcused = DB::table('attendances')
+                        ->where('student_hemis_id', $studentGrade->student_hemis_id)
+                        ->where('subject_id', $studentGrade->subject_id)
+                        ->whereDate('lesson_date', $studentGrade->lesson_date)
+                        ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
+                        ->where('absent_on', '>', 0)
+                        ->exists();
+                }
             }
 
             // Determine the percentage to apply based on reason:
@@ -2845,6 +2961,7 @@ class JournalController extends Controller
                 ->where('id', $gradeId)
                 ->update([
                     'retake_grade' => $retakeGrade,
+                    'retake_was_sababli' => $isExcused,
                     'status' => 'retake',
                     'graded_by_user_id' => $gradedByUserId,
                     'retake_graded_at' => $now,

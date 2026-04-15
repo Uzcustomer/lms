@@ -979,35 +979,46 @@
                 html += '<button type="button" class="reupload-modal-close" onclick="closeReuploadModal()">&times;</button>';
                 html += '</div>';
                 html += '<div class="reupload-modal-body">';
-                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Default — Moodledan kelgan fan ID. Kerak bo\'lsa, guruh o\'quv rejasidagi boshqa fanga o\'zgartiring.</p>';
+                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Dropdown — talabaning <strong>joriy semestriga biriktirilgan fanlar</strong>. Default — Moodledan kelgan fan, lekin to\'g\'ri fanga o\'zgartirib yuklash mumkin.</p>';
                 html += '<table class="reupload-modal-table">';
-                html += '<thead><tr><th>#</th><th>Guruh</th><th>Moodle fan</th><th>Baholar</th><th>Yuklanadigan fan ID</th></tr></thead>';
+                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>Yuklanadigan fan</th></tr></thead>';
                 html += '<tbody>';
                 groups.forEach(function(g, i) {
                     html += '<tr>';
                     html += '<td>' + (i + 1) + '</td>';
                     html += '<td><strong>' + esc(g.group_name) + '</strong></td>';
+                    html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
                     html += '<td>';
                     if (g.available_subjects && g.available_subjects.length > 0) {
-                        html += '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
-                        var foundOriginal = false;
-                        g.available_subjects.forEach(function(s) {
-                            var selected = String(s.subject_id) === String(g.original_fan_id);
-                            if (selected) foundOriginal = true;
-                            html += '<option value="' + s.subject_id + '"' + (selected ? ' selected' : '') + '>';
-                            html += esc(s.subject_name) + ' (ID: ' + s.subject_id + ')';
-                            if (s.semester_name) html += ' — ' + esc(s.semester_name);
-                            html += '</option>';
+                        // Moodle ID semestr ro'yxatida bormi tekshirish
+                        var foundOriginal = g.available_subjects.some(function(s) {
+                            return String(s.subject_id) === String(g.original_fan_id);
                         });
+
+                        var selectHtml = '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
+
+                        // Agar Moodle ID ro'yxatda bo'lmasa — yuqoriga "Moodle (jadvalda yo'q)" qator qo'shamiz
                         if (!foundOriginal) {
-                            html = html.replace('<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">',
-                                                 '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;"><option value="' + g.original_fan_id + '" selected>' + esc(g.original_fan_name) + ' (ID: ' + g.original_fan_id + ', Moodle)</option>');
+                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" selected style="color:#dc2626;">';
+                            selectHtml += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
+                            selectHtml += '</option>';
+                            selectHtml += '<option disabled>──── Joriy semestr fanlari ────</option>';
                         }
-                        html += '</select>';
+
+                        g.available_subjects.forEach(function(s) {
+                            var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
+                            selectHtml += '<option value="' + esc(s.subject_id) + '"' + (selected ? ' selected' : '') + '>';
+                            selectHtml += esc(s.subject_name);
+                            if (s.subject_code) selectHtml += ' [' + esc(s.subject_code) + ']';
+                            selectHtml += ' (ID: ' + s.subject_id + ')';
+                            selectHtml += '</option>';
+                        });
+                        selectHtml += '</select>';
+                        html += selectHtml;
                     } else {
-                        html += '<div style="color:#dc2626;font-size:12px;">Curriculum topilmadi — faqat asl ID ishlatiladi (' + g.original_fan_id + ')</div>';
+                        html += '<div style="color:#dc2626;font-size:12px;">Joriy semestrda fanlar topilmadi — faqat asl ID (' + g.original_fan_id + ') ishlatiladi</div>';
                     }
                     html += '</td>';
                     html += '</tr>';

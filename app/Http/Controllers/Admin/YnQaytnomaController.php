@@ -1157,10 +1157,21 @@ class YnQaytnomaController extends Controller
                 $wOski = (int) ($sheet->getCell('P19')->getValue() ?? 0);
                 $wTest = (int) ($sheet->getCell('S19')->getValue() ?? 0);
 
-                // JB/MT/ON ball — shablondagi ROUND(x, 0.1) mantig'iga mos (1 kasr)
-                $eBall = ($jnVal !== null && $jnVal >= 60) ? round($jnVal * $wJn / 100, 1) : 0;
-                $hBall = ($mtVal !== null && $mtVal >= 60) ? round($mtVal * $wMt / 100, 1) : 0;
-                $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
+                // 4-5 kurs talabalari uchun JN/MT/ON ball butun songacha half-up,
+                // qolgan kurslarda 1 kasr xonasigacha. Semestr level_code:
+                // 11=1-kurs ... 14=4-kurs, 15=5-kurs.
+                $levelCode = (string) ($semester?->level_code ?? '');
+                $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
+
+                if ($roundJnMtToInt) {
+                    $eBall = ($jnVal !== null && $jnVal >= 60) ? (int) floor($jnVal * $wJn / 100 + 0.5) : 0;
+                    $hBall = ($mtVal !== null && $mtVal >= 60) ? (int) floor($mtVal * $wMt / 100 + 0.5) : 0;
+                    $kBall = ($onVal !== null && $onVal >= 60) ? (int) floor($onVal * $wOn / 100 + 0.5) : 0;
+                } else {
+                    $eBall = ($jnVal !== null && $jnVal >= 60) ? round($jnVal * $wJn / 100, 1) : 0;
+                    $hBall = ($mtVal !== null && $mtVal >= 60) ? round($mtVal * $wMt / 100, 1) : 0;
+                    $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
+                }
 
                 // OSKI/Test ball — vazn sxemasiga qarab:
                 //  * ikkalasi ham vaznga ega → yaxlitlashsiz (raw) saqlanadi,
@@ -1217,6 +1228,13 @@ class YnQaytnomaController extends Controller
                     $v = $jbMtOnSum + $examSum;
                 }
 
+                // Yakuniy V ni butun songacha half-up yaxlitlaymiz (vedomost
+                // tekshirish bilan bir xil). Maxsus qiymatlar ('', -2, -1, 0)
+                // o'zgartirilmaydi.
+                if (is_numeric($v) && $v > 0) {
+                    $v = (int) floor((float) $v + 0.5);
+                }
+
                 // W (ECTS) — shablon mantig'i bilan bir xil
                 $w = '';
                 if (is_numeric($v)) {
@@ -1242,10 +1260,25 @@ class YnQaytnomaController extends Controller
 
                 // Ball va natijalarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)
                 $sheet->setCellValue('E' . $row, $eBall);
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle('E' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue('H' . $row, $hBall);
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle('H' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue('K' . $row, $kBall);
+                if ($wOn > 0 && !$roundJnMtToInt) {
+                    $sheet->getStyle('K' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue('Q' . $row, $qBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue('T' . $row, $tBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue('V' . $row, $v);
                 $sheet->setCellValue('W' . $row, $w);
                 $sheet->setCellValue('Y' . $row, $y);

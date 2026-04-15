@@ -6353,10 +6353,21 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             // bo'lganda ham V=80 chiqadi). Mantiqni PHPda takrorlab,
             // hujayralarga to'g'ridan-to'g'ri yozamiz.
 
-            // JB/MT/ON ball — 1 kasrgacha
-            $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
-            $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
-            $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+            // 4-5 kurs talabalari uchun JN/MT/ON ball butun songacha half-up,
+            // qolgan kurslarda 1 kasr xonasigacha. Semestr level_code:
+            // 11=1-kurs ... 14=4-kurs, 15=5-kurs.
+            $levelCode = (string) ($semester?->level_code ?? '');
+            $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
+
+            if ($roundJnMtToInt) {
+                $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+                $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+                $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+            } else {
+                $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
+                $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
+                $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+            }
 
             // OSKI/Test ball — vazn sxemasiga qarab raw yoki butun son
             if ($weightOski > 0 && $weightTest > 0) {
@@ -6408,6 +6419,13 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 $v = $jbMtOnSum + $examSum;
             }
 
+            // Yakuniy V ni butun songacha half-up yaxlitlaymiz (vedomost
+            // tekshirish bilan bir xil). Maxsus qiymatlar ('', -2, -1, 0)
+            // o'zgartirilmaydi.
+            if (is_numeric($v) && $v > 0) {
+                $v = (int) floor((float) $v + 0.5);
+            }
+
             // W (ECTS) — shablon mantig'i
             $w = '';
             if (is_numeric($v)) {
@@ -6433,10 +6451,25 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
 
             // Ball va natijalarni shablon formulasi ustiga yozamiz
             $sheet->setCellValue('E' . $row, $eBall);
+            if (!$roundJnMtToInt) {
+                $sheet->getStyle('E' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
             $sheet->setCellValue('H' . $row, $hBall);
+            if (!$roundJnMtToInt) {
+                $sheet->getStyle('H' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
             $sheet->setCellValue('K' . $row, $kBall);
+            if ($weightOn > 0 && !$roundJnMtToInt) {
+                $sheet->getStyle('K' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
             $sheet->setCellValue('Q' . $row, $qBall);
+            if ($weightOski > 0 && $weightTest > 0) {
+                $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
             $sheet->setCellValue('T' . $row, $tBall);
+            if ($weightOski > 0 && $weightTest > 0) {
+                $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
             $sheet->setCellValue('V' . $row, $v);
             $sheet->setCellValue('W' . $row, $w);
             $sheet->setCellValue('Y' . $row, $y);

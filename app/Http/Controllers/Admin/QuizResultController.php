@@ -1767,7 +1767,7 @@ class QuizResultController extends Controller
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
 
-        // (fan_id, group_id) bo'yicha guruhlash
+        // (fan_id, group_id) bo'yicha guruhlash. Talabaning hozirgi semester_code'i ham saqlanadi.
         $groups = [];
         foreach ($results as $r) {
             $student = Student::where('hemis_id', $r->student_id)
@@ -1785,6 +1785,8 @@ class QuizResultController extends Controller
                     'group_hemis_id' => $student->group_id,
                     'group_name' => $student->group_name ?? '',
                     'curriculum_hemis_id' => null,
+                    'semester_code' => $student->semester_code ?? null,
+                    'semester_name' => $student->semester_name ?? null,
                     'grade_count' => 0,
                     'sample_grades' => [],
                     'available_subjects' => [],
@@ -1799,39 +1801,43 @@ class QuizResultController extends Controller
             }
         }
 
-        // Har bir guruh uchun curriculum subjectlarini olish
-        $groupCurriculumIds = [];
+        // Har bir guruh uchun curriculum_hemis_id ni biriktirish
+        $curriculumLookup = [];   // group_key => curriculum_hemis_id
+        $semesterLookup = [];     // group_key => semester_code
         foreach ($groups as &$g) {
             $group = Group::where('group_hemis_id', $g['group_hemis_id'])->first();
             if ($group) {
                 $g['curriculum_hemis_id'] = $group->curriculum_hemis_id;
-                $groupCurriculumIds[$g['key']] = $group->curriculum_hemis_id;
+                $curriculumLookup[$g['key']] = $group->curriculum_hemis_id;
+            }
+            if ($g['semester_code']) {
+                $semesterLookup[$g['key']] = $g['semester_code'];
             }
         }
         unset($g);
 
-        $allCurriculumIds = array_unique(array_filter(array_values($groupCurriculumIds)));
-        $subjectsByCurriculum = [];
-        if (!empty($allCurriculumIds)) {
-            $subjects = CurriculumSubject::whereIn('curricula_hemis_id', $allCurriculumIds)
-                ->select('curricula_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'semester_name')
-                ->get()
-                ->groupBy('curricula_hemis_id');
-            foreach ($subjects as $cId => $subs) {
-                $unique = $subs->unique('subject_id')->values();
-                $subjectsByCurriculum[$cId] = $unique->map(fn($s) => [
-                    'subject_id' => $s->subject_id,
-                    'subject_name' => $s->subject_name,
-                    'semester_name' => $s->semester_name,
-                ])->toArray();
-            }
-        }
-
-        // Har bir guruh uchun mos curriculum'dan subjectlarni biriktirish
+        // Har bir guruh uchun (curriculum + semester) bo'yicha biriktirilgan fanlar
+        // ro'yxatini olamiz. Faqat hozirgi semestr fanlari chiqadi.
         foreach ($groups as &$g) {
-            if ($g['curriculum_hemis_id'] && isset($subjectsByCurriculum[$g['curriculum_hemis_id']])) {
-                $g['available_subjects'] = $subjectsByCurriculum[$g['curriculum_hemis_id']];
+            if (!$g['curriculum_hemis_id']) continue;
+
+            $query = CurriculumSubject::where('curricula_hemis_id', $g['curriculum_hemis_id']);
+            if (!empty($g['semester_code'])) {
+                $query->where('semester_code', $g['semester_code']);
             }
+            $subjects = $query
+                ->select('subject_id', 'subject_name', 'subject_code', 'semester_code', 'semester_name')
+                ->orderBy('subject_name')
+                ->get()
+                ->unique('subject_id')
+                ->values();
+
+            $g['available_subjects'] = $subjects->map(fn($s) => [
+                'subject_id' => $s->subject_id,
+                'subject_name' => $s->subject_name,
+                'subject_code' => $s->subject_code,
+                'semester_name' => $s->semester_name,
+            ])->toArray();
         }
         unset($g);
 

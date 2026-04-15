@@ -705,13 +705,16 @@
             $('#selected-count').text(count);
             $('#btn-upload').prop('disabled', count === 0);
 
-            // Qayta yuklash va o'chirish button — tanlangan ichida "uploaded" bor-yo'qligini tekshirish
+            // Qayta yuklash — har qanday tanlov ochiq (modal orqali fan_id o'zgartirish mumkin,
+            // mavjud yuklangan baholar bo'lsa avval o'chiriladi, bo'lmasa shunchaki yuklanadi)
+            $('#btn-reupload').prop('disabled', count === 0);
+
+            // Bahoni o'chirish — faqat "uploaded" tanlanganda
             var hasUploaded = false;
             ids.forEach(function(id) {
                 var row = allData.find(function(r) { return r.id === id; });
                 if (row && row.xulosa_code === 'uploaded') hasUploaded = true;
             });
-            $('#btn-reupload').prop('disabled', !hasUploaded);
             $('#btn-delete-grades').prop('disabled', !hasUploaded);
             $('#btn-compare').prop('disabled', count === 0);
         }
@@ -937,25 +940,11 @@
             });
 
             // Qayta yuklash handler — modal orqali fan_id ni o'zgartirish imkoniyati bilan
+            // Har qanday tanlov ochiq: yuklangan bo'lsa qayta yuklanadi, yo'q bo'lsa shunchaki yuklanadi
             $('#btn-reupload').on('click', function() {
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
 
-                // Faqat "uploaded" tanlanganlarnigina qayta yuklash
-                var uploadedIds = [];
-                ids.forEach(function(id) {
-                    var row = allData.find(function(r) { return r.id === id; });
-                    if (row && row.xulosa_code === 'uploaded') {
-                        uploadedIds.push(id);
-                    }
-                });
-
-                if (uploadedIds.length === 0) {
-                    alert('Tanlangan natijalar orasida qayta yuklanishi mumkin bo\'lgani yo\'q.');
-                    return;
-                }
-
-                // Preview olish
                 var btn = $(this);
                 btn.prop('disabled', true);
                 var origHtml = btn.html();
@@ -965,13 +954,13 @@
                     url: reuploadPreviewUrl, type: 'POST',
                     headers: { 'X-CSRF-TOKEN': csrfToken },
                     contentType: 'application/json',
-                    data: JSON.stringify({ ids: uploadedIds }),
+                    data: JSON.stringify({ ids: ids }),
                     success: function(data) {
                         if (!data.success || !data.groups || data.groups.length === 0) {
                             alert('Preview ma\'lumot olinmadi.');
                             return;
                         }
-                        showReuploadModal(data.groups, uploadedIds);
+                        showReuploadModal(data.groups, ids);
                     },
                     error: function(xhr) {
                         var msg = xhr.responseJSON?.message || 'Server xatosi';

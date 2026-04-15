@@ -1686,7 +1686,7 @@ class QuizResultController extends Controller
             $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
             $isJnType = $result->quiz_type && stripos($result->quiz_type, 'JN') === 0;
             if ($isMavzuShakl && $isJnType) {
-                $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors);
+                $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides);
                 continue;
             }
 
@@ -1829,7 +1829,7 @@ class QuizResultController extends Controller
      *     Mavjud baho >= Moodle: skip
      *     YN qulflangan: skip
      */
-    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors): void
+    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors, array $subjectOverrides = []): void
     {
         // Mavzu raqamini olish
         if (!preg_match('/^(\d+)-mavzu$/i', $result->shakl, $m)) {
@@ -1863,12 +1863,16 @@ class QuizResultController extends Controller
             return;
         }
 
+        // Fan ID ni override qilish (Qayta yuklash modal'idan kelsa)
+        $overrideKey = $result->fan_id . '_' . $student->group_id;
+        $targetFanId = $subjectOverrides[$overrideKey] ?? $result->fan_id;
+
         // Fan o'quv rejada bormi
-        $subject = CurriculumSubject::where('subject_id', $result->fan_id)
+        $subject = CurriculumSubject::where('subject_id', $targetFanId)
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)
             ->first();
         if (!$subject) {
-            $rowInfo['error'] = "Fan o'quv rejada yo'q (fan_id: {$result->fan_id})";
+            $rowInfo['error'] = "Fan o'quv rejada yo'q (fan_id: {$targetFanId})";
             $errors[] = $rowInfo;
             return;
         }
@@ -1878,7 +1882,7 @@ class QuizResultController extends Controller
         // Amaliy (JN) dars sanalari — xronologik
         $lessonDates = DB::table('schedules')
             ->where('group_id', $student->group_id)
-            ->where('subject_id', $result->fan_id)
+            ->where('subject_id', $targetFanId)
             ->where('semester_code', $semesterCode)
             ->whereNotIn('training_type_code', [11, 17, 99, 100, 101, 102, 103])
             ->whereNull('deleted_at')
@@ -1901,7 +1905,7 @@ class QuizResultController extends Controller
         // Shu sanadagi jurnal yozuvlari (JN type) — bir kunda bir nechta juftlik bo'lishi mumkin
         $sgRecords = DB::table('student_grades')
             ->where('student_hemis_id', $student->hemis_id)
-            ->where('subject_id', $result->fan_id)
+            ->where('subject_id', $targetFanId)
             ->where('semester_code', $semesterCode)
             ->whereDate('lesson_date', $targetDate)
             ->whereNotIn('training_type_code', [11, 17, 99, 100, 101, 102, 103])
@@ -1925,34 +1929,74 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            $currentValue = $sg->retake_grade ?? $sg->grade;
-            $newReason = $sg->reason;
-            $shouldUpdate = false;
+            $isNb = $sg->reason === 'absent' && $sg->grade === null;
+            $updates = null;
 
-            if ($sg->reason === 'absent' && $sg->grade === null && $sg->retake_grade === null) {
-                // NB — retake qo'yiladi
-                $shouldUpdate = true;
-            } elseif ($currentValue !== null && $currentValue < $moodleGrade) {
-                // Past baho — retake yangilanadi
-                $shouldUpdate = true;
-                if ($sg->reason === null) {
-                    $newReason = 'low_grade';
+            if ($isNb) {
+                // NB scenario: sababli/sababsiz aniqlash
+                // Sababli (yashil NB): tasdiqlangan AbsenceExcuse bor → retake × 1.0
+                // Sababsiz (qizil NB): retake × 0.8
+                $isSababli = \App\Models\AbsenceExcuse::where('status', 'approved')
+                    ->where('student_hemis_id', $student->hemis_id)
+                    ->whereDate('start_date', '<=', $targetDate)
+                    ->whereDate('end_date', '>=', $targetDate)
+                    ->whereHas('makeups', function ($q) use ($targetFanId) {
+                        $q->where('subject_id', $targetFanId);
+                    })
+                    ->exists();
+
+                $multiplier = $isSababli ? 1.0 : 0.8;
+                $retakeValue = round($moodleGrade * $multiplier, 2);
+
+                // Agar mavjud retake baho yangisidan katta yoki teng bo'lsa — skip
+                if ($sg->retake_grade !== null && $sg->retake_grade >= $retakeValue) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: mavjud retake ({$sg->retake_grade}) >= yangi ({$retakeValue})";
+                    continue;
                 }
+
+                $label = $isSababli ? 'sababli ×1.0' : 'sababsiz ×0.8';
+                $updates = [
+                    'retake_grade'   => $retakeValue,
+                    'retake_comment' => "Moodle mavzu {$result->shakl}: {$moodleGrade} {$label} = {$retakeValue} (quiz_result#{$result->id})",
+                    'reason'         => 'absent',
+                    'quiz_result_id' => $result->id,
+                    'updated_at'     => now(),
+                ];
             } else {
-                $cur = $currentValue === null ? 'null' : $currentValue;
-                $skipReasons[] = "juftlik {$sg->lesson_pair_code}: hozirgi ({$cur}) >= Moodle ({$moodleGrade})";
-                continue;
+                // NB emas — oddiy baho bor. Faqat baho 60 dan past bo'lsa retake qabul qilinadi,
+                // retake_grade = Moodle × 0.8 (diagonal ko'rinishda saqlanadi)
+                $currentValue = $sg->retake_grade ?? $sg->grade;
+
+                if ($currentValue === null) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: baho yo'q va NB emas";
+                    continue;
+                }
+
+                if ($currentValue >= 60) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: baho ({$currentValue}) 60 dan yuqori — retake kerak emas";
+                    continue;
+                }
+
+                // Baho < 60 — retake × 0.8
+                $retakeValue = round($moodleGrade * 0.8, 2);
+
+                if ($sg->retake_grade !== null && $sg->retake_grade >= $retakeValue) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: mavjud retake ({$sg->retake_grade}) >= yangi ({$retakeValue})";
+                    continue;
+                }
+
+                $updates = [
+                    'retake_grade'   => $retakeValue,
+                    'retake_comment' => "Moodle mavzu {$result->shakl}: {$moodleGrade} ×0.8 = {$retakeValue} (quiz_result#{$result->id})",
+                    'reason'         => $sg->reason ?? 'low_grade',
+                    'quiz_result_id' => $result->id,
+                    'updated_at'     => now(),
+                ];
             }
 
-            if (!$shouldUpdate) continue;
+            if (!$updates) continue;
 
-            DB::table('student_grades')->where('id', $sg->id)->update([
-                'retake_grade'   => $moodleGrade,
-                'retake_comment' => "Moodle mavzu: {$result->quiz_type} / {$result->shakl} (quiz_result#{$result->id})",
-                'reason'         => $newReason,
-                'quiz_result_id' => $result->id,
-                'updated_at'     => now(),
-            ]);
+            DB::table('student_grades')->where('id', $sg->id)->update($updates);
             $updatedAnyPair = true;
         }
 
@@ -1979,10 +2023,36 @@ class QuizResultController extends Controller
             'subject_overrides' => 'nullable|array',
         ]);
 
-        // Eski student_grades yozuvlarini o'chirish (quiz_result_id bo'yicha)
-        StudentGrade::whereIn('quiz_result_id', $request->ids)->delete();
+        // Qayta yuklashdan oldin eski yozuvlarni tozalash. Ikki xil mantiq:
+        // - OSKI/Test (reason='quiz_result') — yangi qator sifatida qo'shilgan: butunlay o'chiriladi
+        // - Mavzu retake — mavjud jurnal qatoriga retake_grade qo'yilgan: faqat retake
+        //   maydonlari tozalanadi, qator qoladi (NB/past baho asl holatiga qaytadi)
+        $existingRows = StudentGrade::whereIn('quiz_result_id', $request->ids)
+            ->whereNotNull('quiz_result_id')
+            ->get();
 
-        // uploadToGrades ni chaqirish (endi eski yozuvlar yo'q — dublikat tekshiruv o'tmaydi)
+        foreach ($existingRows as $sg) {
+            if ($sg->reason === 'quiz_result') {
+                // OSKI/Test yozuvi — butunlay o'chirish
+                $sg->delete();
+            } else {
+                // Mavzu retake — retake maydonlarni tozalash
+                $revertReason = $sg->reason;
+                if ($sg->reason === 'low_grade' && $sg->grade === null) {
+                    // low_grade faqat retake uchun qo'yilgan bo'lsa — reason ni ham null qilish
+                    $revertReason = null;
+                }
+                DB::table('student_grades')->where('id', $sg->id)->update([
+                    'retake_grade'   => null,
+                    'retake_comment' => null,
+                    'quiz_result_id' => null,
+                    'reason'         => $revertReason,
+                    'updated_at'     => now(),
+                ]);
+            }
+        }
+
+        // uploadToGrades ni chaqirish (endi eski yozuvlar tozalangan — qayta yuklanadi)
         return $this->uploadToGrades($request);
     }
 
@@ -2150,13 +2220,32 @@ class QuizResultController extends Controller
                 }
             }
 
-            // student_grades dan o'chirish (quiz_result_id bo'yicha)
-            $deleted = StudentGrade::where('quiz_result_id', $result->id)
+            // 1) OSKI/Test (reason='quiz_result') yozuvlarini o'chirish
+            $deletedOski = StudentGrade::where('quiz_result_id', $result->id)
                 ->where('reason', 'quiz_result')
                 ->delete();
 
-            if ($deleted > 0) {
-                $deletedCount += $deleted;
+            // 2) Mavzu retake yozuvlarini tiklash (yozuv qoladi, retake maydonlari tozalanadi)
+            $mavzuRows = StudentGrade::where('quiz_result_id', $result->id)
+                ->where(function ($q) {
+                    $q->whereNull('reason')->orWhereIn('reason', ['absent', 'low_grade']);
+                })
+                ->get();
+
+            $revertedMavzu = 0;
+            foreach ($mavzuRows as $sg) {
+                DB::table('student_grades')->where('id', $sg->id)->update([
+                    'retake_grade'   => null,
+                    'retake_comment' => null,
+                    'quiz_result_id' => null,
+                    'updated_at'     => now(),
+                ]);
+                $revertedMavzu++;
+            }
+
+            $totalRemoved = $deletedOski + $revertedMavzu;
+            if ($totalRemoved > 0) {
+                $deletedCount += $totalRemoved;
             } else {
                 $errors[] = [
                     'id' => $result->id,

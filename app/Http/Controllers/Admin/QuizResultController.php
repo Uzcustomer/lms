@@ -148,8 +148,10 @@ class QuizResultController extends Controller
             $allResultIds = $results->pluck('id')->toArray();
             $uploadedResultIds = [];
             if (!empty($allResultIds)) {
-                $uploadedResultIds = StudentGrade::where('reason', 'quiz_result')
-                    ->whereIn('quiz_result_id', $allResultIds)
+                // OSKI/Test: reason='quiz_result' bilan yangi yozuv
+                // Mavzu retake: reason='absent'/'low_grade', lekin quiz_result_id bilan yozilgan
+                $uploadedResultIds = StudentGrade::whereIn('quiz_result_id', $allResultIds)
+                    ->whereNotNull('quiz_result_id')
                     ->pluck('quiz_result_id')
                     ->toArray();
             }
@@ -738,8 +740,10 @@ class QuizResultController extends Controller
             $allResultIds = $results->pluck('id')->toArray();
             $uploadedResultIds = [];
             if (!empty($allResultIds)) {
-                $uploadedResultIds = StudentGrade::where('reason', 'quiz_result')
-                    ->whereIn('quiz_result_id', $allResultIds)
+                // OSKI/Test: reason='quiz_result' bilan yangi yozuv
+                // Mavzu retake: reason='absent'/'low_grade', lekin quiz_result_id bilan yozilgan
+                $uploadedResultIds = StudentGrade::whereIn('quiz_result_id', $allResultIds)
+                    ->whereNotNull('quiz_result_id')
                     ->pluck('quiz_result_id')
                     ->toArray();
             }

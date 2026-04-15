@@ -679,6 +679,13 @@ class VedomostTekshirishController extends Controller
                 // YN natija
                 $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav);
 
+                // Yakuniy qiymatni butun songacha half-up yaxlitlaymiz (V ustun
+                // butun son chiqishi kerak). Maxsus qiymatlar ('', -2, -1, 0)
+                // o'zgartirilmaydi — ular shart kodlari.
+                if (is_numeric($yn) && $yn > 0) {
+                    $yn = (int) floor((float) $yn + 0.5);
+                }
+
                 // ECTS
                 $ects = $this->toEcts($yn);
 

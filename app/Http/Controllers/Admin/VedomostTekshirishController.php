@@ -657,9 +657,11 @@ class VedomostTekshirishController extends Controller
                 //  OSKI/Test ball — ikkalasi ham vaznga ega bo'lsa raw qiymat,
                 //  faqat bittasi vaznga ega bo'lsa butun songacha yaxlitlanadi.
                 //  Istisno: 4 yoki 5 kurs talabalari uchun JN/MT ball ham
-                //  butun songacha half-up yaxlitlanadi.
-                $kurs = (int) ($semester?->level_code ?? 0);
-                $roundJnMtToInt = in_array($kurs, [4, 5], true);
+                //  butun songacha half-up yaxlitlanadi. Semestrda level_code
+                //  qiymatlari: 11=1-kurs, 12=2-kurs, 13=3-kurs, 14=4-kurs,
+                //  15=5-kurs, 16=6-kurs.
+                $levelCode = (string) ($semester?->level_code ?? '');
+                $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
 
                 if ($roundJnMtToInt) {
                     $jnBall = $jn >= 60 ? (int) floor($jn * $wJn / 100 + 0.5) : 0;

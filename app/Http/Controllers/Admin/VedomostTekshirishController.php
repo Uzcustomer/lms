@@ -314,12 +314,11 @@ class VedomostTekshirishController extends Controller
             'AK' => 'JN soni',
             'AL' => 'Divisor',
             'AM' => 'Davomat %',
-            'AN' => 'JN (asl)',
-            'AO' => 'jn_vazn',
-            'AP' => 'mt_vazn',
-            'AQ' => 'on_vazn',
-            'AR' => 'oski_vazn',
-            'AS' => 'test_vazn',
+            'AN' => 'jn_vazn',
+            'AO' => 'mt_vazn',
+            'AP' => 'on_vazn',
+            'AQ' => 'oski_vazn',
+            'AR' => 'test_vazn',
             'AZ' => 'Zanjir',
         ];
 
@@ -356,8 +355,8 @@ class VedomostTekshirishController extends Controller
             'Z' => 14, 'AA' => 10, 'AB' => 28, 'AC' => 14,
             'AD' => 14, 'AE' => 8, 'AF' => 12, 'AG' => 16,
             'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 8,
-            'AL' => 7, 'AM' => 8, 'AN' => 8,
-            'AO' => 8, 'AP' => 8, 'AQ' => 8, 'AR' => 9, 'AS' => 9,
+            'AL' => 7, 'AM' => 8,
+            'AN' => 8, 'AO' => 8, 'AP' => 8, 'AQ' => 9, 'AR' => 9,
             'AZ' => 25,
         ];
         foreach ($colWidths as $col => $width) {
@@ -688,8 +687,10 @@ class VedomostTekshirishController extends Controller
                 }
                 $jnCount = count($jnDaysAttended);
 
-                // Davomat >= 25% bo'lsa JN = 0
-                $jn = $dav >= 25 ? 0 : $jnOrig;
+                // Davomat >= 25% bo'lsa ham JN o'rtacha qiymati saqlanadi —
+                // ma'muriyatga haqiqiy ko'rsatkich ko'rinib tursin. V esa -3
+                // qaytaradi va talaba FISH'iga "(≥25% davomat)" qo'shiladi.
+                $jn = $jnOrig;
 
                 // Balllar:
                 //  JB/MT/ON ball — yaxlitlashsiz raw qiymat (excelda format
@@ -755,7 +756,8 @@ class VedomostTekshirishController extends Controller
 
                 // Hujayralarga yozish
                 $sheet->setCellValue("A{$r}", $rowIndex);
-                $sheet->setCellValue("B{$r}", $stu->full_name);
+                $fioLabel = $stu->full_name . ($dav >= 25 ? ' (≥25% davomat)' : '');
+                $sheet->setCellValue("B{$r}", $fioLabel);
                 $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
                 $sheet->setCellValue("D{$r}", $jn);
                 $sheet->setCellValue("E{$r}", $jnBall);
@@ -807,14 +809,11 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("AL{$r}", $divisor);
                 $sheet->setCellValue("AM{$r}", $dav / 100);
                 $sheet->getStyle("AM{$r}")->getNumberFormat()->setFormatCode('0.00%');
-                if ($dav >= 25 && $jnOrig > 0) {
-                    $sheet->setCellValue("AN{$r}", $jnOrig);
-                }
-                $sheet->setCellValue("AO{$r}", $wJn);
-                $sheet->setCellValue("AP{$r}", $wMt);
-                $sheet->setCellValue("AQ{$r}", $wOn);
-                $sheet->setCellValue("AR{$r}", $wOski);
-                $sheet->setCellValue("AS{$r}", $wTest);
+                $sheet->setCellValue("AN{$r}", $wJn);
+                $sheet->setCellValue("AO{$r}", $wMt);
+                $sheet->setCellValue("AP{$r}", $wOn);
+                $sheet->setCellValue("AQ{$r}", $wOski);
+                $sheet->setCellValue("AR{$r}", $wTest);
                 $sheet->setCellValue("AZ{$r}", $zanjir);
 
                 // Rang berish
@@ -868,7 +867,8 @@ class VedomostTekshirishController extends Controller
         if ($jn === 0 && $mt === 0) return '';
 
         // Davomat >= 25% → qo'yilmadi (-2)
-        if ($dav >= 25) return -2;
+        // Davomat >= 25% → -3 (Davomat ≥25%)
+        if ($dav >= 25) return -3;
 
         // Imtihonga kirmaganlar
         $oskiMissing = $wOski > 0 && $oski == 0;
@@ -923,7 +923,9 @@ class VedomostTekshirishController extends Controller
 
     private function toBaho(string|int|float $yn): string
     {
-        if ($yn === '' || $yn === -2) return "qo'yilmadi";
+        if ($yn === '') return '';
+        if ($yn === -3) return "Davomat \u{2265}25%";
+        if ($yn === -2) return "qo\u{2018}yilmadi";
         if ($yn === -1) return 'kelmadi';
         if (!is_numeric($yn)) return '';
         $yn = (float) $yn;
@@ -970,17 +972,18 @@ class VedomostTekshirishController extends Controller
         ]);
 
         // Rang — YN qaydnoma shabloni bilan bir xil:
+        //  V = -3 → davomat ≥25%: butun qator kursiv qizil shrift
         //  V = -2 → qizil (FFFFC1C1)
         //  V = -1 → pushti (FFFEC2F1)
         //  V =  0 → sariq (FFFFFFCC)
-        if ($yn === -2) {
+        if ($yn === -3 || $dav >= 25) {
+            $sheet->getStyle($range)->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+        } elseif ($yn === -2) {
             $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFC1C1');
         } elseif ($yn === -1) {
             $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEC2F1');
         } elseif ($yn === 0) {
             $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFCC');
-        } elseif ($dav >= 25) {
-            $sheet->getStyle("A{$row}:AZ{$row}")->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
         }
     }
 }

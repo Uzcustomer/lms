@@ -1028,6 +1028,39 @@ class YnQaytnomaController extends Controller
                     }
                 }
 
+                // Davomat (auditoriya soatlariga nisbatan absent_off foizi)
+                $excludedAttendanceCodes = [99, 100, 101, 102];
+                $attendanceByStudent = DB::table('attendances')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subject->subject_id)
+                    ->where('semester_code', $semesterCode)
+                    ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+                    ->selectRaw('student_hemis_id, SUM(absent_off) as total_absent_off')
+                    ->groupBy('student_hemis_id')
+                    ->pluck('total_absent_off', 'student_hemis_id');
+
+                $nonAuditoriumCodes = ['17'];
+                $auditoriumHours = 0;
+                if (is_array($subject->subject_details)) {
+                    foreach ($subject->subject_details as $detail) {
+                        $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                        if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                            $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($auditoriumHours <= 0) {
+                    $auditoriumHours = (float) ($subject->total_acload ?? 0);
+                }
+
+                $davomatByStudent = [];
+                foreach ($students as $stu) {
+                    $absentOff = (float) ($attendanceByStudent[$stu->hemis_id] ?? 0);
+                    $davomatByStudent[$stu->hemis_id] = $auditoriumHours > 0
+                        ? round(($absentOff / $auditoriumHours) * 100, 2)
+                        : 0.0;
+                }
+
                 $subjectKey = $subject->subject_id . '_' . $group->group_hemis_id;
                 $subjectGroups[$subjectKey] = [
                     'subject' => $subject,
@@ -1043,6 +1076,7 @@ class YnQaytnomaController extends Controller
                     'test_grades' => $testGrades,
                     'maruza_teacher' => $maruzaTeacher->full_names ?? '',
                     'other_teachers' => implode(', ', $otherTeacherNames),
+                    'davomat' => $davomatByStudent,
                 ];
             }
         }
@@ -1101,9 +1135,12 @@ class YnQaytnomaController extends Controller
                 if ($row > $maxRow) break;
 
                 $hemisId = $student->hemis_id;
+                $davomatPct = (float) ($data['davomat'][$hemisId] ?? 0);
+                $davomatFailed = $davomatPct >= 25;
 
-                // B ustun - Talaba FIO
-                $sheet->setCellValue('B' . $row, $student->full_name);
+                // B ustun - Talaba FIO (davomat ≥25% bo'lsa izoh qo'shiladi)
+                $fioLabel = $student->full_name . ($davomatFailed ? ' (≥25% davomat)' : '');
+                $sheet->setCellValue('B' . $row, $fioLabel);
 
                 // C ustun - Talaba ID
                 $sheet->setCellValue('C' . $row, $student->student_id_number);
@@ -1201,6 +1238,8 @@ class YnQaytnomaController extends Controller
                 // V (O'zlashtirish ko'rsatkichi)
                 if ($jnVal === null && $mtVal === null) {
                     $v = '';
+                } elseif ($davomatFailed) {
+                    $v = -3; // Davomat ≥25%
                 } elseif ($nPct < 0.6) {
                     $v = -2; // qo'yilmadi
                 } elseif (($wOski > 0 && ($oskiVal === null || $oskiVal == 0))
@@ -1244,6 +1283,7 @@ class YnQaytnomaController extends Controller
                     elseif ($v >= 60)               $w = 'C';
                     elseif ($v >= 0 && $v <= 60)    $w = 'F';
                     elseif ($v == -1)               $w = '';
+                    elseif ($v == -3)               $w = '';
                     else                            $w = 'FX'; // -2 va boshqalar
                 }
 
@@ -1256,6 +1296,7 @@ class YnQaytnomaController extends Controller
                     elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
                     elseif ($v == -1)                 $y = 'kelmadi';
                     elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+                    elseif ($v == -3)                 $y = "Davomat \u{2265}25%";
                 }
 
                 // Ball va natijalarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)
@@ -1282,6 +1323,12 @@ class YnQaytnomaController extends Controller
                 $sheet->setCellValue('V' . $row, $v);
                 $sheet->setCellValue('W' . $row, $w);
                 $sheet->setCellValue('Y' . $row, $y);
+
+                // Davomat ≥25% bo'lgan qatorda kursiv qizil shrift
+                if ($davomatFailed) {
+                    $sheet->getStyle('A' . $row . ':Y' . $row)
+                        ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+                }
             }
 
             // Faylni saqlash

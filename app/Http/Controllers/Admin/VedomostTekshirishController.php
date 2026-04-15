@@ -756,7 +756,13 @@ class VedomostTekshirishController extends Controller
 
                 // Hujayralarga yozish
                 $sheet->setCellValue("A{$r}", $rowIndex);
-                $fioLabel = $stu->full_name . ($dav >= 25 ? ' (≥25% davomat)' : '');
+                $fioLabel = $stu->full_name;
+                if ($dav >= 25) {
+                    // Haqiqiy davomat foizini ko'rsatamiz (1 kasr, oxiridagi
+                    // nollar tozalanadi): 30 → "30", 30.5 → "30.5", 30.15 → "30.2"
+                    $davStr = rtrim(rtrim(number_format($dav, 1, '.', ''), '0'), '.');
+                    $fioLabel .= " ({$davStr}% davomat)";
+                }
                 $sheet->setCellValue("B{$r}", $fioLabel);
                 $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
                 $sheet->setCellValue("D{$r}", $jn);

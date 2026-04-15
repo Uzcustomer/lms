@@ -6515,8 +6515,12 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             $davomatPct = (float) ($davomatByStudent[$hemisId] ?? 0);
             $davomatFailed = $davomatPct >= 25;
 
-            // Davomat ≥25% bo'lsa FIO'ga izoh qo'shamiz
-            $fioLabel = $student->full_name . ($davomatFailed ? ' (≥25% davomat)' : '');
+            // Davomat ≥25% bo'lsa FIO'ga haqiqiy foiz qo'shamiz
+            $fioLabel = $student->full_name;
+            if ($davomatFailed) {
+                $davStr = rtrim(rtrim(number_format($davomatPct, 1, '.', ''), '0'), '.');
+                $fioLabel .= " ({$davStr}% davomat)";
+            }
             $sheet->setCellValue('B' . $row, $fioLabel);
             $sheet->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 

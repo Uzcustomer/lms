@@ -656,9 +656,20 @@ class VedomostTekshirishController extends Controller
                 //  1 kasrni ko'rsatadi);
                 //  OSKI/Test ball — ikkalasi ham vaznga ega bo'lsa raw qiymat,
                 //  faqat bittasi vaznga ega bo'lsa butun songacha yaxlitlanadi.
-                $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
-                $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
-                $onBall = $on >= 60 ? $on * $wOn / 100 : 0;
+                //  Istisno: 4 yoki 5 kurs talabalari uchun JN/MT ball ham
+                //  butun songacha half-up yaxlitlanadi.
+                $kurs = (int) ($semester?->level_code ?? 0);
+                $roundJnMtToInt = in_array($kurs, [4, 5], true);
+
+                if ($roundJnMtToInt) {
+                    $jnBall = $jn >= 60 ? (int) floor($jn * $wJn / 100 + 0.5) : 0;
+                    $mtBall = $mt >= 60 ? (int) floor($mt * $wMt / 100 + 0.5) : 0;
+                    $onBall = $on >= 60 ? (int) floor($on * $wOn / 100 + 0.5) : 0;
+                } else {
+                    $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
+                    $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
+                    $onBall = $on >= 60 ? $on * $wOn / 100 : 0;
+                }
 
                 if ($wOski > 0 && $wTest > 0) {
                     $oskiBall = $oski >= 60 ? $oski * $wOski / 100 : 0;
@@ -706,13 +717,17 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
                 $sheet->setCellValue("D{$r}", $jn);
                 $sheet->setCellValue("E{$r}", $jnBall);
-                $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("G{$r}", $mt);
                 $sheet->setCellValue("H{$r}", $mtBall);
-                $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("J{$r}", $on);
                 $sheet->setCellValue("K{$r}", $onBall);
-                if ($wOn > 0) {
+                if ($wOn > 0 && !$roundJnMtToInt) {
                     $sheet->getStyle("K{$r}")->getNumberFormat()->setFormatCode('0.0');
                 }
                 $sheet->setCellValue("M{$r}", $sumBall);

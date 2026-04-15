@@ -1980,7 +1980,14 @@ class QuizResultController extends Controller
                 // Baho < 60 — retake × 0.8
                 $retakeValue = round($moodleGrade * 0.8, 2);
 
-                if ($sg->retake_grade !== null && $sg->retake_grade >= $retakeValue) {
+                // Yangi retake hozirgi asl bahodan past bo'lmasligi kerak (aks holda qabul qilinmaydi)
+                if ($sg->grade !== null && $retakeValue <= $sg->grade) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: yangi retake ({$retakeValue}) <= asl baho ({$sg->grade})";
+                    continue;
+                }
+
+                // Mavjud retake'dan ham past bo'lmasligi kerak
+                if ($sg->retake_grade !== null && $retakeValue <= $sg->retake_grade) {
                     $skipReasons[] = "juftlik {$sg->lesson_pair_code}: mavjud retake ({$sg->retake_grade}) >= yangi ({$retakeValue})";
                     continue;
                 }

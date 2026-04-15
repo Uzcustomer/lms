@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\WithHeadings;
@@ -19,9 +20,31 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
 
     protected array $filters;
 
+    protected ?array $tutorCache = null;
+
     public function __construct(array $filters = [])
     {
         $this->filters = $filters;
+    }
+
+    protected function getTutorName(?string $groupHemisId): string
+    {
+        if (!$groupHemisId) {
+            return '';
+        }
+
+        if ($this->tutorCache === null) {
+            $this->tutorCache = DB::table('group_teacher')
+                ->join('groups', 'group_teacher.group_id', '=', 'groups.id')
+                ->join('teachers', 'group_teacher.teacher_id', '=', 'teachers.id')
+                ->orderBy('group_teacher.id')
+                ->get(['groups.group_hemis_id', 'teachers.full_name'])
+                ->groupBy('group_hemis_id')
+                ->map(fn ($items) => $items->first()->full_name)
+                ->toArray();
+        }
+
+        return $this->tutorCache[$groupHemisId] ?? '';
     }
 
     public function query()
@@ -121,6 +144,7 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             $frontOffice?->started_at ? $frontOffice->started_at->format('d.m.Y') : '',
             $backOffice?->teacher?->full_name ?? '',
             $backOffice?->started_at ? $backOffice->started_at->format('d.m.Y') : '',
+            $this->getTutorName($student->group_id),
         ];
     }
 
@@ -175,6 +199,7 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             'Front ofis boshlanish sanasi',
             'Back ofis xodimi',
             'Back ofis boshlanish sanasi',
+            'Tyutor',
         ];
     }
 

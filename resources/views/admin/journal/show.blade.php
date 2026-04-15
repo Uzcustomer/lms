@@ -809,7 +809,7 @@
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
-        $canAdminEditExam = false;
+        $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">

@@ -606,7 +606,21 @@
             $('#ef_test').val($('#m_test').val());
 
             closeWeightModal();
-            $('#export-form').submit();
+
+            // Avval HEMIS sync (fonda), keyin Excel export
+            var btn=$('#modal-download-btn');
+            btn.prop('disabled',true).text('HEMIS sync...');
+
+            $.ajax({
+                url: '{{ route("admin.vedomost-tekshirish.sync-hemis") }}',
+                method: 'POST',
+                data: { _token: '{{ csrf_token() }}', rows: selected },
+                timeout: 30000
+            }).always(function(){
+                btn.text('Yuklab olish');
+                btn.prop('disabled',false);
+                $('#export-form').submit();
+            });
         }
     </script>
 

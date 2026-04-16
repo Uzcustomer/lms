@@ -228,7 +228,7 @@
                                                         <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
                                                             <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                    class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}" />
+                                                                   data-initial-value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('Y-m-d') : '' }}" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
@@ -286,7 +286,7 @@
                                                         <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
                                                             <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
                                                                    class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}" />
+                                                                   data-initial-value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('Y-m-d') : '' }}" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"

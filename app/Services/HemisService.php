@@ -942,7 +942,7 @@ class HemisService
      *
      * @return int Saqlab olingan yozuvlar soni
      */
-    public function syncExamGradesForGroup(string $groupHemisId, string $subjectId, string $semesterCode): int
+    public function syncExamGradesForGroup(string $groupHemisId, string $subjectId, string $semesterCode, int $timeout = 10): int
     {
         $synced = 0;
         $page = 1;
@@ -951,7 +951,8 @@ class HemisService
         do {
             try {
                 $response = Http::withoutVerifying()
-                    ->timeout(30)
+                    ->connectTimeout(5)
+                    ->timeout($timeout)
                     ->withToken($this->token)
                     ->get($this->baseUrl . '/v1/data/student-performance-list', [
                         '_group' => $groupHemisId,

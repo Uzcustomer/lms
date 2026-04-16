@@ -655,10 +655,15 @@ class VedomostTekshirishController extends Controller
             $validDates = $dateCounts->filter(fn($r) => $r->cnt >= $threshold)->count();
             $divisor = max(1, $validDates);
 
-            // --- HEMIS exam grades bilan taqqoslash uchun lokal jadvaldan query ---
-            // Sync export paytida qilinmaydi (HEMIS API sekin/timeout bo'lishi
-            // mumkin). Ma'lumotlar cron (hemis:sync-exam-grades, har kuni 03:00)
-            // yoki qo'lda `php artisan hemis:sync-exam-grades` orqali to'ldiriladi.
+            // --- HEMIS exam grades bilan taqqoslash ---
+            // Export paytida HEMIS'dan tortib lokal jadvalga saqlaymiz (faqat
+            // shu guruh/fan/semestr uchun — 1 API call, timeout 10s).
+            // HEMIS javob bermasa, lokal jadvaldan mavjud ma'lumot ishlatiladi.
+            try {
+                app(HemisService::class)->syncExamGradesForGroup($groupHemisId, $subjectId, $semesterCode, 10);
+            } catch (\Throwable $e) {
+                // HEMIS ulanib bo'lmasa — davom etamiz, lokal ma'lumot ishlatiladi
+            }
             $hemisExamGrades = HemisExamGrade::forComparison($studentHemisIds, $subjectId, $semesterCode)
                 ->get()
                 ->groupBy('student_hemis_id');

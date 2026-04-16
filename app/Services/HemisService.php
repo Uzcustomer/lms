@@ -990,6 +990,17 @@ class HemisService
                     $pagination = $json['data']['pagination'] ?? [];
                     $pageCount = $pagination['pageCount'] ?? 1;
 
+                    // Debug: birinchi talaba uchun API javobni log qilamiz
+                    if ($page === 1 && $studentHemisId === $studentHemisIds[0]) {
+                        Log::info('HEMIS student-performance-list response sample', [
+                            'student' => $studentHemisId,
+                            'subject_filter' => $subjectId,
+                            'total_items' => count($items),
+                            'first_item' => $items[0] ?? 'empty',
+                            'pagination' => $pagination,
+                        ]);
+                    }
+
                     foreach ($items as $item) {
                         $hemisId = $item['id'] ?? null;
                         if (!$hemisId) continue;

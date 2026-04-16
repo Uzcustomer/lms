@@ -1959,6 +1959,7 @@ class QuizResultController extends Controller
                     'retake_grade'   => $retakeValue,
                     'retake_comment' => "Moodle mavzu {$result->shakl}: {$moodleGrade} {$label} = {$retakeValue} (quiz_result#{$result->id})",
                     'reason'         => 'absent',
+                    'status'         => 'closed',
                     'quiz_result_id' => $result->id,
                     'updated_at'     => now(),
                 ];
@@ -1996,6 +1997,7 @@ class QuizResultController extends Controller
                     'retake_grade'   => $retakeValue,
                     'retake_comment' => "Moodle mavzu {$result->shakl}: {$moodleGrade} ×0.8 = {$retakeValue} (quiz_result#{$result->id})",
                     'reason'         => $sg->reason ?? 'low_grade',
+                    'status'         => 'closed',
                     'quiz_result_id' => $result->id,
                     'updated_at'     => now(),
                 ];

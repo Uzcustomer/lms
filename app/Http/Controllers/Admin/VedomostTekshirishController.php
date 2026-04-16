@@ -237,6 +237,40 @@ class VedomostTekshirishController extends Controller
         }
     }
 
+    /**
+     * Export'dan oldin HEMIS exam grades ni sync qilish (AJAX).
+     * Frontend avval shu endpointni chaqiradi, keyin export formni yuboradi.
+     */
+    public function syncHemis(Request $request)
+    {
+        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
+
+        $rows = $request->input('rows', []);
+        $synced = 0;
+
+        foreach ($rows as $rowData) {
+            $groupId      = $rowData['group_id'] ?? null;
+            $subjectId    = $rowData['subject_id'] ?? null;
+            $semesterCode = $rowData['semester_code'] ?? null;
+            if (!$groupId || !$subjectId) continue;
+
+            $group = is_numeric($groupId)
+                ? Group::find($groupId)
+                : Group::where('group_hemis_id', $groupId)->first();
+            if (!$group) continue;
+
+            try {
+                $synced += app(HemisService::class)->syncExamGradesForGroup(
+                    $group->group_hemis_id, $subjectId, $semesterCode ?? '', 15
+                );
+            } catch (\Throwable $e) {
+                // HEMIS javob bermasa — davom etamiz
+            }
+        }
+
+        return response()->json(['synced' => $synced]);
+    }
+
     public function export(Request $request)
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
@@ -655,12 +689,9 @@ class VedomostTekshirishController extends Controller
             $validDates = $dateCounts->filter(fn($r) => $r->cnt >= $threshold)->count();
             $divisor = max(1, $validDates);
 
-            // --- HEMIS exam grades bilan taqqoslash uchun sync + query ---
-            try {
-                app(HemisService::class)->syncExamGradesForGroup($groupHemisId, $subjectId, $semesterCode);
-            } catch (\Throwable $e) {
-                \Log::warning('HEMIS exam grades sync failed during export', ['error' => $e->getMessage()]);
-            }
+            // --- HEMIS exam grades bilan taqqoslash (lokal jadvaldan) ---
+            // Sync export'dan oldin alohida AJAX so'rov (syncHemis) orqali
+            // amalga oshiriladi. Bu yerda faqat lokal ma'lumot o'qiladi.
             $hemisExamGrades = HemisExamGrade::forComparison($studentHemisIds, $subjectId, $semesterCode)
                 ->get()
                 ->groupBy('student_hemis_id');

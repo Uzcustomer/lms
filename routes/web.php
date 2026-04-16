@@ -311,6 +311,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
             Route::get('/search', [VedomostTekshirishController::class, 'search'])->name('search');
             Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
+            Route::post('/sync-hemis', [VedomostTekshirishController::class, 'syncHemis'])->name('sync-hemis');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');

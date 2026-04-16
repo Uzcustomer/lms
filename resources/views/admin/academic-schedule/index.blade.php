@@ -228,7 +228,7 @@
                                                         <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
                                                             <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                    class="exam-sc-date" autocomplete="off"
-                                                                   value="{{ $item['oski_date'] }}" />
+                                                                   data-initial-value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
@@ -286,7 +286,7 @@
                                                         <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
                                                             <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
                                                                    class="exam-sc-date" autocomplete="off"
-                                                                   value="{{ $item['test_date'] }}" />
+                                                                   data-initial-value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
@@ -727,7 +727,12 @@
 
             // Jadval sana inputlari uchun ScrollCalendar ishga tushirish
             document.querySelectorAll('.exam-sc-date').forEach(function(inp) {
-                new ScrollCalendar(inp.id);
+                var sc = new ScrollCalendar(inp.id);
+                // Agar saqlangan sana mavjud bo'lsa (canEdit rejimida) — qiymatni o'rnatish
+                var initialVal = inp.getAttribute('data-initial-value');
+                if (initialVal) {
+                    sc.setValue(initialVal);
+                }
             });
 
             // Sort funksiyasi

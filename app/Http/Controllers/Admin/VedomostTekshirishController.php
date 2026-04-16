@@ -374,11 +374,11 @@ class VedomostTekshirishController extends Controller
             'AP' => 'on_vazn',
             'AQ' => 'oski_vazn',
             'AR' => 'test_vazn',
-            'AZ' => 'Zanjir',
-            'BA' => 'JN+MT tekshiruv',
-            'BB' => 'JN+MT izoh',
-            'BC' => 'YN tekshiruv',
-            'BD' => 'YN izoh',
+            'AS' => 'Zanjir',
+            'AT' => 'JN+MT tekshiruv',
+            'AU' => 'JN+MT izoh',
+            'AV' => 'YN tekshiruv',
+            'AW' => 'YN izoh',
         ];
 
         $sheet->getRowDimension(1)->setRowHeight(30);
@@ -416,7 +416,7 @@ class VedomostTekshirishController extends Controller
             'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 8,
             'AL' => 7, 'AM' => 8,
             'AN' => 8, 'AO' => 8, 'AP' => 8, 'AQ' => 9, 'AR' => 9,
-            'AZ' => 25, 'BA' => 12, 'BB' => 20, 'BC' => 12, 'BD' => 20,
+            'AS' => 25, 'AT' => 12, 'AU' => 20, 'AV' => 12, 'AW' => 20,
         ];
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
@@ -899,7 +899,7 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("AP{$r}", $wOn);
                 $sheet->setCellValue("AQ{$r}", $wOski);
                 $sheet->setCellValue("AR{$r}", $wTest);
-                $sheet->setCellValue("AZ{$r}", $zanjir);
+                $sheet->setCellValue("AS{$r}", $zanjir);
 
                 // --- HEMIS bilan taqqoslash ---
                 $studentHemisRecords = $hemisExamGrades[$hId] ?? collect();
@@ -935,10 +935,10 @@ class VedomostTekshirishController extends Controller
                     $ynReason = '';
                 }
 
-                $sheet->setCellValue("BA{$r}", $jnMtCheck);
-                $sheet->setCellValue("BB{$r}", $jnMtReason);
-                $sheet->setCellValue("BC{$r}", $ynCheck);
-                $sheet->setCellValue("BD{$r}", $ynReason);
+                $sheet->setCellValue("AT{$r}", $jnMtCheck);
+                $sheet->setCellValue("AU{$r}", $jnMtReason);
+                $sheet->setCellValue("AV{$r}", $ynCheck);
+                $sheet->setCellValue("AW{$r}", $ynReason);
 
                 // Rang berish
                 $this->applyRowStyle($sheet, $r, $yn, $dav);
@@ -1078,7 +1078,7 @@ class VedomostTekshirishController extends Controller
 
     private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {
-        $range = "A{$row}:BD{$row}";
+        $range = "A{$row}:AW{$row}";
 
         $sheet->getStyle($range)->applyFromArray([
             'font' => ['size' => 9],

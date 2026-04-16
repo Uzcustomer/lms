@@ -8,7 +8,7 @@
         </div>
     </x-slot>
 
-    <div class="py-12">
+    <div class="py-4">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 bg-white border-b border-gray-200">
@@ -385,10 +385,10 @@
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                                 @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['tugilgan_sana',"Tug'ilgan sana",'date'],['jshshir','JSHSHIR'],['jinsi','Jinsi'],['tel1','Tel 1'],['tel2','Tel 2'],['email','Email'],['millat','Millat']] as $f)
                                                 <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                     <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
                                                            value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                            placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
@@ -405,9 +405,9 @@
                                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                     @foreach([['tugilgan_davlat','Davlat'],['tugilgan_viloyat','Viloyat'],['tugulgan_tuman','Tuman']] as $f)
                                                     <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                         <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                                placeholder="{{ $f[1] }}">
                                                     </div>
                                                     @endforeach
@@ -421,9 +421,9 @@
                                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                     @foreach([['doimiy_manzil','Doimiy manzil'],['yashash_davlat','Yashash davlat'],['yashash_viloyat','Yashash viloyat'],['yashash_tuman','Yashash tuman'],['yashash_manzil','Yashash manzil']] as $f)
                                                     <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                         <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                                placeholder="{{ $f[1] }}">
                                                     </div>
                                                     @endforeach
@@ -440,10 +440,10 @@
                                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                                 @foreach([['passport_seriya','Seriya'],['passport_raqam','Raqam'],['passport_sana','Berilgan sana','date'],['passport_joy','Berilgan joy']] as $f)
                                                 <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                     <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
                                                            value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                            placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
@@ -459,9 +459,9 @@
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                                 @foreach([['oliy_malumot',"Oliy ma'lumot"],['otm_nomi','OTM nomi'],['talim_turi',"Ta'lim turi"],['talim_shakli',"Ta'lim shakli"],['mutaxassislik','Mutaxassislik'],['toplagan_ball','Toplagan ball'],['tolov_shakli',"To'lov shakli"],['muassasa_nomi','Muassasa nomi'],['hujjat_seriya','Hujjat seriya'],['ortalacha_ball','Ortalacha ball']] as $f)
                                                 <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                            placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
@@ -477,9 +477,9 @@
                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                 @foreach([['sertifikat_turi','Sertifikat turi'],['sertifikat_ball','Sertifikat ball'],['milliy_sertifikat','Milliy sertifikat']] as $f)
                                                 <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                            placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
@@ -496,9 +496,9 @@
                                                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                                     @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Tel'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
                                                     <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                         <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                                placeholder="{{ $f[1] }}">
                                                     </div>
                                                     @endforeach
@@ -512,9 +512,9 @@
                                                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                                     @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
                                                     <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
                                                         <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
+                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
                                                                placeholder="{{ $f[1] }}">
                                                     </div>
                                                     @endforeach

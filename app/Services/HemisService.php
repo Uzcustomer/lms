@@ -7,6 +7,7 @@ use App\Models\ContractList;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Models\Group;
+use App\Models\HemisExamGrade;
 use App\Models\MarkingSystemScore;
 use App\Models\Semester;
 use App\Models\Student;
@@ -933,5 +934,86 @@ class HemisService
         }
 
         return $totalImported;
+    }
+
+    /**
+     * HEMIS'dan student-performance-list ni tortib hemis_exam_grades ga saqlash.
+     * Bitta guruh + fan + semestr uchun ishlaydi (export paytida chaqiriladi).
+     *
+     * @return int Saqlab olingan yozuvlar soni
+     */
+    public function syncExamGradesForGroup(string $groupHemisId, string $subjectId, string $semesterCode): int
+    {
+        $synced = 0;
+        $page = 1;
+        $pageCount = 1;
+
+        do {
+            try {
+                $response = Http::withoutVerifying()
+                    ->timeout(30)
+                    ->withToken($this->token)
+                    ->get($this->baseUrl . '/v1/data/student-performance-list', [
+                        '_group' => $groupHemisId,
+                        '_subject' => $subjectId,
+                        'limit' => 200,
+                        'page' => $page,
+                    ]);
+
+                if (!$response->successful()) {
+                    Log::warning('HEMIS student-performance-list failed', [
+                        'status' => $response->status(),
+                        'group' => $groupHemisId,
+                        'subject' => $subjectId,
+                    ]);
+                    break;
+                }
+
+                $json = $response->json();
+                $items = $json['data']['items'] ?? [];
+                $pagination = $json['data']['pagination'] ?? [];
+                $pageCount = $pagination['pageCount'] ?? 1;
+
+                foreach ($items as $item) {
+                    $hemisId = $item['id'] ?? null;
+                    if (!$hemisId) continue;
+
+                    $examDate = !empty($item['exam_date'])
+                        ? \Carbon\Carbon::createFromTimestamp($item['exam_date'])
+                        : null;
+
+                    HemisExamGrade::updateOrCreate(
+                        ['hemis_record_id' => $hemisId],
+                        [
+                            'student_hemis_id'   => (string) ($item['_student'] ?? ''),
+                            'subject_id'         => (string) ($item['subject']['id'] ?? $subjectId),
+                            'semester_code'       => (string) ($item['semester']['code'] ?? $semesterCode),
+                            'education_year'     => (string) ($item['_education_year'] ?? ''),
+                            'exam_type_code'     => (string) ($item['examType']['code'] ?? ''),
+                            'exam_type_name'     => $item['examType']['name'] ?? null,
+                            'final_exam_type_code' => (string) ($item['finalExamType']['code'] ?? ''),
+                            'final_exam_type_name' => $item['finalExamType']['name'] ?? null,
+                            'grade'              => is_numeric($item['grade'] ?? null) ? (int) $item['grade'] : null,
+                            'regrade'            => is_numeric($item['regrade'] ?? null) ? (int) $item['regrade'] : null,
+                            'exam_date'          => $examDate,
+                            'employee_hemis_id'  => (string) ($item['_employee'] ?? ''),
+                            'exam_schedule_id'   => $item['_exam_schedule'] ?? null,
+                        ]
+                    );
+                    $synced++;
+                }
+            } catch (\Throwable $e) {
+                Log::error('HEMIS exam grades sync error', [
+                    'error' => $e->getMessage(),
+                    'group' => $groupHemisId,
+                    'page' => $page,
+                ]);
+                break;
+            }
+
+            $page++;
+        } while ($page <= $pageCount);
+
+        return $synced;
     }
 }

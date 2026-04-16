@@ -8,9 +8,11 @@ use App\Models\CurriculumSubject;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Models\Group;
+use App\Models\HemisExamGrade;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Services\HemisService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -320,6 +322,10 @@ class VedomostTekshirishController extends Controller
             'AQ' => 'oski_vazn',
             'AR' => 'test_vazn',
             'AZ' => 'Zanjir',
+            'BA' => 'JN+MT tekshiruv',
+            'BB' => 'JN+MT izoh',
+            'BC' => 'YN tekshiruv',
+            'BD' => 'YN izoh',
         ];
 
         $sheet->getRowDimension(1)->setRowHeight(30);
@@ -357,7 +363,7 @@ class VedomostTekshirishController extends Controller
             'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 8,
             'AL' => 7, 'AM' => 8,
             'AN' => 8, 'AO' => 8, 'AP' => 8, 'AQ' => 9, 'AR' => 9,
-            'AZ' => 25,
+            'AZ' => 25, 'BA' => 12, 'BB' => 20, 'BC' => 12, 'BD' => 20,
         ];
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
@@ -649,6 +655,16 @@ class VedomostTekshirishController extends Controller
             $validDates = $dateCounts->filter(fn($r) => $r->cnt >= $threshold)->count();
             $divisor = max(1, $validDates);
 
+            // --- HEMIS exam grades bilan taqqoslash uchun sync + query ---
+            try {
+                app(HemisService::class)->syncExamGradesForGroup($groupHemisId, $subjectId, $semesterCode);
+            } catch (\Throwable $e) {
+                \Log::warning('HEMIS exam grades sync failed during export', ['error' => $e->getMessage()]);
+            }
+            $hemisExamGrades = HemisExamGrade::forComparison($studentHemisIds, $subjectId, $semesterCode)
+                ->get()
+                ->groupBy('student_hemis_id');
+
             // --- Qatorlarni yozish ---
             foreach ($students as $stu) {
                 $hId = $stu->hemis_id;
@@ -833,6 +849,45 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("AR{$r}", $wTest);
                 $sheet->setCellValue("AZ{$r}", $zanjir);
 
+                // --- HEMIS bilan taqqoslash ---
+                $studentHemisRecords = $hemisExamGrades[$hId] ?? collect();
+
+                // JN+MT: examType.code = '11'
+                $hemisJnMt = $studentHemisRecords->firstWhere('exam_type_code', '11')?->grade;
+                if ($hemisJnMt === null) {
+                    $jnMtCheck = 'D';
+                    $jnMtReason = "Hemisda yo'q";
+                } elseif ((int) $hemisJnMt !== (int) $sumBall) {
+                    $jnMtCheck = 'D';
+                    $jnMtReason = "{$sumBall}≠{$hemisJnMt}";
+                } else {
+                    $jnMtCheck = '';
+                    $jnMtReason = '';
+                }
+
+                // YN: examType.code = '13' (faqat V > 0 bo'lganda)
+                $hemisYn = $studentHemisRecords->firstWhere('exam_type_code', '13')?->grade;
+                if (is_numeric($yn) && $yn > 0) {
+                    if ($hemisYn === null) {
+                        $ynCheck = 'D';
+                        $ynReason = "Hemisda yo'q";
+                    } elseif ((int) $hemisYn !== (int) $yn) {
+                        $ynCheck = 'D';
+                        $ynReason = "{$yn}≠{$hemisYn}";
+                    } else {
+                        $ynCheck = '';
+                        $ynReason = '';
+                    }
+                } else {
+                    $ynCheck = '';
+                    $ynReason = '';
+                }
+
+                $sheet->setCellValue("BA{$r}", $jnMtCheck);
+                $sheet->setCellValue("BB{$r}", $jnMtReason);
+                $sheet->setCellValue("BC{$r}", $ynCheck);
+                $sheet->setCellValue("BD{$r}", $ynReason);
+
                 // Rang berish
                 $this->applyRowStyle($sheet, $r, $yn, $dav);
 
@@ -971,7 +1026,7 @@ class VedomostTekshirishController extends Controller
 
     private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {
-        $range = "A{$row}:AZ{$row}";
+        $range = "A{$row}:BD{$row}";
 
         $sheet->getStyle($range)->applyFromArray([
             'font' => ['size' => 9],

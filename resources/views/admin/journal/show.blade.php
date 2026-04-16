@@ -525,7 +525,10 @@
             color: #dc2626 !important;
         }
         .grade-retake {
-            color: #d97706 !important;
+            color: #111827 !important;
+            background: #c9c9c9;
+            padding: 1px 3px;
+            border-radius: 2px;
         }
         /* Diagonal split cell for retake grades */
         .split-cell {
@@ -533,6 +536,7 @@
             width: 100%;
             height: 40px;
             overflow: hidden;
+            background: #c9c9c9;
         }
         .split-cell .split-line {
             position: absolute;
@@ -561,7 +565,7 @@
             font-size: 11px;
             font-weight: 600;
             line-height: 1;
-            color: #d97706;
+            color: #111827;
         }
         .editable-cell {
             position: relative;
@@ -1142,19 +1146,11 @@
                                                     $isRetake = $hasRetakeInDay[$date] ?? false;
                                                     $hasNonFinalInDay = $hasGrades && collect($dayGrades)->contains(fn($g) => !($g['is_final'] ?? true));
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
                                                     @if($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
-                                                            if ($isRetake) {
-                                                                $dayAvgColorClass = 'text-amber-600'; // retake baholar malla rangda
-                                                            } elseif ($dayAvg < ($minimumLimit ?? 60)) {
-                                                                $dayAvgColorClass = 'text-red-600';
-                                                            } elseif ($hasTeacherGradeInDay) {
-                                                                $dayAvgColorClass = 'text-green-600';
-                                                            } else {
-                                                                $dayAvgColorClass = 'text-gray-900';
-                                                            }
+                                                            $dayAvgColorClass = $dayAvg < ($minimumLimit ?? 60) ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
                                                         @endphp
                                                         <span class="{{ $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
                                                         @if(count($dayGrades) > 1)
@@ -1352,7 +1348,7 @@
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;

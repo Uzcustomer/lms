@@ -89,7 +89,6 @@
                                 <button type="button" onclick="switchProfileTab('manzil')" id="ptab-manzil" class="sp-tab">Manzil</button>
                                 <button type="button" onclick="switchProfileTab('fayllar')" id="ptab-fayllar" class="sp-tab">Fayllar</button>
                                 @if($canUploadFiles)<button type="button" onclick="switchProfileTab('qabul')" id="ptab-qabul" class="sp-tab">Qabul</button>@endif
-                                <button type="button" onclick="switchProfileTab('tizim')" id="ptab-tizim" class="sp-tab">Tizim</button>
                             </div>
 
                             {{-- TAB 1: SHAXSIY --}}
@@ -545,7 +544,7 @@
                                             <div class="flex items-center gap-2 mb-4">
                                                 <span class="w-1 h-4 rounded-full bg-teal-500"></span>
                                                 <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Hujjatlar (PDF / Rasm)</h5>
-                                                <span class="text-[10px] text-slate-400 font-medium ml-1">max 20MB</span>
+                                                <span class="text-[10px] text-slate-400 font-medium ml-1">max 1MB</span>
                                             </div>
 
                                             @php
@@ -627,67 +626,6 @@
                             </div>
                             </div>{{-- /qabul tab --}}
                             @endif
-
-                            {{-- TAB 7: TIZIM --}}
-                            <div id="ptab-content-tizim" class="sp-content" style="display:none;">
-                              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div class="sp-card">
-                                    <h4 class="sp-title">O'quv ma'lumotlari</h4>
-                                    <table class="sp-table">
-                                        <tr><td>O'quv yili</td><td>{{ $student->education_year_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->education_year_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Semestr</td><td>{{ $student->semester_name ?? '-' }} <span class="text-gray-400 text-xs">(kod: {{ $student->semester_code ?? '-' }}, id: {{ $student->semester_id ?? '-' }})</span></td></tr>
-                                        <tr><td>Kurs</td><td>{{ $student->level_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->level_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Curriculum ID</td><td>{{ $student->curriculum_id ?? '-' }} <span class="text-gray-400 text-xs">{{ $student->curriculum->name ?? '' }}</span></td></tr>
-                                        <tr><td>Ta'lim turi</td><td>{{ $student->education_type_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->education_type_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Ta'lim shakli</td><td>{{ $student->education_form_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->education_form_code ?? '-' }})</span></td></tr>
-                                        <tr><td>To'lov shakli</td><td>{{ $student->payment_form_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->payment_form_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Talaba turi</td><td>{{ $student->student_type_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->student_type_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Talaba holati</td><td>{{ $student->student_status_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->student_status_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Ijtimoiy toifa</td><td>{{ $student->social_category_name ?? '-' }}</td></tr>
-                                        <tr><td>Turar joy</td><td>{{ $student->accommodation_name ?? '-' }}</td></tr>
-                                    </table>
-                                </div>
-                                <div class="sp-card">
-                                    <h4 class="sp-title">Tizim va aloqa</h4>
-                                    <table class="sp-table">
-                                        <tr><td>Universitet</td><td>{{ $student->university_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->university_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Fakultet</td><td>{{ $student->department_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->department_code ?? '-' }})</span></td></tr>
-                                        <tr><td>Yo'nalish</td><td>{{ $student->specialty_name ?? '-' }}</td></tr>
-                                        <tr><td>Guruh</td><td>{{ $student->group_name ?? '-' }} <span class="text-gray-400 text-xs">(ID: {{ $student->group_id ?? '-' }})</span></td></tr>
-                                        <tr><td>Telefon</td><td>{{ $student->phone ?? '-' }}</td></tr>
-                                        <tr><td>Telegram</td><td>{{ $student->telegram_username ?? '-' }}</td></tr>
-                                        <tr>
-                                            <td>Telegram tasdiqlangan</td>
-                                            <td>
-                                                @if($student->isTelegramVerified())
-                                                    <span class="text-green-600 font-semibold">Ha ({{ $student->telegram_verified_at->format('d.m.Y') }})</span>
-                                                @else
-                                                    <span class="text-red-600">Yo'q</span>
-                                                @endif
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <td>Parol holati</td>
-                                            <td>
-                                                @if($student->local_password_expires_at)
-                                                    {{ $student->local_password_expires_at->format('d.m.Y H:i') }}
-                                                    @if($student->local_password_expires_at->isFuture())
-                                                        <span class="text-green-600">(faol)</span>
-                                                    @else
-                                                        <span class="text-red-600">(muddati o'tgan)</span>
-                                                    @endif
-                                                @else -
-                                                @endif
-                                            </td>
-                                        </tr>
-                                        <tr><td>Parolni o'zgartirish</td><td>{{ $student->must_change_password ? 'Ha' : 'Yo\'q' }}</td></tr>
-                                        <tr><td>Hash</td><td class="break-all text-xs">{{ $student->hash ?? '-' }}</td></tr>
-                                        <tr><td>Yaratilgan</td><td>{{ $student->hemis_created_at ? $student->hemis_created_at->format('d.m.Y H:i') : '-' }}</td></tr>
-                                        <tr><td>Yangilangan</td><td>{{ $student->hemis_updated_at ? $student->hemis_updated_at->format('d.m.Y H:i') : '-' }}</td></tr>
-                                    </table>
-                                </div>
-                              </div>
-                            </div>{{-- /tizim tab --}}
 
                         </div>{{-- /md:w-3/4 --}}
                     </div>

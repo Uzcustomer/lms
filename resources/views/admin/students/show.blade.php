@@ -370,11 +370,7 @@
                             {{-- TAB 6: QABUL --}}
                             @if($canUploadFiles)
                             <div id="ptab-content-qabul" class="sp-content" style="display:none;">
-                            <div id="admission-section">
-                                <div id="admission-body" style="border:1px solid #dbe4ef; border-top:none; border-radius:0 0 10px 10px; padding:20px; background:#fff;">
-
-                                {{-- Body --}}
-                                <div id="admission-body" class="border border-t-0 border-slate-200 rounded-b-xl bg-white">
+                                <div class="bg-white rounded-xl">
 
                                     {{-- Ma'lumotlar formasi --}}
                                     <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="p-5 space-y-5">
@@ -623,7 +619,6 @@
                                     </div>
 
                                 </div>
-                            </div>
                             </div>{{-- /qabul tab --}}
                             @endif
 
@@ -669,5 +664,26 @@
             if (arrow) arrow.style.transform = 'rotate(0deg)';
         }
     }
+    // Fayl hajmi tekshiruvi
+    document.addEventListener('change', function(e) {
+        if (e.target.type !== 'file' || !e.target.files.length) return;
+        var file = e.target.files[0];
+        // Qabul hujjatlar — 1MB limit
+        if (e.target.name === 'admission_file') {
+            if (file.size > 1 * 1024 * 1024) {
+                alert('Fayl hajmi 1 MB dan oshmasligi kerak! Tanlangan: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
+                e.target.value = '';
+                return;
+            }
+        }
+        // Umumiy fayllar — 10MB limit
+        if (e.target.name === 'file') {
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Fayl hajmi 10 MB dan oshmasligi kerak! Tanlangan: ' + (file.size / 1024 / 1024).toFixed(2) + ' MB');
+                e.target.value = '';
+                return;
+            }
+        }
+    });
     </script>
 </x-app-layout>

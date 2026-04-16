@@ -249,13 +249,26 @@
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
                     var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
-                    if (xhr.responseJSON && xhr.responseJSON.error) {
-                        msg += ' (' + xhr.responseJSON.error + ')';
+                    // Laravel default JSON: .message, controllerimizdagi catch: .error
+                    var detail = null;
+                    if (xhr.responseJSON) {
+                        detail = xhr.responseJSON.error || xhr.responseJSON.message || null;
+                        if (detail && xhr.responseJSON.file) {
+                            detail += ' (' + xhr.responseJSON.file.split('/').pop() + ':' + xhr.responseJSON.line + ')';
+                        }
+                    }
+                    // Agar JSON bo'lmasa, HTML ichidan xato sarlavhasini olishga urinib ko'ramiz
+                    if (!detail && xhr.responseText) {
+                        var m = xhr.responseText.match(/<title>([^<]+)<\/title>/i);
+                        if (m) detail = m[1].replace(/\s+/g, ' ').trim().substring(0, 200);
+                    }
+                    if (detail) {
+                        msg += ' (' + detail + ')';
                     } else if (xhr.status) {
                         msg += ' (HTTP ' + xhr.status + ')';
                     }
                     $('#empty-state').show().find('p:first').text(msg);
-                    console.error('Absence report error:', xhr.status, xhr.responseText ? xhr.responseText.substring(0, 500) : '');
+                    console.error('Absence report error:', xhr.status, xhr.responseText ? xhr.responseText.substring(0, 1000) : '');
                 }
             });
         }

@@ -684,18 +684,25 @@ class AbsenceExcuseController extends Controller
 
     /**
      * Avvalgi arizalardagi `scheduled` holatdagi (bajarilmagan) retake'larni olish,
-     * agar ularning makeup_date i berilgan oraliqqa tushsa.
+     * agar ularning makeup_date i (yoki makeup oralig'i) berilgan sababli oraliqqa tushsa.
      * Bu talaba sababli kun tufayli retake sanasida topshirolmagan testlarni
-     * yangi arizada qayta tanlashga imkon beradi.
+     * (OSKI, Test, JN) yangi arizada qayta tanlashga imkon beradi.
      */
     private function findUncompletedMakeupsInRange($studentId, $startDate, $endDate)
     {
         return AbsenceExcuseMakeup::where('student_id', $studentId)
             ->where('status', 'scheduled')
             ->where('jn_submitted', false)
-            ->whereNotIn('assessment_type', ['jn', 'mt']) // faqat oski/test
-            ->whereDate('makeup_date', '>=', $startDate)
-            ->whereDate('makeup_date', '<=', $endDate)
+            // Har ikki holatni qo'llab-quvvatlash:
+            //  1) OSKI/Test uchun: makeup_end_date NULL, faqat makeup_date bor (bitta kun)
+            //     → makeup_date sababli oraliqda bo'lishi kerak
+            //  2) JN uchun: makeup_date va makeup_end_date (oraliq) — agar bu oraliq
+            //     sababli oraliq bilan kesishsa, avvalgi retake'ni ko'rsatish
+            ->where(function ($q) use ($startDate, $endDate) {
+                // Overlap formula: range_start <= B AND COALESCE(range_end, range_start) >= A
+                $q->whereDate('makeup_date', '<=', $endDate)
+                  ->whereRaw('DATE(COALESCE(makeup_end_date, makeup_date)) >= ?', [$startDate->toDateString()]);
+            })
             ->whereHas('absenceExcuse', function ($q) {
                 $q->whereIn('status', ['approved', 'pending']);
             })
@@ -708,6 +715,7 @@ class AbsenceExcuseController extends Controller
                 'original_date' => Carbon::parse($m->original_date)->format('Y-m-d'),
                 'is_previous_makeup' => true,
                 'previous_makeup_date' => Carbon::parse($m->makeup_date)->format('Y-m-d'),
+                'previous_makeup_end_date' => $m->makeup_end_date ? Carbon::parse($m->makeup_end_date)->format('Y-m-d') : null,
             ]);
     }
 }

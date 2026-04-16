@@ -756,6 +756,30 @@ class JournalController extends Controller
             ];
         }
 
+        // HEMIS sababli lookup — absent_on > 0 bo'lgan (student, Y-m-d sana, juftlik)
+        // kalitlarini normalizatsiya qilib tayyorlaymiz (view'da tez lookup uchun).
+        $hemisSababliByKey = [];
+        foreach (array_merge($jbAttendanceRaw->all(), $mtAttendanceRaw->all()) as $row) {
+            if ((int) ($row->absent_on ?? 0) > 0) {
+                $dateKey = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
+                $hemisSababliByKey[$row->student_hemis_id][$dateKey][$row->lesson_pair_code] = true;
+            }
+        }
+
+        // Sahifa yuklanganida: retake bahosi saqlanganidan keyin sababli holati
+        // (HEMIS yoki LMS ariza orqali) o'zgargan talabalar uchun retake bahosini
+        // avtomatik qayta hisoblash.
+        try {
+            $this->reconcileRetakeGradesForJournal(
+                $studentHemisIds,
+                $subjectId,
+                $semesterCode,
+                $hemisSababliByKey
+            );
+        } catch (\Throwable $e) {
+            Log::warning('reconcileRetakeGradesForJournal failed: ' . $e->getMessage());
+        }
+
         // Get students basic info
         // Agar student_subjects jadvalida shu fan uchun biriktirishlar bo'lsa — faqat biriktirilganlarni ko'rsatish
         // Aks holda (import qilinmagan) — guruhdagi barcha talabalarni ko'rsatish (eski logika)
@@ -1327,6 +1351,7 @@ class JournalController extends Controller
             'mtAbsences',
             'jbAttendance',
             'mtAttendance',
+            'hemisSababliByKey',
             'jbColumns',
             'mtColumns',
             'jbPairsPerDay',
@@ -1669,8 +1694,37 @@ class JournalController extends Controller
                         }
                     }
 
-                    // Sababli holat endi faqat tasdiqlangan sababli arizalar asosida aniqlanadi,
-                    // HEMIS absent_on o'zgarishi retake bahosiga ta'sir qilmaydi
+                    // HEMIS absent_on o'zgarganda retake bahosini qayta hisoblash.
+                    // Effektiv sababli holat: HEMIS absent_on > 0 YOKI LMS'da tasdiqlangan sababli ariza bor.
+                    // LMS ariza statusi attendance sinxronizatsiyasi paytida o'zgarmaydi,
+                    // shuning uchun effektiv holat faqat HEMIS tomonidan o'zgarishi mumkin.
+                    if ($oldAbsentOn !== null && $oldAbsentOn !== $newAbsentOn) {
+                        $hasLmsExcuse = DB::table('absence_excuses as ae')
+                            ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+                            ->where('ae.student_hemis_id', $item['student']['id'])
+                            ->where('ae.status', 'approved')
+                            ->whereDate('ae.start_date', '<=', $lessonDate->format('Y-m-d'))
+                            ->whereDate('ae.end_date', '>=', $lessonDate->format('Y-m-d'))
+                            ->where('aem.subject_id', $item['subject']['id'])
+                            ->exists();
+
+                        $oldIsExcused = ($oldAbsentOn > 0) || $hasLmsExcuse;
+                        $newIsExcused = ($newAbsentOn > 0) || $hasLmsExcuse;
+
+                        // Faqat effektiv holat haqiqatan ham o'zgargan bo'lsa qayta hisoblash.
+                        // Aks holda allaqachon to'g'ri saqlangan koeffitsient buziladi.
+                        if ($oldIsExcused !== $newIsExcused) {
+                            if ($this->recalculateRetakeGrade(
+                                (string) $item['student']['id'],
+                                (int) $item['subject']['id'],
+                                $lessonDate->format('Y-m-d'),
+                                (string) $item['lessonPair']['code'],
+                                $newIsExcused
+                            )) {
+                                $retakeRecalculated++;
+                            }
+                        }
+                    }
                 }
 
                 $page++;
@@ -1695,7 +1749,93 @@ class JournalController extends Controller
     }
 
     /**
-     * Sababli holat o'zgarganda retake bahosini qayta hisoblash
+     * Jurnal yuklangan vaqtda: retake bahosi saqlanganidan beri sababli
+     * holat o'zgargan yozuvlar uchun retake_grade ni avtomatik qayta hisoblash.
+     * HEMIS attendance sinxronlashdan tashqarida (masalan admin panelida)
+     * sababli o'zgartirilganda ham jurnal to'g'ri chiqishini ta'minlaydi.
+     */
+    private function reconcileRetakeGradesForJournal(
+        $studentHemisIds,
+        int $subjectId,
+        string $semesterCode,
+        array $hemisSababliByKey
+    ): void {
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli')) {
+            return; // Migratsiya hali ishga tushmagan
+        }
+
+        $retakes = DB::table('student_grades')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('reason', 'absent')
+            ->where('status', 'retake')
+            ->whereNotNull('retake_grade')
+            ->whereNull('deleted_at')
+            ->select('id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'retake_grade', 'retake_was_sababli')
+            ->get();
+
+        if ($retakes->isEmpty()) {
+            return;
+        }
+
+        // LMS tasdiqlangan arizalar (studentlar bo'yicha, shu fan uchun)
+        $lmsExcuses = \App\Models\AbsenceExcuse::where('status', 'approved')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->whereHas('makeups', fn($q) => $q->where('subject_id', $subjectId))
+            ->get(['student_hemis_id', 'start_date', 'end_date'])
+            ->groupBy('student_hemis_id');
+
+        foreach ($retakes as $row) {
+            $dateKey = \Carbon\Carbon::parse($row->lesson_date)->format('Y-m-d');
+
+            // HEMIS sababli?
+            $hemisSababli = isset($hemisSababliByKey[$row->student_hemis_id][$dateKey][$row->lesson_pair_code]);
+
+            // LMS sababli?
+            $lmsSababli = false;
+            $studentExcuses = $lmsExcuses->get($row->student_hemis_id, collect());
+            foreach ($studentExcuses as $ex) {
+                $exStart = \Carbon\Carbon::parse($ex->start_date)->format('Y-m-d');
+                $exEnd = \Carbon\Carbon::parse($ex->end_date)->format('Y-m-d');
+                if ($exStart <= $dateKey && $exEnd >= $dateKey) {
+                    $lmsSababli = true;
+                    break;
+                }
+            }
+
+            $effectiveSababli = $hemisSababli || $lmsSababli;
+            $wasSababli = !is_null($row->retake_was_sababli) ? (bool) $row->retake_was_sababli : false;
+
+            if ($wasSababli === $effectiveSababli) {
+                continue; // Holat o'zgarmagan
+            }
+
+            $oldPercentage = $wasSababli ? 1.0 : 0.8;
+            $newPercentage = $effectiveSababli ? 1.0 : 0.8;
+
+            if ($oldPercentage <= 0) {
+                continue;
+            }
+
+            $originalEnteredGrade = round($row->retake_grade / $oldPercentage, 2);
+            $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
+
+            DB::table('student_grades')
+                ->where('id', $row->id)
+                ->update([
+                    'retake_grade' => $newRetakeGrade,
+                    'retake_was_sababli' => $effectiveSababli,
+                    'updated_at' => now(),
+                ]);
+        }
+    }
+
+    /**
+     * Sababli holat o'zgarganda retake bahosini qayta hisoblash.
+     * retake_was_sababli ustuni saqlash vaqtidagi holatni aniq biladi,
+     * shuning uchun eski koeffitsientni "teskarisi" deb taxmin qilish o'rniga
+     * real saqlangan qiymatdan foydalanamiz.
      */
     private function recalculateRetakeGrade(
         string $studentHemisId,
@@ -1718,31 +1858,36 @@ class JournalController extends Controller
             return false;
         }
 
-        // Hozirgi foiz va yangi foizni aniqlash
-        $oldPercentage = $isExcused ? 0.8 : 1.0; // o'zgarishdan oldingi (teskari)
-        $newPercentage = $isExcused ? 1.0 : 0.8;
+        // Saqlanish vaqtidagi holat: retake_was_sababli ustuni
+        // Null bo'lsa (migratsiya oldidan) — sababsiz deb hisoblaymiz (historic default)
+        $wasSababli = !is_null($grade->retake_was_sababli ?? null)
+            ? (bool) $grade->retake_was_sababli
+            : false;
 
-        // Asl kiritilgan bahoni qayta hisoblash
-        if ($oldPercentage > 0) {
-            $originalEnteredGrade = round($grade->retake_grade / $oldPercentage, 2);
-        } else {
+        if ($wasSababli === $isExcused) {
+            // Holat o'zgarmagan — qayta hisoblash shart emas
             return false;
         }
 
-        $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
+        $oldPercentage = $wasSababli ? 1.0 : 0.8;
+        $newPercentage = $isExcused ? 1.0 : 0.8;
 
-        // Agar baho o'zgargan bo'lsa — yangilash
-        if (abs($newRetakeGrade - $grade->retake_grade) > 0.01) {
-            DB::table('student_grades')
-                ->where('id', $grade->id)
-                ->update([
-                    'retake_grade' => $newRetakeGrade,
-                    'updated_at' => now(),
-                ]);
-            return true;
+        if ($oldPercentage <= 0) {
+            return false;
         }
 
-        return false;
+        $originalEnteredGrade = round($grade->retake_grade / $oldPercentage, 2);
+        $newRetakeGrade = round($originalEnteredGrade * $newPercentage, 2);
+
+        DB::table('student_grades')
+            ->where('id', $grade->id)
+            ->update([
+                'retake_grade' => $newRetakeGrade,
+                'retake_was_sababli' => $isExcused,
+                'updated_at' => now(),
+            ]);
+
+        return true;
     }
 
     /**
@@ -2777,6 +2922,17 @@ class JournalController extends Controller
                     ->whereDate('ae.end_date', '>=', $studentGrade->lesson_date)
                     ->where('aem.subject_id', $studentGrade->subject_id)
                     ->exists();
+
+                // HEMIS attendance ham inobatga olinadi — absent_on > 0 = sababli
+                if (!$isExcused) {
+                    $isExcused = DB::table('attendances')
+                        ->where('student_hemis_id', $studentGrade->student_hemis_id)
+                        ->where('subject_id', $studentGrade->subject_id)
+                        ->whereDate('lesson_date', $studentGrade->lesson_date)
+                        ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
+                        ->where('absent_on', '>', 0)
+                        ->exists();
+                }
             }
 
             // Determine the percentage to apply based on reason:
@@ -2805,6 +2961,7 @@ class JournalController extends Controller
                 ->where('id', $gradeId)
                 ->update([
                     'retake_grade' => $retakeGrade,
+                    'retake_was_sababli' => $isExcused,
                     'status' => 'retake',
                     'graded_by_user_id' => $gradedByUserId,
                     'retake_graded_at' => $now,
@@ -6312,6 +6469,40 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
         $sheet->setCellValue('P19', $weightOski);
         $sheet->setCellValue('S19', $weightTest);
 
+        // Davomat (auditoriya soatlariga nisbatan absent_off foizi)
+        $excludedAttendanceCodes = [99, 100, 101, 102];
+        $attendanceByStudent = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->when($educationYearCode, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+            ->selectRaw('student_hemis_id, SUM(absent_off) as total_absent_off')
+            ->groupBy('student_hemis_id')
+            ->pluck('total_absent_off', 'student_hemis_id');
+
+        $nonAuditoriumCodes = ['17'];
+        $auditoriumHours = 0;
+        if (is_array($subject->subject_details)) {
+            foreach ($subject->subject_details as $detail) {
+                $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                    $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                }
+            }
+        }
+        if ($auditoriumHours <= 0) {
+            $auditoriumHours = (float) ($subject->total_acload ?? 0);
+        }
+
+        $davomatByStudent = [];
+        foreach ($students as $stu) {
+            $absentOff = (float) ($attendanceByStudent[$stu->hemis_id] ?? 0);
+            $davomatByStudent[$stu->hemis_id] = $auditoriumHours > 0
+                ? round(($absentOff / $auditoriumHours) * 100, 2)
+                : 0.0;
+        }
+
         // Ma'lumotlarni joylashtirish
         $startRow = 20;
         $maxRow = 49;
@@ -6321,8 +6512,16 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             if ($row > $maxRow) break;
 
             $hemisId = $student->hemis_id;
+            $davomatPct = (float) ($davomatByStudent[$hemisId] ?? 0);
+            $davomatFailed = $davomatPct >= 25;
 
-            $sheet->setCellValue('B' . $row, $student->full_name);
+            // Davomat ≥25% bo'lsa FIO'ga haqiqiy foiz qo'shamiz
+            $fioLabel = $student->full_name;
+            if ($davomatFailed) {
+                $davStr = rtrim(rtrim(number_format($davomatPct, 1, '.', ''), '0'), '.');
+                $fioLabel .= " ({$davStr}% davomat)";
+            }
+            $sheet->setCellValue('B' . $row, $fioLabel);
             $sheet->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
             $jnVal = (int) ($calculatedJnGrades[$hemisId] ?? 0);
@@ -6331,9 +6530,9 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             $oskiRaw = $gradesByType[101][$hemisId] ?? null;
             $testRaw = $gradesByType[102][$hemisId] ?? null;
 
-            $onVal = $onRaw !== null ? round((float) $onRaw) : 0;
-            $oskiVal = $oskiRaw !== null ? round((float) $oskiRaw) : 0;
-            $testVal = $testRaw !== null ? round((float) $testRaw) : 0;
+            $onVal = $onRaw !== null ? (int) round((float) $onRaw) : 0;
+            $oskiVal = $oskiRaw !== null ? (int) round((float) $oskiRaw) : 0;
+            $testVal = $testRaw !== null ? (int) round((float) $testRaw) : 0;
 
             $sheet->setCellValue('D' . $row, $jnVal);
             $sheet->setCellValue('G' . $row, $mtVal);
@@ -6347,24 +6546,141 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 $sheet->setCellValue('S' . $row, $testVal);
             }
 
-            // Vaznli yakuniy ball hisoblash
-            // Agar vaznli komponent bahosi 0 bo'lsa, yakuniy ball hisoblanmasin
-            $hasAllRequired = true;
-            if ($weightJn > 0 && $jnVal == 0) $hasAllRequired = false;
-            if ($weightMt > 0 && $mtVal == 0) $hasAllRequired = false;
-            if ($weightOn > 0 && $onVal == 0) $hasAllRequired = false;
-            if ($weightOski > 0 && $oskiVal == 0) $hasAllRequired = false;
-            if ($weightTest > 0 && $testVal == 0) $hasAllRequired = false;
+            // --- Ball, V (O'zlashtirish), W (ECTS), Y (Baho) ni PHP da hisoblash ---
+            // Shablondagi V20 formulasi murakkab nested IF/AND/OR bo'lib,
+            // PhpSpreadsheet uni to'g'ri evaluate qilmaydi (masalan Test < 60
+            // bo'lganda ham V=80 chiqadi). Mantiqni PHPda takrorlab,
+            // hujayralarga to'g'ridan-to'g'ri yozamiz.
 
-            if ($hasAllRequired) {
-                $yakuniyBall = round(
-                    ($jnVal * $weightJn / 100) +
-                    ($mtVal * $weightMt / 100) +
-                    ($onVal * $weightOn / 100) +
-                    ($oskiVal * $weightOski / 100) +
-                    ($testVal * $weightTest / 100)
-                );
-                $sheet->setCellValue('V' . $row, $yakuniyBall);
+            // 4-5 kurs talabalari uchun JN/MT/ON ball butun songacha half-up,
+            // qolgan kurslarda 1 kasr xonasigacha. Semestr level_code:
+            // 11=1-kurs ... 14=4-kurs, 15=5-kurs.
+            $levelCode = (string) ($semester?->level_code ?? '');
+            $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
+
+            if ($roundJnMtToInt) {
+                $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+                $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+                $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+            } else {
+                $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
+                $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
+                $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+            }
+
+            // OSKI/Test ball — vazn sxemasiga qarab raw yoki butun son
+            if ($weightOski > 0 && $weightTest > 0) {
+                $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
+                $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+            } elseif ($weightOski > 0) {
+                $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+                $tBall = 0;
+            } elseif ($weightTest > 0) {
+                $qBall = 0;
+                $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+            } else {
+                $qBall = 0;
+                $tBall = 0;
+            }
+
+            // JB+MT+ON ball va N% — V branchlari uchun
+            $maxJbMtOn = $weightJn + $weightMt + $weightOn;
+            $mSum = (($jnVal < 60) || ($mtVal < 60))
+                ? 0
+                : round($eBall + $hBall + $kBall, 1);
+            $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+            // V (O'zlashtirish ko'rsatkichi)
+            if ($jnVal === 0 && $mtVal === 0) {
+                $v = '';
+            } elseif ($davomatFailed) {
+                $v = -3; // Davomat ≥25%
+            } elseif ($nPct < 0.6) {
+                $v = -2; // qo'yilmadi
+            } elseif (($weightOski > 0 && $oskiVal == 0)
+                   || ($weightTest > 0 && $testVal == 0)) {
+                $v = -1; // kelmadi
+            } elseif (($weightJn   > 0 && $jnVal   < 60)
+                   || ($weightMt   > 0 && $mtVal   < 60)
+                   || ($weightOn   > 0 && $onVal   < 60)
+                   || ($weightOski > 0 && $oskiVal < 60)
+                   || ($weightTest > 0 && $testVal < 60)) {
+                $v = 0;
+            } else {
+                $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $examSum = round($qBall + $tBall, 1);
+                } elseif ($weightOski > 0) {
+                    $examSum = round($qBall, 1);
+                } elseif ($weightTest > 0) {
+                    $examSum = round($tBall, 1);
+                } else {
+                    $examSum = 0;
+                }
+                $v = $jbMtOnSum + $examSum;
+            }
+
+            // Yakuniy V ni butun songacha half-up yaxlitlaymiz (vedomost
+            // tekshirish bilan bir xil). Maxsus qiymatlar ('', -2, -1, 0)
+            // o'zgartirilmaydi.
+            if (is_numeric($v) && $v > 0) {
+                $v = (int) floor((float) $v + 0.5);
+            }
+
+            // W (ECTS) — shablon mantig'i
+            $w = '';
+            if (is_numeric($v)) {
+                if ($v >= 90 && $v <= 100)      $w = 'A';
+                elseif ($v >= 85)               $w = 'B+';
+                elseif ($v >= 70)               $w = 'B';
+                elseif ($v >= 60)               $w = 'C';
+                elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                elseif ($v == -1)               $w = '';
+                elseif ($v == -3)               $w = '';
+                else                            $w = 'FX';
+            }
+
+            // Y (Baho)
+            $y = '';
+            if (is_numeric($v)) {
+                if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
+                elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
+                elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
+                elseif ($v == -1)                 $y = 'kelmadi';
+                elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+                elseif ($v == -3)                 $y = "davomat \u{2265}25%";
+            }
+
+            // Ball va natijalarni shablon formulasi ustiga yozamiz
+            $sheet->setCellValue('E' . $row, $eBall);
+            if (!$roundJnMtToInt) {
+                $sheet->getStyle('E' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
+            $sheet->setCellValue('H' . $row, $hBall);
+            if (!$roundJnMtToInt) {
+                $sheet->getStyle('H' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
+            $sheet->setCellValue('K' . $row, $kBall);
+            if ($weightOn > 0 && !$roundJnMtToInt) {
+                $sheet->getStyle('K' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
+            $sheet->setCellValue('Q' . $row, $qBall);
+            if ($weightOski > 0 && $weightTest > 0) {
+                $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
+            $sheet->setCellValue('T' . $row, $tBall);
+            if ($weightOski > 0 && $weightTest > 0) {
+                $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
+            $sheet->setCellValue('V' . $row, $v);
+            $sheet->setCellValue('W' . $row, $w);
+            $sheet->setCellValue('Y' . $row, $y);
+
+            // Davomat ≥25% bo'lgan qatorda kursiv qizil shrift
+            if ($davomatFailed) {
+                $sheet->getStyle('A' . $row . ':Y' . $row)
+                    ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
             }
         }
 
@@ -6383,6 +6699,70 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
         $spreadsheet->disconnectWorksheets();
 
         return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    public function adminEditGrade(Request $request)
+    {
+        if (!auth()->user()->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'grade_id' => 'required|integer',
+            'grade' => 'nullable|numeric|min:0|max:100',
+            'action' => 'required|in:update,delete',
+        ]);
+
+        try {
+            $gradeId = $request->grade_id;
+            $action = $request->action;
+
+            $studentGrade = DB::table('student_grades')->where('id', $gradeId)->first();
+
+            if (!$studentGrade) {
+                return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
+            }
+
+            // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
+            if ($studentGrade->is_yn_locked && !auth()->user()->hasRole('superadmin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                    'yn_locked' => true,
+                ], 403);
+            }
+
+            if ($action === 'delete') {
+                DB::table('student_grades')->where('id', $gradeId)->delete();
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Baho o\'chirildi',
+                    'deleted' => true,
+                ]);
+            }
+
+            // update
+            $newGrade = $request->grade;
+            $updateData = ['updated_at' => now()];
+
+            if ($studentGrade->retake_grade !== null) {
+                // Retake baho bo'lsa — retake_grade ni yangilaymiz
+                $updateData['retake_grade'] = $newGrade;
+            } else {
+                $updateData['grade'] = $newGrade;
+            }
+
+            DB::table('student_grades')->where('id', $gradeId)->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Baho yangilandi',
+                'grade' => $newGrade,
+                'is_retake' => $studentGrade->retake_grade !== null,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

@@ -35,6 +35,18 @@ Schedule::command('moodle:trigger-sync')->dailyAt('04:30');
 // Akademik ma'lumotnoma: HEMIS dan academic records import (har kuni 02:00 da)
 Schedule::command('import:academic-records')->dailyAt('02:00')->withoutOverlapping(120);
 
+// Attendance backfill: oxirgi 30 kunlik davomatni HEMIS dan qayta sinxronlash.
+// Faqat o'zgargan yozuvlarni yangilaydi, qolganini skip qiladi.
+// Har kuni 03:00 da ishga tushadi, kichik tunggi vaqt — server bo'sh.
+Schedule::call(function () {
+    $from = Carbon::now()->subDays(30)->toDateString();
+    $to   = Carbon::yesterday()->toDateString();
+    \Illuminate\Support\Facades\Artisan::call('attendance:backfill', [
+        '--from' => $from,
+        '--to'   => $to,
+    ]);
+})->dailyAt('03:00')->name('attendance-backfill-monthly')->withoutOverlapping(180);
+
 // O'qituvchilarga davomat va baho eslatmalari (har kuni 13:00, 15:00, 17:00, 19:00, 21:00, 23:00)
 Schedule::command('teachers:send-reminders')->dailyAt('13:00');
 Schedule::command('teachers:send-reminders')->dailyAt('15:00');
@@ -70,6 +82,9 @@ Schedule::command('registrar:send-unrated-report')->dailyAt('08:30');
 
 // Xalqaro talabalar viza va registratsiya muddatlarini tekshirish (har kuni 09:00 da)
 Schedule::command('visa:check-expiry')->dailyAt('09:00');
+
+// HEMIS exam grades sync — baholarni HEMIS dan tortib hemis_exam_grades jadvaliga saqlash (har kuni 03:00 da)
+Schedule::command('hemis:sync-exam-grades')->dailyAt('03:00')->withoutOverlapping(120);
 
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)

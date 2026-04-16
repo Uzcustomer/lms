@@ -106,7 +106,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
 
 
-    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi|javobgar_firma'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi|javobgar_firma'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('admin.dashboard');
         });
@@ -311,6 +311,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
             Route::get('/search', [VedomostTekshirishController::class, 'search'])->name('search');
             Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
+            Route::post('/sync-hemis', [VedomostTekshirishController::class, 'syncHemis'])->name('sync-hemis');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');
@@ -418,6 +419,37 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/export/curricula', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculaExport, 'curricula.xlsx');
         })->name('export.curricula');
+
+        // Tyutorlar ro'yxati + har bir tyutor guruhlarini Excelga eksport qilish
+        Route::get('/tutors', function () {
+            $search = request('search');
+
+            $tutors = \App\Models\Teacher::query()
+                ->whereHas('groups')
+                ->with(['groups' => function ($q) {
+                    $q->orderBy('name');
+                }])
+                ->when($search, function ($q) use ($search) {
+                    $q->where(function ($sub) use ($search) {
+                        $sub->where('full_name', 'like', "%{$search}%")
+                            ->orWhere('department', 'like', "%{$search}%");
+                    });
+                })
+                ->orderBy('full_name')
+                ->paginate(25);
+
+            return view('admin.tutors.index', compact('tutors'));
+        })->name('tutors.index');
+
+        Route::get('/tutors/{teacher}/export', function (\App\Models\Teacher $teacher) {
+            $safeName = preg_replace('/[^A-Za-z0-9_\-]/u', '_', trim($teacher->full_name ?? 'tyutor'));
+            $fileName = 'tyutor_' . $safeName . '_guruhlari_' . date('Y_m_d') . '.xlsx';
+
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\TutorGroupsExport($teacher),
+                $fileName
+            );
+        })->name('tutors.export');
 
         // Xabarnomalar (Notifications)
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
@@ -897,7 +929,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/verify-telegram/check', [TeacherAuthController::class, 'checkTelegramVerification'])->name('verify-telegram.check');
     });
 
-    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
+    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('teacher.dashboard');
         });

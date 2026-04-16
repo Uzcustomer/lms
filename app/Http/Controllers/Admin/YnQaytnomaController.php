@@ -1028,6 +1028,39 @@ class YnQaytnomaController extends Controller
                     }
                 }
 
+                // Davomat (auditoriya soatlariga nisbatan absent_off foizi)
+                $excludedAttendanceCodes = [99, 100, 101, 102];
+                $attendanceByStudent = DB::table('attendances')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subject->subject_id)
+                    ->where('semester_code', $semesterCode)
+                    ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+                    ->selectRaw('student_hemis_id, SUM(absent_off) as total_absent_off')
+                    ->groupBy('student_hemis_id')
+                    ->pluck('total_absent_off', 'student_hemis_id');
+
+                $nonAuditoriumCodes = ['17'];
+                $auditoriumHours = 0;
+                if (is_array($subject->subject_details)) {
+                    foreach ($subject->subject_details as $detail) {
+                        $trainingCode = (string) ($detail['trainingType']['code'] ?? '');
+                        if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                            $auditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($auditoriumHours <= 0) {
+                    $auditoriumHours = (float) ($subject->total_acload ?? 0);
+                }
+
+                $davomatByStudent = [];
+                foreach ($students as $stu) {
+                    $absentOff = (float) ($attendanceByStudent[$stu->hemis_id] ?? 0);
+                    $davomatByStudent[$stu->hemis_id] = $auditoriumHours > 0
+                        ? round(($absentOff / $auditoriumHours) * 100, 2)
+                        : 0.0;
+                }
+
                 $subjectKey = $subject->subject_id . '_' . $group->group_hemis_id;
                 $subjectGroups[$subjectKey] = [
                     'subject' => $subject,
@@ -1043,6 +1076,7 @@ class YnQaytnomaController extends Controller
                     'test_grades' => $testGrades,
                     'maruza_teacher' => $maruzaTeacher->full_names ?? '',
                     'other_teachers' => implode(', ', $otherTeacherNames),
+                    'davomat' => $davomatByStudent,
                 ];
             }
         }
@@ -1101,9 +1135,16 @@ class YnQaytnomaController extends Controller
                 if ($row > $maxRow) break;
 
                 $hemisId = $student->hemis_id;
+                $davomatPct = (float) ($data['davomat'][$hemisId] ?? 0);
+                $davomatFailed = $davomatPct >= 25;
 
-                // B ustun - Talaba FIO
-                $sheet->setCellValue('B' . $row, $student->full_name);
+                // B ustun - Talaba FIO (davomat ≥25% bo'lsa haqiqiy foiz qo'shiladi)
+                $fioLabel = $student->full_name;
+                if ($davomatFailed) {
+                    $davStr = rtrim(rtrim(number_format($davomatPct, 1, '.', ''), '0'), '.');
+                    $fioLabel .= " ({$davStr}% davomat)";
+                }
+                $sheet->setCellValue('B' . $row, $fioLabel);
 
                 // C ustun - Talaba ID
                 $sheet->setCellValue('C' . $row, $student->student_id_number);
@@ -1136,6 +1177,161 @@ class YnQaytnomaController extends Controller
                 $test = $data['test_grades'][$hemisId] ?? '';
                 if ($test !== '' && $test !== null) {
                     $sheet->setCellValue('S' . $row, round((float) $test));
+                }
+
+                // --- V (O'zlashtirish), W (ECTS), Y (Baho) ni PHP da hisoblash ---
+                // Shablondagi V20 formulasi juda murakkab (nested IF/AND/OR) va
+                // PhpSpreadsheet uni to'g'ri hisoblay olmaydi — natijada OSKI
+                // yoki Test < 60 bo'lganda ham V 0 emas, balki xato qiymat
+                // chiqadi. Shu bois mantiqni PHPda takrorlab, hujayra qiymatini
+                // to'g'ridan-to'g'ri yozib qo'yamiz (formulani bekor qiladi).
+                $jnVal   = ($jn   !== '' && $jn   !== null) ? (int) $jn                   : null;
+                $mtVal   = ($mt   !== '' && $mt   !== null) ? (int) $mt                   : null;
+                $onVal   = ($on   !== '' && $on   !== null) ? (int) round((float) $on)    : null;
+                $oskiVal = ($oski !== '' && $oski !== null) ? (int) round((float) $oski)  : null;
+                $testVal = ($test !== '' && $test !== null) ? (int) round((float) $test)  : null;
+
+                // Og'irliklarni shablondan o'qiymiz (19-qatordan)
+                $wJn   = (int) ($sheet->getCell('D19')->getValue() ?? 0);
+                $wMt   = (int) ($sheet->getCell('G19')->getValue() ?? 0);
+                $wOn   = (int) ($sheet->getCell('J19')->getValue() ?? 0);
+                $wOski = (int) ($sheet->getCell('P19')->getValue() ?? 0);
+                $wTest = (int) ($sheet->getCell('S19')->getValue() ?? 0);
+
+                // 4-5 kurs talabalari uchun JN/MT/ON ball butun songacha half-up,
+                // qolgan kurslarda 1 kasr xonasigacha. Semestr level_code:
+                // 11=1-kurs ... 14=4-kurs, 15=5-kurs.
+                $levelCode = (string) ($semester?->level_code ?? '');
+                $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
+
+                if ($roundJnMtToInt) {
+                    $eBall = ($jnVal !== null && $jnVal >= 60) ? (int) floor($jnVal * $wJn / 100 + 0.5) : 0;
+                    $hBall = ($mtVal !== null && $mtVal >= 60) ? (int) floor($mtVal * $wMt / 100 + 0.5) : 0;
+                    $kBall = ($onVal !== null && $onVal >= 60) ? (int) floor($onVal * $wOn / 100 + 0.5) : 0;
+                } else {
+                    $eBall = ($jnVal !== null && $jnVal >= 60) ? round($jnVal * $wJn / 100, 1) : 0;
+                    $hBall = ($mtVal !== null && $mtVal >= 60) ? round($mtVal * $wMt / 100, 1) : 0;
+                    $kBall = ($onVal !== null && $onVal >= 60) ? round($onVal * $wOn / 100, 1) : 0;
+                }
+
+                // OSKI/Test ball — vazn sxemasiga qarab:
+                //  * ikkalasi ham vaznga ega → yaxlitlashsiz (raw) saqlanadi,
+                //    format 1 kasr ko'rsatadi;
+                //  * faqat bittasi vaznga ega → o'sha butun songacha yaxlitlanadi.
+                if ($wOski > 0 && $wTest > 0) {
+                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? $oskiVal * $wOski / 100 : 0;
+                    $tBall = ($testVal !== null && $testVal >= 60) ? $testVal * $wTest / 100 : 0;
+                } elseif ($wOski > 0) {
+                    $qBall = ($oskiVal !== null && $oskiVal >= 60) ? (int) round($oskiVal * $wOski / 100) : 0;
+                    $tBall = 0;
+                } elseif ($wTest > 0) {
+                    $qBall = 0;
+                    $tBall = ($testVal !== null && $testVal >= 60) ? (int) round($testVal * $wTest / 100) : 0;
+                } else {
+                    $qBall = 0;
+                    $tBall = 0;
+                }
+
+                // JB+MT+ON ball va N% — V branchlari uchun
+                $maxJbMtOn = $wJn + $wMt + $wOn;
+                $mSum = (($jnVal !== null && $jnVal < 60) || ($mtVal !== null && $mtVal < 60))
+                    ? 0
+                    : round($eBall + $hBall + $kBall, 1);
+                $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+                // V (O'zlashtirish ko'rsatkichi)
+                if ($jnVal === null && $mtVal === null) {
+                    $v = '';
+                } elseif ($davomatFailed) {
+                    $v = -3; // Davomat ≥25%
+                } elseif ($nPct < 0.6) {
+                    $v = -2; // qo'yilmadi
+                } elseif (($wOski > 0 && ($oskiVal === null || $oskiVal == 0))
+                       || ($wTest > 0 && ($testVal === null || $testVal == 0))) {
+                    $v = -1; // kelmadi
+                } elseif (($wJn > 0   && $jnVal   !== null && $jnVal   < 60)
+                       || ($wMt > 0   && $mtVal   !== null && $mtVal   < 60)
+                       || ($wOn > 0   && $onVal   !== null && $onVal   < 60)
+                       || ($wOski > 0 && $oskiVal !== null && $oskiVal < 60)
+                       || ($wTest > 0 && $testVal !== null && $testVal < 60)) {
+                    $v = 0;
+                } else {
+                    // JB+MT+ON qismi bir marta yaxlitlanadi, OSKI+Test ham bir
+                    // marta birga yaxlitlanadi (faqat vazni mavjudlari qo'shiladi).
+                    $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                    if ($wOski > 0 && $wTest > 0) {
+                        $examSum = round($qBall + $tBall, 1);
+                    } elseif ($wOski > 0) {
+                        $examSum = round($qBall, 1);
+                    } elseif ($wTest > 0) {
+                        $examSum = round($tBall, 1);
+                    } else {
+                        $examSum = 0;
+                    }
+                    $v = $jbMtOnSum + $examSum;
+                }
+
+                // Yakuniy V ni butun songacha half-up yaxlitlaymiz (vedomost
+                // tekshirish bilan bir xil). Maxsus qiymatlar ('', -2, -1, 0)
+                // o'zgartirilmaydi.
+                if (is_numeric($v) && $v > 0) {
+                    $v = (int) floor((float) $v + 0.5);
+                }
+
+                // W (ECTS) — shablon mantig'i bilan bir xil
+                $w = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)      $w = 'A';
+                    elseif ($v >= 85)               $w = 'B+';
+                    elseif ($v >= 70)               $w = 'B';
+                    elseif ($v >= 60)               $w = 'C';
+                    elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                    elseif ($v == -1)               $w = '';
+                    elseif ($v == -3)               $w = '';
+                    else                            $w = 'FX'; // -2 va boshqalar
+                }
+
+                // Y (Baho)
+                $y = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
+                    elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
+                    elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                    elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
+                    elseif ($v == -1)                 $y = 'kelmadi';
+                    elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+                    elseif ($v == -3)                 $y = "davomat \u{2265}25%";
+                }
+
+                // Ball va natijalarni shablon formulasi ustiga yozamiz (formula bekor qilinadi)
+                $sheet->setCellValue('E' . $row, $eBall);
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle('E' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $sheet->setCellValue('H' . $row, $hBall);
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle('H' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $sheet->setCellValue('K' . $row, $kBall);
+                if ($wOn > 0 && !$roundJnMtToInt) {
+                    $sheet->getStyle('K' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $sheet->setCellValue('Q' . $row, $qBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $sheet->setCellValue('T' . $row, $tBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $sheet->setCellValue('V' . $row, $v);
+                $sheet->setCellValue('W' . $row, $w);
+                $sheet->setCellValue('Y' . $row, $y);
+
+                // Davomat ≥25% bo'lgan qatorda kursiv qizil shrift
+                if ($davomatFailed) {
+                    $sheet->getStyle('A' . $row . ':Y' . $row)
+                        ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
                 }
             }
 

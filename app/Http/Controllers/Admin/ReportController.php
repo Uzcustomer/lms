@@ -1940,16 +1940,40 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
+        // Fatal errorlarni (OOM / max_execution_time) ham ushlab, foydalanuvchiga
+        // JSON javob qaytarish uchun shutdown funksiya ro'yxatdan o'tkaziladi.
+        // Try/catch fatal xatolarni ushlay olmaydi — shu sababli bu kerak.
+        $fatalCaught = false;
+        register_shutdown_function(function () use (&$fatalCaught) {
+            $err = error_get_last();
+            if (!$err || $fatalCaught) return;
+            $fatalTypes = [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR, E_PARSE];
+            if (!in_array($err['type'], $fatalTypes, true)) return;
+
+            \Log::error('Absence report fatal error', $err);
+            if (!headers_sent()) {
+                http_response_code(500);
+                header('Content-Type: application/json');
+            }
+            echo json_encode([
+                'error' => 'Server xatosi: ' . ($err['message'] ?? 'fatal') . ' (' . basename($err['file'] ?? '') . ':' . ($err['line'] ?? '?') . ')',
+            ]);
+        });
+
         try {
-        ini_set('memory_limit', '512M');
-        set_time_limit(120);
+        ini_set('memory_limit', '1024M');
+        set_time_limit(300);
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 
         // 1-QADAM: Schedule dan unique (group, subject, semester) kombinatsiyalarini olish
+        // MUHIM: fakultet/ta'lim turi/kurs/guruh filtrlari shu yerda qo'llaniladi,
+        // aks holda butun universitetning schedule yozuvlari yuklanib, timeout/OOM
+        // sodir bo'lishi mumkin.
         $scheduleQuery = DB::table('schedules as sch')
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
+            ->whereNull('sch.deleted_at')
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code')
             ->distinct();
 
@@ -1972,9 +1996,40 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.subject_id', $request->subject);
         }
 
+        // Fakultet filtri: schedules.faculty_id = departments.department_hemis_id
+        if ($request->filled('faculty')) {
+            $facultyForSchedule = Department::find($request->faculty);
+            if ($facultyForSchedule) {
+                $scheduleQuery->where('sch.faculty_id', $facultyForSchedule->department_hemis_id);
+            }
+        }
+
+        // Ta'lim turi filtri: faqat shu ta'lim turiga tegishli guruhlar
+        if ($request->filled('education_type')) {
+            $eduGroupIds = DB::table('groups')
+                ->whereIn('curriculum_hemis_id',
+                    Curriculum::where('education_type_code', $request->education_type)
+                        ->pluck('curricula_hemis_id')
+                )
+                ->pluck('group_hemis_id')
+                ->toArray();
+            $scheduleQuery->whereIn('sch.group_id', $eduGroupIds);
+        }
+
+        // Guruh filtri: to'g'ridan-to'g'ri schedule da filtrlash
+        if ($request->filled('group')) {
+            $scheduleQuery->where('sch.group_id', $request->group);
+        }
+
+        // Kafedra filtri: schedules.department_id bo'yicha filter
+        if ($request->filled('department')) {
+            $scheduleQuery->where('sch.department_id', $request->department);
+        }
+
         $scheduleCombos = $scheduleQuery->get();
 
         if ($scheduleCombos->isEmpty()) {
+            $fatalCaught = true;
             return response()->json(['data' => [], 'total' => 0]);
         }
 
@@ -2088,6 +2143,7 @@ class ReportController extends Controller
         $students = $studentQuery->get();
 
         if ($students->isEmpty()) {
+            $fatalCaught = true;
             return response()->json(['data' => [], 'total' => 0]);
         }
 
@@ -2101,13 +2157,18 @@ class ReportController extends Controller
         if ($allowedSubjectIds !== null) {
             $filteredSubjectIds = array_intersect($validSubjectIds, $allowedSubjectIds);
             if (empty($filteredSubjectIds)) {
+                $fatalCaught = true;
                 return response()->json(['data' => [], 'total' => 0]);
             }
         }
 
-        // 3-QADAM: student_grades dan ma'lumotlarni olish
-        // Joriy o'quv yili bo'lsa, o'tgan yilgi ma'lumotlar tushmasligi uchun
-        // joriy o'quv yilining eng kichik dars sanasidan filtrlash
+        // 3-QADAM: attendances dan davomat ma'lumotlarini olish
+        // MUHIM: avval bu yerda student_grades ishlatilardi, lekin u jadvalda bir
+        // dars uchun bir nechta yozuv bo'lishi mumkin (HEMIS qayta import, retake,
+        // status o'zgarishlari) — bu sababsiz soat 4-5 baravargacha shishib ketardi
+        // (jurnalda 23% bo'lsa, hisobotda 437% chiqishi mumkin edi).
+        // attendances jadvali esa har bir (talaba, fan, sana, juftlik, training_type)
+        // uchun bitta yagona yozuv saqlaydi va jurnal ham o'shani ishlatadi.
         $minScheduleDate = null;
         if ($isCurrentSemester) {
             $minScheduleDate = DB::table('schedules')
@@ -2117,39 +2178,48 @@ class ReportController extends Controller
                 ->min('lesson_date');
         }
 
+        // Auditoriya bo'lmagan training_type kodlari (JournalController::show
+        // dagi $excludedAttendanceCodes bilan bir xil): 99=MT, 100=ON,
+        // 101=Oski, 102=Test. Bu jurnal "Dav %" hisoblash bilan moslashish
+        // uchun kerak — aks holda foiz farq qilib qoladi.
+        $nonAuditoryAttendanceCodes = [99, 100, 101, 102];
+
         // 4-QADAM: Har bir talaba/fan uchun davomat ma'lumotlarini hisoblash
         $studentSubjectData = [];
         $studentAllAttendanceDates = []; // Talabaning ISTALGAN fandan darsga chiqqan kunlari
         $now = Carbon::now('Asia/Tashkent');
         $spravkaDays = (int) Setting::get('spravka_deadline_days', 10);
 
-        // student_grades ni chunk qilib olish (katta ma'lumot uchun)
+        // attendances ni chunk qilib olish (katta ma'lumot uchun)
         foreach (array_chunk($studentHemisIds, 1000) as $hemisChunk) {
-            $gradesChunk = DB::table('student_grades')
+            $attendanceChunk = DB::table('attendances')
                 ->whereIn('student_hemis_id', $hemisChunk)
                 ->whereIn('subject_id', $filteredSubjectIds)
                 ->whereIn('semester_code', $validSemesterCodes)
-                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotIn('training_type_code', $nonAuditoryAttendanceCodes)
                 ->whereNotNull('lesson_date')
                 ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                 ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
-                    'grade', 'lesson_date', 'lesson_pair_code', 'reason', 'status', 'deadline')
+                    'lesson_date', 'absent_on', 'absent_off')
                 ->get();
 
-            foreach ($gradesChunk as $g) {
-                $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
+            foreach ($attendanceChunk as $a) {
+                $groupId = $studentGroupMap[$a->student_hemis_id] ?? null;
                 if (!$groupId) continue;
 
-                $ssKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
-                $comboKey = $groupId . '|' . $g->subject_id . '|' . $g->semester_code;
-                $dateKey = substr($g->lesson_date, 0, 10);
+                $absentOn  = (int) $a->absent_on;   // sababli (excused)
+                $absentOff = (int) $a->absent_off;  // sababsiz (unexcused)
+
+                $ssKey = $a->student_hemis_id . '|' . $a->subject_id . '|' . $a->semester_code;
+                $comboKey = $groupId . '|' . $a->subject_id . '|' . $a->semester_code;
+                $dateKey = substr($a->lesson_date, 0, 10);
 
                 if (!isset($studentSubjectData[$ssKey])) {
                     $studentSubjectData[$ssKey] = [
-                        'student_hemis_id' => $g->student_hemis_id,
-                        'subject_id' => $g->subject_id,
-                        'subject_name' => $g->subject_name,
-                        'semester_code' => $g->semester_code,
+                        'student_hemis_id' => $a->student_hemis_id,
+                        'subject_id' => $a->subject_id,
+                        'subject_name' => $a->subject_name,
+                        'semester_code' => $a->semester_code,
                         'combo_key' => $comboKey,
                         'group_id' => $groupId,
                         'total_absent_hours' => 0,
@@ -2159,22 +2229,22 @@ class ReportController extends Controller
                     ];
                 }
 
-                if ($g->reason === 'absent') {
-                    $studentSubjectData[$ssKey]['total_absent_hours'] += 2;
-
-                    if ($g->status !== 'retake') {
-                        $studentSubjectData[$ssKey]['unexcused_absent_hours'] += 2;
-                        $studentSubjectData[$ssKey]['unexcused_absent_dates'][] = $dateKey;
+                if ($absentOn > 0 || $absentOff > 0) {
+                    $studentSubjectData[$ssKey]['total_absent_hours'] += $absentOn + $absentOff;
+                    if ($absentOff > 0) {
+                        $studentSubjectData[$ssKey]['unexcused_absent_hours'] += $absentOff;
+                        // Saqlash uchun [sana => shu kungi sababsiz soat] (25% chegarasi
+                        // sanasini aniqlashda kerak)
+                        $studentSubjectData[$ssKey]['unexcused_absent_dates'][$dateKey] =
+                            ($studentSubjectData[$ssKey]['unexcused_absent_dates'][$dateKey] ?? 0) + $absentOff;
                     }
                 } else {
-                    if ($g->grade !== null && $g->grade > 0) {
-                        $studentSubjectData[$ssKey]['attendance_dates'][$dateKey] = true;
-                        // Istalgan fandan grade > 0 bo'lsa, talabaning umumiy davomatiga qo'shish
-                        $studentAllAttendanceDates[$g->student_hemis_id][$dateKey] = true;
-                    }
+                    // Talaba shu darsda bo'lgan
+                    $studentSubjectData[$ssKey]['attendance_dates'][$dateKey] = true;
+                    $studentAllAttendanceDates[$a->student_hemis_id][$dateKey] = true;
                 }
             }
-            unset($gradesChunk);
+            unset($attendanceChunk);
         }
 
         // attendance_controls dan istalgan fandan dars o'tilgan kunlarni olish (load > 0)
@@ -2219,9 +2289,12 @@ class ReportController extends Controller
 
             if ($unexcusedPercent < $minPercent) continue;
 
+            // unexcused_absent_dates: [sana => shu kungi sababsiz soat]
+            $absentDateHours = $data['unexcused_absent_dates'];
+            ksort($absentDateHours);
+            $absentDates = array_keys($absentDateHours);
+
             // Spravka muddati: oxirgi sababsiz dars kunidan boshlab hisoblash
-            $absentDates = $data['unexcused_absent_dates'];
-            sort($absentDates);
             $spravkaStatus = '-';
             if (!empty($absentDates)) {
                 $latestAbsentDate = Carbon::parse(end($absentDates));
@@ -2229,13 +2302,13 @@ class ReportController extends Controller
                 $spravkaStatus = $daysSinceAbsent <= $spravkaDays ? 'Muddat bor' : 'Kechikkan';
             }
 
-            // 25% chegarasiga yetgan sanani aniqlash
+            // 25% chegarasiga yetgan sanani aniqlash (kunma-kun jamlash)
             $firstAttendanceAfter25 = null;
             $cumulativeHours = 0;
             $thresholdDate = null;
 
-            foreach ($absentDates as $aDate) {
-                $cumulativeHours += 2;
+            foreach ($absentDateHours as $aDate => $hoursThatDay) {
+                $cumulativeHours += $hoursThatDay;
                 if (($cumulativeHours / $totalAuditoryHours) * 100 >= 25 && !$thresholdDate) {
                     $thresholdDate = $aDate;
                     break;
@@ -2320,6 +2393,7 @@ class ReportController extends Controller
         });
 
         if ($request->get('export') === 'excel') {
+            $fatalCaught = true;
             return $this->exportAbsenceExcel($finalResults);
         }
 
@@ -2334,6 +2408,7 @@ class ReportController extends Controller
         }
         unset($item);
 
+        $fatalCaught = true;
         return response()->json([
             'data' => $pageData,
             'total' => $total,
@@ -2342,8 +2417,14 @@ class ReportController extends Controller
             'last_page' => ceil($total / $perPage),
         ]);
         } catch (\Throwable $e) {
-            \Log::error('Absence report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-            return response()->json(['error' => $e->getMessage()], 500);
+            $fatalCaught = true;
+            \Log::error('Absence report error: ' . $e->getMessage(), [
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'error' => $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')',
+            ], 500);
         }
     }
 

@@ -813,7 +813,6 @@
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
-        // OSKI va Test baho kiritish — YN yuborilgan bo'lsa ham admin va superadmin uchun ochiq
         $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
@@ -1162,9 +1161,11 @@
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                             $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
                                                             $daySababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $date && $excuseData->end_date >= $date;
+                                                            $dateKeyForSababli = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                                            $hemisSababliDay = !empty($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli] ?? []);
                                                         @endphp
-                                                        @if($hasApprovedExcuse)
-                                                            <span class="excuse-nb-cell font-medium" title="Sababli (tasdiqlangan hujjat)">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
+                                                        @if($hasApprovedExcuse || $hemisSababliDay)
+                                                            <span class="excuse-nb-cell font-medium" title="Sababli">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
                                                         @else
                                                             <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
                                                         @endif
@@ -1430,7 +1431,10 @@
                                                             @php
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                                 $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
-                                                                $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $lmsSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                                $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                                $isSababli = $lmsSababli || $hemisSababli;
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
                                                             <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
@@ -1449,7 +1453,10 @@
                                                         @php
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                             $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
-                                                            $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                            $lmsSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                            $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                            $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                            $isSababli = $lmsSababli || $hemisSababli;
                                                             $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
 
@@ -1480,16 +1487,16 @@
                                                                 <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                                                             </div>
-                                                        @elseif($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved && $canEnterExcuseGrade)
-                                                            {{-- Sababli NB — modal orqali baho kiritish --}}
+                                                        @elseif($hasApprovedExcuse && !$hasRetake && ((!$excuseAlreadySaved && $canEnterExcuseGrade) || (auth()->user()?->hasRole('superadmin') ?? false)))
+                                                            {{-- Sababli NB — modal orqali baho kiritish (superadmin YN snapshot/muddat cheklovlaridan tashqari) --}}
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
                                                                  onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
                                                                  title="Sababli — bosib baho kiriting{{ !$isAdminRole && $excuseDeadlineStr ? ' (muddat: ' . $excuseDeadlineStr . ')' : '' }}">
                                                                 <span class="text-green-600 font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
                                                             </div>
-                                                        @elseif($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
-                                                            {{-- Dekan / muddat o'tgan — faqat ko'rish --}}
+                                                        @elseif($hasApprovedExcuse && !$hasRetake)
+                                                            {{-- Dekan / muddat o'tgan / excuse snapshot allaqachon yuborilgan — faqat ko'rish --}}
                                                             <span class="text-green-600 font-medium"
                                                                   title="{{ $excuseDeadlinePassed && !$isAdminRole ? 'Sababli baho kiritish muddati o\'tgan (' . $excuseDeadlineStr . ')' : 'Sababli — baho kiritishga ruxsat yo\'q' }}">NB</span>
                                                         @elseif($showRatingInput)

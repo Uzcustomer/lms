@@ -1,71 +1,65 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                Bitiruvchilar ma'lumotlari
-            </h2>
-            <div class="text-sm text-gray-600">
-                Jami bitiruvchilar: <span class="font-bold text-indigo-700">{{ $stats->total ?? 0 }}</span>
-                <span class="text-gray-400 mx-1">·</span>
-                <span class="text-blue-700 font-semibold">{{ $stats->male ?? 0 }}</span> erkak,
-                <span class="text-pink-700 font-semibold">{{ $stats->female ?? 0 }}</span> ayol
-            </div>
-        </div>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">Bitiruvchilar ma'lumotlari</h2>
     </x-slot>
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100">
 
-                {{-- Filters --}}
+            {{-- 4 ta statistika karta --}}
+            <div class="stats-row">
+                <div class="stat-card" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-color:#bfdbfe;">
+                    <div class="stat-label">Jami bitiruvchilar</div>
+                    <div class="stat-value" style="color:#1d4ed8;" id="card-total">{{ $stats->total }}</div>
+                </div>
+                <div class="stat-card" style="background:linear-gradient(135deg,#eff6ff,#e0e7ff);border-color:#bfdbfe;">
+                    <div class="stat-label">Erkak</div>
+                    <div class="stat-value" style="color:#2563eb;" id="card-male">{{ $stats->male }}</div>
+                </div>
+                <div class="stat-card" style="background:linear-gradient(135deg,#fdf2f8,#fce7f3);border-color:#fbcfe8;">
+                    <div class="stat-label">Ayol</div>
+                    <div class="stat-value" style="color:#be185d;" id="card-female">{{ $stats->female }}</div>
+                </div>
+                <div class="stat-card" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-color:#bbf7d0;">
+                    <div class="stat-label">Ma'lumot to'ldirganlar</div>
+                    <div class="stat-value" style="color:#15803d;" id="card-filled">{{ $stats->filled }}</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+
+                {{-- Filtrlar --}}
                 <div class="filter-container">
                     <div class="filter-row">
-                        <div class="filter-item" style="flex:1; min-width:180px;">
+                        <div class="filter-item" style="flex:1; min-width:260px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
-                            <select id="faculty_id" class="filter-input">
+                            <select id="faculty-select" class="filter-input" onchange="onFacultyChange()">
                                 <option value="">Barchasi</option>
                                 @foreach($faculties as $f)
-                                    <option value="{{ $f->department_hemis_id }}">{{ $f->name }}</option>
+                                    <option value="{{ $f->id }}">{{ $f->name }} ({{ $f->total }})</option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex:1; min-width:180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Kafedra</label>
-                            <select id="department_id" class="filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($departments as $d)
-                                    <option value="{{ $d->department_hemis_id }}" data-faculty="{{ $d->faculty_hemis_id }}">{{ $d->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="filter-item" style="min-width:130px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Jinsi</label>
-                            <select id="gender_code" class="filter-input">
-                                <option value="">Barchasi</option>
-                                <option value="11">Erkak</option>
-                                <option value="12">Ayol</option>
-                            </select>
-                        </div>
-                        <div class="filter-item" style="flex:1; min-width:180px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select id="group_id" class="filter-input">
+                        <div class="filter-item" style="flex:1; min-width:260px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Guruh</label>
+                            <select id="group-select" class="filter-input">
                                 <option value="">Barchasi</option>
                                 @foreach($groups as $g)
-                                    <option value="{{ $g->group_id }}">{{ $g->group_name }} ({{ $g->total }})</option>
+                                    <option value="{{ $g->group_id }}" data-faculty-id="{{ $g->faculty_id }}">{{ $g->group_name }} ({{ $g->filled }}/{{ $g->total }})</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="filter-item" style="min-width:150px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Holat</label>
-                            <select id="status" class="filter-input">
+                            <select id="status-select" class="filter-input">
                                 <option value="">Barchasi</option>
                                 <option value="filled">To'ldirgan</option>
                                 <option value="empty">To'ldirilmagan</option>
                             </select>
                         </div>
                         <div class="filter-item" style="flex:1; min-width:200px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Qidiruv (FIO / Student ID)</label>
-                            <input type="text" id="search" class="filter-input" placeholder="FIO yoki talaba ID">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.Sh / Student ID</label>
+                            <input type="text" id="search-input" class="filter-input" placeholder="Ism yoki ID bo'yicha qidirish">
                         </div>
                         <div class="filter-item" style="min-width:130px;">
                             <label class="filter-label">&nbsp;</label>
@@ -73,32 +67,6 @@
                                 <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                                 Qidirish
                             </button>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Summary cards --}}
-                <div id="summary-row" style="display:none;padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                        <div class="stat-card" style="background:#eff6ff;border-color:#bfdbfe;">
-                            <div class="stat-label">Jami</div>
-                            <div class="stat-value" style="color:#1d4ed8;" id="stat-total">0</div>
-                        </div>
-                        <div class="stat-card" style="background:#eff6ff;border-color:#bfdbfe;">
-                            <div class="stat-label">Erkak</div>
-                            <div class="stat-value" style="color:#2563eb;" id="stat-male">0</div>
-                        </div>
-                        <div class="stat-card" style="background:#fdf2f8;border-color:#fbcfe8;">
-                            <div class="stat-label">Ayol</div>
-                            <div class="stat-value" style="color:#be185d;" id="stat-female">0</div>
-                        </div>
-                        <div class="stat-card" style="background:#f0fdf4;border-color:#bbf7d0;">
-                            <div class="stat-label">To'ldirgan</div>
-                            <div class="stat-value" style="color:#15803d;" id="stat-filled">0</div>
-                        </div>
-                        <div class="stat-card" style="background:#fef2f2;border-color:#fecaca;">
-                            <div class="stat-label">To'ldirilmagan</div>
-                            <div class="stat-value" style="color:#b91c1c;" id="stat-empty">0</div>
                         </div>
                     </div>
                 </div>
@@ -115,7 +83,7 @@
                     <p style="color:#64748b;font-size:15px;font-weight:600;">Talabalar topilmadi</p>
                 </div>
 
-                {{-- Table --}}
+                {{-- Jadval --}}
                 <div id="table-area" style="display:none;overflow-x:auto;">
                     <table class="gp-table">
                         <thead>
@@ -146,46 +114,54 @@
 
         function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-        // Fakultet → Kafedra cascade
-        $('#faculty_id').on('change', function() {
-            var fid = $(this).val();
-            $('#department_id option').each(function() {
-                var faculty = $(this).data('faculty');
-                if (!$(this).val()) {
-                    $(this).show();
-                    return;
-                }
-                if (!fid || String(faculty) === String(fid)) {
-                    $(this).show();
-                } else {
-                    $(this).hide();
-                }
+        // Barcha guruh option'larini saqlab qo'yamiz (fakultet tanlanganda filtrlash uchun)
+        var allGroupOptions = [];
+        $(document).ready(function() {
+            $('#group-select option').each(function() {
+                allGroupOptions.push({
+                    value: $(this).val(),
+                    text: $(this).text(),
+                    facultyId: $(this).data('faculty-id') || ''
+                });
             });
-            // Agar tanlangan kafedra fakultetga tegishli bo'lmasa — reset
-            var curDep = $('#department_id').val();
-            if (curDep && fid) {
-                var depFaculty = $('#department_id option:selected').data('faculty');
-                if (String(depFaculty) !== String(fid)) {
-                    $('#department_id').val('');
-                }
-            }
+            applyFilter();
+
+            $('#search-input').on('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); applyFilter(); }
+            });
         });
 
-        // Qidiruv input — Enter
-        $('#search').on('keydown', function(e) {
-            if (e.key === 'Enter') { e.preventDefault(); applyFilter(); }
-        });
+        function onFacultyChange() {
+            var facultyId = $('#faculty-select').val();
+            var $group = $('#group-select');
+            var currentGroupVal = $group.val();
+
+            $group.empty();
+            $group.append('<option value="">Barchasi</option>');
+            allGroupOptions.forEach(function(opt) {
+                if (!opt.value) return;
+                if (!facultyId || String(opt.facultyId) === String(facultyId)) {
+                    $group.append('<option value="' + opt.value + '" data-faculty-id="' + opt.facultyId + '">' + esc(opt.text) + '</option>');
+                }
+            });
+            // Agar tanlangan guruh yangi ro'yxatda qolsa — ushlab qolamiz, aks holda "Barchasi" ga tushadi
+            if (currentGroupVal && $group.find('option[value="' + currentGroupVal + '"]').length) {
+                $group.val(currentGroupVal);
+            } else {
+                $group.val('');
+            }
+
+            applyFilter();
+        }
 
         function applyFilter() {
             $('#empty').hide(); $('#table-area').hide(); $('#loading').show();
 
             var params = {
-                faculty_id: $('#faculty_id').val(),
-                department_id: $('#department_id').val(),
-                gender_code: $('#gender_code').val(),
-                group_id: $('#group_id').val(),
-                status: $('#status').val(),
-                search: $('#search').val().trim(),
+                faculty_id: $('#faculty-select').val() || '',
+                group_id: $('#group-select').val() || '',
+                status: $('#status-select').val() || '',
+                search: ($('#search-input').val() || '').trim(),
             };
 
             $.get(dataUrl, params, function(res) {
@@ -193,12 +169,11 @@
                 var students = res.students || [];
                 var stats = res.stats || {};
 
-                $('#stat-total').text(stats.total || 0);
-                $('#stat-male').text(stats.male || 0);
-                $('#stat-female').text(stats.female || 0);
-                $('#stat-filled').text(stats.filled || 0);
-                $('#stat-empty').text(stats.empty || 0);
-                $('#summary-row').show();
+                // Yuqoridagi statistika kartalarini filtr natijasi bo'yicha yangilash
+                $('#card-total').text(stats.total || 0);
+                $('#card-male').text(stats.male || 0);
+                $('#card-female').text(stats.female || 0);
+                $('#card-filled').text(stats.filled || 0);
 
                 if (students.length === 0) {
                     $('#empty').show();
@@ -210,32 +185,19 @@
                     var s = students[i];
                     var isFilled = s.filled;
 
-                    // Gender badge
-                    var genderBadge = '';
-                    if (s.gender_code === '11') {
-                        genderBadge = '<span class="gender-badge gender-male">♂ Erkak</span>';
-                    } else if (s.gender_code === '12') {
-                        genderBadge = '<span class="gender-badge gender-female">♀ Ayol</span>';
-                    } else {
-                        genderBadge = '<span style="color:#94a3b8;">—</span>';
-                    }
+                    var genderBadge = '<span style="color:#94a3b8;">—</span>';
+                    if (s.gender_code === '11') genderBadge = '<span class="gender-badge gender-male">♂ Erkak</span>';
+                    else if (s.gender_code === '12') genderBadge = '<span class="gender-badge gender-female">♀ Ayol</span>';
 
-                    // Status badge
                     var status = isFilled
                         ? '<span class="badge-filled">To\'ldirgan</span>'
                         : '<span class="badge-empty">To\'ldirilmagan</span>';
 
-                    // Faculty / Department
                     var facDept = '';
-                    if (s.faculty_name) {
-                        facDept += '<div style="font-size:12px;font-weight:600;color:#0f172a;">' + esc(s.faculty_name) + '</div>';
-                    }
-                    if (s.kafedra_name) {
-                        facDept += '<div style="font-size:11px;color:#64748b;margin-top:1px;">' + esc(s.kafedra_name) + '</div>';
-                    }
+                    if (s.faculty_name) facDept += '<div style="font-size:12px;font-weight:600;color:#0f172a;">' + esc(s.faculty_name) + '</div>';
+                    if (s.kafedra_name) facDept += '<div style="font-size:11px;color:#64748b;margin-top:1px;">' + esc(s.kafedra_name) + '</div>';
                     if (!facDept) facDept = '<span style="color:#cbd5e1;">—</span>';
 
-                    // Ma'lumotlar
                     var info = '<span style="color:#cbd5e1;">—</span>';
                     if (isFilled) {
                         var accId = 'acc-' + i;
@@ -251,7 +213,6 @@
                         info += '</div>';
                     }
 
-                    // Fayllar
                     var files = '<span style="color:#cbd5e1;">—</span>';
                     if (isFilled && s.gp_id) {
                         var btns = '';
@@ -276,6 +237,9 @@
                 }
                 $('#table-body').html(html);
                 $('#table-area').show();
+            }).fail(function() {
+                $('#loading').hide();
+                $('#empty').show().find('p').text("Xatolik yuz berdi");
             });
         }
 
@@ -290,13 +254,15 @@
                 arrow.style.transform = 'rotate(90deg)';
             }
         }
-
-        // Sahifa ochilganda barcha bitiruvchilarni yuklash
-        $(document).ready(function() { applyFilter(); });
     </script>
 
     <style>
-        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; border-top-left-radius: 12px; border-top-right-radius: 12px; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 14px; }
+        .stat-card { padding: 12px 16px; border-radius: 10px; border: 1px solid; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
+        .stat-value { font-size: 24px; font-weight: 800; line-height: 1.1; margin-top: 4px; }
+
+        .filter-container { padding: 14px 18px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
         .filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
         .filter-item { display: flex; flex-direction: column; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
@@ -310,10 +276,6 @@
 
         .spinner { width: 36px; height: 36px; margin: 0 auto; border: 3px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.7s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        .stat-card { padding: 8px 14px; border-radius: 10px; border: 1px solid; min-width: 110px; }
-        .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
-        .stat-value { font-size: 22px; font-weight: 800; line-height: 1.1; margin-top: 2px; }
 
         .gp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .gp-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }

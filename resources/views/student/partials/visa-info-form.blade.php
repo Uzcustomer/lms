@@ -42,7 +42,7 @@
                     'UAE','Uganda','Ukraine','United Kingdom','United States','Uruguay','Uzbekistan',
                     'Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'
                 ]) }},
-                value: '{{ old('birth_country', $visaInfo?->birth_country ?? 'India') }}'
+                value: '{{ old('birth_country', $visaInfo?->birth_country ?? '') }}'
             })">
                 <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Davlat') }} <span class="text-red-500">*</span></label>
                 <div class="relative">

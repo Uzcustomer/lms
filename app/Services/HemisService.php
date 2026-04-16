@@ -990,34 +990,23 @@ class HemisService
                     $pagination = $json['data']['pagination'] ?? [];
                     $pageCount = $pagination['pageCount'] ?? 1;
 
-                    // Debug: birinchi talaba uchun API javobni log qilamiz
-                    if ($page === 1 && $studentHemisId === $studentHemisIds[0]) {
-                        Log::info('HEMIS student-performance-list response sample', [
-                            'student' => $studentHemisId,
-                            'subject_filter' => $subjectId,
-                            'total_items' => count($items),
-                            'first_item' => $items[0] ?? 'empty',
-                            'pagination' => $pagination,
-                        ]);
-                    }
-
                     foreach ($items as $item) {
                         $hemisId = $item['id'] ?? null;
                         if (!$hemisId) continue;
-
-                        // Faqat kerakli fan uchun saqlaymiz
-                        $itemSubjectId = (string) ($item['subject']['id'] ?? '');
-                        if ($itemSubjectId !== '' && $itemSubjectId !== $subjectId) continue;
 
                         $examDate = !empty($item['exam_date'])
                             ? \Carbon\Carbon::createFromTimestamp($item['exam_date'])
                             : null;
 
+                        // subject_id sifatida HEMIS API'dan kelgan subject.id
+                        // saqlanadi — taqqoslash paytida shu ID ishlatiladi.
+                        $itemSubjectId = (string) ($item['subject']['id'] ?? '');
+
                         HemisExamGrade::updateOrCreate(
                             ['hemis_record_id' => $hemisId],
                             [
                                 'student_hemis_id'    => (string) ($item['_student'] ?? $studentHemisId),
-                                'subject_id'          => $itemSubjectId ?: $subjectId,
+                                'subject_id'          => $itemSubjectId,
                                 'semester_code'       => (string) ($item['semester']['code'] ?? $semesterCode),
                                 'education_year'      => (string) ($item['_education_year'] ?? ''),
                                 'exam_type_code'      => (string) ($item['examType']['code'] ?? ''),

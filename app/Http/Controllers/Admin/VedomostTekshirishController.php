@@ -711,7 +711,11 @@ class VedomostTekshirishController extends Controller
             // --- HEMIS exam grades bilan taqqoslash (lokal jadvaldan) ---
             // Sync export'dan oldin alohida AJAX so'rov (syncHemis) orqali
             // amalga oshiriladi. Bu yerda faqat lokal ma'lumot o'qiladi.
-            $hemisExamGrades = HemisExamGrade::forComparison($studentHemisIds, $subjectId, $semesterCode)
+            // HEMIS va bizning tizim subject_id/semester_code formatlarida
+            // farq bo'lishi mumkin, shuning uchun faqat student_hemis_id
+            // bo'yicha query qilamiz. Har bir talabada exam_type_code
+            // orqali (11=JN+MT, 13=YN) kerakli yozuv ajratiladi.
+            $hemisExamGrades = HemisExamGrade::whereIn('student_hemis_id', $studentHemisIds)
                 ->get()
                 ->groupBy('student_hemis_id');
 

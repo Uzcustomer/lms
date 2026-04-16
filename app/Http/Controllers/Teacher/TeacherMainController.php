@@ -300,7 +300,7 @@ class TeacherMainController extends Controller
             $activeRole = $userRoles[0];
         }
 
-        $adminRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_prorektori', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'inspeksiya'];
+        $adminRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_prorektori', 'oquv_bolimi', 'inspeksiya'];
         if (in_array($activeRole, $adminRoles)) {
             return $this->studentsAdmin($request);
         }

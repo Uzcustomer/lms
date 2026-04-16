@@ -12,7 +12,7 @@
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 bg-white border-b border-gray-200">
-                    <div class="flex flex-col md:flex-row">
+                    <div class="flex flex-col md:flex-row" style="gap:20px;">
                         <!-- Rasm va asosiy ma'lumot -->
                         <div class="md:w-1/4 flex flex-col items-center" style="background:linear-gradient(135deg,#1a3268,#2b5ea7);border-radius:12px;padding:1.5rem;color:#fff;">
                             @if($student->image)
@@ -698,7 +698,7 @@
 
     <style>
     .sp-tabs { display:flex; gap:0; border-bottom:3px solid #1a3268; flex-wrap:wrap; }
-    .sp-tab { padding:10px 18px; font-size:13px; font-weight:700; color:#64748b; background:#f1f5f9; border:1px solid #e2e8f0; border-bottom:none; border-radius:8px 8px 0 0; cursor:pointer; transition:all 0.15s; margin-bottom:-3px; }
+    .sp-tab { padding:10px 18px; font-size:13px; font-weight:700; color:#64748b; background:#f1f5f9; border:1px solid #e2e8f0; border-bottom:none; border-radius:8px 8px 0 0; cursor:pointer; transition:all 0.15s; margin-bottom:-3px; flex:1; text-align:center; }
     .sp-tab:hover { background:#e2e8f0; color:#1e293b; }
     .sp-tab-active { background:linear-gradient(135deg,#1a3268,#2b5ea7) !important; color:#fff !important; border-color:#1a3268; }
     .sp-content { background:#fff; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 10px 10px; padding:20px; }

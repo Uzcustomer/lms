@@ -136,6 +136,10 @@
                             </label>
                             <span id="selected-count" style="font-size:13px;color:#64748b;"></span>
                         </div>
+                        <button id="btn-sync-hemis" class="btn-sync-hemis btn-disabled" disabled onclick="doSyncHemis()">
+                            <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span id="sync-btn-text">HEMIS yangilash</span>
+                        </button>
                         <button id="btn-generate" class="btn-excel btn-disabled" disabled onclick="openWeightModal()">
                             <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                             Generatsiya Excel
@@ -216,10 +220,6 @@
             </div>
             <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
                 <button class="modal-cancel-btn" onclick="closeWeightModal()">Bekor qilish</button>
-                <button id="modal-sync-btn" class="modal-sync-btn" onclick="doSyncHemis()">
-                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                    HEMIS yangilash
-                </button>
                 <button id="modal-download-btn" class="modal-download-btn" onclick="doExport()">
                     <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Yuklab olish
@@ -528,10 +528,13 @@
         function updateGenBtn() {
             var c=$('.row-cb:checked').length;
             var btn=$('#btn-generate');
+            var syncBtn=$('#btn-sync-hemis');
             if(c>0){
                 btn.prop('disabled',false).removeClass('btn-disabled').addClass('btn-active');
+                syncBtn.prop('disabled',false).removeClass('btn-disabled').addClass('btn-sync-active');
             } else {
                 btn.prop('disabled',true).addClass('btn-disabled').removeClass('btn-active');
+                syncBtn.prop('disabled',true).addClass('btn-disabled').removeClass('btn-sync-active');
             }
         }
 
@@ -598,8 +601,10 @@
             var selected=getSelectedRows();
             if(selected.length===0){ alert('Qator tanlanmagan'); return; }
 
-            var btn=$('#modal-sync-btn');
-            btn.prop('disabled',true).html('<span class="spinner-border spinner-border-sm"></span> Yangilanmoqda...');
+            var btn=$('#btn-sync-hemis');
+            var txtEl=$('#sync-btn-text');
+            btn.prop('disabled',true);
+            txtEl.text('Yangilanmoqda...');
 
             $.ajax({
                 url: '{{ route("admin.vedomost-tekshirish.sync-hemis") }}',
@@ -607,11 +612,11 @@
                 data: { _token: '{{ csrf_token() }}', rows: selected },
                 timeout: 60000
             }).done(function(res){
-                btn.html('&#10003; Yangilandi (' + (res.synced||0) + ')');
-                setTimeout(function(){ btn.html('<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> HEMIS yangilash'); btn.prop('disabled',false); }, 2000);
+                txtEl.text('Yangilandi (' + (res.synced||0) + ')');
+                setTimeout(function(){ txtEl.text('HEMIS yangilash'); btn.prop('disabled',false); }, 3000);
             }).fail(function(){
-                btn.html('&#10007; Xatolik');
-                setTimeout(function(){ btn.html('<svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> HEMIS yangilash'); btn.prop('disabled',false); }, 2000);
+                txtEl.text('Xatolik!');
+                setTimeout(function(){ txtEl.text('HEMIS yangilash'); btn.prop('disabled',false); }, 3000);
             });
         }
 
@@ -731,9 +736,10 @@
         .mw-input:focus { border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }
         .modal-cancel-btn { padding:8px 20px; border:1px solid #cbd5e1; background:#fff; border-radius:8px; font-size:13px; font-weight:600; color:#334155; cursor:pointer; }
         .modal-cancel-btn:hover { background:#f1f5f9; }
-        .modal-sync-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 22px; background:linear-gradient(135deg,#2563eb,#3b82f6); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(37,99,235,.3); }
-        .modal-sync-btn:hover:not(:disabled) { background:linear-gradient(135deg,#1d4ed8,#2563eb); }
-        .modal-sync-btn:disabled { opacity:.5; cursor:not-allowed; }
+        .btn-sync-hemis { display:inline-flex; align-items:center; gap:6px; padding:8px 18px; background:linear-gradient(135deg,#2563eb,#3b82f6); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(37,99,235,.3); transition:all .2s; }
+        .btn-sync-hemis:hover:not(:disabled) { background:linear-gradient(135deg,#1d4ed8,#2563eb); }
+        .btn-sync-hemis.btn-disabled { opacity:.5; cursor:not-allowed; background:#94a3b8; box-shadow:none; }
+        .btn-sync-active { opacity:1 !important; background:linear-gradient(135deg,#2563eb,#3b82f6) !important; box-shadow:0 2px 8px rgba(37,99,235,.3) !important; }
         .modal-download-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 22px; background:linear-gradient(135deg,#16a34a,#22c55e); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(22,163,74,.3); }
         .modal-download-btn:hover:not(:disabled) { background:linear-gradient(135deg,#15803d,#16a34a); }
         .modal-download-btn:disabled { opacity:.5; cursor:not-allowed; }

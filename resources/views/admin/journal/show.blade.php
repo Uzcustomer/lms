@@ -525,7 +525,7 @@
             color: #dc2626 !important;
         }
         .grade-retake {
-            color: #7c3aed !important;
+            color: #d97706 !important;
         }
         /* Diagonal split cell for retake grades */
         .split-cell {
@@ -561,7 +561,7 @@
             font-size: 11px;
             font-weight: 600;
             line-height: 1;
-            color: #7c3aed;
+            color: #d97706;
         }
         .editable-cell {
             position: relative;
@@ -1147,7 +1147,15 @@
                                                     @if($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
-                                                            $dayAvgColorClass = $dayAvg < ($minimumLimit ?? 60) ? 'text-red-600' : ($hasTeacherGradeInDay ? 'text-green-600' : 'text-gray-900');
+                                                            if ($isRetake) {
+                                                                $dayAvgColorClass = 'text-amber-600'; // retake baholar malla rangda
+                                                            } elseif ($dayAvg < ($minimumLimit ?? 60)) {
+                                                                $dayAvgColorClass = 'text-red-600';
+                                                            } elseif ($hasTeacherGradeInDay) {
+                                                                $dayAvgColorClass = 'text-green-600';
+                                                            } else {
+                                                                $dayAvgColorClass = 'text-gray-900';
+                                                            }
                                                         @endphp
                                                         <span class="{{ $dayAvgColorClass }} font-medium">{{ $dayAvg }}</span>
                                                         @if(count($dayGrades) > 1)

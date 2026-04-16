@@ -83,5 +83,8 @@ Schedule::command('registrar:send-unrated-report')->dailyAt('08:30');
 // Xalqaro talabalar viza va registratsiya muddatlarini tekshirish (har kuni 09:00 da)
 Schedule::command('visa:check-expiry')->dailyAt('09:00');
 
+// HEMIS exam grades sync — baholarni HEMIS dan tortib hemis_exam_grades jadvaliga saqlash (har kuni 03:00 da)
+Schedule::command('hemis:sync-exam-grades')->dailyAt('03:00')->withoutOverlapping(120);
+
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)

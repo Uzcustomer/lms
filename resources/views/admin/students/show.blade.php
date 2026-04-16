@@ -14,7 +14,7 @@
                 <div class="p-6 bg-white border-b border-gray-200">
                     <div class="flex flex-col md:flex-row">
                         <!-- Rasm va asosiy ma'lumot -->
-                        <div class="md:w-1/4 pr-6 flex flex-col items-center">
+                        <div class="md:w-1/4 flex flex-col items-center" style="background:linear-gradient(135deg,#1a3268,#2b5ea7);border-radius:12px;padding:1.5rem;color:#fff;">
                             @if($student->image)
                                 <img src="{{ $student->image }}" alt="{{ $student->full_name }}"
                                      class="w-40 h-40 object-cover rounded-full shadow-md mb-4"
@@ -27,9 +27,9 @@
                                     <span class="text-3xl font-bold text-gray-500">{{ strtoupper(substr($student->full_name, 0, 2)) }}</span>
                                 </div>
                             @endif
-                            <h3 class="text-lg font-bold text-center mb-1">{{ $student->full_name }}</h3>
-                            <p class="text-gray-500 text-sm text-center mb-1">{{ $student->student_id_number }}</p>
-                            <p class="text-gray-400 text-xs text-center mb-4">HEMIS ID: {{ $student->hemis_id }}</p>
+                            <h3 class="text-lg font-bold text-center mb-1" style="color:#fff;">{{ $student->full_name }}</h3>
+                            <p class="text-sm text-center mb-1" style="color:rgba(255,255,255,0.8);">{{ $student->student_id_number }}</p>
+                            <p class="text-xs text-center mb-4" style="color:rgba(255,255,255,0.6);">HEMIS ID: {{ $student->hemis_id }}</p>
 
                             <!-- Holat badge -->
                             @if($student->student_status_name)
@@ -630,32 +630,45 @@
 
                             {{-- TAB 7: TIZIM --}}
                             <div id="ptab-content-tizim" class="sp-content" style="display:none;">
-                            <div class="sp-card">
-                                <h4 class="sp-title">Tizim ma'lumotlari</h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <table class="w-full text-sm">
-                                        <tr><td class="py-1 text-gray-500 w-2/5">_curriculum</td><td class="py-1 text-gray-900">{{ $student->curriculum_id ?? '-' }} <span class="text-gray-400 text-xs">{{ $student->curriculum->name ?? '' }}</span></td></tr>
-                                        <tr><td class="py-1 text-gray-500">hash</td><td class="py-1 text-gray-900 break-all text-xs">{{ $student->hash ?? '-' }}</td></tr>
-                                        <tr><td class="py-1 text-gray-500">other</td><td class="py-1 text-gray-900">{{ $student->other ?? '-' }}</td></tr>
-                                        <tr><td class="py-1 text-gray-500">created_at</td><td class="py-1 text-gray-900">{{ $student->hemis_created_at ? $student->hemis_created_at->format('d.m.Y H:i:s') : '-' }}</td></tr>
-                                        <tr><td class="py-1 text-gray-500">updated_at</td><td class="py-1 text-gray-900">{{ $student->hemis_updated_at ? $student->hemis_updated_at->format('d.m.Y H:i:s') : '-' }}</td></tr>
+                              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="sp-card">
+                                    <h4 class="sp-title">O'quv ma'lumotlari</h4>
+                                    <table class="sp-table">
+                                        <tr><td>O'quv yili</td><td>{{ $student->education_year_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->education_year_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Semestr</td><td>{{ $student->semester_name ?? '-' }} <span class="text-gray-400 text-xs">(kod: {{ $student->semester_code ?? '-' }}, id: {{ $student->semester_id ?? '-' }})</span></td></tr>
+                                        <tr><td>Kurs</td><td>{{ $student->level_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->level_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Curriculum ID</td><td>{{ $student->curriculum_id ?? '-' }} <span class="text-gray-400 text-xs">{{ $student->curriculum->name ?? '' }}</span></td></tr>
+                                        <tr><td>Ta'lim turi</td><td>{{ $student->education_type_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->education_type_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Ta'lim shakli</td><td>{{ $student->education_form_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->education_form_code ?? '-' }})</span></td></tr>
+                                        <tr><td>To'lov shakli</td><td>{{ $student->payment_form_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->payment_form_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Talaba turi</td><td>{{ $student->student_type_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->student_type_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Talaba holati</td><td>{{ $student->student_status_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->student_status_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Ijtimoiy toifa</td><td>{{ $student->social_category_name ?? '-' }}</td></tr>
+                                        <tr><td>Turar joy</td><td>{{ $student->accommodation_name ?? '-' }}</td></tr>
                                     </table>
-                                    <table class="w-full text-sm">
-                                        <tr><td class="py-1 text-gray-500 w-2/5">Telefon</td><td class="py-1 text-gray-900">{{ $student->phone ?? '-' }}</td></tr>
-                                        <tr><td class="py-1 text-gray-500">Telegram</td><td class="py-1 text-gray-900">{{ $student->telegram_username ?? '-' }}</td></tr>
+                                </div>
+                                <div class="sp-card">
+                                    <h4 class="sp-title">Tizim va aloqa</h4>
+                                    <table class="sp-table">
+                                        <tr><td>Universitet</td><td>{{ $student->university_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->university_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Fakultet</td><td>{{ $student->department_name ?? '-' }} <span class="text-gray-400 text-xs">({{ $student->department_code ?? '-' }})</span></td></tr>
+                                        <tr><td>Yo'nalish</td><td>{{ $student->specialty_name ?? '-' }}</td></tr>
+                                        <tr><td>Guruh</td><td>{{ $student->group_name ?? '-' }} <span class="text-gray-400 text-xs">(ID: {{ $student->group_id ?? '-' }})</span></td></tr>
+                                        <tr><td>Telefon</td><td>{{ $student->phone ?? '-' }}</td></tr>
+                                        <tr><td>Telegram</td><td>{{ $student->telegram_username ?? '-' }}</td></tr>
                                         <tr>
-                                            <td class="py-1 text-gray-500">Telegram tasdiqlangan</td>
-                                            <td class="py-1">
+                                            <td>Telegram tasdiqlangan</td>
+                                            <td>
                                                 @if($student->isTelegramVerified())
-                                                    <span class="text-green-600">Ha ({{ $student->telegram_verified_at->format('d.m.Y') }})</span>
+                                                    <span class="text-green-600 font-semibold">Ha ({{ $student->telegram_verified_at->format('d.m.Y') }})</span>
                                                 @else
                                                     <span class="text-red-600">Yo'q</span>
                                                 @endif
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td class="py-1 text-gray-500">Parol holati</td>
-                                            <td class="py-1">
+                                            <td>Parol holati</td>
+                                            <td>
                                                 @if($student->local_password_expires_at)
                                                     {{ $student->local_password_expires_at->format('d.m.Y H:i') }}
                                                     @if($student->local_password_expires_at->isFuture())
@@ -663,24 +676,17 @@
                                                     @else
                                                         <span class="text-red-600">(muddati o'tgan)</span>
                                                     @endif
-                                                @else
-                                                    -
+                                                @else -
                                                 @endif
                                             </td>
                                         </tr>
-                                        <tr>
-                                            <td class="py-1 text-gray-500">must_change_password</td>
-                                            <td class="py-1">
-                                                @if($student->must_change_password)
-                                                    <span class="text-yellow-600">Ha</span>
-                                                @else
-                                                    <span class="text-green-600">Yo'q</span>
-                                                @endif
-                                            </td>
-                                        </tr>
+                                        <tr><td>Parolni o'zgartirish</td><td>{{ $student->must_change_password ? 'Ha' : 'Yo\'q' }}</td></tr>
+                                        <tr><td>Hash</td><td class="break-all text-xs">{{ $student->hash ?? '-' }}</td></tr>
+                                        <tr><td>Yaratilgan</td><td>{{ $student->hemis_created_at ? $student->hemis_created_at->format('d.m.Y H:i') : '-' }}</td></tr>
+                                        <tr><td>Yangilangan</td><td>{{ $student->hemis_updated_at ? $student->hemis_updated_at->format('d.m.Y H:i') : '-' }}</td></tr>
                                     </table>
                                 </div>
-                            </div>
+                              </div>
                             </div>{{-- /tizim tab --}}
 
                         </div>{{-- /md:w-3/4 --}}

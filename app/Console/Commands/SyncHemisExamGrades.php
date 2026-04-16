@@ -25,10 +25,20 @@ class SyncHemisExamGrades extends Command
 
         // Agar aniq parametrlar berilgan bo'lsa — faqat shu uchun sync
         if ($groupFilter && $subjectFilter) {
+            $group = Group::where('group_hemis_id', $groupFilter)->first();
+            if (!$group) {
+                $this->error("Guruh topilmadi: {$groupFilter}");
+                return self::FAILURE;
+            }
+            $studentHemisIds = \App\Models\Student::where('group_id', $group->group_hemis_id)
+                ->pluck('hemis_id')->toArray();
+
             $synced = $hemis->syncExamGradesForGroup(
-                $groupFilter,
+                $studentHemisIds,
                 $subjectFilter,
-                $semesterFilter ?? ''
+                $semesterFilter ?? '',
+                null,
+                30
             );
             $this->info("Synced {$synced} exam grade(s) for group={$groupFilter}, subject={$subjectFilter}.");
             return self::SUCCESS;
@@ -48,6 +58,10 @@ class SyncHemisExamGrades extends Command
         $bar->start();
 
         foreach ($groups as $group) {
+            $studentHemisIds = \App\Models\Student::where('group_id', $group->group_hemis_id)
+                ->pluck('hemis_id')->toArray();
+            if (empty($studentHemisIds)) { $bar->advance(); continue; }
+
             $semesters = $currentSemesters->where('curriculum_hemis_id', $group->curriculum_hemis_id);
 
             foreach ($semesters as $semester) {
@@ -58,9 +72,11 @@ class SyncHemisExamGrades extends Command
 
                 foreach ($subjects as $subjectId) {
                     $totalSynced += $hemis->syncExamGradesForGroup(
-                        $group->group_hemis_id,
+                        $studentHemisIds,
                         $subjectId,
-                        $semester->code
+                        $semester->code,
+                        null,
+                        30
                     );
                 }
             }

@@ -259,9 +259,28 @@ class VedomostTekshirishController extends Controller
                 : Group::where('group_hemis_id', $groupId)->first();
             if (!$group) continue;
 
+            // Guruh talabalarining HEMIS ID'larini olamiz
+            $studentHemisIds = Student::where('group_id', $group->group_hemis_id)
+                ->pluck('hemis_id')
+                ->toArray();
+            if (empty($studentHemisIds)) continue;
+
+            // Curriculum'dan educationYearCode
+            $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
+            $educationYearCode = $curriculum?->education_year_code;
+            $scheduleYear = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleYear) $educationYearCode = $scheduleYear;
+
             try {
                 $synced += app(HemisService::class)->syncExamGradesForGroup(
-                    $group->group_hemis_id, $subjectId, $semesterCode ?? '', 15
+                    $studentHemisIds, $subjectId, $semesterCode ?? '', $educationYearCode, 15
                 );
             } catch (\Throwable $e) {
                 // HEMIS javob bermasa — davom etamiz

@@ -801,9 +801,12 @@ class VedomostTekshirishController extends Controller
                     $testBall = 0;
                 }
 
-                // M ustun (JN+MT) — ballarni yig'ib butun songacha half-up
-                // yaxlitlanadi.
-                $sumBall = (int) floor($jnBall + $mtBall + $onBall + 0.5);
+                // M ustun (JN+MT) — shablon formulasi bilan bir xil:
+                // =IF(OR(D<60, G<60), 0, ROUND(E+H, 0.1))
+                // JN yoki MT 60 dan kichik bo'lsa M = 0.
+                $sumBall = ($jn < 60 || $mt < 60)
+                    ? 0
+                    : (int) floor($jnBall + $mtBall + $onBall + 0.5);
                 $maxSum  = $wJn + $wMt + $wOn;
 
                 // YN natija — ekrandagi ball'lardan hisoblanadi, shuning uchun

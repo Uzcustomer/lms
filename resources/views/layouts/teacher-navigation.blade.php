@@ -392,6 +392,7 @@
                                 'inspeksiya' => 'Inspeksiya',
                                 'oquv_prorektori' => "O'quv prorektori",
                                 'oquv_bolimi' => "O'quv bo'limi",
+                                'oquv_bolimi_boshligi' => "O'quv bo'limi boshlig'i",
                                 'buxgalteriya' => 'Buxgalteriya',
                                 'manaviyat' => "Ma'naviyat",
                                 'tyutor' => 'Tyutor',

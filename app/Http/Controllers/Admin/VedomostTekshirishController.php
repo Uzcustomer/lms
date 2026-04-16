@@ -29,7 +29,7 @@ class VedomostTekshirishController extends Controller
 {
     private array $allowedRoles = [
         'superadmin', 'admin', 'kichik_admin',
-        'registrator_ofisi', 'oquv_bolimi', 'oquv_prorektori',
+        'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori',
     ];
 
     public function index()

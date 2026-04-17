@@ -892,30 +892,25 @@ class ReportController extends Controller
         $maxDate = $schedules->max('lesson_date_str');
 
         // Davomat (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
-        // Bu HEMIS dagi davomat nazoratini jadval bilan aniq bog'laydi.
-        // `load` = HEMIS da o'qituvchi belgilagan soat (jadval soati bilan taqqoslash uchun).
-        $attendanceLoadByScheduleId = DB::table('attendance_controls')
+        // Bu HEMIS dagi davomat nazoratini jadval bilan aniq bog'laydi
+        $attendanceByScheduleId = DB::table('attendance_controls')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
             ->where('load', '>', 0)
-            ->select('subject_schedule_id', DB::raw('MAX(`load`) as load_hours'))
-            ->groupBy('subject_schedule_id')
-            ->pluck('load_hours', 'subject_schedule_id');
+            ->pluck('subject_schedule_id')
+            ->flip();
 
         // Davomat (2-usul): atribut kalitlari orqali tekshirish (zaxira)
         // subject_schedule_id bo'lmagan yozuvlar uchun
-        $attendanceLoadByKey = DB::table('attendance_controls')
+        $attendanceByKey = DB::table('attendance_controls')
             ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
             ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->where('load', '>', 0)
-            ->select(
-                DB::raw("CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"),
-                DB::raw('MAX(`load`) as load_hours')
-            )
-            ->groupBy(DB::raw("CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code)"))
-            ->pluck('load_hours', 'ck');
+            ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
+            ->pluck('ck')
+            ->flip();
 
         // Baho (1-usul): subject_schedule_id bo'yicha yozuvi bor talabalar soni
         // Baho HAM, NB HAM hisobga olinadi — o'qituvchi shu talaba uchun ish qilgan
@@ -981,15 +976,8 @@ class ReportController extends Controller
                       . '|' . $sch->lesson_pair_code;
 
             // Davomat: schedule_hemis_id orqali yoki atribut kaliti orqali tekshirish
-            // HEMIS da o'qituvchi belgilagan soat (load). Topilmasa 0.
-            $loadBySchedule = (int) ($attendanceLoadByScheduleId[$sch->schedule_hemis_id] ?? 0);
-            $loadByKey = (int) ($attendanceLoadByKey[$attKey] ?? 0);
-            $hemisHours = max($loadBySchedule, $loadByKey);
-            $hasAtt = $hemisHours > 0;
-            // 1 juftlik = 2 akademik soat (O'zbekiston OTM standarti)
-            $scheduledHours = 2;
-            $hoursDiff = $scheduledHours - $hemisHours;
-            $hoursMatch = $hemisHours === $scheduledHours;
+            $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
+                   || isset($attendanceByKey[$attKey]);
 
             // Baho: fanga biriktirilgan talabalar soni va baho qo'yilmaganlar soni
             $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
@@ -1046,22 +1034,12 @@ class ReportController extends Controller
                     'has_attendance' => $hasAtt,
                     'has_grades' => $hasGrade,
                     'missing_grade_count' => $missingGradeCount,
-                    'scheduled_hours' => $scheduledHours,
-                    'hemis_hours' => $hemisHours,
-                    'hours_diff' => $hoursDiff,
-                    'hours_match' => $hoursMatch,
                 ];
             } else {
                 // Dublikat schedule (bir xil kalit, boshqa schedule_hemis_id) —
                 // agar biror dublikatda davomat/baho topilsa, eng yaxshi natijani olish
                 if ($hasAtt && !$grouped[$key]['has_attendance']) {
                     $grouped[$key]['has_attendance'] = true;
-                }
-                // Soat bo'yicha eng ko'p belgilangan qiymatni olish
-                if ($hemisHours > $grouped[$key]['hemis_hours']) {
-                    $grouped[$key]['hemis_hours'] = $hemisHours;
-                    $grouped[$key]['hours_diff'] = $grouped[$key]['scheduled_hours'] - $hemisHours;
-                    $grouped[$key]['hours_match'] = $hemisHours === $grouped[$key]['scheduled_hours'];
                 }
                 if ($hasGrade === true && $grouped[$key]['has_grades'] === false) {
                     $grouped[$key]['has_grades'] = true;
@@ -1083,8 +1061,7 @@ class ReportController extends Controller
                     'attendance_missing' => !$r['has_attendance'],
                     'grade_missing' => $r['has_grades'] === false,
                     'both_missing' => !$r['has_attendance'] && $r['has_grades'] === false,
-                    'hours_mismatch' => !$r['hours_match'],
-                    'all_done' => $r['has_attendance'] && $r['has_grades'] !== false && $r['hours_match'],
+                    'all_done' => $r['has_attendance'] && $r['has_grades'] !== false,
                     default => true,
                 };
             }));
@@ -1131,7 +1108,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Dars belgilash');
 
-        $headers = ['#', 'Xodim FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', "Mashg'ulot turi", 'Juftlik vaqti', 'Talaba soni', 'Davomat', 'Baho', 'Jadval soati', 'HEMIS soati', 'Soat farqi', 'Dars sanasi'];
+        $headers = ['#', 'Xodim FISH', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Kafedra', 'Fan', 'Guruh', "Mashg'ulot turi", 'Juftlik vaqti', 'Talaba soni', 'Davomat', 'Baho', 'Dars sanasi'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -1142,7 +1119,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:R1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:O1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -1160,20 +1137,17 @@ class ReportController extends Controller
             $sheet->setCellValue([12, $row], $r['student_count']);
             $sheet->setCellValue([13, $row], $r['has_attendance'] ? 'Ha' : "Yo'q");
             $sheet->setCellValue([14, $row], $r['has_grades'] === null ? '-' : ($r['has_grades'] ? 'Ha' : "Yo'q (" . ($r['missing_grade_count'] ?? 0) . ")"));
-            $sheet->setCellValue([15, $row], $r['scheduled_hours'] ?? 0);
-            $sheet->setCellValue([16, $row], $r['hemis_hours'] ?? 0);
-            $sheet->setCellValue([17, $row], $r['hours_diff'] ?? 0);
-            $sheet->setCellValue([18, $row], $r['lesson_date']);
+            $sheet->setCellValue([15, $row], $r['lesson_date']);
         }
 
-        $widths = [5, 30, 25, 30, 8, 10, 25, 35, 15, 16, 13, 12, 10, 10, 12, 12, 10, 14];
+        $widths = [5, 30, 25, 30, 8, 10, 25, 35, 15, 16, 13, 12, 10, 10, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:R{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

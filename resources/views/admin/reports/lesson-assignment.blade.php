@@ -98,7 +98,6 @@
                                 <option value="attendance_missing">Davomat yo'q</option>
                                 <option value="grade_missing">Baho yo'q</option>
                                 <option value="both_missing">Ikkalasi yo'q</option>
-                                <option value="hours_mismatch">Soat farqi bor</option>
                                 <option value="all_done">Barchasi bajarilgan</option>
                             </select>
                         </div>
@@ -155,9 +154,6 @@
                                         <th><a href="#" class="sort-link" data-sort="student_count">Talaba soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="has_attendance">Davomat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="has_grades">Baho <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Jadvalga qo'yilgan soat"><a href="#" class="sort-link" data-sort="scheduled_hours">Jadval soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="O'qituvchi HEMIS da belgilagan soat"><a href="#" class="sort-link" data-sort="hemis_hours">HEMIS soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Jadval soati − HEMIS soati"><a href="#" class="sort-link" data-sort="hours_diff">Farq <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon active">&#9660;</span></a></th>
                                         <th style="text-align:center;">Ko'rish</th>
                                     </tr>
@@ -407,24 +403,6 @@
             return '<span class="badge badge-status-no">Yo\'q (' + missingCount + ')</span>';
         }
 
-        function hoursBadge(val, isScheduled) {
-            var v = (val === undefined || val === null) ? 0 : val;
-            if (v === 0 && !isScheduled) {
-                return '<span class="badge badge-status-no" title="HEMIS da belgilanmagan">0</span>';
-            }
-            return '<span class="badge badge-hours">' + v + '</span>';
-        }
-
-        function hoursDiffBadge(diff, match) {
-            var d = (diff === undefined || diff === null) ? 0 : diff;
-            if (match) {
-                return '<span class="badge badge-status-yes" title="Jadval va HEMIS soati mos">0</span>';
-            }
-            var label = d > 0 ? ('−' + d) : ('+' + Math.abs(d));
-            var title = d > 0 ? "Jadvalga nisbatan HEMIS da " + d + " soat kam" : "Jadvalga nisbatan HEMIS da " + Math.abs(d) + " soat ko'p";
-            return '<span class="badge badge-status-no" title="' + title + '">' + label + '</span>';
-        }
-
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
@@ -444,9 +422,6 @@
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.student_count + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_attendance) + '</td>';
                 html += '<td style="text-align:center;">' + gradeBadge(r.has_grades, r.missing_grade_count) + '</td>';
-                html += '<td style="text-align:center;">' + hoursBadge(r.scheduled_hours, true) + '</td>';
-                html += '<td style="text-align:center;">' + hoursBadge(r.hemis_hours, false) + '</td>';
-                html += '<td style="text-align:center;">' + hoursDiffBadge(r.hours_diff, r.hours_match) + '</td>';
                 html += '<td><span class="badge badge-date">' + formatDate(r.lesson_date) + '</span></td>';
                 html += '<td style="text-align:center;"><a href="/admin/journal/show/' + encodeURIComponent(r.group_db_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code) + '" target="_blank" class="btn-view-journal" title="Jurnalga o\'tish"><svg style="width:18px;height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></a></td>';
                 html += '</tr>';
@@ -709,7 +684,6 @@
 
         .badge-status-yes { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; padding: 4px 12px; font-size: 12px; font-weight: 700; }
         .badge-status-no { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 4px 12px; font-size: 12px; font-weight: 700; }
-        .badge-hours { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 4px 12px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
         .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }

@@ -581,106 +581,6 @@
                                         </div>
                                     </div>
 
-                                    {{-- 3b. Qabul ma'lumotlari --}}
-                                    <div class="qabul-card">
-                                        <div class="qabul-card-header" style="--accent:#7c3aed;">
-                                            <span class="qabul-dot"></span>
-                                            <h5 class="qabul-card-title">Qabul ma'lumotlari</h5>
-                                        </div>
-                                        <div class="qabul-card-body">
-                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                <div>
-                                                    <label class="qabul-label">Abituriyent ID raqami</label>
-                                                    <input type="text" name="abituriyent_id" value="{{ old('abituriyent_id', $admissionData?->abituriyent_id ?? '') }}"
-                                                           class="qabul-input" placeholder="342234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
-                                                </div>
-                                                <div>
-                                                    <label class="qabul-label">Javoblar varaqasi raqami</label>
-                                                    <input type="text" name="javoblar_varaqasi" value="{{ old('javoblar_varaqasi', $admissionData?->javoblar_varaqasi ?? '') }}"
-                                                           class="qabul-input" placeholder="1234234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
-                                                </div>
-                                                <div>
-                                                    <label class="qabul-label">Ta'lim tili</label>
-                                                    <select name="talim_tili" class="qabul-input">
-                                                        <option value="">Tanlang...</option>
-                                                        @foreach(["O'zbekcha","Ruscha","Inglizcha"] as $tl)
-                                                        <option value="{{ $tl }}" {{ old('talim_tili', $admissionData?->talim_tili) === $tl ? 'selected' : '' }}>{{ $tl }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="qabul-label">Imtihon alifbosi</label>
-                                                    <select name="imtihon_alifbosi" class="qabul-input">
-                                                        <option value="">Tanlang...</option>
-                                                        @foreach(['Lotin','Kiril'] as $ia)
-                                                        <option value="{{ $ia }}" {{ old('imtihon_alifbosi', $admissionData?->imtihon_alifbosi) === $ia ? 'selected' : '' }}>{{ $ia }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="qabul-label">To'plagan ball</label>
-                                                    <input type="text" name="toplagan_ball" value="{{ old('toplagan_ball', $admissionData?->toplagan_ball ?? '') }}"
-                                                           class="qabul-input" placeholder="Ball" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
-                                                </div>
-                                                <div>
-                                                    <label class="qabul-label">Tavsiya turi</label>
-                                                    <select name="tavsiya_turi" class="qabul-input">
-                                                        <option value="">Tanlang...</option>
-                                                        @php
-                                                        $tavsiyalar = [
-                                                            "To'lov-kontrakti asosida talabalikka tavsiya etildi",
-                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
-                                                            "Davlat granti asosida talabalikka tavsiya etildi",
-                                                            "Davlat grantlari asosida qo'shimcha qabul (Kambag'al oila reyestriga kiritilgan oilalarning farzandlari)",
-                                                            "Nogironligi bo'lgan shaxslarni uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
-                                                            "Mutaxassisligi bo'yicha kamida besh yil mehnat stajiga ega bo'lgan xotin-qizlar tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
-                                                            "Xotin-qizlarni qo'llab-quvvatlash maqsadida berilgan tavsiyanoma bilan oliy ta'lim muassasalariga ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
-                                                            "O'zbekiston Respublikasi ichki ishlar organlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
-                                                            "O'zbekiston Respublikasi Qurolli Kuchlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
-                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
-                                                            "O'zbekiston Respublikasi Bojxona xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
-                                                            "\"Mehribonlik uyi\" va Bolalar shaharchasining bitiruvchilari bo'lgan chin yetim abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
-                                                            "Tabaqalashtirilgan to'lov kontrakt asosida",
-                                                        ];
-                                                        @endphp
-                                                        @foreach($tavsiyalar as $tv)
-                                                        <option value="{{ $tv }}" {{ old('tavsiya_turi', $admissionData?->tavsiya_turi) === $tv ? 'selected' : '' }}>{{ $tv }}</option>
-                                                        @endforeach
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            @php $ruxsatFile = $studentFiles->firstWhere('name', 'Abituriyent ruxsatnomasi (PDF)'); $dtmFile = $studentFiles->firstWhere('name', 'DTM javob varaqasi (PDF)'); @endphp
-                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
-                                                <div>
-                                                    <label class="qabul-label">Abituriyent ruxsatnomasi (PDF)</label>
-                                                    <div class="rounded-lg border p-3 {{ $ruxsatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
-                                                        @if($ruxsatFile)
-                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($ruxsatFile->size / 1024, 1) }} KB</span>
-                                                            <a href="{{ route('admin.students.files.download', [$student, $ruxsatFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
-                                                            <button type="button" onclick="qabulDelete({{ $ruxsatFile->id }},'Ruxsatnoma')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
-                                                        </div>
-                                                        @else
-                                                        <input type="file" name="files[Abituriyent ruxsatnomasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <label class="qabul-label">DTM javob varaqasi (PDF)</label>
-                                                    <div class="rounded-lg border p-3 {{ $dtmFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
-                                                        @if($dtmFile)
-                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($dtmFile->size / 1024, 1) }} KB</span>
-                                                            <a href="{{ route('admin.students.files.download', [$student, $dtmFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
-                                                            <button type="button" onclick="qabulDelete({{ $dtmFile->id }},'DTM javob varaqasi')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
-                                                        </div>
-                                                        @else
-                                                        <input type="file" name="files[DTM javob varaqasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     {{-- 4. Avvalgi ta'lim ma'lumotlari --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#10b981;">
@@ -816,32 +716,163 @@
                                         </div>
                                     </div>
 
-                                    {{-- 5. Til sertifikati --}}
-                                    @php $sertFile = $studentFiles->firstWhere('name', 'Til sertifikati'); @endphp
+                                    {{-- 4c. Qabul ma'lumotlari --}}
                                     <div class="qabul-card">
-                                        <div class="qabul-card-header" style="--accent:#8b5cf6;">
+                                        <div class="qabul-card-header" style="--accent:#7c3aed;">
                                             <span class="qabul-dot"></span>
-                                            <h5 class="qabul-card-title">Til sertifikati</h5>
+                                            <h5 class="qabul-card-title">Qabul ma'lumotlari</h5>
                                         </div>
                                         <div class="qabul-card-body">
                                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div>
-                                                    <label class="qabul-label">Til sertifikati mavjudmi?</label>
-                                                    <select name="sertifikat_turi" class="qabul-input" id="qabul_sert_select" onchange="toggleSertUpload()">
-                                                        <option value="Yo'q" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi ?? '') !== 'Ha' ? 'selected' : '' }}>Yo'q</option>
-                                                        <option value="Ha" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $sertFile ? 'selected' : '' }}>Ha</option>
+                                                    <label class="qabul-label">Abituriyent ID raqami</label>
+                                                    <input type="text" name="abituriyent_id" value="{{ old('abituriyent_id', $admissionData?->abituriyent_id ?? '') }}"
+                                                           class="qabul-input" placeholder="342234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Javoblar varaqasi raqami</label>
+                                                    <input type="text" name="javoblar_varaqasi" value="{{ old('javoblar_varaqasi', $admissionData?->javoblar_varaqasi ?? '') }}"
+                                                           class="qabul-input" placeholder="1234234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim tili</label>
+                                                    <select name="talim_tili" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(["O'zbekcha","Ruscha","Inglizcha"] as $tl)
+                                                        <option value="{{ $tl }}" {{ old('talim_tili', $admissionData?->talim_tili) === $tl ? 'selected' : '' }}>{{ $tl }}</option>
+                                                        @endforeach
                                                     </select>
                                                 </div>
-                                                <div id="qabul_sert_upload" style="{{ (old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $sertFile) ? '' : 'display:none;' }}">
-                                                    <label class="qabul-label">Sertifikat faylini yuklang</label>
-                                                    <div class="rounded-lg border p-3 {{ $sertFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
-                                                        @if($sertFile)
-                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($sertFile->size / 1024, 1) }} KB</span>
-                                                            <a href="{{ route('admin.students.files.download', [$student, $sertFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
-                                                            <button type="button" onclick="qabulDelete({{ $sertFile->id }},'Til sertifikati')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                <div>
+                                                    <label class="qabul-label">Imtihon alifbosi</label>
+                                                    <select name="imtihon_alifbosi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['Lotin','Kiril'] as $ia)
+                                                        <option value="{{ $ia }}" {{ old('imtihon_alifbosi', $admissionData?->imtihon_alifbosi) === $ia ? 'selected' : '' }}>{{ $ia }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">To'plagan ball</label>
+                                                    <input type="text" name="toplagan_ball" value="{{ old('toplagan_ball', $admissionData?->toplagan_ball ?? '') }}"
+                                                           class="qabul-input" placeholder="Ball" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Tavsiya turi</label>
+                                                    <select name="tavsiya_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @php
+                                                        $tavsiyalar = [
+                                                            "To'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Davlat grantlari asosida qo'shimcha qabul (Kambag'al oila reyestriga kiritilgan oilalarning farzandlari)",
+                                                            "Nogironligi bo'lgan shaxslarni uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Mutaxassisligi bo'yicha kamida besh yil mehnat stajiga ega bo'lgan xotin-qizlar tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Xotin-qizlarni qo'llab-quvvatlash maqsadida berilgan tavsiyanoma bilan oliy ta'lim muassasalariga ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi ichki ishlar organlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi Qurolli Kuchlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi Bojxona xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "\"Mehribonlik uyi\" va Bolalar shaharchasining bitiruvchilari bo'lgan chin yetim abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Tabaqalashtirilgan to'lov kontrakt asosida",
+                                                        ];
+                                                        @endphp
+                                                        @foreach($tavsiyalar as $tv)
+                                                        <option value="{{ $tv }}" {{ old('tavsiya_turi', $admissionData?->tavsiya_turi) === $tv ? 'selected' : '' }}>{{ $tv }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            @php $ruxsatFile = $studentFiles->firstWhere('name', 'Abituriyent ruxsatnomasi (PDF)'); $dtmFile = $studentFiles->firstWhere('name', 'DTM javob varaqasi (PDF)'); @endphp
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Abituriyent ruxsatnomasi (PDF)</label>
+                                                    <div class="rounded-lg border p-3 {{ $ruxsatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($ruxsatFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($ruxsatFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $ruxsatFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $ruxsatFile->id }},'Ruxsatnoma')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
                                                         </div>
                                                         @else
-                                                        <input type="file" name="files[Til sertifikati]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        <input type="file" name="files[Abituriyent ruxsatnomasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">DTM javob varaqasi (PDF)</label>
+                                                    <div class="rounded-lg border p-3 {{ $dtmFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($dtmFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($dtmFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $dtmFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $dtmFile->id }},'DTM javob varaqasi')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[DTM javob varaqasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- 5. Til sertifikatlari --}}
+                                    @php $milliySertFile = $studentFiles->firstWhere('name', 'Milliy sertifikat'); $chetSertFile = $studentFiles->firstWhere('name', 'Chet tili sertifikati'); @endphp
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#8b5cf6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Til sertifikatlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {{-- Milliy sertifikat --}}
+                                                <div>
+                                                    <label class="qabul-label">Milliy sertifikat mavjudmi?</label>
+                                                    <select name="sertifikat_turi" class="qabul-input" id="qabul_sert_select" onchange="toggleSertUpload()">
+                                                        <option value="Yo'q" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi) !== 'Ha' ? 'selected' : '' }}>Yo'q</option>
+                                                        <option value="Ha" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $milliySertFile ? 'selected' : '' }}>Ha</option>
+                                                    </select>
+                                                </div>
+                                                <div id="qabul_sert_upload" style="{{ (old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $milliySertFile) ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Milliy sertifikat faylini yuklang</label>
+                                                    <div class="rounded-lg border p-3 {{ $milliySertFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($milliySertFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($milliySertFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $milliySertFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $milliySertFile->id }},'Milliy sertifikat')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[Milliy sertifikat]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {{-- Chet tili sertifikati --}}
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Chet tili sertifikati</label>
+                                                    @php $chetTilVal = old('chet_til_sertifikat', $admissionData?->chet_til_sertifikat ?? 'Mavjud emas'); @endphp
+                                                    <select name="chet_til_sertifikat" class="qabul-input" id="qabul_chet_sert" onchange="toggleChetSert()">
+                                                        @foreach(['Mavjud emas','Milliy sertifikat','IELTS','TOEFL','DELF','DALF','Goethe-sertifikat','TOPIK','TORFL','JLPT','CEFR'] as $cs)
+                                                        <option value="{{ $cs }}" {{ $chetTilVal === $cs ? 'selected' : '' }}>{{ $cs }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div id="qabul_chet_ball_wrap" style="{{ $chetTilVal !== 'Mavjud emas' ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Ball</label>
+                                                    <input type="text" name="chet_til_ball" value="{{ old('chet_til_ball', $admissionData?->chet_til_ball ?? '') }}"
+                                                           class="qabul-input" placeholder="Ball" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
+                                                </div>
+                                                <div id="qabul_chet_file_wrap" style="{{ $chetTilVal !== 'Mavjud emas' ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Sertifikat fayli</label>
+                                                    <div class="rounded-lg border p-3 {{ $chetSertFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($chetSertFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($chetSertFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $chetSertFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $chetSertFile->id }},'Chet tili sertifikati')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[Chet tili sertifikati]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
                                                         @endif
                                                     </div>
                                                 </div>
@@ -919,7 +950,7 @@
                                     <div class="qabul-card qabul-save-card">
                                         <div class="flex items-center justify-between flex-wrap gap-3">
                                             <div class="flex items-center gap-3">
-                                                <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
+                                                <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-700 to-blue-500 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
                                                     Ma'lumotlarni saqlash
                                                 </button>
@@ -936,7 +967,6 @@
                                     $docTypes = [
                                         ['short' => 'Propiska', 'full' => 'Propiska (PDF)'],
                                         ['short' => 'Obyektivka', 'full' => 'Obyektivka'],
-                                        ['short' => 'Boshqa', 'full' => 'Boshqa'],
                                     ];
                                     $uploadedByName = $studentFiles->filter(fn($f) => in_array($f->name, array_column($docTypes, 'full')))->keyBy('name');
                                 @endphp
@@ -1088,11 +1118,20 @@
         f.submit();
     }
 
-    // Til sertifikati toggle
+    // Milliy sertifikat toggle
     function toggleSertUpload() {
         var sel = document.getElementById('qabul_sert_select');
         var wrap = document.getElementById('qabul_sert_upload');
         if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
+    }
+    // Chet tili sertifikati toggle
+    function toggleChetSert() {
+        var sel = document.getElementById('qabul_chet_sert');
+        var ballWrap = document.getElementById('qabul_chet_ball_wrap');
+        var fileWrap = document.getElementById('qabul_chet_file_wrap');
+        var show = sel && sel.value !== 'Mavjud emas';
+        if (ballWrap) ballWrap.style.display = show ? '' : 'none';
+        if (fileWrap) fileWrap.style.display = show ? '' : 'none';
     }
 
     // Oliy ma'lumot toggle

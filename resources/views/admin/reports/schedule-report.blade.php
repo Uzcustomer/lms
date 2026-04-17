@@ -147,17 +147,31 @@
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="faculty_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="faculty_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="specialty_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="level_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="semester_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="subject_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="group_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="planned_hours" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="scheduled_hours" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="ktr_hours" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="farq">Farq (ajrat.) <span class="sort-icon active">&#9660;</span></a><button type="button" class="col-filter-btn" data-col="farq" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
-                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="ktr_farq">Farq (KTR) <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="ktr_farq" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th><a href="#" class="sort-link" data-sort="faculty_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="farq">Farq (ajrat.) <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="ktr_farq">Farq (KTR) <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                    </tr>
+                                    <tr class="cf-filter-row">
+                                        <th></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="faculty_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="specialty_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="level_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="semester_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="subject_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="group_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="planned_hours"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="scheduled_hours"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="ktr_hours"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="farq"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="ktr_farq"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -510,7 +524,21 @@
         function updateFilterIcons() {
             $('.col-filter-btn').each(function() {
                 var col = $(this).data('col');
-                $(this).toggleClass('cf-active', !!columnFilters[col]);
+                var filter = columnFilters[col];
+                var $label = $(this).find('.cf-label');
+                if (!filter) {
+                    $(this).removeClass('cf-active');
+                    $label.text('Barchasi');
+                } else {
+                    $(this).addClass('cf-active');
+                    if (filter.size === 0) {
+                        $label.text('(tanlanmagan)');
+                    } else if (filter.size === 1) {
+                        $label.text([...filter][0] || '(bo\'sh)');
+                    } else {
+                        $label.text('(' + filter.size + ' tanlangan)');
+                    }
+                }
             });
         }
 
@@ -846,13 +874,16 @@
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
 
-        /* Ustun filtri (Excel uslubi) */
-        .th-with-filter { position: relative; padding-right: 26px !important; }
-        .col-filter-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; padding: 0; background: transparent; border: none; cursor: pointer; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; transition: all 0.15s; }
-        .col-filter-btn:hover { background: #dbeafe; color: #2b5ea7; }
-        .col-filter-btn svg { width: 12px; height: 12px; }
-        .col-filter-btn.cf-active { color: #2b5ea7; background: #dbeafe; }
-        .col-filter-btn.cf-active::after { content: ''; position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: #dc2626; border-radius: 50%; }
+        /* Ustun filtri (Excel uslubi) - sarlavha ostida katak shaklida */
+        .cf-filter-row th { padding: 4px 6px; background: #fff; border-bottom: 1px solid #cbd5e1; border-top: 1px solid #e2e8f0; }
+        .col-filter-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 60px; height: 28px; padding: 2px 8px; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; cursor: pointer; font-size: 11.5px; font-weight: 500; color: #1e293b; transition: all 0.15s; text-align: left; }
+        .col-filter-btn:hover { background: #eff6ff; border-color: #2b5ea7; }
+        .col-filter-btn svg { width: 14px; height: 14px; color: #64748b; flex-shrink: 0; }
+        .col-filter-btn:hover svg { color: #2b5ea7; }
+        .col-filter-btn .cf-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; font-weight: 500; }
+        .col-filter-btn.cf-active { background: linear-gradient(135deg, #dbeafe, #bfdbfe); border-color: #2b5ea7; color: #1e3a8a; font-weight: 700; }
+        .col-filter-btn.cf-active .cf-label { color: #1e3a8a; font-weight: 700; }
+        .col-filter-btn.cf-active svg { color: #2b5ea7; }
 
         .cf-popup { position: absolute; z-index: 999; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); min-width: 240px; max-width: 320px; padding: 8px; font-size: 12.5px; }
         .cf-head { padding: 2px 2px 6px; }

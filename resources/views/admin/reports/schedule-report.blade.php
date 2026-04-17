@@ -138,9 +138,9 @@
                                     <svg style="width:17px;height:17px;" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 8V3.5L18.5 9H14a1 1 0 0 1-1-1zM8.2 13l1.6 2.4L11.4 13h1.8l-2.4 3.5L13.4 20H11.6l-1.8-2.7L8 20H6.2l2.6-3.7L6.4 13h1.8z"/></svg>
                                     Excel (umumiy)
                                 </button>
-                                <button type="button" id="btn-excel-lessons" class="btn-excel-lessons" onclick="downloadExcel('excel_lessons')" disabled title="Darslar bo'yicha batafsil Excel">
+                                <button type="button" id="btn-excel-lessons" class="btn-excel-lessons" onclick="downloadExcel('excel_lessons')" disabled title="Batafsil Excel: har bir dars o'z ustuni bilan">
                                     <svg style="width:17px;height:17px;" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 8V3.5L18.5 9H14a1 1 0 0 1-1-1zM8.2 13l1.6 2.4L11.4 13h1.8l-2.4 3.5L13.4 20H11.6l-1.8-2.7L8 20H6.2l2.6-3.7L6.4 13h1.8z"/></svg>
-                                    Excel (darslar)
+                                    Excel (batafsil)
                                 </button>
                             </div>
                         </div>
@@ -248,6 +248,20 @@
             };
             var tt = $('#training_types').val();
             if (tt && tt.length > 0) params.training_types = tt;
+
+            // Ustun filtrlari - backendga yuborish (barcha sahifalarga ta'sir qilishi uchun)
+            var colFiltersObj = {};
+            var hasColFilter = false;
+            for (var col in columnFilters) {
+                var allowed = columnFilters[col];
+                if (allowed && allowed.size !== undefined) {
+                    var arr = [];
+                    allowed.forEach(function(v) { arr.push(v); });
+                    colFiltersObj[col] = arr;
+                    hasColFilter = true;
+                }
+            }
+            if (hasColFilter) params.col_filters = colFiltersObj;
             return params;
         }
 
@@ -311,6 +325,11 @@
                     var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+
+                    // Server qaytargan ustun qiymatlarini saqlash (filtr dropdown'lari uchun)
+                    if (res.column_values) {
+                        serverColumnValues = res.column_values;
+                    }
 
                     if (!res.data || res.data.length === 0) {
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
@@ -382,7 +401,6 @@
                 html += '</tr>';
             }
             $('#table-body').html(html);
-            applyColumnFilters();
         }
 
         function openKtrCompareModal(e, csId, groupId) {
@@ -466,7 +484,8 @@
             }
 
             (res.lessons || []).forEach(function(wk) {
-                html += '<tr><td class="wk-col">' + wk.lesson + '-dars</td>';
+                var darsLabel = wk.lesson + '-dars' + (wk.date ? ' <span class="dars-date">(' + wk.date + ')</span>' : '');
+                html += '<tr><td class="wk-col">' + darsLabel + '</td>';
                 typeCodes.forEach(function(code, idx) {
                     var c = idx % 6;
                     var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, diff:0};
@@ -507,21 +526,13 @@
         var columnFilters = {};
 
         function applyColumnFilters() {
-            $('#table-body tr').each(function() {
-                var $row = $(this);
-                var show = true;
-                for (var col in columnFilters) {
-                    var allowed = columnFilters[col];
-                    var cellText = ($row.find('[data-filter-col="' + col + '"]').text() || '').trim();
-                    if (!allowed.has(cellText)) {
-                        show = false;
-                        break;
-                    }
-                }
-                $row.toggle(show);
-            });
+            // Server-side filtr: hisobotni qayta yuklash
             updateFilterIcons();
+            loadReport(1);
         }
+
+        // Backend qaytargan ustun qiymatlari (filtrgacha) - dropdown'lar uchun
+        var serverColumnValues = {};
 
         function updateFilterIcons() {
             $('.col-filter-btn').each(function() {
@@ -547,30 +558,14 @@
         function openColFilter(e, col) {
             e.preventDefault();
             e.stopPropagation();
-            // Boshqa ustun filtrlari hisobga olgan holda (shu ustundan tashqari) ko'rinadigan qatorlarning noyob qiymatlari
-            var values = {};
-            $('#table-body tr').each(function() {
-                var $row = $(this);
-                // Shu ustundan tashqari boshqa filtrlarga mos keladigan qatorlarni oladi
-                var otherOk = true;
-                for (var c in columnFilters) {
-                    if (c === col) continue;
-                    var allowed = columnFilters[c];
-                    var txt = ($row.find('[data-filter-col="' + c + '"]').text() || '').trim();
-                    if (!allowed.has(txt)) { otherOk = false; break; }
-                }
-                if (!otherOk) return;
-                var v = ($row.find('[data-filter-col="' + col + '"]').text() || '').trim();
-                values[v] = (values[v] || 0) + 1;
-            });
-
-            var keys = Object.keys(values);
+            // Server qaytargan barcha sahifalardagi noyob qiymatlardan foydalanamiz
+            var keys = (serverColumnValues[col] || []).slice();
             // Son ko'rinishida bo'lsa raqam tartibida
-            var allNum = keys.length > 0 && keys.every(function(k) { return k === '' || /^-?\d+(\.\d+)?$/.test(k.replace(',', '.')); });
+            var allNum = keys.length > 0 && keys.every(function(k) { return k === '' || /^-?\d+(\.\d+)?$/.test(String(k).replace(',', '.')); });
             if (allNum) {
-                keys.sort(function(a, b) { return parseFloat(a.replace(',', '.')) - parseFloat(b.replace(',', '.')); });
+                keys.sort(function(a, b) { return parseFloat(String(a).replace(',', '.')) - parseFloat(String(b).replace(',', '.')); });
             } else {
-                keys.sort(function(a, b) { return a.localeCompare(b, 'uz'); });
+                keys.sort(function(a, b) { return String(a).localeCompare(String(b), 'uz'); });
             }
 
             var active = columnFilters[col] || null;
@@ -579,9 +574,10 @@
             html += '<div class="cf-actions"><a href="#" class="cf-select-all">Barchasini belgilash</a><a href="#" class="cf-clear-all">Tozalash</a></div>';
             html += '<div class="cf-list">';
             keys.forEach(function(v) {
-                var checked = (active === null || active.has(v)) ? 'checked' : '';
-                var display = v === '' ? '(bo\'sh)' : v;
-                html += '<label class="cf-item"><input type="checkbox" value="' + esc(v).replace(/"/g,'&quot;') + '" ' + checked + '><span>' + esc(display) + '</span><span class="cf-count">' + values[v] + '</span></label>';
+                var sv = String(v);
+                var checked = (active === null || active.has(sv)) ? 'checked' : '';
+                var display = sv === '' ? '(bo\'sh)' : sv;
+                html += '<label class="cf-item"><input type="checkbox" value="' + esc(sv).replace(/"/g,'&quot;') + '" ' + checked + '><span>' + esc(display) + '</span></label>';
             });
             html += '</div>';
             html += '<div class="cf-footer">';
@@ -925,6 +921,7 @@
         .ktr-cmp-table thead tr:last-child th.sub-head { padding: 6px 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; text-align: center; white-space: nowrap; }
         .ktr-cmp-table th.wk-col { background: linear-gradient(135deg, #1e3a5f, #2b5ea7); color: #fff; border-bottom: 1px solid #2b5ea7; }
         .ktr-cmp-table td.wk-col { background: #f8fafc; font-weight: 700; color: #1e3a5f; padding: 8px 10px; border-right: 1px solid #e2e8f0; text-align: center; white-space: nowrap; }
+        .dars-date { font-weight: 500; color: #64748b; font-size: 11px; }
         .ktr-cmp-table td.num-cell { padding: 7px 8px; text-align: center; font-weight: 600; color: #334155; border-bottom: 1px solid #f1f5f9; }
         .ktr-cmp-table tbody tr:hover td.num-cell { filter: brightness(0.96); }
         .ktr-cmp-table tbody tr:hover td.wk-col { background: #dbeafe; }

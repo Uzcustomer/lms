@@ -666,6 +666,56 @@
                                             </div>
                                         </div>
                                     </div>
+                                    {{-- 4b. Hozirgi Oliy ta'lim muassasasi ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#0369a1;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Hozirgi Oliy ta'lim muassasasi ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">OTM nomi</label>
+                                                    <input type="text" value="Toshkent davlat tibbiyot universiteti Termiz filiali" class="qabul-input" style="background:#f0fdf4; border-color:#86efac; color:#166534;" readonly>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim turi</label>
+                                                    <select name="hozirgi_talim_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['Bakalavr','Magistr'] as $ht)
+                                                        <option value="{{ $ht }}" {{ old('hozirgi_talim_turi', $admissionData?->hozirgi_talim_turi) === $ht ? 'selected' : '' }}>{{ $ht }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim shakli</label>
+                                                    <select name="talim_shakli" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['Kunduzgi','Kechki','Sirtqi','Onlayn'] as $ts)
+                                                        <option value="{{ $ts }}" {{ old('talim_shakli', $admissionData?->talim_shakli) === $ts ? 'selected' : '' }}>{{ $ts }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Mutaxassislik</label>
+                                                    <select name="mutaxassislik" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @php
+                                                        $mutaxassisliklar = [
+                                                            'Davolash ishi','Farmatsiya','Fundamental tibbiyot','Pediatriya ishi','Stomatologiya','Tibbiy profilaktika ishi',
+                                                            'Davolash ishi (Termiz tumani)','Davolash ishi (Termiz shahri)','Davolash ishi (Angor tumani)','Davolash ishi (Bandixon tumani)','Davolash ishi (Boysun tumani)','Davolash ishi (Denov tumani)','Davolash ishi (Jarqo\'rg\'on tumani)','Davolash ishi (Oltinsoy tumani)','Davolash ishi (Qiziriq tumani)','Davolash ishi (Sherobod tumani)','Davolash ishi (Qumqo\'rg\'on tumani)','Davolash ishi (Sho\'rchi tumani)','Davolash ishi (Uzun tumani)','Davolash ishi (Sariosiyo tumani)','Davolash ishi (Muzrabod tumani)','Davolash ishi (Chiroqchi tumani)','Davolash ishi (Qarshi tumani)','Davolash ishi (Qarshi shahri)','Davolash ishi (Dehqonobod tumani)','Davolash ishi (G\'uzor tumani)','Davolash ishi (Kasbi tumani)','Davolash ishi (Kitob tumani)','Davolash ishi (Ko\'kdala tumani)','Davolash ishi (Koson tumani)','Davolash ishi (Mirishkor tumani)','Davolash ishi (Muborak tumani)','Davolash ishi (Nishon tumani)','Davolash ishi (Qamashi tumani)','Davolash ishi (Shahrisabz tumani)','Davolash ishi (Yakkabog\' tumani)',
+                                                            'Pediatriya ishi (Angor tumani)','Pediatriya ishi (Bandixon tumani)','Pediatriya ishi (Boysun tumani)','Pediatriya ishi (Denov tumani)','Pediatriya ishi (Denov tumani)','Pediatriya ishi (Jarqo\'rg\'on tumani)','Pediatriya ishi (Muzrabod tumani)','Pediatriya ishi (Oltinsoy tumani)','Pediatriya ishi (Qiziriq tumani)','Pediatriya ishi (Qumqo\'rg\'on tumani)','Pediatriya ishi (Sariosiyo tumani)','Pediatriya ishi (Sherobod tumani)','Pediatriya ishi (Sho\'rchi tumani)','Pediatriya ishi (Termiz shahri)','Pediatriya ishi (Termiz tumani)','Pediatriya ishi (Uzun tumani)',
+                                                        ];
+                                                        @endphp
+                                                        @foreach($mutaxassisliklar as $mx)
+                                                        <option value="{{ $mx }}" {{ old('mutaxassislik', $admissionData?->mutaxassislik) === $mx ? 'selected' : '' }}>{{ $mx }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {{-- 5. Til sertifikati --}}
                                     @php $sertFile = $studentFiles->firstWhere('name', 'Til sertifikati'); @endphp
                                     <div class="qabul-card">

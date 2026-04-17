@@ -17,7 +17,7 @@ class StudentAdmissionData extends Model
         'yashash_davlat', 'yashash_viloyat', 'yashash_tuman', 'yashash_manzil',
         'vaqtinchalik_manzil',
         'passport_seriya', 'passport_raqam', 'passport_sana', 'passport_joy',
-        'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik',
+        'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik', 'hozirgi_talim_turi',
         'toplagan_ball', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',
         'talim_davlat', 'talim_viloyat', 'talim_tuman', 'oqigan_yili_boshi', 'oqigan_yili_tugashi',
         'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat',

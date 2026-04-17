@@ -81,10 +81,10 @@ class AbsenceExcuseController extends Controller
             ->pluck('subject_name')
             ->unique()
             ->toArray();
-        $missedSubjectNames = array_unique(array_merge(
+        $missedSubjectNames = array_unique(array_map('mb_strtolower', array_merge(
             $missedAssessments->pluck('subject_name')->unique()->toArray(),
             $scheduledSubjectNames
-        ));
+        )));
 
         // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan nazoratlar
         // Faqat qoldirilgan fanlardagi testlar ko'rsatiladi
@@ -100,12 +100,8 @@ class AbsenceExcuseController extends Controller
                 $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
 
                 foreach ($makeupAssessments as $ma) {
-                    // OSKI va TEST barcha fanlar uchun ko'rsatiladi (ular umumiy imtihon),
-                    // JN/MT esa faqat sababli oralig'ida darsi bo'lgan fanlarga cheklanadi
-                    if (in_array($ma['assessment_type'], ['jn', 'mt'])) {
-                        if (!in_array($ma['subject_name'], $missedSubjectNames)) {
-                            continue;
-                        }
+                    if (!in_array(mb_strtolower($ma['subject_name']), $missedSubjectNames)) {
+                        continue;
                     }
                     $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
                     if (!in_array($key, $existingKeys)) {

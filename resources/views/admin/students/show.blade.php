@@ -370,6 +370,12 @@
                             {{-- TAB 6: QABUL --}}
                             @if($canUploadFiles)
                             <div id="ptab-content-qabul" class="sp-content" style="display:none;">
+                                @if(session('success'))
+                                <div class="mb-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold">{{ session('success') }}</div>
+                                @endif
+                                @if(session('error'))
+                                <div class="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">{{ session('error') }}</div>
+                                @endif
                                 <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form" enctype="multipart/form-data" id="qabul-main-form" novalidate>
                                     @csrf
 

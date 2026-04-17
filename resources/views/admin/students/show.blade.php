@@ -88,7 +88,7 @@
                                 <button type="button" onclick="switchProfileTab('tashkiliy')" id="ptab-tashkiliy" class="sp-tab">Tashkiliy</button>
                                 <button type="button" onclick="switchProfileTab('manzil')" id="ptab-manzil" class="sp-tab">Manzil</button>
                                 <button type="button" onclick="switchProfileTab('fayllar')" id="ptab-fayllar" class="sp-tab">Fayllar</button>
-                                @if($canUploadFiles)<button type="button" onclick="switchProfileTab('qabul')" id="ptab-qabul" class="sp-tab">Qabul</button>@endif
+                                @if($canUploadFiles)<button type="button" onclick="switchProfileTab('qabul')" id="ptab-qabul" class="sp-tab">Umumiy ma'lumotlar</button>@endif
                             </div>
 
                             {{-- TAB 1: SHAXSIY --}}
@@ -532,7 +532,7 @@
                                     <div class="qabul-card qabul-save-card">
                                         <div class="flex items-center justify-between flex-wrap gap-3">
                                             <div class="flex items-center gap-3">
-                                                <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-700 to-blue-500 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
+                                                <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
                                                     Ma'lumotlarni saqlash
                                                 </button>
@@ -627,6 +627,27 @@
                                             </div>
                                     </div>
                                 </div>
+
+                                {{-- Tozalash tugmasi — faqat ma'lumot mavjud bo'lganda --}}
+                                @if($admissionData || $studentFiles->count() > 0)
+                                <div class="qabul-card" style="background:linear-gradient(135deg,#fef2f2,#fff1f2); border-color:#fecaca;">
+                                    <div class="flex items-center justify-between flex-wrap gap-3 p-4">
+                                        <div>
+                                            <p class="text-sm font-bold text-red-700">Barcha qabul ma'lumotlarini tozalash</p>
+                                            <p class="text-[11px] text-red-400 mt-0.5">Form ma'lumotlari, yuklangan hujjatlar — hammasi o'chiriladi</p>
+                                        </div>
+                                        <form action="{{ route('admin.students.admission-data.clear', $student) }}" method="POST"
+                                              onsubmit="return confirm('DIQQAT! Barcha qabul ma\'lumotlari va yuklangan hujjatlar butunlay o\'chiriladi. Davom etasizmi?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="inline-flex items-center gap-2 px-5 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 transition shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                                                Tozalash
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                @endif
 
                             </div>{{-- /qabul tab --}}
                             @endif

@@ -551,6 +551,34 @@ class StudentController extends Controller
         return back()->with('success', "Fayl o'chirildi.");
     }
 
+    public function clearAdmissionData(Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda tozalash huquqi yo'q.");
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+
+        $files = \App\Models\StudentFile::where('student_id', $student->id)->get();
+        foreach ($files as $file) {
+            $disk->delete($file->path);
+            $file->delete();
+        }
+
+        $disk->deleteDirectory('student-files/' . $student->id);
+
+        \App\Models\StudentAdmissionData::where('student_id', $student->id)->delete();
+
+        return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.");
+    }
+
     public function getCurricula(Request $request)
     {
         $year = $request->input('year');

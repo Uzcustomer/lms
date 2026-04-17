@@ -142,6 +142,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/students/{student}/admission-data', [AdminStudentController::class, 'saveAdmissionData'])->name('students.admission-data.save');
         Route::post('/students/{student}/admission-files', [AdminStudentController::class, 'uploadAdmissionFile'])->name('students.admission-files.upload');
         Route::delete('/students/{student}/admission-files/{file}', [AdminStudentController::class, 'deleteAdmissionFile'])->name('students.admission-files.delete');
+        Route::delete('/students/{student}/admission-data/clear', [AdminStudentController::class, 'clearAdmissionData'])->name('students.admission-data.clear');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');

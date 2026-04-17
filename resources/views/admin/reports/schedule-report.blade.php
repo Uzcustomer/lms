@@ -421,12 +421,16 @@
             var html = '<div style="overflow-x:auto;">';
             html += '<table class="ktr-cmp-table"><thead>';
             html += '<tr><th rowspan="2" class="wk-col">Hafta</th>';
-            typeCodes.forEach(function(code) {
-                html += '<th colspan="3" class="tt-col-head">' + esc(types[code].name) + '</th>';
+            typeCodes.forEach(function(code, idx) {
+                var c = idx % 6;
+                html += '<th colspan="3" class="tt-col-head tt-head-' + c + '">' + esc(types[code].name) + '</th>';
             });
             html += '</tr><tr>';
-            typeCodes.forEach(function() {
-                html += '<th class="sub-head">HEMIS</th><th class="sub-head">KTR</th><th class="sub-head">Farq</th>';
+            typeCodes.forEach(function(code, idx) {
+                var c = idx % 6;
+                html += '<th class="sub-head tt-sub-' + c + '">HEMIS</th>';
+                html += '<th class="sub-head tt-sub-' + c + '">KTR</th>';
+                html += '<th class="sub-head tt-sub-' + c + '">Farq</th>';
             });
             html += '</tr></thead><tbody>';
 
@@ -435,26 +439,28 @@
 
             (res.weeks || []).forEach(function(wk) {
                 html += '<tr><td class="wk-col">' + wk.week + '-hafta</td>';
-                typeCodes.forEach(function(code) {
+                typeCodes.forEach(function(code, idx) {
+                    var c = idx % 6;
                     var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, diff:0};
                     totalHemis[code] += (cell.hemis || 0);
                     totalKtr[code] += (cell.ktr || 0);
                     var diff = cell.diff;
                     var diffCls = diff === 0 ? 'diff-zero' : (diff > 0 ? 'diff-pos' : 'diff-neg');
-                    html += '<td class="num-cell">' + (cell.hemis || 0) + '</td>';
-                    html += '<td class="num-cell">' + (cell.ktr || 0) + '</td>';
-                    html += '<td class="num-cell ' + diffCls + '">' + (diff > 0 ? '+' + diff : diff) + '</td>';
+                    html += '<td class="num-cell tt-body-' + c + '">' + (cell.hemis || 0) + '</td>';
+                    html += '<td class="num-cell tt-body-' + c + '">' + (cell.ktr || 0) + '</td>';
+                    html += '<td class="num-cell tt-body-' + c + ' ' + diffCls + '">' + (diff > 0 ? '+' + diff : diff) + '</td>';
                 });
                 html += '</tr>';
             });
 
             html += '</tbody><tfoot><tr><td class="wk-col">Jami</td>';
-            typeCodes.forEach(function(code) {
+            typeCodes.forEach(function(code, idx) {
+                var c = idx % 6;
                 var d = totalKtr[code] - totalHemis[code];
                 var diffCls = d === 0 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
-                html += '<td class="num-cell">' + totalHemis[code] + '</td>';
-                html += '<td class="num-cell">' + totalKtr[code] + '</td>';
-                html += '<td class="num-cell ' + diffCls + '">' + (d > 0 ? '+' + d : d) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + totalHemis[code] + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + totalKtr[code] + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + ' ' + diffCls + '">' + (d > 0 ? '+' + d : d) + '</td>';
             });
             html += '</tr></tfoot></table></div>';
             html += '<div style="padding:10px 16px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11.5px;color:#64748b;display:flex;gap:14px;flex-wrap:wrap;">' +
@@ -688,21 +694,51 @@
         .kcmp-modal-body { flex: 1; overflow: auto; }
 
         .ktr-cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
-        .ktr-cmp-table thead tr:first-child th { background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #4c1d95; padding: 10px 8px; font-size: 12px; font-weight: 700; border-bottom: 1px solid #c4b5fd; text-align: center; }
-        .ktr-cmp-table thead tr:last-child th.sub-head { background: #f5f3ff; color: #6d28d9; padding: 6px 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #ddd6fe; text-align: center; white-space: nowrap; }
+        .ktr-cmp-table thead tr:first-child th { padding: 10px 8px; font-size: 12px; font-weight: 700; text-align: center; }
+        .ktr-cmp-table thead tr:last-child th.sub-head { padding: 6px 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; text-align: center; white-space: nowrap; }
         .ktr-cmp-table th.wk-col { background: linear-gradient(135deg, #1e3a5f, #2b5ea7); color: #fff; border-bottom: 1px solid #2b5ea7; }
         .ktr-cmp-table td.wk-col { background: #f8fafc; font-weight: 700; color: #1e3a5f; padding: 8px 10px; border-right: 1px solid #e2e8f0; text-align: center; white-space: nowrap; }
         .ktr-cmp-table td.num-cell { padding: 7px 8px; text-align: center; font-weight: 600; color: #334155; border-bottom: 1px solid #f1f5f9; }
-        .ktr-cmp-table tbody tr:hover td { background: #eff6ff; }
+        .ktr-cmp-table tbody tr:hover td.num-cell { filter: brightness(0.96); }
         .ktr-cmp-table tbody tr:hover td.wk-col { background: #dbeafe; }
         .ktr-cmp-table td.diff-zero { color: #16a34a; }
-        .ktr-cmp-table td.diff-pos { color: #d97706; background: #fffbeb; }
-        .ktr-cmp-table td.diff-neg { color: #dc2626; background: #fef2f2; }
-        .ktr-cmp-table tfoot td { background: #f1f5f9; padding: 10px 8px; font-weight: 800; border-top: 2px solid #cbd5e1; text-align: center; }
+        .ktr-cmp-table td.diff-pos { color: #d97706; background: #fffbeb !important; }
+        .ktr-cmp-table td.diff-neg { color: #dc2626; background: #fef2f2 !important; }
+        .ktr-cmp-table tfoot td { padding: 10px 8px; font-weight: 800; border-top: 2px solid #cbd5e1; text-align: center; }
         .ktr-cmp-table tfoot td.wk-col { background: #1e3a5f; color: #fff; }
-        .ktr-cmp-table th.tt-col-head { border-left: 1px solid #c4b5fd; }
-        .ktr-cmp-table td.num-cell:nth-child(3n-1) { border-right: 1px solid #f1f5f9; }
-        .ktr-cmp-table td.num-cell:nth-child(3n+1):not(:first-child) { border-left: 1px solid #e2e8f0; }
+        .ktr-cmp-table th.tt-col-head, .ktr-cmp-table td.num-cell:nth-child(3n+2) { border-left: 2px solid #cbd5e1; }
+        .ktr-cmp-table tfoot td.num-cell:nth-child(3n+2) { border-left: 2px solid #cbd5e1; }
+
+        /* Mashg'ulot turlari uchun ranglar */
+        .tt-head-0 { background: linear-gradient(135deg, #bfdbfe, #93c5fd); color: #1e3a8a; border-bottom: 1px solid #93c5fd; }
+        .tt-sub-0  { background: #dbeafe; color: #1e40af; border-bottom: 2px solid #93c5fd; }
+        .tt-body-0 { background: #eff6ff; }
+        .tt-foot-0 { background: #dbeafe; color: #1e3a8a; }
+
+        .tt-head-1 { background: linear-gradient(135deg, #bbf7d0, #86efac); color: #064e3b; border-bottom: 1px solid #86efac; }
+        .tt-sub-1  { background: #d1fae5; color: #065f46; border-bottom: 2px solid #86efac; }
+        .tt-body-1 { background: #ecfdf5; }
+        .tt-foot-1 { background: #d1fae5; color: #064e3b; }
+
+        .tt-head-2 { background: linear-gradient(135deg, #fbcfe8, #f9a8d4); color: #831843; border-bottom: 1px solid #f9a8d4; }
+        .tt-sub-2  { background: #fce7f3; color: #9f1239; border-bottom: 2px solid #f9a8d4; }
+        .tt-body-2 { background: #fdf2f8; }
+        .tt-foot-2 { background: #fce7f3; color: #831843; }
+
+        .tt-head-3 { background: linear-gradient(135deg, #fed7aa, #fdba74); color: #7c2d12; border-bottom: 1px solid #fdba74; }
+        .tt-sub-3  { background: #ffedd5; color: #9a3412; border-bottom: 2px solid #fdba74; }
+        .tt-body-3 { background: #fff7ed; }
+        .tt-foot-3 { background: #ffedd5; color: #7c2d12; }
+
+        .tt-head-4 { background: linear-gradient(135deg, #c7d2fe, #a5b4fc); color: #312e81; border-bottom: 1px solid #a5b4fc; }
+        .tt-sub-4  { background: #e0e7ff; color: #3730a3; border-bottom: 2px solid #a5b4fc; }
+        .tt-body-4 { background: #eef2ff; }
+        .tt-foot-4 { background: #e0e7ff; color: #312e81; }
+
+        .tt-head-5 { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); color: #1e293b; border-bottom: 1px solid #cbd5e1; }
+        .tt-sub-5  { background: #e2e8f0; color: #334155; border-bottom: 2px solid #cbd5e1; }
+        .tt-body-5 { background: #f8fafc; }
+        .tt-foot-5 { background: #e2e8f0; color: #1e293b; }
 
         .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
     </style>

@@ -1642,19 +1642,26 @@ class ReportController extends Controller
                 return response()->json(['error' => 'Fan topilmadi'], 404);
             }
 
-            // Fan dars turlari (subject_details dan)
+            // Mustaqil ta'lim turlarini aniqlovchi yordamchi
+            $isMustaqil = function ($name) {
+                $normalized = preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower((string) $name));
+                return str_contains($normalized, 'mustaqil');
+            };
+
+            // Fan dars turlari (subject_details dan) - mustaqil ta'limdan tashqari
             $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
             $trainingTypes = [];
             if (is_array($details)) {
                 foreach ($details as $d) {
                     $code = (string) ($d['trainingType']['code'] ?? '');
                     $name = $d['trainingType']['name'] ?? '';
-                    if ($code !== '') {
-                        $trainingTypes[$code] = [
-                            'name' => $name,
-                            'planned_hours' => (int) ($d['academic_load'] ?? 0),
-                        ];
+                    if ($code === '' || $isMustaqil($name)) {
+                        continue;
                     }
+                    $trainingTypes[$code] = [
+                        'name' => $name,
+                        'planned_hours' => (int) ($d['academic_load'] ?? 0),
+                    ];
                 }
             }
 
@@ -1709,10 +1716,13 @@ class ReportController extends Controller
                 if ($weekIdx === null) {
                     continue;
                 }
+                $code = (string) $row->training_type_code;
+                if ($isMustaqil($row->training_type_name ?? $code)) {
+                    continue;
+                }
                 $start = strtotime($row->lesson_pair_start_time);
                 $end = strtotime($row->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
-                $code = (string) $row->training_type_code;
                 $hemisWeeks[$weekIdx][$code] = ($hemisWeeks[$weekIdx][$code] ?? 0) + $hours;
 
                 if (!isset($trainingTypes[$code])) {
@@ -1741,13 +1751,17 @@ class ReportController extends Controller
                                 $wIdx = (int) $w;
                                 foreach ($weekData as $code => $hours) {
                                     $codeStr = (string) $code;
-                                    $ktrWeeks[$wIdx][$codeStr] = (int) $hours;
+                                    // KTR yangi training turini qo'shmasin (mustaqil bo'lsa) - subject_details da borligini tekshiramiz
                                     if (!isset($trainingTypes[$codeStr])) {
+                                        if ($isMustaqil($codeStr)) {
+                                            continue;
+                                        }
                                         $trainingTypes[$codeStr] = [
                                             'name' => $codeStr,
                                             'planned_hours' => 0,
                                         ];
                                     }
+                                    $ktrWeeks[$wIdx][$codeStr] = (int) $hours;
                                 }
                             }
                         }

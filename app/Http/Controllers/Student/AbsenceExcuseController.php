@@ -100,9 +100,12 @@ class AbsenceExcuseController extends Controller
                 $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
 
                 foreach ($makeupAssessments as $ma) {
-                    // Faqat qoldirilgan kunlardagi fanlarga tegishli testlarni qo'shish
-                    if (!in_array($ma['subject_name'], $missedSubjectNames)) {
-                        continue;
+                    // OSKI va TEST barcha fanlar uchun ko'rsatiladi (ular umumiy imtihon),
+                    // JN/MT esa faqat sababli oralig'ida darsi bo'lgan fanlarga cheklanadi
+                    if (in_array($ma['assessment_type'], ['jn', 'mt'])) {
+                        if (!in_array($ma['subject_name'], $missedSubjectNames)) {
+                            continue;
+                        }
                     }
                     $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
                     if (!in_array($key, $existingKeys)) {

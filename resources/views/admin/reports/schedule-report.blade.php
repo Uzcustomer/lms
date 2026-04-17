@@ -147,31 +147,17 @@
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th><a href="#" class="sort-link" data-sort="faculty_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="farq">Farq (ajrat.) <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="ktr_farq">Farq (KTR) <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                    </tr>
-                                    <tr class="col-filter-row">
-                                        <th></th>
-                                        <th><input type="text" class="col-filter" data-col="faculty_name" placeholder="Filtr..." /></th>
-                                        <th><input type="text" class="col-filter" data-col="specialty_name" placeholder="Filtr..." /></th>
-                                        <th><input type="text" class="col-filter" data-col="level_name" placeholder="Filtr..." /></th>
-                                        <th><input type="text" class="col-filter" data-col="semester_name" placeholder="Filtr..." /></th>
-                                        <th><input type="text" class="col-filter" data-col="subject_name" placeholder="Filtr..." /></th>
-                                        <th><input type="text" class="col-filter" data-col="group_name" placeholder="Filtr..." /></th>
-                                        <th><input type="text" class="col-filter col-filter-num" data-col="planned_hours" placeholder="=,>,<" /></th>
-                                        <th><input type="text" class="col-filter col-filter-num" data-col="scheduled_hours" placeholder="=,>,<" /></th>
-                                        <th><input type="text" class="col-filter col-filter-num" data-col="ktr_hours" placeholder="=,>,<" /></th>
-                                        <th><input type="text" class="col-filter col-filter-num" data-col="farq" placeholder="=,>,<" /></th>
-                                        <th><input type="text" class="col-filter col-filter-num" data-col="ktr_farq" placeholder="=,>,<" /></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="faculty_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="faculty_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="specialty_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="level_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="semester_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="subject_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="group_name" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="planned_hours" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="scheduled_hours" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="ktr_hours" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="farq">Farq (ajrat.) <span class="sort-icon active">&#9660;</span></a><button type="button" class="col-filter-btn" data-col="farq" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
+                                        <th class="th-with-filter"><a href="#" class="sort-link" data-sort="ktr_farq">Farq (KTR) <span class="sort-icon">&#9650;&#9660;</span></a><button type="button" class="col-filter-btn" data-col="ktr_farq" title="Filtr"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg></button></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -183,6 +169,9 @@
             </div>
         </div>
     </div>
+
+    <!-- Ustun filtri popup (Excel uslubi) -->
+    <div id="col-filter-popup" class="cf-popup" style="display:none;"></div>
 
     <!-- KTR vs HEMIS solishtirish modali -->
     <div id="ktr-compare-modal-overlay" class="kcmp-overlay" style="display:none;" onclick="closeKtrCompareModal(event)">
@@ -497,49 +486,100 @@
             $('#ktr-compare-modal-body').html(html);
         }
 
+        // Ustun filtri holati: {columnName: Set<allowedValue>}
+        // Agar col kalit ma'lumotda bo'lmasa, u ustun bo'yicha filtr yo'q (barchasi ko'rinadi)
+        var columnFilters = {};
+
         function applyColumnFilters() {
-            var filters = {};
-            $('.col-filter').each(function() {
-                var col = $(this).data('col');
-                var val = ($(this).val() || '').trim().toLowerCase();
-                if (val !== '') filters[col] = val;
-            });
-
-            function matchNumeric(filterStr, value) {
-                // Faqat sonlar: =5, >5, <5, >=5, <=5, 5 (teng)
-                var m = filterStr.match(/^\s*(=|>=|<=|>|<)?\s*(-?\d+(?:[.,]\d+)?)\s*$/);
-                if (!m) return null;
-                var op = m[1] || '=';
-                var num = parseFloat(m[2].replace(',', '.'));
-                var v = parseFloat(value);
-                if (isNaN(v)) return false;
-                switch (op) {
-                    case '>': return v > num;
-                    case '<': return v < num;
-                    case '>=': return v >= num;
-                    case '<=': return v <= num;
-                    default: return Math.abs(v - num) < 0.01;
-                }
-            }
-
             $('#table-body tr').each(function() {
                 var $row = $(this);
                 var show = true;
-                for (var col in filters) {
-                    var fv = filters[col];
-                    var cell = $row.find('[data-filter-col="' + col + '"]');
-                    var cellText = (cell.text() || '').trim().toLowerCase();
-                    var numMatch = matchNumeric(fv, cellText);
-                    var ok;
-                    if (numMatch !== null) {
-                        ok = numMatch;
-                    } else {
-                        ok = cellText.indexOf(fv) !== -1;
+                for (var col in columnFilters) {
+                    var allowed = columnFilters[col];
+                    var cellText = ($row.find('[data-filter-col="' + col + '"]').text() || '').trim();
+                    if (!allowed.has(cellText)) {
+                        show = false;
+                        break;
                     }
-                    if (!ok) { show = false; break; }
                 }
                 $row.toggle(show);
             });
+            updateFilterIcons();
+        }
+
+        function updateFilterIcons() {
+            $('.col-filter-btn').each(function() {
+                var col = $(this).data('col');
+                $(this).toggleClass('cf-active', !!columnFilters[col]);
+            });
+        }
+
+        function openColFilter(e, col) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Boshqa ustun filtrlari hisobga olgan holda (shu ustundan tashqari) ko'rinadigan qatorlarning noyob qiymatlari
+            var values = {};
+            $('#table-body tr').each(function() {
+                var $row = $(this);
+                // Shu ustundan tashqari boshqa filtrlarga mos keladigan qatorlarni oladi
+                var otherOk = true;
+                for (var c in columnFilters) {
+                    if (c === col) continue;
+                    var allowed = columnFilters[c];
+                    var txt = ($row.find('[data-filter-col="' + c + '"]').text() || '').trim();
+                    if (!allowed.has(txt)) { otherOk = false; break; }
+                }
+                if (!otherOk) return;
+                var v = ($row.find('[data-filter-col="' + col + '"]').text() || '').trim();
+                values[v] = (values[v] || 0) + 1;
+            });
+
+            var keys = Object.keys(values);
+            // Son ko'rinishida bo'lsa raqam tartibida
+            var allNum = keys.length > 0 && keys.every(function(k) { return k === '' || /^-?\d+(\.\d+)?$/.test(k.replace(',', '.')); });
+            if (allNum) {
+                keys.sort(function(a, b) { return parseFloat(a.replace(',', '.')) - parseFloat(b.replace(',', '.')); });
+            } else {
+                keys.sort(function(a, b) { return a.localeCompare(b, 'uz'); });
+            }
+
+            var active = columnFilters[col] || null;
+            var html = '';
+            html += '<div class="cf-head"><input type="text" class="cf-search" placeholder="Qidirish..." autocomplete="off" /></div>';
+            html += '<div class="cf-actions"><a href="#" class="cf-select-all">Barchasini belgilash</a><a href="#" class="cf-clear-all">Tozalash</a></div>';
+            html += '<div class="cf-list">';
+            keys.forEach(function(v) {
+                var checked = (active === null || active.has(v)) ? 'checked' : '';
+                var display = v === '' ? '(bo\'sh)' : v;
+                html += '<label class="cf-item"><input type="checkbox" value="' + esc(v).replace(/"/g,'&quot;') + '" ' + checked + '><span>' + esc(display) + '</span><span class="cf-count">' + values[v] + '</span></label>';
+            });
+            html += '</div>';
+            html += '<div class="cf-footer">';
+            html += '<button type="button" class="cf-btn cf-ok" data-col="' + col + '">OK</button>';
+            html += '<button type="button" class="cf-btn cf-cancel">Bekor</button>';
+            html += '</div>';
+
+            var popup = document.getElementById('col-filter-popup');
+            popup.innerHTML = html;
+            popup.style.display = 'block';
+
+            // Tugma oldiga joylashtirish
+            var btn = e.currentTarget || e.target.closest('.col-filter-btn');
+            var rect = btn.getBoundingClientRect();
+            var popupRect = popup.getBoundingClientRect();
+            var left = rect.left;
+            if (left + popupRect.width > window.innerWidth - 8) {
+                left = window.innerWidth - popupRect.width - 8;
+            }
+            popup.style.left = Math.max(8, left) + 'px';
+            popup.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+
+            setTimeout(function() { popup.querySelector('.cf-search')?.focus(); }, 30);
+        }
+
+        function closeColFilter() {
+            var popup = document.getElementById('col-filter-popup');
+            if (popup) popup.style.display = 'none';
         }
 
         function downloadExcel(type) {
@@ -571,14 +611,56 @@
             new ScrollCalendar('date_from');
             new ScrollCalendar('date_to');
 
-            // Ustun filtrlari: matn kiritilganda jadvalni filtrlash
-            var colFilterTimer = null;
-            $(document).on('input', '.col-filter', function() {
-                clearTimeout(colFilterTimer);
-                colFilterTimer = setTimeout(applyColumnFilters, 120);
+            // Ustun filtri tugmasini bosganda popup ochiladi
+            $(document).on('click', '.col-filter-btn', function(e) {
+                openColFilter(e, $(this).data('col'));
             });
-            // Filtr inputlari bosilganda sortlash ishlamasin
-            $(document).on('click keydown', '.col-filter', function(e) { e.stopPropagation(); });
+
+            // Popup ichidagi amallar
+            $(document).on('input', '.cf-search', function() {
+                var q = ($(this).val() || '').toLowerCase();
+                $('.cf-list .cf-item').each(function() {
+                    var txt = $(this).find('span').first().text().toLowerCase();
+                    $(this).toggle(txt.indexOf(q) !== -1);
+                });
+            });
+            $(document).on('click', '.cf-select-all', function(e) {
+                e.preventDefault();
+                $('.cf-list .cf-item:visible input').prop('checked', true);
+            });
+            $(document).on('click', '.cf-clear-all', function(e) {
+                e.preventDefault();
+                $('.cf-list .cf-item:visible input').prop('checked', false);
+            });
+            $(document).on('click', '.cf-cancel', function() { closeColFilter(); });
+            $(document).on('click', '.cf-ok', function() {
+                var col = $(this).data('col');
+                var total = $('.cf-list .cf-item input').length;
+                var checked = $('.cf-list .cf-item input:checked');
+                if (checked.length === 0) {
+                    // Hech narsa belgilanmagan - hech qanday qator ko'rinmasin
+                    columnFilters[col] = new Set();
+                } else if (checked.length === total) {
+                    delete columnFilters[col];
+                } else {
+                    var selected = new Set();
+                    checked.each(function() { selected.add($(this).val()); });
+                    columnFilters[col] = selected;
+                }
+                applyColumnFilters();
+                closeColFilter();
+            });
+
+            // Popup tashqariga bosilganda yopish
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#col-filter-popup').length &&
+                    !$(e.target).closest('.col-filter-btn').length) {
+                    closeColFilter();
+                }
+            });
+
+            // Popup tugmalari sort eventini chaqirmasligi uchun
+            $(document).on('click', '.col-filter-btn', function(e) { e.stopPropagation(); });
 
             // Sort links
             $(document).on('click', '.sort-link', function(e) {
@@ -764,12 +846,33 @@
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
 
-        /* Ustun filtrlari */
-        .col-filter-row th { padding: 4px 6px; background: #fff; border-bottom: 1px solid #e2e8f0; }
-        .col-filter { width: 100%; min-width: 60px; height: 26px; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11.5px; font-weight: 500; color: #1e293b; background: #f8fafc; outline: none; transition: all 0.15s; }
-        .col-filter:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); background: #fff; }
-        .col-filter::placeholder { color: #94a3b8; font-weight: 400; font-size: 11px; }
-        .col-filter-num { text-align: center; }
+        /* Ustun filtri (Excel uslubi) */
+        .th-with-filter { position: relative; padding-right: 26px !important; }
+        .col-filter-btn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; padding: 0; background: transparent; border: none; cursor: pointer; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; transition: all 0.15s; }
+        .col-filter-btn:hover { background: #dbeafe; color: #2b5ea7; }
+        .col-filter-btn svg { width: 12px; height: 12px; }
+        .col-filter-btn.cf-active { color: #2b5ea7; background: #dbeafe; }
+        .col-filter-btn.cf-active::after { content: ''; position: absolute; top: -2px; right: -2px; width: 6px; height: 6px; background: #dc2626; border-radius: 50%; }
+
+        .cf-popup { position: absolute; z-index: 999; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); min-width: 240px; max-width: 320px; padding: 8px; font-size: 12.5px; }
+        .cf-head { padding: 2px 2px 6px; }
+        .cf-search { width: 100%; height: 30px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 12px; outline: none; }
+        .cf-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .cf-actions { display: flex; gap: 8px; padding: 4px 2px 6px; border-bottom: 1px solid #e2e8f0; }
+        .cf-actions a { color: #2b5ea7; font-size: 11.5px; font-weight: 600; text-decoration: none; }
+        .cf-actions a:hover { text-decoration: underline; }
+        .cf-list { max-height: 260px; overflow-y: auto; padding: 4px 0; }
+        .cf-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; cursor: pointer; border-radius: 4px; font-size: 12px; color: #1e293b; line-height: 1.3; }
+        .cf-item:hover { background: #eff6ff; }
+        .cf-item input { margin: 0; cursor: pointer; flex-shrink: 0; }
+        .cf-item span:first-of-type { flex: 1; word-break: break-word; }
+        .cf-item .cf-count { color: #94a3b8; font-size: 10.5px; font-weight: 600; flex-shrink: 0; }
+        .cf-footer { display: flex; gap: 6px; padding: 6px 2px 2px; border-top: 1px solid #e2e8f0; margin-top: 4px; }
+        .cf-btn { flex: 1; padding: 6px 10px; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+        .cf-ok { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; }
+        .cf-ok:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); }
+        .cf-cancel { background: #f1f5f9; color: #475569; }
+        .cf-cancel:hover { background: #e2e8f0; }
 
         .subject-link { color: #0f172a; font-weight: 700; font-size: 12.5px; text-decoration: none; border-bottom: 1.5px dashed #6d28d9; cursor: pointer; max-width: 260px; display: inline-block; word-break: break-word; }
         .subject-link:hover { color: #6d28d9; border-bottom-color: #7c3aed; }

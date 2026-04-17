@@ -946,11 +946,35 @@
                                         </div>
                                     </div>
 
-                                    {{-- Saqlash tugmasi --}}
+                                    {{-- Boshqa hujjatlar --}}
+                                    @php $obyektivkaFile = $studentFiles->firstWhere('name', 'Obyektivka'); @endphp
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#14b8a6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Boshqa hujjatlar</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div>
+                                                <label class="qabul-label">Obyektivka</label>
+                                                <div class="rounded-lg border p-3 {{ $obyektivkaFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                    @if($obyektivkaFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($obyektivkaFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $obyektivkaFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $obyektivkaFile->id }},'Obyektivka')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" name="files[Obyektivka]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- Saqlash + Tozalash tugmalari --}}
                                     <div class="qabul-card qabul-save-card">
                                         <div class="flex items-center justify-between flex-wrap gap-3">
                                             <div class="flex items-center gap-3">
-                                                <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-700 to-blue-500 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
+                                                <button type="submit" style="background:#059669;" class="inline-flex items-center gap-2 px-6 py-2.5 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
                                                     Ma'lumotlarni saqlash
                                                 </button>
@@ -962,63 +986,23 @@
                                     </div>
                                 </form>
 
-                                {{-- 9. Hujjatlar --}}
-                                @php
-                                    $docTypes = [
-                                        ['short' => 'Propiska', 'full' => 'Propiska (PDF)'],
-                                        ['short' => 'Obyektivka', 'full' => 'Obyektivka'],
-                                    ];
-                                    $uploadedByName = $studentFiles->filter(fn($f) => in_array($f->name, array_column($docTypes, 'full')))->keyBy('name');
-                                @endphp
-                                <div class="qabul-card">
-                                    <div class="qabul-card-header" style="--accent:#14b8a6;">
-                                        <span class="qabul-dot"></span>
-                                        <h5 class="qabul-card-title">Hujjatlar (PDF / Rasm)</h5>
-                                        <span class="ml-auto text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-full">Har fayl max 1MB</span>
-                                    </div>
-                                    <div class="qabul-card-body">
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                            @foreach($docTypes as $doc)
-                                            @php $uploaded = $uploadedByName->get($doc['full']); @endphp
-                                            <div class="rounded-lg border p-3 transition-all {{ $uploaded ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30 hover:border-slate-300' }}">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    <span class="flex-shrink-0 w-5 h-5 rounded-full {{ $uploaded ? 'bg-emerald-100' : 'bg-slate-100' }} flex items-center justify-center">@if($uploaded)<svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>@else<svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>@endif</span>
-                                                    <span class="text-xs font-bold {{ $uploaded ? 'text-emerald-700' : 'text-slate-600' }}">{{ $doc['short'] }}</span>
-                                                    @if($uploaded)<span class="text-[10px] text-slate-400 ml-auto">{{ number_format($uploaded->size / 1024, 1) }} KB</span>@endif
-                                                </div>
-                                                @if($uploaded)
-                                                <div class="flex items-center gap-1.5">
-                                                    <a href="{{ route('admin.students.files.download', [$student, $uploaded]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
-                                                    <button type="button" onclick="qabulDelete({{ $uploaded->id }},'{{ addslashes($doc['short']) }}')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
-                                                </div>
-                                                @else
-                                                <input type="file" name="files[{{ $doc['full'] }}]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200 file:cursor-pointer">
-                                                @endif
-                                            </div>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {{-- Tozalash tugmasi — faqat ma'lumot mavjud bo'lganda --}}
                                 @if($admissionData || $studentFiles->count() > 0)
-                                <div class="qabul-card" style="background:linear-gradient(135deg,#fef2f2,#fff1f2); border-color:#fecaca;">
-                                    <div class="flex items-center justify-between flex-wrap gap-3 p-4">
-                                        <div>
-                                            <p class="text-sm font-bold text-red-700">Barcha qabul ma'lumotlarini tozalash</p>
-                                            <p class="text-[11px] text-red-400 mt-0.5">Form ma'lumotlari, yuklangan hujjatlar — hammasi o'chiriladi</p>
-                                        </div>
-                                        <form action="{{ route('admin.students.admission-data.clear', $student) }}" method="POST"
-                                              onsubmit="return confirm('DIQQAT! Barcha qabul ma\'lumotlari va yuklangan hujjatlar butunlay o\'chiriladi. Davom etasizmi?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="inline-flex items-center gap-2 px-5 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 transition shadow-sm">
+                                <form action="{{ route('admin.students.admission-data.clear', $student) }}" method="POST"
+                                      onsubmit="return confirm('DIQQAT! Barcha qabul ma\'lumotlari va yuklangan hujjatlar butunlay o\'chiriladi. Davom etasizmi?')">
+                                    @csrf @method('DELETE')
+                                    <div class="qabul-card" style="border-color:#fecaca;">
+                                        <div class="flex items-center justify-between flex-wrap gap-3 p-4">
+                                            <div>
+                                                <p class="text-sm font-bold text-red-700">Barcha ma'lumotlarni tozalash</p>
+                                                <p class="text-[11px] text-red-400 mt-0.5">Form ma'lumotlari, yuklangan hujjatlar — hammasi o'chiriladi</p>
+                                            </div>
+                                            <button type="submit" style="background:#dc2626;" class="inline-flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-lg hover:opacity-90 transition shadow-sm">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
                                                 Tozalash
                                             </button>
-                                        </form>
+                                        </div>
                                     </div>
-                                </div>
+                                </form>
                                 @endif
 
                             </div>{{-- /qabul tab --}}

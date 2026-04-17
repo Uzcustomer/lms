@@ -490,13 +490,30 @@
                                         </div>
                                         <div class="qabul-card-body">
                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                @foreach([['tugilgan_davlat','Davlat'],['tugilgan_viloyat','Viloyat'],['tugulgan_tuman','Tuman']] as $f)
                                                 <div>
-                                                    <label class="qabul-label">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">Davlat</label>
+                                                    @php $tdVal = old('tugilgan_davlat', $admissionData?->tugilgan_davlat ?? "O'zbekiston Respublikasi"); @endphp
+                                                    <select name="tugilgan_davlat" class="qabul-input qabul-davlat-select" data-group="tugilgan">
+                                                        <option value="O'zbekiston Respublikasi" {{ $tdVal === "O'zbekiston Respublikasi" ? 'selected' : '' }}>O'zbekiston Respublikasi</option>
+                                                        <option value="Boshqa" {{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'selected' : '' }}>Boshqa</option>
+                                                    </select>
                                                 </div>
-                                                @endforeach
+                                                <div>
+                                                    <label class="qabul-label">Viloyat</label>
+                                                    @php $tvVal = old('tugilgan_viloyat', $admissionData?->tugilgan_viloyat ?? ''); @endphp
+                                                    <select name="tugilgan_viloyat" class="qabul-input qabul-viloyat-select" data-group="tugilgan" {{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'disabled' : '' }} style="{{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="tugilgan_viloyat" class="qabul-input qabul-viloyat-text" data-group="tugilgan" value="{{ $tvVal }}" placeholder="Viloyat" {{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'disabled' : '' }} style="{{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Tuman</label>
+                                                    @php $ttVal = old('tugulgan_tuman', $admissionData?->tugulgan_tuman ?? ''); @endphp
+                                                    <select name="tugulgan_tuman" class="qabul-input qabul-tuman-select" data-group="tugilgan" {{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'disabled' : '' }} style="{{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="tugulgan_tuman" class="qabul-input qabul-tuman-text" data-group="tugilgan" value="{{ $ttVal }}" placeholder="Tuman" {{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'disabled' : '' }} style="{{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'display:none' : '' }}">
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -509,13 +526,34 @@
                                         </div>
                                         <div class="qabul-card-body">
                                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                                @foreach([['yashash_davlat','Yashayotgan davlat'],['yashash_viloyat','Yashayotgan viloyat'],['yashash_tuman','Yashayotgan tuman'],['yashash_manzil','Yashayotgan manzil (ko\'cha, uy)']] as $f)
                                                 <div>
-                                                    <label class="qabul-label">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">Yashayotgan davlat</label>
+                                                    @php $ydVal = old('yashash_davlat', $admissionData?->yashash_davlat ?? "O'zbekiston Respublikasi"); @endphp
+                                                    <select name="yashash_davlat" class="qabul-input qabul-davlat-select" data-group="yashash">
+                                                        <option value="O'zbekiston Respublikasi" {{ $ydVal === "O'zbekiston Respublikasi" ? 'selected' : '' }}>O'zbekiston Respublikasi</option>
+                                                        <option value="Boshqa" {{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'selected' : '' }}>Boshqa</option>
+                                                    </select>
                                                 </div>
-                                                @endforeach
+                                                <div>
+                                                    <label class="qabul-label">Yashayotgan viloyat</label>
+                                                    @php $yvVal = old('yashash_viloyat', $admissionData?->yashash_viloyat ?? ''); @endphp
+                                                    <select name="yashash_viloyat" class="qabul-input qabul-viloyat-select" data-group="yashash" {{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'disabled' : '' }} style="{{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="yashash_viloyat" class="qabul-input qabul-viloyat-text" data-group="yashash" value="{{ $yvVal }}" placeholder="Viloyat" {{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'disabled' : '' }} style="{{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Yashayotgan tuman</label>
+                                                    @php $ytVal = old('yashash_tuman', $admissionData?->yashash_tuman ?? ''); @endphp
+                                                    <select name="yashash_tuman" class="qabul-input qabul-tuman-select" data-group="yashash" {{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'disabled' : '' }} style="{{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="yashash_tuman" class="qabul-input qabul-tuman-text" data-group="yashash" value="{{ $ytVal }}" placeholder="Tuman" {{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'disabled' : '' }} style="{{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Yashayotgan manzil (ko'cha, uy)</label>
+                                                    <input type="text" name="yashash_manzil" value="{{ old('yashash_manzil', $admissionData?->yashash_manzil ?? '') }}" class="qabul-input" placeholder="Ko'cha, uy raqami">
+                                                </div>
                                             </div>
                                             <div class="mt-3">
                                                 <label class="qabul-label">Hozirgi vaqtinchalik yashash manzilingiz</label>
@@ -536,18 +574,27 @@
                                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div>
                                                     <label class="qabul-label">Davlat</label>
-                                                    <input type="text" name="talim_davlat" value="{{ old('talim_davlat', $admissionData?->talim_davlat ?? '') }}"
-                                                           class="qabul-input" placeholder="O'zbekiston Respublikasi">
+                                                    @php $tldVal = old('talim_davlat', $admissionData?->talim_davlat ?? "O'zbekiston Respublikasi"); @endphp
+                                                    <select name="talim_davlat" class="qabul-input qabul-davlat-select" data-group="talim">
+                                                        <option value="O'zbekiston Respublikasi" {{ $tldVal === "O'zbekiston Respublikasi" ? 'selected' : '' }}>O'zbekiston Respublikasi</option>
+                                                        <option value="Boshqa" {{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'selected' : '' }}>Boshqa</option>
+                                                    </select>
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Ta'lim olgan viloyati</label>
-                                                    <input type="text" name="talim_viloyat" value="{{ old('talim_viloyat', $admissionData?->talim_viloyat ?? '') }}"
-                                                           class="qabul-input" placeholder="Viloyatni kiriting">
+                                                    @php $tlvVal = old('talim_viloyat', $admissionData?->talim_viloyat ?? ''); @endphp
+                                                    <select name="talim_viloyat" class="qabul-input qabul-viloyat-select" data-group="talim" {{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'disabled' : '' }} style="{{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="talim_viloyat" class="qabul-input qabul-viloyat-text" data-group="talim" value="{{ $tlvVal }}" placeholder="Viloyat" {{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'disabled' : '' }} style="{{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'display:none' : '' }}">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Ta'lim olgan tumani</label>
-                                                    <input type="text" name="talim_tuman" value="{{ old('talim_tuman', $admissionData?->talim_tuman ?? '') }}"
-                                                           class="qabul-input" placeholder="Tumanni kiriting">
+                                                    @php $tltVal = old('talim_tuman', $admissionData?->talim_tuman ?? ''); @endphp
+                                                    <select name="talim_tuman" class="qabul-input qabul-tuman-select" data-group="talim" {{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'disabled' : '' }} style="{{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="talim_tuman" class="qabul-input qabul-tuman-text" data-group="talim" value="{{ $tltVal }}" placeholder="Tuman" {{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'disabled' : '' }} style="{{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'display:none' : '' }}">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Ta'lim muassasasi turi</label>
@@ -965,5 +1012,100 @@
             if (!e.target.value) e.target.value = '+998 ';
         });
     });
+    // Viloyat va tuman ma'lumotlari
+    var uzRegions = {
+        "Toshkent shahri":["Bektemir tumani","Chilonzor tumani","Mirobod tumani","Mirzo Ulug'bek tumani","Olmazor tumani","Sergeli tumani","Shayxontohur tumani","Uchtepa tumani","Yakkasaroy tumani","Yashnobod tumani","Yunusobod tumani"],
+        "Toshkent viloyati":["Bekobod tumani","Bo'ka tumani","Bo'stonliq tumani","Chinoz tumani","Ohangaron tumani","Oqqo'rg'on tumani","O'rtachirchiq tumani","Parkent tumani","Piskent tumani","Qibray tumani","Toshkent tumani","Yangiyo'l tumani","Yuqorichirchiq tumani","Zangiota tumani"],
+        "Andijon viloyati":["Andijon tumani","Asaka tumani","Baliqchi tumani","Bo'ston tumani","Buloqboshi tumani","Izboskan tumani","Jalaquduq tumani","Marhamat tumani","Oltinko'l tumani","Paxtaobod tumani","Qo'rg'ontepa tumani","Shahrixon tumani","Ulug'nor tumani","Xo'jaobod tumani"],
+        "Buxoro viloyati":["Buxoro tumani","G'ijduvon tumani","Jondor tumani","Kogon tumani","Olot tumani","Peshku tumani","Qorako'l tumani","Qorovulbozor tumani","Romitan tumani","Shofirkon tumani","Vobkent tumani"],
+        "Farg'ona viloyati":["Beshariq tumani","Bog'dod tumani","Buvayda tumani","Dang'ara tumani","Farg'ona tumani","Furqat tumani","Oltiariq tumani","O'zbekiston tumani","Qo'shtepa tumani","Quva tumani","Rishton tumani","So'x tumani","Toshloq tumani","Uchko'prik tumani","Yozyovon tumani"],
+        "Jizzax viloyati":["Arnasoy tumani","Baxmal tumani","Do'stlik tumani","Forish tumani","G'allaorol tumani","Mirzacho'l tumani","Paxtakor tumani","Sharof Rashidov tumani","Yangiobod tumani","Zafarobod tumani","Zarbdor tumani","Zomin tumani"],
+        "Xorazm viloyati":["Bog'ot tumani","Gurlan tumani","Hazorasp tumani","Qo'shko'pir tumani","Shovot tumani","Tuproqqal'a tumani","Urganch tumani","Xiva tumani","Xonqa tumani","Yangiariq tumani","Yangibozor tumani"],
+        "Namangan viloyati":["Chortoq tumani","Chust tumani","Kosonsoy tumani","Mingbuloq tumani","Namangan tumani","Norin tumani","Pop tumani","To'raqo'rg'on tumani","Uchqo'rg'on tumani","Uychi tumani","Yangiqo'rg'on tumani"],
+        "Navoiy viloyati":["Karmana tumani","Konimex tumani","Navbahor tumani","Nurota tumani","Qiziltepa tumani","Tomdi tumani","Uchquduq tumani","Xatirchi tumani"],
+        "Qashqadaryo viloyati":["Chiroqchi tumani","Dehqonobod tumani","G'uzor tumani","Kamashi tumani","Kasbi tumani","Kitob tumani","Koson tumani","Mirishkor tumani","Muborak tumani","Nishon tumani","Qarshi tumani","Shahrisabz tumani","Yakkabog' tumani"],
+        "Samarqand viloyati":["Bulung'ur tumani","Ishtixon tumani","Jomboy tumani","Kattaqo'rg'on tumani","Narpay tumani","Nurobod tumani","Oqdaryo tumani","Pastdarg'om tumani","Payariq tumani","Samarqand tumani","Toyloq tumani","Urgut tumani"],
+        "Sirdaryo viloyati":["Boyovut tumani","Guliston tumani","Mirzaobod tumani","Oqoltin tumani","Sardoba tumani","Sayxunobod tumani","Sirdaryo tumani","Xovos tumani"],
+        "Surxondaryo viloyati":["Angor tumani","Bandixon tumani","Boysun tumani","Denov tumani","Jarqo'rg'on tumani","Muzrabod tumani","Oltinsoy tumani","Qiziriq tumani","Qumqo'rg'on tumani","Sariosiyo tumani","Sherobod tumani","Sho'rchi tumani","Termiz tumani","Uzun tumani"],
+        "Qoraqalpog'iston Respublikasi":["Amudaryo tumani","Beruniy tumani","Bo'zatov tumani","Chimboy tumani","Ellikqal'a tumani","Kegeyli tumani","Mo'ynoq tumani","Nukus tumani","Qanliko'l tumani","Qo'ng'irot tumani","Qorao'zak tumani","Shumanay tumani","Taxtako'pir tumani","To'rtko'l tumani","Xo'jayli tumani"]
+    };
+    var uzViloyatlar = Object.keys(uzRegions);
+
+    function initLocationGroup(group) {
+        var davlatSel = document.querySelector('.qabul-davlat-select[data-group="'+group+'"]');
+        var vilSel = document.querySelector('.qabul-viloyat-select[data-group="'+group+'"]');
+        var vilTxt = document.querySelector('.qabul-viloyat-text[data-group="'+group+'"]');
+        var tumSel = document.querySelector('.qabul-tuman-select[data-group="'+group+'"]');
+        var tumTxt = document.querySelector('.qabul-tuman-text[data-group="'+group+'"]');
+        if (!davlatSel) return;
+
+        var savedVil = vilTxt ? vilTxt.value || vilSel.getAttribute('data-saved') : '';
+        var savedTum = tumTxt ? tumTxt.value || tumSel.getAttribute('data-saved') : '';
+
+        function populateViloyat() {
+            vilSel.innerHTML = '<option value="">Tanlang...</option>';
+            uzViloyatlar.forEach(function(v) {
+                var o = document.createElement('option');
+                o.value = v; o.textContent = v;
+                if (v === savedVil) o.selected = true;
+                vilSel.appendChild(o);
+            });
+        }
+
+        function populateTuman(vil) {
+            tumSel.innerHTML = '<option value="">Tanlang...</option>';
+            var list = uzRegions[vil] || [];
+            list.forEach(function(t) {
+                var o = document.createElement('option');
+                o.value = t; o.textContent = t;
+                if (t === savedTum) o.selected = true;
+                tumSel.appendChild(o);
+            });
+        }
+
+        function switchMode(isUzb) {
+            if (isUzb) {
+                vilSel.style.display=''; vilSel.disabled=false; vilTxt.style.display='none'; vilTxt.disabled=true;
+                tumSel.style.display=''; tumSel.disabled=false; tumTxt.style.display='none'; tumTxt.disabled=true;
+                populateViloyat();
+                populateTuman(vilSel.value);
+            } else {
+                vilSel.style.display='none'; vilSel.disabled=true; vilTxt.style.display=''; vilTxt.disabled=false;
+                tumSel.style.display='none'; tumSel.disabled=true; tumTxt.style.display=''; tumTxt.disabled=false;
+            }
+        }
+
+        davlatSel.addEventListener('change', function() {
+            savedVil = ''; savedTum = '';
+            vilTxt.value = ''; tumTxt.value = '';
+            switchMode(this.value === "O'zbekiston Respublikasi");
+        });
+
+        vilSel.addEventListener('change', function() {
+            savedTum = '';
+            populateTuman(this.value);
+        });
+
+        switchMode(davlatSel.value === "O'zbekiston Respublikasi");
+    }
+
+    // Saved values uchun data-saved atributlarni set qilish
+    @if($admissionData)
+    (function(){
+        var pairs = {
+            'tugilgan': ['{{ addslashes($admissionData->tugilgan_viloyat ?? '') }}', '{{ addslashes($admissionData->tugulgan_tuman ?? '') }}'],
+            'yashash': ['{{ addslashes($admissionData->yashash_viloyat ?? '') }}', '{{ addslashes($admissionData->yashash_tuman ?? '') }}'],
+            'talim': ['{{ addslashes($admissionData->talim_viloyat ?? '') }}', '{{ addslashes($admissionData->talim_tuman ?? '') }}']
+        };
+        Object.keys(pairs).forEach(function(g) {
+            var vs = document.querySelector('.qabul-viloyat-select[data-group="'+g+'"]');
+            var ts = document.querySelector('.qabul-tuman-select[data-group="'+g+'"]');
+            if (vs) vs.setAttribute('data-saved', pairs[g][0]);
+            if (ts) ts.setAttribute('data-saved', pairs[g][1]);
+        });
+    })();
+    @endif
+
+    ['tugilgan','yashash','talim'].forEach(initLocationGroup);
     </script>
 </x-app-layout>

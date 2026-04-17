@@ -1361,6 +1361,9 @@
 
     @if(session('active_tab'))
     switchProfileTab('{{ session('active_tab') }}');
+    @if(session('active_tab') === 'qabul')
+    setTimeout(function(){ goStep(5, true); }, 100);
+    @endif
     @endif
 
     // Form submit — validate last step

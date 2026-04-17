@@ -1369,7 +1369,14 @@ class ReportController extends Controller
         }
 
         if ($request->filled('specialty')) {
-            $csQuery->where('g.specialty_hemis_id', $request->specialty);
+            // Bir xil nomga ega yo'nalishlar turli specialty_hemis_id'ga ega bo'lishi mumkin.
+            // Shu sababli nom bo'yicha filtrlanadi.
+            $specialtyName = \App\Models\Specialty::where('specialty_hemis_id', $request->specialty)->value('name');
+            if ($specialtyName) {
+                $csQuery->where('g.specialty_name', $specialtyName);
+            } else {
+                $csQuery->where('g.specialty_hemis_id', $request->specialty);
+            }
         }
 
         if ($request->filled('level_code')) {

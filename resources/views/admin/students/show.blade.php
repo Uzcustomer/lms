@@ -370,7 +370,7 @@
                             {{-- TAB 6: QABUL --}}
                             @if($canUploadFiles)
                             <div id="ptab-content-qabul" class="sp-content" style="display:none;">
-                                <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form" enctype="multipart/form-data">
+                                <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form" enctype="multipart/form-data" id="qabul-main-form" novalidate>
                                     @csrf
 
                                     {{-- 1. Shaxsiy ma'lumotlar --}}
@@ -1043,6 +1043,8 @@
     .qabul-input:hover { border-color:#94a3b8; }
     .qabul-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }
     .qabul-save-card { background:linear-gradient(135deg,#f8fafc,#eef2f7); border-color:#cbd5e1; padding:14px 16px; }
+    .qabul-input.qabul-error { border-color:#ef4444 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
+    .qabul-error-msg { color:#ef4444; font-size:10.5px; font-weight:600; margin-top:3px; }
     select.qabul-input { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; cursor:pointer; }
     </style>
 
@@ -1241,5 +1243,51 @@
     @if(session('active_tab'))
     switchProfileTab('{{ session('active_tab') }}');
     @endif
+
+    // Form validation
+    var qabulForm = document.getElementById('qabul-main-form');
+    if (qabulForm) {
+        qabulForm.addEventListener('submit', function(e) {
+            document.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
+            document.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
+
+            var errors = [];
+            var fields = qabulForm.querySelectorAll('input.qabul-input, select.qabul-input');
+            fields.forEach(function(el) {
+                if (el.disabled || el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
+                if (el.type === 'file' || el.readOnly) return;
+                var val = (el.value || '').trim();
+                if (!val || val === '' || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
+                    el.classList.add('qabul-error');
+                    var msg = document.createElement('p');
+                    msg.className = 'qabul-error-msg';
+                    msg.textContent = 'Bu maydon majburiy';
+                    el.parentNode.appendChild(msg);
+                    errors.push(el);
+                }
+            });
+
+            if (errors.length > 0) {
+                e.preventDefault();
+                errors[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                errors[0].focus();
+            }
+        });
+
+        qabulForm.addEventListener('input', function(e) {
+            if (e.target.classList.contains('qabul-error')) {
+                e.target.classList.remove('qabul-error');
+                var msg = e.target.parentNode.querySelector('.qabul-error-msg');
+                if (msg) msg.remove();
+            }
+        });
+        qabulForm.addEventListener('change', function(e) {
+            if (e.target.classList.contains('qabul-error')) {
+                e.target.classList.remove('qabul-error');
+                var msg = e.target.parentNode.querySelector('.qabul-error-msg');
+                if (msg) msg.remove();
+            }
+        });
+    }
     </script>
 </x-app-layout>

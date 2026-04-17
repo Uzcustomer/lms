@@ -1,14 +1,8 @@
 <x-app-layout>
     <x-slot name="header">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                Dars jadval mosligi hisoboti
-            </h2>
-            <button type="button" id="btn-ktr-compare" class="btn-ktr-compare" onclick="toggleKtrCompareMode()">
-                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                <span id="btn-ktr-compare-label">Dars jadvalni KTR bilan mosligi</span>
-            </button>
-        </div>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Dars jadval mosligi hisoboti
+        </h2>
     </x-slot>
 
     <div class="py-4">
@@ -155,10 +149,12 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th class="col-training-type"><a href="#" class="sort-link" data-sort="training_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th id="th-col-1"><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th id="th-col-2"><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda qo'yilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th id="th-col-3"><a href="#" class="sort-link" data-sort="farq">Farq <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="training_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="farq">Farq (ajrat.) <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="ktr_farq">Farq (KTR) <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -195,47 +191,6 @@
         let currentSort = 'farq';
         let currentDirection = 'desc';
         let currentPage = 1;
-        let ktrCompareMode = false;
-
-        function toggleKtrCompareMode() {
-            ktrCompareMode = !ktrCompareMode;
-            var btn = document.getElementById('btn-ktr-compare');
-            var tbl = document.getElementById('report-table');
-            if (ktrCompareMode) {
-                btn.classList.add('active');
-                tbl.classList.add('ktr-mode');
-            } else {
-                btn.classList.remove('active');
-                tbl.classList.remove('ktr-mode');
-            }
-            currentSort = 'farq';
-            currentDirection = 'desc';
-            $('.sort-link .sort-icon').removeClass('active').html('&#9650;&#9660;');
-            updateTableHeaders();
-            $('#th-col-3 .sort-icon').addClass('active').html('&#9660;');
-            loadReport(1);
-        }
-
-        function updateTableHeaders() {
-            var col1 = document.querySelector('#th-col-1 .sort-link');
-            var col2 = document.querySelector('#th-col-2 .sort-link');
-            var col3 = document.querySelector('#th-col-3 .sort-link');
-            if (ktrCompareMode) {
-                col1.setAttribute('data-sort', 'scheduled_hours');
-                col1.childNodes[0].nodeValue = "Jadvalda qo'yilgan soat (HEMIS) ";
-                col2.setAttribute('data-sort', 'ktr_hours');
-                col2.childNodes[0].nodeValue = 'KTR soati ';
-                col3.setAttribute('data-sort', 'farq');
-                col3.childNodes[0].nodeValue = 'Farq ';
-            } else {
-                col1.setAttribute('data-sort', 'planned_hours');
-                col1.childNodes[0].nodeValue = 'Ajratilgan soat ';
-                col2.setAttribute('data-sort', 'scheduled_hours');
-                col2.childNodes[0].nodeValue = "Jadvalda qo'yilgan soat ";
-                col3.setAttribute('data-sort', 'farq');
-                col3.childNodes[0].nodeValue = 'Farq ';
-            }
-        }
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
         function fuzzyMatcher(params, data) {
@@ -325,12 +280,8 @@
 
             var startTime = performance.now();
 
-            var dataUrl = ktrCompareMode
-                ? '{{ route("admin.reports.schedule-report.ktr-compare") }}'
-                : '{{ route("admin.reports.schedule-report.data") }}';
-
             $.ajax({
-                url: dataUrl,
+                url: '{{ route("admin.reports.schedule-report.data") }}',
                 type: 'GET',
                 data: params,
                 timeout: 120000,
@@ -391,26 +342,21 @@
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
-                if (ktrCompareMode) {
-                    html += '<td><a href="#" class="subject-link" data-cs-id="' + r.cs_id + '" onclick="openKtrCompareModal(event, ' + r.cs_id + ')">' + esc(r.subject_name) + '</a></td>';
-                } else {
-                    html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
-                }
+                html += '<td><a href="#" class="subject-link" onclick="openKtrCompareModal(event, ' + r.cs_id + ')">' + esc(r.subject_name) + '</a></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td class="col-training-type"><span class="text-cell" style="font-weight:600;color:#6d28d9;">' + esc(r.training_type) + '</span></td>';
-                if (ktrCompareMode) {
-                    html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
-                    if (r.ktr_exists) {
-                        html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.ktr_hours + '</td>';
-                        html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
-                    } else {
-                        html += '<td style="text-align:center;"><span class="badge badge-status-none" style="font-size:11.5px;">KTR yo\'q</span></td>';
-                        html += '<td style="text-align:center;color:#94a3b8;">-</td>';
-                    }
+                html += '<td><span class="text-cell" style="font-weight:600;color:#6d28d9;">' + esc(r.training_type) + '</span></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
+                if (r.ktr_exists) {
+                    html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.ktr_hours + '</td>';
                 } else {
-                    html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
-                    html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
-                    html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
+                    html += '<td style="text-align:center;"><span class="badge badge-status-none" style="font-size:11px;">yo\'q</span></td>';
+                }
+                html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
+                if (r.ktr_exists) {
+                    html += '<td style="text-align:center;">' + farqBadge(r.ktr_farq) + '</td>';
+                } else {
+                    html += '<td style="text-align:center;color:#94a3b8;">-</td>';
                 }
                 html += '</tr>';
             }
@@ -426,7 +372,7 @@
             $('#ktr-compare-modal-overlay').fadeIn(150);
 
             $.ajax({
-                url: '{{ url('admin/reports/schedule-report/ktr-compare/detail') }}/' + csId,
+                url: '{{ url('admin/reports/schedule-report/detail') }}/' + csId,
                 type: 'GET',
                 data: {
                     group: params.group || '',
@@ -524,10 +470,7 @@
             var params = getFilters();
             params.export = 'excel';
             var query = $.param(params);
-            var url = ktrCompareMode
-                ? '{{ route("admin.reports.schedule-report.ktr-compare") }}'
-                : '{{ route("admin.reports.schedule-report.data") }}';
-            window.location.href = url + '?' + query;
+            window.location.href = '{{ route("admin.reports.schedule-report.data") }}?' + query;
         }
 
         function renderPagination(res) {
@@ -655,11 +598,6 @@
         .date-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); }
         .date-input::placeholder { color: #94a3b8; font-weight: 400; }
 
-        .btn-ktr-compare { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fff; color: #6d28d9; border: 1.5px solid #6d28d9; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; height: 36px; }
-        .btn-ktr-compare:hover { background: #f5f3ff; box-shadow: 0 2px 8px rgba(109,40,217,0.2); }
-        .btn-ktr-compare.active { background: linear-gradient(135deg, #6d28d9, #7c3aed); color: #fff; border-color: #6d28d9; box-shadow: 0 2px 8px rgba(109,40,217,0.35); }
-        .btn-ktr-compare.active:hover { background: linear-gradient(135deg, #5b21b6, #6d28d9); }
-
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
@@ -735,9 +673,6 @@
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
-
-        /* KTR compare mode: Dars turi ustunini yashirish */
-        #report-table.ktr-mode .col-training-type { display: none; }
 
         .subject-link { color: #0f172a; font-weight: 700; font-size: 12.5px; text-decoration: none; border-bottom: 1.5px dashed #6d28d9; cursor: pointer; max-width: 260px; display: inline-block; word-break: break-word; }
         .subject-link:hover { color: #6d28d9; border-bottom-color: #7c3aed; }

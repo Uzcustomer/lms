@@ -581,6 +581,77 @@
                                         </div>
                                     </div>
 
+                                    {{-- 3b. Qabul ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#7c3aed;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Qabul ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">Abituriyent ID raqami</label>
+                                                    <input type="text" name="abituriyent_id" value="{{ old('abituriyent_id', $admissionData?->abituriyent_id ?? '') }}"
+                                                           class="qabul-input" placeholder="342234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Javoblar varaqasi raqami</label>
+                                                    <input type="text" name="javoblar_varaqasi" value="{{ old('javoblar_varaqasi', $admissionData?->javoblar_varaqasi ?? '') }}"
+                                                           class="qabul-input" placeholder="1234234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim tili</label>
+                                                    <select name="talim_tili" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(["O'zbekcha","Ruscha","Inglizcha"] as $tl)
+                                                        <option value="{{ $tl }}" {{ old('talim_tili', $admissionData?->talim_tili) === $tl ? 'selected' : '' }}>{{ $tl }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Imtihon alifbosi</label>
+                                                    <select name="imtihon_alifbosi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['Lotin','Kiril'] as $ia)
+                                                        <option value="{{ $ia }}" {{ old('imtihon_alifbosi', $admissionData?->imtihon_alifbosi) === $ia ? 'selected' : '' }}>{{ $ia }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">To'plagan ball</label>
+                                                    <input type="text" name="toplagan_ball" value="{{ old('toplagan_ball', $admissionData?->toplagan_ball ?? '') }}"
+                                                           class="qabul-input" placeholder="Ball" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Tavsiya turi</label>
+                                                    <select name="tavsiya_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @php
+                                                        $tavsiyalar = [
+                                                            "To'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Davlat grantlari asosida qo'shimcha qabul (Kambag'al oila reyestriga kiritilgan oilalarning farzandlari)",
+                                                            "Nogironligi bo'lgan shaxslarni uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Mutaxassisligi bo'yicha kamida besh yil mehnat stajiga ega bo'lgan xotin-qizlar tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Xotin-qizlarni qo'llab-quvvatlash maqsadida berilgan tavsiyanoma bilan oliy ta'lim muassasalariga ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi ichki ishlar organlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi Qurolli Kuchlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi Bojxona xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "\"Mehribonlik uyi\" va Bolalar shaharchasining bitiruvchilari bo'lgan chin yetim abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Tabaqalashtirilgan to'lov kontrakt asosida",
+                                                        ];
+                                                        @endphp
+                                                        @foreach($tavsiyalar as $tv)
+                                                        <option value="{{ $tv }}" {{ old('tavsiya_turi', $admissionData?->tavsiya_turi) === $tv ? 'selected' : '' }}>{{ $tv }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {{-- 4. Avvalgi ta'lim ma'lumotlari --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#10b981;">

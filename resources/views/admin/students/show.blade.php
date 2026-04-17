@@ -381,7 +381,7 @@
                                         </div>
                                         <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['jshshir','JSHSHIR'],['email','Email'],['millat','Millat']] as $f)
+                                                @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['email','Email'],['millat','Millat']] as $f)
                                                 <div>
                                                     <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}"
@@ -390,10 +390,17 @@
                                                 </div>
                                                 @endforeach
                                                 <div>
+                                                    <label class="qabul-label">JSHSHIR</label>
+                                                    <input type="text" name="jshshir" inputmode="numeric" pattern="[0-9]*" maxlength="14"
+                                                           value="{{ old('jshshir', $admissionData?->jshshir ?? '') }}"
+                                                           class="qabul-input" placeholder="14 xonali raqam"
+                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
                                                     <label class="qabul-label">Tug'ilgan sana</label>
                                                     <input type="text" name="tugilgan_sana"
                                                            value="{{ old('tugilgan_sana', $admissionData?->tugilgan_sana ? \Carbon\Carbon::parse($admissionData->tugilgan_sana)->format('Y-m-d') : '') }}"
-                                                           class="qabul-input qabul-datepicker" placeholder="Sanani tanlang" readonly>
+                                                           class="qabul-input qabul-datepicker" placeholder="Sanani tanlang">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Jinsi</label>
@@ -416,6 +423,21 @@
                                                            class="qabul-input qabul-phone" placeholder="+998 __ ___ __ __">
                                                 </div>
                                             </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Oliy ma'lumot mavjudligi</label>
+                                                    <select name="oliy_malumot" id="qabul_oliy_malumot" class="qabul-input" onchange="toggleOtmNomi()">
+                                                        <option value="Yo'q" {{ old('oliy_malumot', $admissionData?->oliy_malumot) === "Yo'q" || !old('oliy_malumot', $admissionData?->oliy_malumot) ? 'selected' : '' }}>Yo'q</option>
+                                                        <option value="Ha" {{ old('oliy_malumot', $admissionData?->oliy_malumot) === 'Ha' ? 'selected' : '' }}>Ha</option>
+                                                    </select>
+                                                </div>
+                                                <div id="qabul_otm_nomi_wrap" style="{{ old('oliy_malumot', $admissionData?->oliy_malumot) === 'Ha' ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Avval tugatgan OTM nomi</label>
+                                                    <input type="text" name="otm_nomi"
+                                                           value="{{ old('otm_nomi', $admissionData?->otm_nomi ?? '') }}"
+                                                           class="qabul-input" placeholder="OTM nomini kiriting">
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -431,19 +453,20 @@
                                                     <label class="qabul-label">Seriya</label>
                                                     <input type="text" name="passport_seriya"
                                                            value="{{ old('passport_seriya', $admissionData?->passport_seriya ?? '') }}"
-                                                           class="qabul-input" placeholder="AA">
+                                                           class="qabul-input" placeholder="AA" maxlength="2" style="text-transform:uppercase;">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Raqam</label>
                                                     <input type="text" name="passport_raqam"
                                                            value="{{ old('passport_raqam', $admissionData?->passport_raqam ?? '') }}"
-                                                           class="qabul-input" placeholder="1234567">
+                                                           class="qabul-input" placeholder="1234567" maxlength="7" inputmode="numeric"
+                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan sana</label>
                                                     <input type="text" name="passport_sana"
                                                            value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}"
-                                                           class="qabul-input qabul-datepicker" placeholder="Sanani tanlang" readonly>
+                                                           class="qabul-input qabul-datepicker" placeholder="Sanani tanlang">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan joy</label>
@@ -454,7 +477,11 @@
                                             </div>
                                         </div>
                                     </div>
-
+                                    {{-- Pasport file vars for later use --}}
+                                    @php
+                                        $passportFile = $studentFiles->firstWhere('name', 'Pasport nusxasi (PDF)');
+                                        $photoFile = $studentFiles->firstWhere('name', '3x4 rasm');
+                                    @endphp
                                     {{-- 2. Tug'ilgan joy --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#0ea5e9;">
@@ -499,26 +526,69 @@
                                         </div>
                                     </div>
 
-                                    {{-- 4. Ta'lim ma'lumotlari --}}
+                                    {{-- 4. Avvalgi ta'lim ma'lumotlari --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#10b981;">
                                             <span class="qabul-dot"></span>
-                                            <h5 class="qabul-card-title">Ta'lim ma'lumotlari</h5>
+                                            <h5 class="qabul-card-title">Avvalgi ta'lim ma'lumotlari</h5>
                                         </div>
                                         <div class="qabul-card-body">
-                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                @foreach([['oliy_malumot',"Oliy ma'lumot"],['otm_nomi','OTM nomi'],['talim_turi',"Ta'lim turi"],['talim_shakli',"Ta'lim shakli"],['mutaxassislik','Mutaxassislik'],['toplagan_ball','Toplagan ball'],['tolov_shakli',"To'lov shakli"],['muassasa_nomi','Muassasa nomi'],['hujjat_seriya','Hujjat seriya'],['ortalacha_ball','Ortalacha ball']] as $f)
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div>
-                                                    <label class="qabul-label">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">Davlat</label>
+                                                    <input type="text" name="talim_davlat" value="{{ old('talim_davlat', $admissionData?->talim_davlat ?? '') }}"
+                                                           class="qabul-input" placeholder="O'zbekiston Respublikasi">
                                                 </div>
-                                                @endforeach
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim olgan viloyati</label>
+                                                    <input type="text" name="talim_viloyat" value="{{ old('talim_viloyat', $admissionData?->talim_viloyat ?? '') }}"
+                                                           class="qabul-input" placeholder="Viloyatni kiriting">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim olgan tumani</label>
+                                                    <input type="text" name="talim_tuman" value="{{ old('talim_tuman', $admissionData?->talim_tuman ?? '') }}"
+                                                           class="qabul-input" placeholder="Tumanni kiriting">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim muassasasi turi</label>
+                                                    <select name="talim_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(["Umumiy o'rta","O'rta maxsus","Akademik litsey","Kasb-hunar kolleji","Oliy ta'lim"] as $tt)
+                                                        <option value="{{ $tt }}" {{ old('talim_turi', $admissionData?->talim_turi) === $tt ? 'selected' : '' }}>{{ $tt }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim muassasasi nomi</label>
+                                                    <input type="text" name="muassasa_nomi" value="{{ old('muassasa_nomi', $admissionData?->muassasa_nomi ?? '') }}"
+                                                           class="qabul-input" placeholder="Muassasa nomini kiriting">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">O'qigan yillari (boshi)</label>
+                                                    <input type="text" name="oqigan_yili_boshi" value="{{ old('oqigan_yili_boshi', $admissionData?->oqigan_yili_boshi ?? '') }}"
+                                                           class="qabul-input" placeholder="2018" maxlength="4" inputmode="numeric"
+                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">O'qigan yillari (tugashi)</label>
+                                                    <input type="text" name="oqigan_yili_tugashi" value="{{ old('oqigan_yili_tugashi', $admissionData?->oqigan_yili_tugashi ?? '') }}"
+                                                           class="qabul-input" placeholder="2020" maxlength="4" inputmode="numeric"
+                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Hujjat seriyasi va raqami</label>
+                                                    <input type="text" name="hujjat_seriya" value="{{ old('hujjat_seriya', $admissionData?->hujjat_seriya ?? '') }}"
+                                                           class="qabul-input" placeholder="KT777111">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">O'rtacha attestat/diplom bali</label>
+                                                    <input type="text" name="ortalacha_ball" value="{{ old('ortalacha_ball', $admissionData?->ortalacha_ball ?? '') }}"
+                                                           class="qabul-input" placeholder="4.5">
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-
-                                    {{-- 6. Til sertifikatlari --}}
+                                    {{-- 5. Til sertifikatlari --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#8b5cf6;">
                                             <span class="qabul-dot"></span>
@@ -591,6 +661,82 @@
                                     </div>
                                 </form>
 
+                                {{-- Pasport nusxasi va 3x4 rasm --}}
+                                <div class="qabul-card">
+                                    <div class="qabul-card-header" style="--accent:#f59e0b;">
+                                        <span class="qabul-dot"></span>
+                                        <h5 class="qabul-card-title">Pasport nusxasi va 3x4 rasm</h5>
+                                    </div>
+                                    <div class="qabul-card-body">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            @php $pf = $passportFile; @endphp
+                                            <div class="rounded-lg border p-3 {{ $pf ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    @if($pf)<span class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></span>
+                                                    @else<span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center"><svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg></span>@endif
+                                                    <span class="text-xs font-bold {{ $pf ? 'text-emerald-700' : 'text-slate-600' }}">Pasport nusxasi (ikala tomoni bitta PDF)</span>
+                                                </div>
+                                                @if($pf)
+                                                <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($pf->size / 1024, 1) }} KB</span>
+                                                    <a href="{{ route('admin.students.files.download', [$student, $pf]) }}" class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                    <form action="{{ route('admin.students.admission-files.delete', [$student, $pf]) }}" method="POST" onsubmit="return confirm('Pasport faylini o\'chirmoqchimisiz?')">@csrf @method('DELETE')<button type="submit" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button></form>
+                                                </div>
+                                                @else
+                                                <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">@csrf<input type="hidden" name="admission_file_name" value="Pasport nusxasi (PDF)">
+                                                    <div class="flex items-center gap-2"><input type="file" name="admission_file" accept=".pdf,.jpg,.jpeg,.png" required class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer"><button type="submit" class="flex-shrink-0 p-1.5 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg></button></div>
+                                                </form>
+                                                @endif
+                                            </div>
+                                            @php $ph = $photoFile; @endphp
+                                            <div class="rounded-lg border p-3 {{ $ph ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    @if($ph)<span class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></span>
+                                                    @else<span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center"><svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg></span>@endif
+                                                    <span class="text-xs font-bold {{ $ph ? 'text-emerald-700' : 'text-slate-600' }}">3x4 rasm</span>
+                                                </div>
+                                                @if($ph)
+                                                <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($ph->size / 1024, 1) }} KB</span>
+                                                    <a href="{{ route('admin.students.files.download', [$student, $ph]) }}" class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                    <form action="{{ route('admin.students.admission-files.delete', [$student, $ph]) }}" method="POST" onsubmit="return confirm('3x4 rasmni o\'chirmoqchimisiz?')">@csrf @method('DELETE')<button type="submit" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button></form>
+                                                </div>
+                                                @else
+                                                <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">@csrf<input type="hidden" name="admission_file_name" value="3x4 rasm">
+                                                    <div class="flex items-center gap-2"><input type="file" name="admission_file" accept=".jpg,.jpeg,.png" required class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer"><button type="submit" class="flex-shrink-0 p-1.5 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg></button></div>
+                                                </form>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {{-- Attestat/Diplom yuklash --}}
+                                @php $attestatFile = $studentFiles->firstWhere('name', 'Attestat/Diplom (PDF)'); @endphp
+                                <div class="qabul-card">
+                                    <div class="qabul-card-header" style="--accent:#10b981;">
+                                        <span class="qabul-dot"></span>
+                                        <h5 class="qabul-card-title">Attestat yoki diplomni yuklash (PDF)</h5>
+                                    </div>
+                                    <div class="qabul-card-body">
+                                        <div class="rounded-lg border p-3 {{ $attestatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                @if($attestatFile)<span class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></span>
+                                                @else<span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center"><svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg></span>@endif
+                                                <span class="text-xs font-bold {{ $attestatFile ? 'text-emerald-700' : 'text-slate-600' }}">Attestat yoki diplomini ilovasi bilan skaner qilib yuklash</span>
+                                            </div>
+                                            @if($attestatFile)
+                                            <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($attestatFile->size / 1024, 1) }} KB</span>
+                                                <a href="{{ route('admin.students.files.download', [$student, $attestatFile]) }}" class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                <form action="{{ route('admin.students.admission-files.delete', [$student, $attestatFile]) }}" method="POST" onsubmit="return confirm('Attestat faylini o\'chirmoqchimisiz?')">@csrf @method('DELETE')<button type="submit" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button></form>
+                                            </div>
+                                            @else
+                                            <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">@csrf<input type="hidden" name="admission_file_name" value="Attestat/Diplom (PDF)">
+                                                <div class="flex items-center gap-2"><input type="file" name="admission_file" accept=".pdf,.jpg,.jpeg,.png" required class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer"><button type="submit" class="flex-shrink-0 p-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg></button></div>
+                                            </form>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {{-- 9. Hujjatlar --}}
                                 <div class="qabul-card">
                                     <div class="qabul-card-header" style="--accent:#14b8a6;">
@@ -602,9 +748,7 @@
 
                                             @php
                                                 $docTypes = [
-                                                    ['short' => 'Pasport', 'full' => 'Pasport (PDF)'],
                                                     ['short' => 'Propiska', 'full' => 'Propiska (PDF)'],
-                                                    ['short' => 'Attestat', 'full' => 'Attestat (PDF)'],
                                                     ['short' => 'Ruxsatnoma', 'full' => 'Ruxsatnoma (PDF)'],
                                                     ['short' => 'DTM varaqa', 'full' => 'DTM varaqa (PDF)'],
                                                     ['short' => 'Ota pasporti', 'full' => 'Ota pasporti (PDF)'],
@@ -780,15 +924,29 @@
         }
     });
 
-    // Flatpickr — barcha date inputlar
-    document.addEventListener('DOMContentLoaded', function() {
-        if (typeof window.flatpickr !== 'undefined') {
-            document.querySelectorAll('.qabul-datepicker').forEach(function(el) {
-                if (el._flatpickr) return;
-                flatpickr(el, { dateFormat: 'Y-m-d', allowInput: false });
-            });
+    // Oliy ma'lumot toggle
+    function toggleOtmNomi() {
+        var sel = document.getElementById('qabul_oliy_malumot');
+        var wrap = document.getElementById('qabul_otm_nomi_wrap');
+        if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
+    }
+
+    // Flatpickr — barcha date inputlar (init after short delay to ensure Vite bundle loaded)
+    function initQabulFlatpickr() {
+        if (typeof window.flatpickr === 'undefined') {
+            setTimeout(initQabulFlatpickr, 200);
+            return;
         }
-    });
+        document.querySelectorAll('.qabul-datepicker').forEach(function(el) {
+            if (el._flatpickr) return;
+            flatpickr(el, { dateFormat: 'Y-m-d', allowInput: false });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() { setTimeout(initQabulFlatpickr, 100); });
+    } else {
+        setTimeout(initQabulFlatpickr, 100);
+    }
 
     // +998 telefon mask
     document.querySelectorAll('.qabul-phone').forEach(function(el) {

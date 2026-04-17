@@ -1482,8 +1482,7 @@ class ReportController extends Controller
             }
         }
 
-        // 3-QADAM: subject_details JSON dan dars turlari bo'yicha ajratilgan soatlarni olish
-        // Har bir fan+guruh+dars_turi uchun alohida qator hosil qilish
+        // 3-QADAM: Har bir fan+guruh uchun dars turlari bo'yicha yig'indini hisoblash
         $trainingTypeFilter = $request->has('training_types') ? (array) $request->training_types : [];
         $results = [];
         foreach ($curriculumSubjects as $cs) {
@@ -1498,44 +1497,52 @@ class ReportController extends Controller
             $ktrByCode = $ktrMap[$cs->cs_id] ?? null;
             $ktrExists = $ktrByCode !== null;
 
+            $totalPlanned = 0;
+            $totalScheduled = 0;
+            $totalKtr = 0;
+            $hasAnyType = false;
+
             foreach ($details as $detail) {
                 $trainingTypeCode = (string) ($detail['trainingType']['code'] ?? '');
-                $trainingTypeName = $detail['trainingType']['name'] ?? '-';
                 $plannedHours = (int) ($detail['academic_load'] ?? 0);
-
                 if ($trainingTypeCode === '') {
                     continue;
                 }
-
-                // Dars turi filtri
                 if (!empty($trainingTypeFilter) && !in_array($trainingTypeCode, $trainingTypeFilter)) {
                     continue;
                 }
+                $hasAnyType = true;
 
                 $schedKey = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code . '|' . $trainingTypeCode;
-                $scheduledHours = (int) ($scheduleMap[$schedKey] ?? 0);
-                $farq = $plannedHours - $scheduledHours;
-
-                $ktrHours = $ktrExists ? (int) ($ktrByCode[$trainingTypeCode] ?? 0) : null;
-                $ktrFarq = $ktrExists ? ($ktrHours - $scheduledHours) : null;
-
-                $results[] = [
-                    'cs_id' => (int) $cs->cs_id,
-                    'faculty_name' => $cs->faculty_name ?? '-',
-                    'specialty_name' => $cs->specialty_name ?? '-',
-                    'level_name' => $cs->level_name ?? '-',
-                    'semester_name' => $cs->semester_name ?? '-',
-                    'subject_name' => $cs->subject_name ?? '-',
-                    'group_name' => $cs->group_name ?? '-',
-                    'training_type' => $trainingTypeName,
-                    'planned_hours' => $plannedHours,
-                    'scheduled_hours' => $scheduledHours,
-                    'ktr_hours' => $ktrHours,
-                    'ktr_exists' => $ktrExists,
-                    'farq' => $farq,
-                    'ktr_farq' => $ktrFarq,
-                ];
+                $totalPlanned += $plannedHours;
+                $totalScheduled += (int) ($scheduleMap[$schedKey] ?? 0);
+                if ($ktrExists) {
+                    $totalKtr += (int) ($ktrByCode[$trainingTypeCode] ?? 0);
+                }
             }
+
+            if (!$hasAnyType) {
+                continue;
+            }
+
+            $farq = $totalPlanned - $totalScheduled;
+            $ktrFarq = $ktrExists ? ($totalKtr - $totalScheduled) : null;
+
+            $results[] = [
+                'cs_id' => (int) $cs->cs_id,
+                'faculty_name' => $cs->faculty_name ?? '-',
+                'specialty_name' => $cs->specialty_name ?? '-',
+                'level_name' => $cs->level_name ?? '-',
+                'semester_name' => $cs->semester_name ?? '-',
+                'subject_name' => $cs->subject_name ?? '-',
+                'group_name' => $cs->group_name ?? '-',
+                'planned_hours' => $totalPlanned,
+                'scheduled_hours' => $totalScheduled,
+                'ktr_hours' => $ktrExists ? $totalKtr : null,
+                'ktr_exists' => $ktrExists,
+                'farq' => $farq,
+                'ktr_farq' => $ktrFarq,
+            ];
         }
 
         if (empty($results)) {
@@ -1815,7 +1822,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Jadval mosligi');
 
-        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', 'Dars turi', 'Ajratilgan soat', 'Jadvalda qo\'yilgan soat', 'KTR soati', 'Farq (ajrat.)', 'Farq (KTR)'];
+        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', 'Ajratilgan soat', 'Jadvalda qo\'yilgan soat', 'KTR soati', 'Farq (ajrat.)', 'Farq (KTR)'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -1826,7 +1833,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:M1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -1837,22 +1844,21 @@ class ReportController extends Controller
             $sheet->setCellValue([5, $row], $r['semester_name']);
             $sheet->setCellValue([6, $row], $r['subject_name']);
             $sheet->setCellValue([7, $row], $r['group_name']);
-            $sheet->setCellValue([8, $row], $r['training_type']);
-            $sheet->setCellValue([9, $row], $r['planned_hours']);
-            $sheet->setCellValue([10, $row], $r['scheduled_hours']);
-            $sheet->setCellValue([11, $row], !empty($r['ktr_exists']) ? $r['ktr_hours'] : 'KTR yo\'q');
-            $sheet->setCellValue([12, $row], $r['farq']);
-            $sheet->setCellValue([13, $row], !empty($r['ktr_exists']) ? $r['ktr_farq'] : '-');
+            $sheet->setCellValue([8, $row], $r['planned_hours']);
+            $sheet->setCellValue([9, $row], $r['scheduled_hours']);
+            $sheet->setCellValue([10, $row], !empty($r['ktr_exists']) ? $r['ktr_hours'] : 'KTR yo\'q');
+            $sheet->setCellValue([11, $row], $r['farq']);
+            $sheet->setCellValue([12, $row], !empty($r['ktr_exists']) ? $r['ktr_farq'] : '-');
         }
 
-        $widths = [5, 25, 30, 8, 10, 35, 15, 20, 16, 22, 14, 14, 14];
+        $widths = [5, 25, 30, 8, 10, 35, 15, 16, 22, 14, 14, 14];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

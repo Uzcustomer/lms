@@ -149,7 +149,6 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="training_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a></th>
@@ -344,7 +343,6 @@
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
                 html += '<td><a href="#" class="subject-link" onclick="openKtrCompareModal(event, ' + r.cs_id + ')">' + esc(r.subject_name) + '</a></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#6d28d9;">' + esc(r.training_type) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
                 if (r.ktr_exists) {

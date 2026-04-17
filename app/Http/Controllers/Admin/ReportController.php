@@ -1718,9 +1718,10 @@ class ReportController extends Controller
                 ->get();
 
             // hemisWeeks[weekIdx][tt_code] = hours (haftalik yig'indi)
-            // hemisLessonsRaw[tt_code] = [{week, date, start, hours}, ...]
+            // hemisLessonsRaw[tt_code] = [{week, date, start, hours}, ...] - bir kundagi soatlar jamlanadi
             $hemisWeeks = [];
             $hemisLessonsRaw = [];
+            $dayAcc = []; // code|YYYY-MM-DD => index in hemisLessonsRaw[code]
             foreach ($scheduleRows as $row) {
                 $weekIdx = $weekIndexMap[(string) $row->week_number] ?? null;
                 if ($weekIdx === null) {
@@ -1734,12 +1735,28 @@ class ReportController extends Controller
                 $end = strtotime($row->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
                 $hemisWeeks[$weekIdx][$code] = ($hemisWeeks[$weekIdx][$code] ?? 0) + $hours;
-                $hemisLessonsRaw[$code][] = [
-                    'week' => $weekIdx,
-                    'date' => $row->lesson_date,
-                    'start' => $row->lesson_pair_start_time,
-                    'hours' => $hours,
-                ];
+
+                $dateStr = '';
+                if (!empty($row->lesson_date)) {
+                    $dateStr = substr((string) $row->lesson_date, 0, 10);
+                }
+                $dayKey = $code . '|' . $dateStr;
+
+                if (isset($dayAcc[$dayKey])) {
+                    $idx = $dayAcc[$dayKey];
+                    $hemisLessonsRaw[$code][$idx]['hours'] += $hours;
+                    if (strcmp($row->lesson_pair_start_time, $hemisLessonsRaw[$code][$idx]['start']) < 0) {
+                        $hemisLessonsRaw[$code][$idx]['start'] = $row->lesson_pair_start_time;
+                    }
+                } else {
+                    $hemisLessonsRaw[$code][] = [
+                        'week' => $weekIdx,
+                        'date' => $row->lesson_date,
+                        'start' => $row->lesson_pair_start_time,
+                        'hours' => $hours,
+                    ];
+                    $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
+                }
 
                 if (!isset($trainingTypes[$code])) {
                     $trainingTypes[$code] = [
@@ -2091,8 +2108,9 @@ class ReportController extends Controller
             $semId = (string) ($cs->semester_hemis_id ?? '');
             $wMap = $weekIndexMap[$semId] ?? [];
 
-            // HEMIS darslarini dars turi bo'yicha yig'ish (sana+vaqt bo'yicha tartiblangan)
+            // HEMIS darslarini dars turi bo'yicha yig'ish (bir kundagi soatlar bitta darsga jamlanadi)
             $hemisLessonsRaw = [];
+            $dayAcc = []; // code|YYYY-MM-DD => index in hemisLessonsRaw[code]
             $key = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
             foreach ($schedBySubject[$key] ?? [] as $r) {
                 $wIdx = $wMap[(string) $r->week_number] ?? null;
@@ -2104,12 +2122,32 @@ class ReportController extends Controller
                 $start = strtotime($r->lesson_pair_start_time);
                 $end = strtotime($r->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
-                $hemisLessonsRaw[$code][] = [
-                    'week' => $wIdx,
-                    'date' => $r->lesson_date,
-                    'start' => $r->lesson_pair_start_time,
-                    'hours' => $hours,
-                ];
+
+                // Sana bo'yicha kalit
+                $dateStr = '';
+                if (!empty($r->lesson_date)) {
+                    $dateStr = substr((string) $r->lesson_date, 0, 10);
+                }
+                $dayKey = $code . '|' . $dateStr;
+
+                if (isset($dayAcc[$dayKey])) {
+                    // Shu kunda shu dars turida allaqachon qator bor - soatlarni qo'shamiz
+                    $idx = $dayAcc[$dayKey];
+                    $hemisLessonsRaw[$code][$idx]['hours'] += $hours;
+                    // Eng erta boshlangan vaqtni saqlash
+                    if (strcmp($r->lesson_pair_start_time, $hemisLessonsRaw[$code][$idx]['start']) < 0) {
+                        $hemisLessonsRaw[$code][$idx]['start'] = $r->lesson_pair_start_time;
+                    }
+                } else {
+                    $hemisLessonsRaw[$code][] = [
+                        'week' => $wIdx,
+                        'date' => $r->lesson_date,
+                        'start' => $r->lesson_pair_start_time,
+                        'hours' => $hours,
+                    ];
+                    $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
+                }
+
                 if (!isset($trainingTypes[$code])) {
                     $trainingTypes[$code] = $name;
                 }

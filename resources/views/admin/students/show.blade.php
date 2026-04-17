@@ -441,7 +441,7 @@
                                         </div>
                                     </div>
 
-                                    {{-- 1b. Pasport --}}
+                                    {{-- 1b. Pasport ma'lumotlari + fayllar --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#f59e0b;">
                                             <span class="qabul-dot"></span>
@@ -451,37 +451,54 @@
                                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                                 <div>
                                                     <label class="qabul-label">Seriya</label>
-                                                    <input type="text" name="passport_seriya"
-                                                           value="{{ old('passport_seriya', $admissionData?->passport_seriya ?? '') }}"
-                                                           class="qabul-input" placeholder="AA" maxlength="2" style="text-transform:uppercase;">
+                                                    <input type="text" name="passport_seriya" value="{{ old('passport_seriya', $admissionData?->passport_seriya ?? '') }}" class="qabul-input" placeholder="AA" maxlength="2" style="text-transform:uppercase;">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Raqam</label>
-                                                    <input type="text" name="passport_raqam"
-                                                           value="{{ old('passport_raqam', $admissionData?->passport_raqam ?? '') }}"
-                                                           class="qabul-input" placeholder="1234567" maxlength="7" inputmode="numeric"
-                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                    <input type="text" name="passport_raqam" value="{{ old('passport_raqam', $admissionData?->passport_raqam ?? '') }}" class="qabul-input" placeholder="1234567" maxlength="7" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan sana</label>
-                                                    <input type="text" name="passport_sana"
-                                                           value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}"
-                                                           class="qabul-input qabul-datepicker" placeholder="Sanani tanlang">
+                                                    <input type="text" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}" class="qabul-input qabul-datepicker" placeholder="Sanani tanlang">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan joy</label>
-                                                    <input type="text" name="passport_joy"
-                                                           value="{{ old('passport_joy', $admissionData?->passport_joy ?? '') }}"
-                                                           class="qabul-input" placeholder="Berilgan joy">
+                                                    <input type="text" name="passport_joy" value="{{ old('passport_joy', $admissionData?->passport_joy ?? '') }}" class="qabul-input" placeholder="Berilgan joy">
+                                                </div>
+                                            </div>
+                                            @php $passportFile = $studentFiles->firstWhere('name', 'Pasport nusxasi (PDF)'); $photoFile = $studentFiles->firstWhere('name', '3x4 rasm'); @endphp
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div class="rounded-lg border p-3 {{ $passportFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}" id="qf-pasport-nusxa">
+                                                    <div class="flex items-center gap-2 mb-2">
+                                                        <span class="w-5 h-5 rounded-full {{ $passportFile ? 'bg-emerald-100' : 'bg-slate-100' }} flex items-center justify-center">@if($passportFile)<svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>@else<svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>@endif</span>
+                                                        <span class="text-xs font-bold {{ $passportFile ? 'text-emerald-700' : 'text-slate-600' }}">Pasport nusxasi (ikala tomoni bitta PDF)</span>
+                                                    </div>
+                                                    @if($passportFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($passportFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $passportFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $passportFile->id }},'Pasport nusxasi')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'Pasport nusxasi (PDF)')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                                <div class="rounded-lg border p-3 {{ $photoFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}" id="qf-3x4-rasm">
+                                                    <div class="flex items-center gap-2 mb-2">
+                                                        <span class="w-5 h-5 rounded-full {{ $photoFile ? 'bg-emerald-100' : 'bg-slate-100' }} flex items-center justify-center">@if($photoFile)<svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>@else<svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg>@endif</span>
+                                                        <span class="text-xs font-bold {{ $photoFile ? 'text-emerald-700' : 'text-slate-600' }}">3x4 rasm</span>
+                                                    </div>
+                                                    @if($photoFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($photoFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $photoFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $photoFile->id }},'3x4 rasm')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" accept=".jpg,.jpeg,.png" onchange="qabulUpload(this,'3x4 rasm')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
+                                                    @endif
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    {{-- Pasport file vars for later use --}}
-                                    @php
-                                        $passportFile = $studentFiles->firstWhere('name', 'Pasport nusxasi (PDF)');
-                                        $photoFile = $studentFiles->firstWhere('name', '3x4 rasm');
-                                    @endphp
                                     {{-- 2. Tug'ilgan joy --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#0ea5e9;">
@@ -633,23 +650,51 @@
                                                            class="qabul-input" placeholder="4.5">
                                                 </div>
                                             </div>
+                                            @php $attestatFile = $studentFiles->firstWhere('name', 'Attestat/Diplom (PDF)'); @endphp
+                                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                                <label class="qabul-label">Attestat yoki diplomini ilovasi bilan skaner qilib yuklash (PDF)</label>
+                                                <div class="rounded-lg border p-3 {{ $attestatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                    @if($attestatFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($attestatFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $attestatFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $attestatFile->id }},'Attestat')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'Attestat/Diplom (PDF)')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    {{-- 5. Til sertifikatlari --}}
+                                    {{-- 5. Til sertifikati --}}
+                                    @php $sertFile = $studentFiles->firstWhere('name', 'Til sertifikati'); @endphp
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#8b5cf6;">
                                             <span class="qabul-dot"></span>
-                                            <h5 class="qabul-card-title">Til sertifikatlari</h5>
+                                            <h5 class="qabul-card-title">Til sertifikati</h5>
                                         </div>
                                         <div class="qabul-card-body">
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                @foreach([['sertifikat_turi','Sertifikat turi'],['sertifikat_ball','Sertifikat ball'],['milliy_sertifikat','Milliy sertifikat']] as $f)
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 <div>
-                                                    <label class="qabul-label">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">Til sertifikati mavjudmi?</label>
+                                                    <select name="sertifikat_turi" class="qabul-input" id="qabul_sert_select" onchange="toggleSertUpload()">
+                                                        <option value="Yo'q" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi ?? '') !== 'Ha' ? 'selected' : '' }}>Yo'q</option>
+                                                        <option value="Ha" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $sertFile ? 'selected' : '' }}>Ha</option>
+                                                    </select>
                                                 </div>
-                                                @endforeach
+                                                <div id="qabul_sert_upload" style="{{ (old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $sertFile) ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Sertifikat faylini yuklang</label>
+                                                    <div class="rounded-lg border p-3 {{ $sertFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($sertFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($sertFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $sertFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $sertFile->id }},'Til sertifikati')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'Til sertifikati')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -708,83 +753,19 @@
                                     </div>
                                 </form>
 
-                                {{-- Pasport nusxasi va 3x4 rasm --}}
-                                <div class="qabul-card">
-                                    <div class="qabul-card-header" style="--accent:#f59e0b;">
-                                        <span class="qabul-dot"></span>
-                                        <h5 class="qabul-card-title">Pasport nusxasi va 3x4 rasm</h5>
-                                    </div>
-                                    <div class="qabul-card-body">
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            @php $pf = $passportFile; @endphp
-                                            <div class="rounded-lg border p-3 {{ $pf ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    @if($pf)<span class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></span>
-                                                    @else<span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center"><svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg></span>@endif
-                                                    <span class="text-xs font-bold {{ $pf ? 'text-emerald-700' : 'text-slate-600' }}">Pasport nusxasi (ikala tomoni bitta PDF)</span>
-                                                </div>
-                                                @if($pf)
-                                                <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($pf->size / 1024, 1) }} KB</span>
-                                                    <a href="{{ route('admin.students.files.download', [$student, $pf]) }}" class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition">Yuklab olish</a>
-                                                    <form action="{{ route('admin.students.admission-files.delete', [$student, $pf]) }}" method="POST" onsubmit="return confirm('Pasport faylini o\'chirmoqchimisiz?')">@csrf @method('DELETE')<button type="submit" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button></form>
-                                                </div>
-                                                @else
-                                                <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">@csrf<input type="hidden" name="admission_file_name" value="Pasport nusxasi (PDF)">
-                                                    <div class="flex items-center gap-2"><input type="file" name="admission_file" accept=".pdf,.jpg,.jpeg,.png" required class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer"><button type="submit" class="flex-shrink-0 p-1.5 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg></button></div>
-                                                </form>
-                                                @endif
-                                            </div>
-                                            @php $ph = $photoFile; @endphp
-                                            <div class="rounded-lg border p-3 {{ $ph ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
-                                                <div class="flex items-center gap-2 mb-2">
-                                                    @if($ph)<span class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></span>
-                                                    @else<span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center"><svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg></span>@endif
-                                                    <span class="text-xs font-bold {{ $ph ? 'text-emerald-700' : 'text-slate-600' }}">3x4 rasm</span>
-                                                </div>
-                                                @if($ph)
-                                                <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($ph->size / 1024, 1) }} KB</span>
-                                                    <a href="{{ route('admin.students.files.download', [$student, $ph]) }}" class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition">Yuklab olish</a>
-                                                    <form action="{{ route('admin.students.admission-files.delete', [$student, $ph]) }}" method="POST" onsubmit="return confirm('3x4 rasmni o\'chirmoqchimisiz?')">@csrf @method('DELETE')<button type="submit" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button></form>
-                                                </div>
-                                                @else
-                                                <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">@csrf<input type="hidden" name="admission_file_name" value="3x4 rasm">
-                                                    <div class="flex items-center gap-2"><input type="file" name="admission_file" accept=".jpg,.jpeg,.png" required class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer"><button type="submit" class="flex-shrink-0 p-1.5 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg></button></div>
-                                                </form>
-                                                @endif
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {{-- Attestat/Diplom yuklash --}}
-                                @php $attestatFile = $studentFiles->firstWhere('name', 'Attestat/Diplom (PDF)'); @endphp
-                                <div class="qabul-card">
-                                    <div class="qabul-card-header" style="--accent:#10b981;">
-                                        <span class="qabul-dot"></span>
-                                        <h5 class="qabul-card-title">Attestat yoki diplomni yuklash (PDF)</h5>
-                                    </div>
-                                    <div class="qabul-card-body">
-                                        <div class="rounded-lg border p-3 {{ $attestatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
-                                            <div class="flex items-center gap-2 mb-2">
-                                                @if($attestatFile)<span class="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center"><svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg></span>
-                                                @else<span class="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center"><svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg></span>@endif
-                                                <span class="text-xs font-bold {{ $attestatFile ? 'text-emerald-700' : 'text-slate-600' }}">Attestat yoki diplomini ilovasi bilan skaner qilib yuklash</span>
-                                            </div>
-                                            @if($attestatFile)
-                                            <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($attestatFile->size / 1024, 1) }} KB</span>
-                                                <a href="{{ route('admin.students.files.download', [$student, $attestatFile]) }}" class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition">Yuklab olish</a>
-                                                <form action="{{ route('admin.students.admission-files.delete', [$student, $attestatFile]) }}" method="POST" onsubmit="return confirm('Attestat faylini o\'chirmoqchimisiz?')">@csrf @method('DELETE')<button type="submit" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button></form>
-                                            </div>
-                                            @else
-                                            <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">@csrf<input type="hidden" name="admission_file_name" value="Attestat/Diplom (PDF)">
-                                                <div class="flex items-center gap-2"><input type="file" name="admission_file" accept=".pdf,.jpg,.jpeg,.png" required class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer"><button type="submit" class="flex-shrink-0 p-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg></button></div>
-                                            </form>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </div>
-
                                 {{-- 9. Hujjatlar --}}
+                                @php
+                                    $docTypes = [
+                                        ['short' => 'Propiska', 'full' => 'Propiska (PDF)'],
+                                        ['short' => 'Ruxsatnoma', 'full' => 'Ruxsatnoma (PDF)'],
+                                        ['short' => 'DTM varaqa', 'full' => 'DTM varaqa (PDF)'],
+                                        ['short' => 'Ota pasporti', 'full' => 'Ota pasporti (PDF)'],
+                                        ['short' => 'Ona pasporti', 'full' => 'Ona pasporti (PDF)'],
+                                        ['short' => 'Obyektivka', 'full' => 'Obyektivka'],
+                                        ['short' => 'Boshqa', 'full' => 'Boshqa'],
+                                    ];
+                                    $uploadedByName = $studentFiles->filter(fn($f) => in_array($f->name, array_column($docTypes, 'full')))->keyBy('name');
+                                @endphp
                                 <div class="qabul-card">
                                     <div class="qabul-card-header" style="--accent:#14b8a6;">
                                         <span class="qabul-dot"></span>
@@ -792,77 +773,26 @@
                                         <span class="ml-auto text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-full">Har fayl max 1MB</span>
                                     </div>
                                     <div class="qabul-card-body">
-
-                                            @php
-                                                $docTypes = [
-                                                    ['short' => 'Propiska', 'full' => 'Propiska (PDF)'],
-                                                    ['short' => 'Ruxsatnoma', 'full' => 'Ruxsatnoma (PDF)'],
-                                                    ['short' => 'DTM varaqa', 'full' => 'DTM varaqa (PDF)'],
-                                                    ['short' => 'Ota pasporti', 'full' => 'Ota pasporti (PDF)'],
-                                                    ['short' => 'Ona pasporti', 'full' => 'Ona pasporti (PDF)'],
-                                                    ['short' => 'Obyektivka', 'full' => 'Obyektivka'],
-                                                    ['short' => 'Boshqa', 'full' => 'Boshqa'],
-                                                ];
-                                                $uploadedByName = $studentFiles->filter(fn($f) => in_array($f->name, array_column($docTypes, 'full')))->keyBy('name');
-                                            @endphp
-
-                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                @foreach($docTypes as $doc)
-                                                @php $uploaded = $uploadedByName->get($doc['full']); @endphp
-                                                <div class="rounded-lg border p-3 transition-all {{ $uploaded ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30 hover:border-slate-300' }}">
-                                                    {{-- Hujjat nomi va holati --}}
-                                                    <div class="flex items-center gap-2 mb-2.5">
-                                                        @if($uploaded)
-                                                        <span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                                                            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-                                                        </span>
-                                                        @else
-                                                        <span class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                                                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-                                                        </span>
-                                                        @endif
-                                                        <div class="min-w-0">
-                                                            <span class="text-xs font-bold block {{ $uploaded ? 'text-emerald-700' : 'text-slate-600' }}">{{ $doc['short'] }}</span>
-                                                            @if($uploaded)
-                                                            <span class="text-[10px] text-slate-400">{{ number_format($uploaded->size / 1024, 1) }} KB &middot; {{ $uploaded->created_at->format('d.m.Y') }}</span>
-                                                            @endif
-                                                        </div>
-                                                    </div>
-
-                                                    @if($uploaded)
-                                                    {{-- Yuklangan fayl uchun amallar --}}
-                                                    <div class="flex items-center gap-1.5">
-                                                        <a href="{{ route('admin.students.files.download', [$student, $uploaded]) }}"
-                                                           class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition">
-                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-                                                            Yuklab olish
-                                                        </a>
-                                                        <form action="{{ route('admin.students.admission-files.delete', [$student, $uploaded]) }}" method="POST"
-                                                              onsubmit="return confirm('{{ addslashes($doc['full']) }} faylini o\'chirmoqchimisiz?')">
-                                                            @csrf @method('DELETE')
-                                                            <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-red-500 bg-red-50 rounded-md hover:bg-red-100 transition">
-                                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
-                                                                O'chirish
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                    @else
-                                                    {{-- Fayl yuklash input --}}
-                                                    <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">
-                                                        @csrf
-                                                        <input type="hidden" name="admission_file_name" value="{{ $doc['full'] }}">
-                                                        <div class="flex items-center gap-2">
-                                                            <input type="file" name="admission_file" accept=".pdf,.jpg,.jpeg,.png" required
-                                                                   class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200 file:cursor-pointer file:transition">
-                                                            <button type="submit" class="flex-shrink-0 p-1.5 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition" title="Yuklash">
-                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
-                                                            </button>
-                                                        </div>
-                                                    </form>
-                                                    @endif
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            @foreach($docTypes as $doc)
+                                            @php $uploaded = $uploadedByName->get($doc['full']); @endphp
+                                            <div class="rounded-lg border p-3 transition-all {{ $uploaded ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30 hover:border-slate-300' }}">
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    <span class="flex-shrink-0 w-5 h-5 rounded-full {{ $uploaded ? 'bg-emerald-100' : 'bg-slate-100' }} flex items-center justify-center">@if($uploaded)<svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>@else<svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>@endif</span>
+                                                    <span class="text-xs font-bold {{ $uploaded ? 'text-emerald-700' : 'text-slate-600' }}">{{ $doc['short'] }}</span>
+                                                    @if($uploaded)<span class="text-[10px] text-slate-400 ml-auto">{{ number_format($uploaded->size / 1024, 1) }} KB</span>@endif
                                                 </div>
-                                                @endforeach
+                                                @if($uploaded)
+                                                <div class="flex items-center gap-1.5">
+                                                    <a href="{{ route('admin.students.files.download', [$student, $uploaded]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                    <button type="button" onclick="qabulDelete({{ $uploaded->id }},'{{ addslashes($doc['short']) }}')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                </div>
+                                                @else
+                                                <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'{{ addslashes($doc['full']) }}')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200 file:cursor-pointer">
+                                                @endif
                                             </div>
+                                            @endforeach
+                                        </div>
                                     </div>
                                 </div>
 
@@ -970,6 +900,38 @@
             }
         }
     });
+
+    // AJAX fayl yuklash va o'chirish
+    var qabulStudentId = {{ $student->id }};
+    var qabulCsrf = '{{ csrf_token() }}';
+
+    function qabulUpload(input, fileName) {
+        if (!input.files.length) return;
+        var file = input.files[0];
+        if (file.size > 1 * 1024 * 1024) { alert('Fayl hajmi 1 MB dan oshmasligi kerak!'); input.value = ''; return; }
+        var fd = new FormData();
+        fd.append('admission_file', file);
+        fd.append('admission_file_name', fileName);
+        fd.append('_token', qabulCsrf);
+        input.disabled = true;
+        fetch('/admin/students/' + qabulStudentId + '/admission-files', { method: 'POST', body: fd })
+            .then(function(r) { if (r.ok) location.reload(); else { alert('Yuklashda xatolik!'); input.disabled = false; } })
+            .catch(function() { alert('Tarmoq xatosi!'); input.disabled = false; });
+    }
+
+    function qabulDelete(fileId, label) {
+        if (!confirm(label + " faylini o'chirmoqchimisiz?")) return;
+        fetch('/admin/students/' + qabulStudentId + '/admission-files/' + fileId, {
+            method: 'DELETE', headers: { 'X-CSRF-TOKEN': qabulCsrf, 'Accept': 'application/json' }
+        }).then(function(r) { if (r.ok) location.reload(); else alert("O'chirishda xatolik!"); });
+    }
+
+    // Til sertifikati toggle
+    function toggleSertUpload() {
+        var sel = document.getElementById('qabul_sert_select');
+        var wrap = document.getElementById('qabul_sert_upload');
+        if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
+    }
 
     // Oliy ma'lumot toggle
     function toggleOtmNomi() {

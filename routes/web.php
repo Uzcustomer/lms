@@ -552,6 +552,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
         Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');
+        Route::get('/reports/schedule-report/ktr-compare', [ReportController::class, 'scheduleKtrCompareData'])->name('reports.schedule-report.ktr-compare');
         Route::get('/reports/schedule-report/get-auditoriums', [ReportController::class, 'getAuditoriums'])->name('reports.schedule-report.get-auditoriums');
         Route::post('/reports/schedule-report/sync-auditoriums', [ReportController::class, 'syncAuditoriums'])->name('reports.schedule-report.sync-auditoriums');
 

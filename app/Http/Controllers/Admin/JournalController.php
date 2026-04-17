@@ -3212,7 +3212,14 @@ class JournalController extends Controller
         if ($request->filled('faculty_id')) {
             $faculty = Department::find($request->faculty_id);
             if ($faculty) {
-                $query->where('department_hemis_id', $faculty->department_hemis_id);
+                // Faculty'dagi faol guruhlardan foydalanilgan yo'nalishlar
+                $specialtyHemisIds = DB::table('groups')
+                    ->where('department_hemis_id', $faculty->department_hemis_id)
+                    ->where('active', true)
+                    ->where('department_active', true)
+                    ->pluck('specialty_hemis_id')
+                    ->unique();
+                $query->whereIn('specialty_hemis_id', $specialtyHemisIds);
             }
         }
 

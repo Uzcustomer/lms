@@ -145,7 +145,7 @@
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                         </div>
                         <div style="max-height:calc(100vh - 380px);overflow-y:auto;overflow-x:auto;">
-                            <table class="journal-table">
+                            <table class="journal-table" id="report-table">
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
@@ -155,7 +155,7 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="training_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th class="col-training-type"><a href="#" class="sort-link" data-sort="training_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th id="th-col-1"><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th id="th-col-2"><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda qo'yilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th id="th-col-3"><a href="#" class="sort-link" data-sort="farq">Farq <span class="sort-icon active">&#9660;</span></a></th>
@@ -168,6 +168,20 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- KTR vs HEMIS solishtirish modali -->
+    <div id="ktr-compare-modal-overlay" class="kcmp-overlay" style="display:none;" onclick="closeKtrCompareModal(event)">
+        <div class="kcmp-modal" onclick="event.stopPropagation()">
+            <div class="kcmp-modal-header">
+                <div>
+                    <h3 class="kcmp-modal-title" id="ktr-compare-modal-title">Fan nomi</h3>
+                    <div class="kcmp-modal-subtitle" id="ktr-compare-modal-subtitle"></div>
+                </div>
+                <button type="button" class="kcmp-modal-close" onclick="closeKtrCompareModal()" aria-label="Yopish">&times;</button>
+            </div>
+            <div class="kcmp-modal-body" id="ktr-compare-modal-body"></div>
         </div>
     </div>
 
@@ -186,10 +200,13 @@
         function toggleKtrCompareMode() {
             ktrCompareMode = !ktrCompareMode;
             var btn = document.getElementById('btn-ktr-compare');
+            var tbl = document.getElementById('report-table');
             if (ktrCompareMode) {
                 btn.classList.add('active');
+                tbl.classList.add('ktr-mode');
             } else {
                 btn.classList.remove('active');
+                tbl.classList.remove('ktr-mode');
             }
             currentSort = 'farq';
             currentDirection = 'desc';
@@ -374,9 +391,13 @@
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
-                html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
+                if (ktrCompareMode) {
+                    html += '<td><a href="#" class="subject-link" data-cs-id="' + r.cs_id + '" onclick="openKtrCompareModal(event, ' + r.cs_id + ')">' + esc(r.subject_name) + '</a></td>';
+                } else {
+                    html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
+                }
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#6d28d9;">' + esc(r.training_type) + '</span></td>';
+                html += '<td class="col-training-type"><span class="text-cell" style="font-weight:600;color:#6d28d9;">' + esc(r.training_type) + '</span></td>';
                 if (ktrCompareMode) {
                     html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
                     if (r.ktr_exists) {
@@ -394,6 +415,109 @@
                 html += '</tr>';
             }
             $('#table-body').html(html);
+        }
+
+        function openKtrCompareModal(e, csId) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            var params = getFilters();
+            $('#ktr-compare-modal-title').text('Yuklanmoqda...');
+            $('#ktr-compare-modal-subtitle').text('');
+            $('#ktr-compare-modal-body').html('<div style="padding:60px 20px;text-align:center;"><div class="spinner"></div><p style="color:#2b5ea7;font-size:13px;margin-top:14px;font-weight:600;">Yuklanmoqda...</p></div>');
+            $('#ktr-compare-modal-overlay').fadeIn(150);
+
+            $.ajax({
+                url: '{{ url('admin/reports/schedule-report/ktr-compare/detail') }}/' + csId,
+                type: 'GET',
+                data: {
+                    group: params.group || '',
+                    date_from: params.date_from || '',
+                    date_to: params.date_to || '',
+                    auditorium: params.auditorium || '',
+                },
+                success: function(res) {
+                    renderKtrCompareModal(res);
+                },
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi';
+                    try { msg = JSON.parse(xhr.responseText).error || msg; } catch(e) {}
+                    $('#ktr-compare-modal-body').html('<div style="padding:40px 20px;text-align:center;color:#dc2626;">' + esc(msg) + '</div>');
+                }
+            });
+        }
+
+        function closeKtrCompareModal(e) {
+            if (e && e.target && e.target.id && e.target.id !== 'ktr-compare-modal-overlay') return;
+            $('#ktr-compare-modal-overlay').fadeOut(120);
+        }
+
+        function renderKtrCompareModal(res) {
+            $('#ktr-compare-modal-title').text(res.subject_name || '');
+            $('#ktr-compare-modal-subtitle').text('Guruh: ' + (res.group_name || '-'));
+
+            if (!res.ktr_exists) {
+                $('#ktr-compare-modal-body').html(
+                    '<div style="padding:40px 20px;text-align:center;">' +
+                    '<svg style="width:48px;height:48px;margin:0 auto 12px;color:#fbbf24;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>' +
+                    '<p style="color:#92400e;font-size:15px;font-weight:600;">Bu fan uchun KTR yaratilmagan</p>' +
+                    '<p style="color:#94a3b8;font-size:12.5px;margin-top:6px;">KTR (Kalendar tematik reja) sahifasida reja yaratilganidan keyin solishtirish imkoniyati paydo bo\'ladi.</p>' +
+                    '</div>'
+                );
+                return;
+            }
+
+            var types = res.training_types || {};
+            var typeCodes = Object.keys(types);
+            if (typeCodes.length === 0) {
+                $('#ktr-compare-modal-body').html('<div style="padding:40px 20px;text-align:center;color:#64748b;">Dars turlari topilmadi</div>');
+                return;
+            }
+
+            var html = '<div style="overflow-x:auto;">';
+            html += '<table class="ktr-cmp-table"><thead>';
+            html += '<tr><th rowspan="2" class="wk-col">Hafta</th>';
+            typeCodes.forEach(function(code) {
+                html += '<th colspan="3" class="tt-col-head">' + esc(types[code].name) + '</th>';
+            });
+            html += '</tr><tr>';
+            typeCodes.forEach(function() {
+                html += '<th class="sub-head">HEMIS</th><th class="sub-head">KTR</th><th class="sub-head">Farq</th>';
+            });
+            html += '</tr></thead><tbody>';
+
+            var totalHemis = {}, totalKtr = {};
+            typeCodes.forEach(function(c) { totalHemis[c] = 0; totalKtr[c] = 0; });
+
+            (res.weeks || []).forEach(function(wk) {
+                html += '<tr><td class="wk-col">' + wk.week + '-hafta</td>';
+                typeCodes.forEach(function(code) {
+                    var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, diff:0};
+                    totalHemis[code] += (cell.hemis || 0);
+                    totalKtr[code] += (cell.ktr || 0);
+                    var diff = cell.diff;
+                    var diffCls = diff === 0 ? 'diff-zero' : (diff > 0 ? 'diff-pos' : 'diff-neg');
+                    html += '<td class="num-cell">' + (cell.hemis || 0) + '</td>';
+                    html += '<td class="num-cell">' + (cell.ktr || 0) + '</td>';
+                    html += '<td class="num-cell ' + diffCls + '">' + (diff > 0 ? '+' + diff : diff) + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody><tfoot><tr><td class="wk-col">Jami</td>';
+            typeCodes.forEach(function(code) {
+                var d = totalKtr[code] - totalHemis[code];
+                var diffCls = d === 0 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
+                html += '<td class="num-cell">' + totalHemis[code] + '</td>';
+                html += '<td class="num-cell">' + totalKtr[code] + '</td>';
+                html += '<td class="num-cell ' + diffCls + '">' + (d > 0 ? '+' + d : d) + '</td>';
+            });
+            html += '</tr></tfoot></table></div>';
+            html += '<div style="padding:10px 16px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11.5px;color:#64748b;display:flex;gap:14px;flex-wrap:wrap;">' +
+                '<span><span class="legend-dot" style="background:#16a34a;"></span> Farq = 0 (mos)</span>' +
+                '<span><span class="legend-dot" style="background:#d97706;"></span> Farq &gt; 0 (KTR ko\'p)</span>' +
+                '<span><span class="legend-dot" style="background:#dc2626;"></span> Farq &lt; 0 (HEMIS ko\'p)</span>' +
+                '</div>';
+
+            $('#ktr-compare-modal-body').html(html);
         }
 
         function downloadExcel() {
@@ -611,5 +735,40 @@
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
+
+        /* KTR compare mode: Dars turi ustunini yashirish */
+        #report-table.ktr-mode .col-training-type { display: none; }
+
+        .subject-link { color: #0f172a; font-weight: 700; font-size: 12.5px; text-decoration: none; border-bottom: 1.5px dashed #6d28d9; cursor: pointer; max-width: 260px; display: inline-block; word-break: break-word; }
+        .subject-link:hover { color: #6d28d9; border-bottom-color: #7c3aed; }
+
+        /* KTR compare modal */
+        .kcmp-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.55); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(2px); }
+        .kcmp-modal { background: #fff; border-radius: 12px; max-width: 1100px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.24); }
+        .kcmp-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f5f3ff, #ede9fe); }
+        .kcmp-modal-title { font-size: 17px; font-weight: 700; color: #1e293b; margin: 0; line-height: 1.3; }
+        .kcmp-modal-subtitle { font-size: 12.5px; color: #6d28d9; font-weight: 600; margin-top: 4px; }
+        .kcmp-modal-close { background: transparent; border: none; font-size: 28px; color: #64748b; cursor: pointer; line-height: 1; padding: 0 6px; border-radius: 6px; transition: all 0.15s; }
+        .kcmp-modal-close:hover { background: #fee2e2; color: #dc2626; }
+        .kcmp-modal-body { flex: 1; overflow: auto; }
+
+        .ktr-cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+        .ktr-cmp-table thead tr:first-child th { background: linear-gradient(135deg, #ede9fe, #ddd6fe); color: #4c1d95; padding: 10px 8px; font-size: 12px; font-weight: 700; border-bottom: 1px solid #c4b5fd; text-align: center; }
+        .ktr-cmp-table thead tr:last-child th.sub-head { background: #f5f3ff; color: #6d28d9; padding: 6px 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #ddd6fe; text-align: center; white-space: nowrap; }
+        .ktr-cmp-table th.wk-col { background: linear-gradient(135deg, #1e3a5f, #2b5ea7); color: #fff; border-bottom: 1px solid #2b5ea7; }
+        .ktr-cmp-table td.wk-col { background: #f8fafc; font-weight: 700; color: #1e3a5f; padding: 8px 10px; border-right: 1px solid #e2e8f0; text-align: center; white-space: nowrap; }
+        .ktr-cmp-table td.num-cell { padding: 7px 8px; text-align: center; font-weight: 600; color: #334155; border-bottom: 1px solid #f1f5f9; }
+        .ktr-cmp-table tbody tr:hover td { background: #eff6ff; }
+        .ktr-cmp-table tbody tr:hover td.wk-col { background: #dbeafe; }
+        .ktr-cmp-table td.diff-zero { color: #16a34a; }
+        .ktr-cmp-table td.diff-pos { color: #d97706; background: #fffbeb; }
+        .ktr-cmp-table td.diff-neg { color: #dc2626; background: #fef2f2; }
+        .ktr-cmp-table tfoot td { background: #f1f5f9; padding: 10px 8px; font-weight: 800; border-top: 2px solid #cbd5e1; text-align: center; }
+        .ktr-cmp-table tfoot td.wk-col { background: #1e3a5f; color: #fff; }
+        .ktr-cmp-table th.tt-col-head { border-left: 1px solid #c4b5fd; }
+        .ktr-cmp-table td.num-cell:nth-child(3n-1) { border-right: 1px solid #f1f5f9; }
+        .ktr-cmp-table td.num-cell:nth-child(3n+1):not(:first-child) { border-left: 1px solid #e2e8f0; }
+
+        .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
     </style>
 </x-app-layout>

@@ -1555,7 +1555,8 @@ class ReportController extends Controller
 
     /**
      * AJAX: Dars jadvali HEMIS soatini KTR sahifasida kiritilgan soat bilan solishtirish
-     * Har bir fan+guruh+dars_turi uchun schedules (HEMIS) va ktr_plans soatlarini solishtiradi
+     * Har bir fan+guruh uchun schedules (HEMIS) va ktr_plans jami soatlarini solishtiradi.
+     * Haftalik batafsil ko'rinish alohida `scheduleKtrCompareDetail` endpointi orqali olinadi.
      */
     public function scheduleKtrCompareData(Request $request)
     {
@@ -1621,7 +1622,6 @@ class ReportController extends Controller
                 return response()->json(['data' => [], 'total' => 0]);
             }
 
-            // HEMIS jadvalidan soatlarni hisoblash
             $groupIds = $curriculumSubjects->pluck('group_hemis_id')->unique()->toArray();
             $subjectIds = $curriculumSubjects->pluck('subject_id')->unique()->toArray();
             $semesterCodes = $curriculumSubjects->pluck('semester_code')->unique()->toArray();
@@ -1654,6 +1654,7 @@ class ReportController extends Controller
                 )
                 ->get();
 
+            // key: group|subject|semester|tt_code => total_hours
             $scheduleMap = [];
             foreach ($scheduleRows as $row) {
                 $key = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $row->training_type_code;
@@ -1664,7 +1665,7 @@ class ReportController extends Controller
                 $scheduleMap[$key] = ($scheduleMap[$key] ?? 0) + $academicHours;
             }
 
-            // KTR rejalaridagi soatlarni yig'ish (training_type bo'yicha)
+            // KTR rejalaridagi soatlar (barcha haftalar yig'indisi tt_code bo'yicha)
             $ktrMap = [];
             if (\Illuminate\Support\Facades\Schema::hasTable('ktr_plans')) {
                 $csIds = $curriculumSubjects->pluck('cs_id')->unique()->toArray();
@@ -1707,45 +1708,48 @@ class ReportController extends Controller
                 }
 
                 $ktrByCode = $ktrMap[$cs->cs_id] ?? null;
+                $ktrExists = $ktrByCode !== null;
+
+                $totalScheduled = 0;
+                $totalKtr = 0;
+                $hasAnyType = false;
 
                 foreach ($details as $detail) {
                     $trainingTypeCode = (string) ($detail['trainingType']['code'] ?? '');
-                    $trainingTypeName = $detail['trainingType']['name'] ?? '-';
-
                     if ($trainingTypeCode === '') {
                         continue;
                     }
                     if (!empty($trainingTypeFilter) && !in_array($trainingTypeCode, $trainingTypeFilter)) {
                         continue;
                     }
+                    $hasAnyType = true;
 
                     $schedKey = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code . '|' . $trainingTypeCode;
-                    $scheduledHours = $scheduleMap[$schedKey] ?? 0;
-
-                    if ($ktrByCode === null) {
-                        $ktrHours = null;
-                        $ktrExists = false;
-                    } else {
-                        $ktrHours = (int) ($ktrByCode[$trainingTypeCode] ?? 0);
-                        $ktrExists = true;
+                    $totalScheduled += (int) ($scheduleMap[$schedKey] ?? 0);
+                    if ($ktrExists) {
+                        $totalKtr += (int) ($ktrByCode[$trainingTypeCode] ?? 0);
                     }
-
-                    $farq = $ktrExists ? ($ktrHours - $scheduledHours) : null;
-
-                    $results[] = [
-                        'faculty_name' => $cs->faculty_name ?? '-',
-                        'specialty_name' => $cs->specialty_name ?? '-',
-                        'level_name' => $cs->level_name ?? '-',
-                        'semester_name' => $cs->semester_name ?? '-',
-                        'subject_name' => $cs->subject_name ?? '-',
-                        'group_name' => $cs->group_name ?? '-',
-                        'training_type' => $trainingTypeName,
-                        'scheduled_hours' => $scheduledHours,
-                        'ktr_hours' => $ktrHours,
-                        'ktr_exists' => $ktrExists,
-                        'farq' => $farq,
-                    ];
                 }
+
+                if (!$hasAnyType) {
+                    continue;
+                }
+
+                $farq = $ktrExists ? ($totalKtr - $totalScheduled) : null;
+
+                $results[] = [
+                    'cs_id' => (int) $cs->cs_id,
+                    'faculty_name' => $cs->faculty_name ?? '-',
+                    'specialty_name' => $cs->specialty_name ?? '-',
+                    'level_name' => $cs->level_name ?? '-',
+                    'semester_name' => $cs->semester_name ?? '-',
+                    'subject_name' => $cs->subject_name ?? '-',
+                    'group_name' => $cs->group_name ?? '-',
+                    'scheduled_hours' => $totalScheduled,
+                    'ktr_hours' => $ktrExists ? $totalKtr : null,
+                    'ktr_exists' => $ktrExists,
+                    'farq' => $farq,
+                ];
             }
 
             if (empty($results)) {
@@ -1800,6 +1804,220 @@ class ReportController extends Controller
     }
 
     /**
+     * AJAX: Bitta fan+guruh uchun haftalik HEMIS vs KTR soatlarini qaytarish.
+     * Modalda ko'rsatiladigan batafsil ma'lumot.
+     */
+    public function scheduleKtrCompareDetail(Request $request, $csId)
+    {
+        try {
+            $cs = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->leftJoin('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as s', function ($join) {
+                    $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('s.code', '=', 'cs.semester_code');
+                })
+                ->where('cs.id', $csId);
+
+            if ($request->filled('group')) {
+                $cs->where('g.group_hemis_id', $request->group);
+            }
+
+            $cs = $cs->select(
+                'cs.id as cs_id',
+                'cs.subject_id',
+                'cs.subject_name',
+                'cs.semester_code',
+                'cs.subject_details',
+                'g.group_hemis_id',
+                'g.name as group_name',
+                's.semester_hemis_id'
+            )->first();
+
+            if (!$cs) {
+                return response()->json(['error' => 'Fan topilmadi'], 404);
+            }
+
+            // Fan dars turlari (subject_details dan)
+            $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+            $trainingTypes = [];
+            if (is_array($details)) {
+                foreach ($details as $d) {
+                    $code = (string) ($d['trainingType']['code'] ?? '');
+                    $name = $d['trainingType']['name'] ?? '';
+                    if ($code !== '') {
+                        $trainingTypes[$code] = [
+                            'name' => $name,
+                            'planned_hours' => (int) ($d['academic_load'] ?? 0),
+                        ];
+                    }
+                }
+            }
+
+            // Semestr haftalarini olish va ketma-ket indeks xaritasini yaratish
+            $weekIndexMap = [];
+            if ($cs->semester_hemis_id) {
+                $weeks = DB::table('curriculum_weeks')
+                    ->where('semester_hemis_id', $cs->semester_hemis_id)
+                    ->orderBy('start_date')
+                    ->select('curriculum_week_hemis_id', 'start_date', 'end_date')
+                    ->get();
+                foreach ($weeks->values() as $i => $w) {
+                    $weekIndexMap[(string) $w->curriculum_week_hemis_id] = $i + 1;
+                }
+            }
+
+            // HEMIS jadvaldan dars soatlarini hafta+dars_turi bo'yicha yig'ish
+            $scheduleQuery = DB::table('schedules as sch')
+                ->where('sch.subject_id', $cs->subject_id)
+                ->where('sch.semester_code', $cs->semester_code)
+                ->whereNotNull('sch.lesson_date')
+                ->whereNull('sch.deleted_at');
+
+            if ($cs->group_hemis_id) {
+                $scheduleQuery->where('sch.group_id', $cs->group_hemis_id);
+            }
+            if ($request->filled('date_from')) {
+                $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
+            }
+            if ($request->filled('date_to')) {
+                $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
+            }
+            if ($request->filled('auditorium')) {
+                $scheduleQuery->where('sch.auditorium_code', $request->auditorium);
+            }
+
+            $scheduleRows = $scheduleQuery
+                ->select(
+                    'sch.training_type_code',
+                    'sch.training_type_name',
+                    'sch.week_number',
+                    'sch.lesson_date',
+                    'sch.lesson_pair_start_time',
+                    'sch.lesson_pair_end_time'
+                )
+                ->get();
+
+            // hemisWeeks[weekIdx][tt_code] = hours
+            $hemisWeeks = [];
+            foreach ($scheduleRows as $row) {
+                $weekIdx = $weekIndexMap[(string) $row->week_number] ?? null;
+                if ($weekIdx === null) {
+                    continue;
+                }
+                $start = strtotime($row->lesson_pair_start_time);
+                $end = strtotime($row->lesson_pair_end_time);
+                $hours = max(1, round((($end - $start) / 60) / 40));
+                $code = (string) $row->training_type_code;
+                $hemisWeeks[$weekIdx][$code] = ($hemisWeeks[$weekIdx][$code] ?? 0) + $hours;
+
+                if (!isset($trainingTypes[$code])) {
+                    $trainingTypes[$code] = [
+                        'name' => $row->training_type_name ?? $code,
+                        'planned_hours' => 0,
+                    ];
+                }
+            }
+
+            // KTR rejasidan soatlarni olish
+            $ktrWeeks = [];
+            $weekCount = 0;
+            $ktrExists = false;
+            if (\Illuminate\Support\Facades\Schema::hasTable('ktr_plans')) {
+                $plan = DB::table('ktr_plans')->where('curriculum_subject_id', $cs->cs_id)->first();
+                if ($plan) {
+                    $ktrExists = true;
+                    $weekCount = (int) $plan->week_count;
+                    $planData = is_string($plan->plan_data) ? json_decode($plan->plan_data, true) : $plan->plan_data;
+                    if (is_array($planData)) {
+                        $hoursData = $planData['hours'] ?? $planData;
+                        if (is_array($hoursData)) {
+                            foreach ($hoursData as $w => $weekData) {
+                                if (!is_array($weekData)) continue;
+                                $wIdx = (int) $w;
+                                foreach ($weekData as $code => $hours) {
+                                    $codeStr = (string) $code;
+                                    $ktrWeeks[$wIdx][$codeStr] = (int) $hours;
+                                    if (!isset($trainingTypes[$codeStr])) {
+                                        $trainingTypes[$codeStr] = [
+                                            'name' => $codeStr,
+                                            'planned_hours' => 0,
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Dars turlari tartibini belgilash
+            $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar', 'mustaqil'];
+            $normalize = function ($str) {
+                return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower($str));
+            };
+            uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
+                $nameA = $normalize($trainingTypes[$a]['name']);
+                $nameB = $normalize($trainingTypes[$b]['name']);
+                $posA = count($typeOrder);
+                $posB = count($typeOrder);
+                foreach ($typeOrder as $i => $keyword) {
+                    if ($posA === count($typeOrder) && str_contains($nameA, $keyword)) $posA = $i;
+                    if ($posB === count($typeOrder) && str_contains($nameB, $keyword)) $posB = $i;
+                }
+                return $posA <=> $posB;
+            });
+
+            // Ko'rsatiladigan haftalar soni
+            $maxWeekFromData = 0;
+            foreach (array_keys($hemisWeeks) as $w) $maxWeekFromData = max($maxWeekFromData, (int) $w);
+            foreach (array_keys($ktrWeeks) as $w) $maxWeekFromData = max($maxWeekFromData, (int) $w);
+            $totalWeeks = max($weekCount, $maxWeekFromData, count($weekIndexMap));
+            if ($totalWeeks <= 0) {
+                $totalWeeks = 1;
+            }
+
+            // Hafta-lar ro'yxatini tuzish
+            $weeksList = [];
+            for ($w = 1; $w <= $totalWeeks; $w++) {
+                $rowData = [
+                    'week' => $w,
+                    'cells' => [],
+                ];
+                foreach ($trainingTypes as $code => $info) {
+                    $hemisH = (int) ($hemisWeeks[$w][$code] ?? 0);
+                    $ktrH = $ktrExists && isset($ktrWeeks[$w][$code]) ? (int) $ktrWeeks[$w][$code] : 0;
+                    $rowData['cells'][$code] = [
+                        'hemis' => $hemisH,
+                        'ktr' => $ktrExists ? $ktrH : null,
+                        'diff' => $ktrExists ? ($ktrH - $hemisH) : null,
+                    ];
+                }
+                $weeksList[] = $rowData;
+            }
+
+            return response()->json([
+                'subject_name' => $cs->subject_name,
+                'group_name' => $cs->group_name,
+                'ktr_exists' => $ktrExists,
+                'week_count' => $weekCount,
+                'total_weeks' => $totalWeeks,
+                'training_types' => $trainingTypes,
+                'weeks' => $weeksList,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Schedule-KTR compare detail error: ' . $e->getMessage(), [
+                'cs_id' => $csId,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Dars jadval HEMIS vs KTR solishtirish Excel export
      */
     private function exportScheduleKtrCompareExcel(array $data)
@@ -1808,7 +2026,7 @@ class ReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('HEMIS vs KTR');
 
-        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', 'Dars turi', "Jadvalda qo'yilgan soat (HEMIS)", 'KTR soati', 'Farq'];
+        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', "Jadvalda qo'yilgan soat (HEMIS)", 'KTR soati', 'Farq'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -1819,7 +2037,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
 
         foreach ($data as $i => $r) {
             $row = $i + 2;
@@ -1830,20 +2048,19 @@ class ReportController extends Controller
             $sheet->setCellValue([5, $row], $r['semester_name']);
             $sheet->setCellValue([6, $row], $r['subject_name']);
             $sheet->setCellValue([7, $row], $r['group_name']);
-            $sheet->setCellValue([8, $row], $r['training_type']);
-            $sheet->setCellValue([9, $row], $r['scheduled_hours']);
-            $sheet->setCellValue([10, $row], $r['ktr_exists'] ? $r['ktr_hours'] : 'KTR yo\'q');
-            $sheet->setCellValue([11, $row], $r['ktr_exists'] ? $r['farq'] : '-');
+            $sheet->setCellValue([8, $row], $r['scheduled_hours']);
+            $sheet->setCellValue([9, $row], $r['ktr_exists'] ? $r['ktr_hours'] : 'KTR yo\'q');
+            $sheet->setCellValue([10, $row], $r['ktr_exists'] ? $r['farq'] : '-');
         }
 
-        $widths = [5, 25, 30, 8, 10, 35, 15, 20, 26, 14, 10];
+        $widths = [5, 25, 30, 8, 10, 35, 15, 26, 14, 10];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = count($data) + 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:J{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             ]);
         }

@@ -649,6 +649,35 @@
                                                     </select>
                                                 </div>
                                             </div>
+                                            @php $ruxsatFile = $studentFiles->firstWhere('name', 'Abituriyent ruxsatnomasi (PDF)'); $dtmFile = $studentFiles->firstWhere('name', 'DTM javob varaqasi (PDF)'); @endphp
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Abituriyent ruxsatnomasi (PDF)</label>
+                                                    <div class="rounded-lg border p-3 {{ $ruxsatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($ruxsatFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($ruxsatFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $ruxsatFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $ruxsatFile->id }},'Ruxsatnoma')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[Abituriyent ruxsatnomasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">DTM javob varaqasi (PDF)</label>
+                                                    <div class="rounded-lg border p-3 {{ $dtmFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($dtmFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($dtmFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $dtmFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $dtmFile->id }},'DTM javob varaqasi')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[DTM javob varaqasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -906,8 +935,6 @@
                                 @php
                                     $docTypes = [
                                         ['short' => 'Propiska', 'full' => 'Propiska (PDF)'],
-                                        ['short' => 'Ruxsatnoma', 'full' => 'Ruxsatnoma (PDF)'],
-                                        ['short' => 'DTM varaqa', 'full' => 'DTM varaqa (PDF)'],
                                         ['short' => 'Obyektivka', 'full' => 'Obyektivka'],
                                         ['short' => 'Boshqa', 'full' => 'Boshqa'],
                                     ];

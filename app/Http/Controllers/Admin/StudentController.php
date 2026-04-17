@@ -477,8 +477,6 @@ class StudentController extends Controller
         foreach (['tugilgan_sana', 'passport_sana'] as $df) {
             if (empty($data[$df])) {
                 $data[$df] = null;
-            } elseif (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $data[$df], $m)) {
-                $data[$df] = $m[3] . '-' . $m[2] . '-' . $m[1];
             }
         }
 

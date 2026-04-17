@@ -398,9 +398,9 @@
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Tug'ilgan sana</label>
-                                                    <input type="text" name="tugilgan_sana"
-                                                           value="{{ old('tugilgan_sana', $admissionData?->tugilgan_sana ? \Carbon\Carbon::parse($admissionData->tugilgan_sana)->format('d.m.Y') : '') }}"
-                                                           class="qabul-input qabul-date" placeholder="kk.oo.yyyy" maxlength="10">
+                                                    <input type="date" name="tugilgan_sana"
+                                                           value="{{ old('tugilgan_sana', $admissionData?->tugilgan_sana ? \Carbon\Carbon::parse($admissionData->tugilgan_sana)->format('Y-m-d') : '') }}"
+                                                           class="qabul-input">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Jinsi</label>
@@ -459,7 +459,7 @@
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan sana</label>
-                                                    <input type="text" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('d.m.Y') : '') }}" class="qabul-input qabul-date" placeholder="kk.oo.yyyy" maxlength="10">
+                                                    <input type="date" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}" class="qabul-input">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan joy</label>
@@ -1127,41 +1127,6 @@
         if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
     }
 
-    // Flatpickr kalendar — tab ochilganda init qilinadi
-    var qabulFpInited = false;
-    function initQabulDatepickers() {
-        if (qabulFpInited) return;
-        if (typeof window.flatpickr === 'undefined') return;
-        document.querySelectorAll('.qabul-date').forEach(function(el) {
-            if (el._flatpickr) return;
-            var savedVal = el.value;
-            flatpickr(el, {
-                dateFormat: 'd.m.Y',
-                allowInput: true,
-                clickOpens: true,
-                disableMobile: true,
-                parseDate: function(datestr) {
-                    if (!datestr) return null;
-                    var p = datestr.split('.');
-                    if (p.length === 3) return new Date(p[2], p[1]-1, p[0]);
-                    return new Date(datestr);
-                }
-            });
-            if (savedVal) el.value = savedVal;
-        });
-        qabulFpInited = true;
-    }
-    // Init on tab switch
-    var origSwitchTab = window.switchProfileTab;
-    window.switchProfileTab = function(tab) {
-        origSwitchTab(tab);
-        if (tab === 'qabul') setTimeout(initQabulDatepickers, 50);
-    };
-    // Init if already on qabul tab
-    if (document.getElementById('ptab-content-qabul') && document.getElementById('ptab-content-qabul').style.display !== 'none') {
-        setTimeout(initQabulDatepickers, 100);
-    }
-
     // +998 telefon mask
     document.querySelectorAll('.qabul-phone').forEach(function(el) {
         el.addEventListener('input', function(e) {
@@ -1278,8 +1243,6 @@
     @if(session('active_tab'))
     switchProfileTab('{{ session('active_tab') }}');
     @endif
-    // Also try init after Vite bundle fully loads
-    window.addEventListener('load', function() { if (document.getElementById('ptab-content-qabul') && document.getElementById('ptab-content-qabul').style.display !== 'none') setTimeout(initQabulDatepickers, 50); });
 
     // Form validation
     var qabulForm = document.getElementById('qabul-main-form');

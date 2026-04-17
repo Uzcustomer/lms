@@ -551,6 +551,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/lesson-assignment/export-status', [ReportController::class, 'lessonAssignmentExportStatus'])->name('reports.lesson-assignment.export-status');
         Route::get('/reports/lesson-assignment/export-download', [ReportController::class, 'lessonAssignmentExportDownload'])->name('reports.lesson-assignment.export-download');
 
+        Route::get('/reports/lesson-hours', [ReportController::class, 'lessonHours'])->name('reports.lesson-hours');
+        Route::get('/reports/lesson-hours/data', [ReportController::class, 'lessonHoursData'])->name('reports.lesson-hours.data');
+
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
         Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');
         Route::get('/reports/schedule-report/detail/{csId}', [ReportController::class, 'scheduleKtrCompareDetail'])->name('reports.schedule-report.detail');

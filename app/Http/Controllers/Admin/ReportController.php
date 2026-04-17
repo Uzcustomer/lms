@@ -1267,6 +1267,334 @@ class ReportController extends Controller
     }
 
     /**
+     * Dars soati belgilash hisoboti sahifasi.
+     * Jadvalga qo'yilgan soat bilan o'qituvchi HEMIS da belgilagan soat taqqoslanadi.
+     */
+    public function lessonHours(Request $request)
+    {
+        $dekanFacultyIds = get_dekan_faculty_ids();
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+
+        if (!empty($dekanFacultyIds)) {
+            $facultyQuery->whereIn('id', $dekanFacultyIds);
+        }
+
+        $faculties = $facultyQuery->get();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        $kafedraQuery = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name');
+
+        if ($selectedEducationType) {
+            $kafedraQuery->where('c.education_type_code', $selectedEducationType);
+        }
+        if (!empty($dekanFacultyIds)) {
+            $kafedraQuery->whereIn('f.id', $dekanFacultyIds);
+        } elseif ($request->filled('faculty')) {
+            $kafedraQuery->where('f.id', $request->faculty);
+        }
+        $kafedraQuery->where('s.current', true);
+
+        $kafedras = $kafedraQuery
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
+        return view('admin.reports.lesson-hours', compact(
+            'faculties',
+            'educationTypes',
+            'selectedEducationType',
+            'kafedras',
+            'dekanFacultyIds'
+        ));
+    }
+
+    /**
+     * Dars soati belgilash AJAX ma'lumot endpointi.
+     * Har bir dars juftligi uchun jadval soati (doimo 2 akademik soat) va
+     * o'qituvchi HEMIS da belgilagan soat (attendance_controls.load)ni qaytaradi.
+     */
+    public function lessonHoursData(Request $request)
+    {
+        try {
+            return $this->lessonHoursDataInner($request);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[lessonHoursData] ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'params' => $request->all(),
+            ]);
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'file' => basename($e->getFile()) . ':' . $e->getLine(),
+            ], 500);
+        }
+    }
+
+    private function lessonHoursDataInner(Request $request)
+    {
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyIds[0]]);
+        }
+
+        $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
+
+        $scheduleQuery = DB::table('schedules as sch')
+            ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
+            ->leftJoin('semesters as sem', function ($join) {
+                $join->on('sem.code', '=', 'sch.semester_code')
+                    ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
+            })
+            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotNull('sch.lesson_date')
+            ->whereNull('sch.deleted_at');
+
+        if ($request->get('current_semester', '1') == '1') {
+            $scheduleQuery->where(function ($q) {
+                $q->where('sem.current', true)
+                  ->orWhereNull('sem.id');
+            });
+        }
+
+        if ($request->filled('education_type')) {
+            $groupIds = DB::table('groups')
+                ->whereIn('curriculum_hemis_id',
+                    Curriculum::where('education_type_code', $request->education_type)
+                        ->pluck('curricula_hemis_id')
+                )
+                ->pluck('group_hemis_id')
+                ->toArray();
+            $scheduleQuery->whereIn('sch.group_id', $groupIds);
+        }
+
+        if ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $scheduleQuery->where('sch.faculty_id', $faculty->department_hemis_id);
+            }
+        }
+
+        if ($request->filled('specialty')) {
+            $scheduleQuery->where('g.specialty_hemis_id', $request->specialty);
+        }
+
+        if ($request->filled('level_code')) {
+            $scheduleQuery->where('sem.level_code', $request->level_code);
+        }
+
+        if ($request->filled('semester_code')) {
+            $scheduleQuery->where('sch.semester_code', $request->semester_code);
+        }
+
+        if ($request->filled('department')) {
+            $scheduleQuery->where('sch.department_id', $request->department);
+        }
+
+        if ($request->filled('subject')) {
+            $scheduleQuery->where('sch.subject_id', $request->subject);
+        }
+
+        if ($request->filled('group')) {
+            $scheduleQuery->where('sch.group_id', $request->group);
+        }
+
+        if ($request->filled('date_from')) {
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
+        }
+
+        if ($request->filled('date_to')) {
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
+        }
+
+        $schedules = $scheduleQuery->select(
+            'sch.schedule_hemis_id',
+            'sch.employee_id',
+            'sch.employee_name',
+            'sch.faculty_name',
+            'g.specialty_name',
+            'sem.level_name',
+            'sch.semester_code',
+            'sch.semester_name',
+            'sch.department_name',
+            'sch.subject_id',
+            'sch.subject_name',
+            'sch.group_id',
+            'sch.group_name',
+            'sch.training_type_code',
+            'sch.training_type_name',
+            'sch.lesson_pair_code',
+            'sch.lesson_pair_start_time',
+            'sch.lesson_pair_end_time',
+            'g.id as group_db_id',
+            DB::raw('DATE(sch.lesson_date) as lesson_date_str')
+        )->get();
+
+        if ($schedules->isEmpty()) {
+            return response()->json([
+                'data' => [],
+                'total' => 0,
+                'summary' => ['scheduled_total' => 0, 'hemis_total' => 0, 'diff_total' => 0],
+            ]);
+        }
+
+        $employeeIds = $schedules->pluck('employee_id')->unique()->values()->toArray();
+        $groupHemisIds = $schedules->pluck('group_id')->unique()->values()->toArray();
+        $scheduleHemisIds = $schedules->pluck('schedule_hemis_id')->unique()->values()->toArray();
+        $minDate = $schedules->min('lesson_date_str');
+        $maxDate = $schedules->max('lesson_date_str');
+
+        // HEMIS da o'qituvchi belgilagan soat — subject_schedule_id orqali
+        $loadByScheduleId = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('subject_schedule_id', $scheduleHemisIds)
+            ->where('load', '>', 0)
+            ->select('subject_schedule_id', DB::raw('MAX(`load`) as load_hours'))
+            ->groupBy('subject_schedule_id')
+            ->pluck('load_hours', 'subject_schedule_id');
+
+        // Atribut kaliti orqali (zaxira — subject_schedule_id bog'lanmagan yozuvlar uchun)
+        $loadByKey = DB::table('attendance_controls')
+            ->whereNull('deleted_at')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('group_id', $groupHemisIds)
+            ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->where('load', '>', 0)
+            ->select(
+                DB::raw("CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"),
+                DB::raw('MAX(`load`) as load_hours')
+            )
+            ->groupBy(DB::raw("CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code)"))
+            ->pluck('load_hours', 'ck');
+
+        // Bir juftlik = 2 akademik soat
+        $scheduledHoursPerPair = 2;
+
+        $grouped = [];
+        foreach ($schedules as $sch) {
+            $key = $sch->employee_id . '|' . $sch->group_id . '|' . $sch->subject_id . '|' . $sch->lesson_date_str
+                 . '|' . $sch->training_type_code . '|' . $sch->lesson_pair_code;
+
+            $pairStart = $sch->lesson_pair_start_time ? substr($sch->lesson_pair_start_time, 0, 5) : '';
+            $pairEnd = $sch->lesson_pair_end_time ? substr($sch->lesson_pair_end_time, 0, 5) : '';
+            $pairTime = ($pairStart && $pairEnd) ? ($pairStart . '-' . $pairEnd) : '';
+
+            $attKey = $key;
+            $loadBySch = (int) ($loadByScheduleId[$sch->schedule_hemis_id] ?? 0);
+            $loadByK = (int) ($loadByKey[$attKey] ?? 0);
+            $hemisHours = max($loadBySch, $loadByK);
+
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'employee_id' => $sch->employee_id,
+                    'employee_name' => $sch->employee_name,
+                    'faculty_name' => $sch->faculty_name,
+                    'specialty_name' => $sch->specialty_name,
+                    'level_name' => $sch->level_name,
+                    'semester_name' => $sch->semester_name,
+                    'semester_code' => $sch->semester_code,
+                    'department_name' => $sch->department_name,
+                    'subject_id' => $sch->subject_id,
+                    'subject_name' => $sch->subject_name,
+                    'group_id' => $sch->group_id,
+                    'group_db_id' => $sch->group_db_id,
+                    'group_name' => $sch->group_name,
+                    'training_type' => $sch->training_type_name,
+                    'lesson_pair_time' => $pairTime,
+                    'lesson_date' => $sch->lesson_date_str,
+                    'scheduled_hours' => $scheduledHoursPerPair,
+                    'hemis_hours' => $hemisHours,
+                    'hours_diff' => $scheduledHoursPerPair - $hemisHours,
+                    'hours_match' => $hemisHours === $scheduledHoursPerPair,
+                ];
+            } elseif ($hemisHours > $grouped[$key]['hemis_hours']) {
+                $grouped[$key]['hemis_hours'] = $hemisHours;
+                $grouped[$key]['hours_diff'] = $grouped[$key]['scheduled_hours'] - $hemisHours;
+                $grouped[$key]['hours_match'] = $hemisHours === $grouped[$key]['scheduled_hours'];
+            }
+        }
+
+        $results = array_values($grouped);
+
+        // Status filtri: barchasi | only mismatches | only matches | not marked
+        if ($request->filled('status_filter')) {
+            $results = array_values(array_filter($results, function ($r) use ($request) {
+                return match ($request->status_filter) {
+                    'mismatch' => !$r['hours_match'],
+                    'match' => $r['hours_match'],
+                    'not_marked' => $r['hemis_hours'] === 0,
+                    'partial' => $r['hemis_hours'] > 0 && $r['hemis_hours'] < $r['scheduled_hours'],
+                    'over_marked' => $r['hemis_hours'] > $r['scheduled_hours'],
+                    default => true,
+                };
+            }));
+        }
+
+        // Saralash
+        $sortColumn = $request->get('sort', 'lesson_date');
+        $sortDirection = $request->get('direction', 'desc');
+        usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
+            $valA = $a[$sortColumn] ?? '';
+            $valB = $b[$sortColumn] ?? '';
+            $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+            return $sortDirection === 'desc' ? -$cmp : $cmp;
+        });
+
+        // Xulosa jamlari (filtrlangan natijalar bo'yicha)
+        $summary = [
+            'scheduled_total' => array_sum(array_column($results, 'scheduled_hours')),
+            'hemis_total' => array_sum(array_column($results, 'hemis_hours')),
+        ];
+        $summary['diff_total'] = $summary['scheduled_total'] - $summary['hemis_total'];
+
+        // Pagination
+        $page = (int) $request->get('page', 1);
+        $perPage = (int) $request->get('per_page', 50);
+        $total = count($results);
+        $offset = ($page - 1) * $perPage;
+        $pageData = array_slice($results, $offset, $perPage);
+        foreach ($pageData as $i => &$item) {
+            $item['row_num'] = $offset + $i + 1;
+        }
+        unset($item);
+
+        return response()->json([
+            'data' => $pageData,
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => $page,
+            'last_page' => (int) ceil($total / $perPage),
+            'summary' => $summary,
+        ]);
+    }
+
+    /**
      * Dars jadval mosligi hisoboti sahifasi
      */
     public function scheduleReport(Request $request)

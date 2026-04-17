@@ -1018,6 +1018,7 @@ class HemisService
                                 'exam_date'           => $examDate,
                                 'employee_hemis_id'   => (string) ($item['_employee'] ?? ''),
                                 'exam_schedule_id'    => $item['_exam_schedule'] ?? null,
+                                'hemis_updated_at'    => $item['updated_at'] ?? null,
                             ]
                         );
                         $synced++;
@@ -1103,6 +1104,7 @@ class HemisService
                             'exam_date'           => $examDate,
                             'employee_hemis_id'   => (string) ($item['_employee'] ?? ''),
                             'exam_schedule_id'    => $item['_exam_schedule'] ?? null,
+                            'hemis_updated_at'    => $item['updated_at'] ?? null,
                         ]
                     );
                     $synced++;

@@ -56,14 +56,18 @@ class SyncHemisExamGrades extends Command
         $updatedAtFrom = null;
 
         if (!$this->option('full')) {
-            // Oxirgi sync vaqtini aniqlash — jadvaldan eng katta updated_at
-            $lastUpdated = HemisExamGrade::max('updated_at');
-            if ($lastUpdated) {
-                // 1 soat orqaga suramiz — chegaradagi yozuvlar tushib qolmasligi uchun
-                $updatedAtFrom = \Carbon\Carbon::parse($lastUpdated)->subHour()->timestamp;
-                $this->info("Oxirgi sync: {$lastUpdated} — faqat o'zgarganlarni tortamiz (updated_at_from={$updatedAtFrom})");
+            // HEMIS'dagi eng oxirgi updated_at vaqtini olamiz (lokal updated_at
+            // EMAS — chunki qo'lda "HEMIS yangilash" tugmasi faqat ayrim
+            // guruhlarni yangilaydi va lokal updated_at shu vaqtga o'zgaradi,
+            // lekin boshqa guruhlar yangilanmay qoladi. hemis_updated_at esa
+            // HEMIS tizimining o'z vaqti — cron shu joydan davom etadi).
+            $lastHemisUpdated = HemisExamGrade::max('hemis_updated_at');
+            if ($lastHemisUpdated) {
+                // 1 soat orqaga — chegaradagi yozuvlar tushib qolmasligi uchun
+                $updatedAtFrom = (int) $lastHemisUpdated - 3600;
+                $this->info("Oxirgi HEMIS updated_at: {$lastHemisUpdated} — faqat o'zgarganlarni tortamiz (updated_at_from={$updatedAtFrom})");
             } else {
-                $this->info("Jadval bo'sh — barchasini tortamiz (birinchi run).");
+                $this->info("Jadval bo'sh yoki hemis_updated_at yo'q — barchasini tortamiz.");
             }
         } else {
             $this->info("--full rejim: barchasini boshidan tortamiz.");

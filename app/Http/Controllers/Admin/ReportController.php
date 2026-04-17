@@ -1968,11 +1968,11 @@ class ReportController extends Controller
                 return $posA <=> $posB;
             });
 
-            // Ko'rsatiladigan haftalar soni
+            // Ko'rsatiladigan haftalar soni: KTR week_count va HEMIS'dagi haqiqiy haftalardan kattasi
             $maxWeekFromData = 0;
             foreach (array_keys($hemisWeeks) as $w) $maxWeekFromData = max($maxWeekFromData, (int) $w);
             foreach (array_keys($ktrWeeks) as $w) $maxWeekFromData = max($maxWeekFromData, (int) $w);
-            $totalWeeks = max($weekCount, $maxWeekFromData, count($weekIndexMap));
+            $totalWeeks = max($weekCount, $maxWeekFromData);
             if ($totalWeeks <= 0) {
                 $totalWeeks = 1;
             }

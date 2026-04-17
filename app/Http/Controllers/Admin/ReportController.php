@@ -1411,11 +1411,17 @@ class ReportController extends Controller
             'f.name as faculty_name',
             'g.specialty_name',
             's.level_name',
-            's.name as semester_name'
+            's.name as semester_name',
+            's.semester_hemis_id'
         )->get();
 
         if ($curriculumSubjects->isEmpty()) {
             return response()->json(['data' => [], 'total' => 0]);
+        }
+
+        // Excel export: haftalik batafsil ko'rinish (mashg'ulot turlari bilan)
+        if ($request->get('export') === 'excel') {
+            return $this->exportScheduleReportWeeklyExcel($curriculumSubjects, $request);
         }
 
         // 2-QADAM: Jadvaldan darslar sonini dars turi bo'yicha hisoblash
@@ -1569,11 +1575,6 @@ class ReportController extends Controller
             $cmp = is_numeric($valA) && is_numeric($valB) ? ($valA <=> $valB) : strcasecmp((string) $valA, (string) $valB);
             return $sortDirection === 'desc' ? -$cmp : $cmp;
         });
-
-        // Excel export
-        if ($request->get('export') === 'excel') {
-            return $this->exportScheduleReportExcel($results);
-        }
 
         // Pagination
         $page = $request->get('page', 1);
@@ -1836,58 +1837,255 @@ class ReportController extends Controller
     }
 
     /**
-     * Dars jadval mosligi Excel export
+     * Dars jadval mosligi Excel export - haftalik batafsil ko'rinish (mashg'ulot turlari bilan)
      */
-    private function exportScheduleReportExcel(array $data)
+    private function exportScheduleReportWeeklyExcel($curriculumSubjects, Request $request)
     {
+        $isMustaqil = function ($name) {
+            $normalized = preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower((string) $name));
+            return str_contains($normalized, 'mustaqil');
+        };
+        $normalize = function ($str) {
+            return preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower((string) $str));
+        };
+        $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar'];
+        $trainingTypeFilter = $request->has('training_types') ? (array) $request->training_types : [];
+
+        // Semestrlarning haftalari (tartib raqami)
+        $semIds = $curriculumSubjects->pluck('semester_hemis_id')->filter()->unique()->toArray();
+        $weekIndexMap = [];
+        if (!empty($semIds)) {
+            $weeks = DB::table('curriculum_weeks')
+                ->whereIn('semester_hemis_id', $semIds)
+                ->orderBy('start_date')
+                ->select('curriculum_week_hemis_id', 'semester_hemis_id')
+                ->get()
+                ->groupBy('semester_hemis_id');
+            foreach ($weeks as $sId => $rows) {
+                foreach ($rows->values() as $i => $w) {
+                    $weekIndexMap[(string) $sId][(string) $w->curriculum_week_hemis_id] = $i + 1;
+                }
+            }
+        }
+
+        // Jadval satrlarini barcha fan+guruh uchun bir so'rovda olish
+        $groupIds = $curriculumSubjects->pluck('group_hemis_id')->unique()->toArray();
+        $subjectIds = $curriculumSubjects->pluck('subject_id')->unique()->toArray();
+        $semesterCodes = $curriculumSubjects->pluck('semester_code')->unique()->toArray();
+
+        $scheduleQuery = DB::table('schedules as sch')
+            ->whereIn('sch.group_id', $groupIds)
+            ->whereIn('sch.subject_id', $subjectIds)
+            ->whereIn('sch.semester_code', $semesterCodes)
+            ->whereNotNull('sch.lesson_date')
+            ->whereNull('sch.deleted_at');
+        if ($request->filled('date_from')) {
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$request->date_from]);
+        }
+        if ($request->filled('date_to')) {
+            $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$request->date_to]);
+        }
+        if ($request->filled('auditorium')) {
+            $scheduleQuery->where('sch.auditorium_code', $request->auditorium);
+        }
+        $scheduleRows = $scheduleQuery->select(
+            'sch.group_id', 'sch.subject_id', 'sch.semester_code',
+            'sch.training_type_code', 'sch.training_type_name',
+            'sch.week_number',
+            'sch.lesson_pair_start_time', 'sch.lesson_pair_end_time'
+        )->get();
+
+        $schedBySubject = [];
+        foreach ($scheduleRows as $row) {
+            $key = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
+            $schedBySubject[$key][] = $row;
+        }
+
+        // KTR rejalarini cs_id bo'yicha olish
+        $ktrPlans = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('ktr_plans')) {
+            $csIds = $curriculumSubjects->pluck('cs_id')->unique()->toArray();
+            $plans = DB::table('ktr_plans')
+                ->whereIn('curriculum_subject_id', $csIds)
+                ->select('curriculum_subject_id', 'week_count', 'plan_data')
+                ->get();
+            foreach ($plans as $p) {
+                $ktrPlans[$p->curriculum_subject_id] = $p;
+            }
+        }
+
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Jadval mosligi');
+        $sheet->setTitle('Haftalik mosligi');
 
-        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', 'Ajratilgan soat', 'Jadvalda qo\'yilgan soat', 'KTR soati', 'Farq (ajrat.)', 'Farq (KTR)'];
+        $headers = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', 'Hafta', "Mashg'ulot turi", 'HEMIS soat', 'KTR soat', 'Farq (KTR-HEMIS)'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
-
         $headerStyle = [
-            'font' => ['bold' => true, 'size' => 11],
+            'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '1E293B']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBE4EF']],
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
-            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER, 'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
         ];
         $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
+        $sheet->getRowDimension(1)->setRowHeight(22);
 
-        foreach ($data as $i => $r) {
-            $row = $i + 2;
-            $sheet->setCellValue([1, $row], $i + 1);
-            $sheet->setCellValue([2, $row], $r['faculty_name']);
-            $sheet->setCellValue([3, $row], $r['specialty_name']);
-            $sheet->setCellValue([4, $row], $r['level_name']);
-            $sheet->setCellValue([5, $row], $r['semester_name']);
-            $sheet->setCellValue([6, $row], $r['subject_name']);
-            $sheet->setCellValue([7, $row], $r['group_name']);
-            $sheet->setCellValue([8, $row], $r['planned_hours']);
-            $sheet->setCellValue([9, $row], $r['scheduled_hours']);
-            $sheet->setCellValue([10, $row], !empty($r['ktr_exists']) ? $r['ktr_hours'] : 'KTR yo\'q');
-            $sheet->setCellValue([11, $row], $r['farq']);
-            $sheet->setCellValue([12, $row], !empty($r['ktr_exists']) ? $r['ktr_farq'] : '-');
+        $excelRow = 2;
+        $num = 1;
+
+        foreach ($curriculumSubjects as $cs) {
+            // Dars turlarini yig'ish (subject_details dan)
+            $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
+            $trainingTypes = [];
+            if (is_array($details)) {
+                foreach ($details as $d) {
+                    $code = (string) ($d['trainingType']['code'] ?? '');
+                    $name = $d['trainingType']['name'] ?? '';
+                    if ($code === '' || $isMustaqil($name)) continue;
+                    if (!empty($trainingTypeFilter) && !in_array($code, $trainingTypeFilter)) continue;
+                    $trainingTypes[$code] = $name;
+                }
+            }
+
+            $semId = (string) ($cs->semester_hemis_id ?? '');
+            $wMap = $weekIndexMap[$semId] ?? [];
+
+            // HEMIS haftalik soatlar
+            $hemisWeeks = [];
+            $key = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
+            foreach ($schedBySubject[$key] ?? [] as $r) {
+                $wIdx = $wMap[(string) $r->week_number] ?? null;
+                if ($wIdx === null) continue;
+                $code = (string) $r->training_type_code;
+                $name = $r->training_type_name ?? $code;
+                if ($isMustaqil($name)) continue;
+                if (!empty($trainingTypeFilter) && !in_array($code, $trainingTypeFilter)) continue;
+                $start = strtotime($r->lesson_pair_start_time);
+                $end = strtotime($r->lesson_pair_end_time);
+                $hours = max(1, round((($end - $start) / 60) / 40));
+                $hemisWeeks[$wIdx][$code] = ($hemisWeeks[$wIdx][$code] ?? 0) + $hours;
+                if (!isset($trainingTypes[$code])) {
+                    $trainingTypes[$code] = $name;
+                }
+            }
+
+            // KTR haftalik soatlar
+            $ktrWeeks = [];
+            $weekCount = 0;
+            $ktrExists = false;
+            if (isset($ktrPlans[$cs->cs_id])) {
+                $plan = $ktrPlans[$cs->cs_id];
+                $ktrExists = true;
+                $weekCount = (int) $plan->week_count;
+                $planData = is_string($plan->plan_data) ? json_decode($plan->plan_data, true) : $plan->plan_data;
+                if (is_array($planData)) {
+                    $hoursData = $planData['hours'] ?? $planData;
+                    if (is_array($hoursData)) {
+                        foreach ($hoursData as $w => $weekData) {
+                            if (!is_array($weekData)) continue;
+                            $wIdx = (int) $w;
+                            foreach ($weekData as $code => $hours) {
+                                $codeStr = (string) $code;
+                                if ($isMustaqil($codeStr)) continue;
+                                if (!empty($trainingTypeFilter) && !in_array($codeStr, $trainingTypeFilter)) continue;
+                                $ktrWeeks[$wIdx][$codeStr] = (int) $hours;
+                                if (!isset($trainingTypes[$codeStr])) {
+                                    $trainingTypes[$codeStr] = $codeStr;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (empty($trainingTypes)) {
+                continue;
+            }
+
+            // Dars turlari tartibini belgilash
+            uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
+                $nameA = $normalize($trainingTypes[$a]);
+                $nameB = $normalize($trainingTypes[$b]);
+                $posA = count($typeOrder);
+                $posB = count($typeOrder);
+                foreach ($typeOrder as $i => $kw) {
+                    if ($posA === count($typeOrder) && str_contains($nameA, $kw)) $posA = $i;
+                    if ($posB === count($typeOrder) && str_contains($nameB, $kw)) $posB = $i;
+                }
+                return $posA <=> $posB;
+            });
+
+            $maxWeekFromData = 0;
+            foreach (array_keys($hemisWeeks) as $w) $maxWeekFromData = max($maxWeekFromData, (int) $w);
+            foreach (array_keys($ktrWeeks) as $w) $maxWeekFromData = max($maxWeekFromData, (int) $w);
+            $totalWeeks = max($weekCount, $maxWeekFromData);
+            if ($totalWeeks <= 0) $totalWeeks = 1;
+
+            $subjectStartRow = $excelRow;
+
+            for ($w = 1; $w <= $totalWeeks; $w++) {
+                foreach ($trainingTypes as $code => $name) {
+                    $hemis = (int) ($hemisWeeks[$w][$code] ?? 0);
+                    $ktr = $ktrExists ? (int) ($ktrWeeks[$w][$code] ?? 0) : 0;
+                    $farq = $ktrExists ? ($ktr - $hemis) : 0;
+
+                    $sheet->setCellValue([1, $excelRow], $num++);
+                    $sheet->setCellValue([2, $excelRow], $cs->faculty_name ?? '-');
+                    $sheet->setCellValue([3, $excelRow], $cs->specialty_name ?? '-');
+                    $sheet->setCellValue([4, $excelRow], $cs->level_name ?? '-');
+                    $sheet->setCellValue([5, $excelRow], $cs->semester_name ?? '-');
+                    $sheet->setCellValue([6, $excelRow], $cs->subject_name ?? '-');
+                    $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
+                    $sheet->setCellValue([8, $excelRow], $w . '-hafta');
+                    $sheet->setCellValue([9, $excelRow], $name);
+                    $sheet->setCellValue([10, $excelRow], $hemis);
+                    $sheet->setCellValue([11, $excelRow], $ktrExists ? $ktr : 'KTR yo\'q');
+                    $sheet->setCellValue([12, $excelRow], $ktrExists ? $farq : '-');
+
+                    // Farq rangi
+                    if ($ktrExists) {
+                        $fillColor = null;
+                        if ($farq > 0) $fillColor = 'FEF3C7';
+                        elseif ($farq < 0) $fillColor = 'FEE2E2';
+                        if ($fillColor) {
+                            $sheet->getStyle([12, $excelRow, 12, $excelRow])->applyFromArray([
+                                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $fillColor]],
+                            ]);
+                        }
+                    }
+                    $excelRow++;
+                }
+            }
+
+            // Har bir fan bloki uchun pastki chegarasi (vizual ajratish)
+            if ($excelRow > $subjectStartRow) {
+                $sheet->getStyle("A" . ($excelRow - 1) . ":L" . ($excelRow - 1))->applyFromArray([
+                    'borders' => ['bottom' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM, 'color' => ['rgb' => '94A3B8']]],
+                ]);
+            }
         }
 
-        $widths = [5, 25, 30, 8, 10, 35, 15, 16, 22, 14, 14, 14];
+        $widths = [5, 22, 28, 8, 10, 32, 14, 11, 18, 12, 12, 18];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
-        $lastRow = count($data) + 1;
+        $lastRow = $excelRow - 1;
         if ($lastRow > 1) {
             $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
-                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['rgb' => 'E2E8F0']]],
+                'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
             ]);
+            // Raqamli ustunlarni markazga
+            $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("H2:L{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
         }
 
-        $fileName = 'Jadval_mosligi_' . date('Y-m-d_H-i') . '.xlsx';
-        $temp = tempnam(sys_get_temp_dir(), 'sr_');
+        $sheet->freezePane('A2');
 
+        $fileName = 'Jadval_mosligi_haftalik_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'sr_');
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($temp);
         $spreadsheet->disconnectWorksheets();

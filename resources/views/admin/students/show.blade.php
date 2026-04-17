@@ -400,7 +400,7 @@
                                                     <label class="qabul-label">Tug'ilgan sana</label>
                                                     <input type="text" name="tugilgan_sana"
                                                            value="{{ old('tugilgan_sana', $admissionData?->tugilgan_sana ? \Carbon\Carbon::parse($admissionData->tugilgan_sana)->format('Y-m-d') : '') }}"
-                                                           class="qabul-input qabul-datepicker" placeholder="Sanani tanlang">
+                                                           class="qabul-input" type="date">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Jinsi</label>
@@ -459,7 +459,7 @@
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan sana</label>
-                                                    <input type="text" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}" class="qabul-input qabul-datepicker" placeholder="Sanani tanlang">
+                                                    <input type="date" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}" class="qabul-input">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan joy</label>
@@ -856,7 +856,6 @@
     .qabul-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }
     .qabul-save-card { background:linear-gradient(135deg,#f8fafc,#eef2f7); border-color:#cbd5e1; padding:14px 16px; }
     select.qabul-input { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; cursor:pointer; }
-    .qabul-datepicker { cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:32px; }
     </style>
 
     <script>
@@ -938,23 +937,6 @@
         var sel = document.getElementById('qabul_oliy_malumot');
         var wrap = document.getElementById('qabul_otm_nomi_wrap');
         if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
-    }
-
-    // Flatpickr — barcha date inputlar (init after short delay to ensure Vite bundle loaded)
-    function initQabulFlatpickr() {
-        if (typeof window.flatpickr === 'undefined') {
-            setTimeout(initQabulFlatpickr, 200);
-            return;
-        }
-        document.querySelectorAll('.qabul-datepicker').forEach(function(el) {
-            if (el._flatpickr) return;
-            flatpickr(el, { dateFormat: 'Y-m-d', allowInput: false });
-        });
-    }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function() { setTimeout(initQabulFlatpickr, 100); });
-    } else {
-        setTimeout(initQabulFlatpickr, 100);
     }
 
     // +998 telefon mask

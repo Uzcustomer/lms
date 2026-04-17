@@ -563,12 +563,14 @@
             });
 
             // Cascading dropdowns
-            function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
+            function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_name: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
             function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
             function pd(url, p, el, cb) { $.get(url, p, function(d) { $.each(d, function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb) cb(); }); }
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
+            // Yo'nalishlar uchun: nom dubllari bo'lishi mumkin bo'lgani sababli option qiymati ham nom bo'ladi
+            function pdSpec(url, p, el, cb) { $.get(url, p, function(d) { var names = {}; $.each(d, function(k,v){ if (v) names[v] = true; }); Object.keys(names).sort().forEach(function(n){ $(el).append('<option value="'+n+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
-            function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rSpec() { rd('#specialty'); pdSpec('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
             function rSubj() { rd('#subject'); pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
 
@@ -581,7 +583,7 @@
             $('#subject').change(function() { rGrp(); });
 
             // Init dropdowns
-            pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
+            pdSpec('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
             pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
             pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject');

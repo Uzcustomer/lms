@@ -1351,8 +1351,8 @@ class ReportController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
 
-        // Joriy semestr filtri - foydalanuvchi aniq semestr tanlagan bo'lsa qo'llanmaydi
-        if ($request->get('current_semester', '1') == '1' && !$request->filled('semester_code')) {
+        // Joriy semestr filtri
+        if ($request->get('current_semester', '1') == '1') {
             $csQuery->where('s.current', true);
         }
 
@@ -1389,7 +1389,7 @@ class ReportController extends Controller
         }
 
         if ($request->filled('group')) {
-            $csQuery->where('g.group_hemis_id', $request->group);
+            $csQuery->where('g.id', $request->group);
         }
 
         $curriculumSubjects = $csQuery->select(
@@ -1609,7 +1609,7 @@ class ReportController extends Controller
                 ->where('cs.id', $csId);
 
             if ($request->filled('group')) {
-                $cs->where('g.group_hemis_id', $request->group);
+                $cs->where('g.id', $request->group);
             }
 
             $cs = $cs->select(

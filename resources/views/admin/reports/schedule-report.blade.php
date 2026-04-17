@@ -108,9 +108,13 @@
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel('excel')" disabled title="Umumiy Excel (har fan+guruh bir qator)">
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                    Excel
+                                    Umumiy
+                                </button>
+                                <button type="button" id="btn-excel-lessons" class="btn-excel-lessons" onclick="downloadExcel('excel_lessons')" disabled title="Darslar bo'yicha batafsil Excel">
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                    Darslar
                                 </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
@@ -154,6 +158,20 @@
                                         <th><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="farq">Farq (ajrat.) <span class="sort-icon active">&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="ktr_farq">Farq (KTR) <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                    </tr>
+                                    <tr class="col-filter-row">
+                                        <th></th>
+                                        <th><input type="text" class="col-filter" data-col="faculty_name" placeholder="Filtr..." /></th>
+                                        <th><input type="text" class="col-filter" data-col="specialty_name" placeholder="Filtr..." /></th>
+                                        <th><input type="text" class="col-filter" data-col="level_name" placeholder="Filtr..." /></th>
+                                        <th><input type="text" class="col-filter" data-col="semester_name" placeholder="Filtr..." /></th>
+                                        <th><input type="text" class="col-filter" data-col="subject_name" placeholder="Filtr..." /></th>
+                                        <th><input type="text" class="col-filter" data-col="group_name" placeholder="Filtr..." /></th>
+                                        <th><input type="text" class="col-filter col-filter-num" data-col="planned_hours" placeholder="=,>,<" /></th>
+                                        <th><input type="text" class="col-filter col-filter-num" data-col="scheduled_hours" placeholder="=,>,<" /></th>
+                                        <th><input type="text" class="col-filter col-filter-num" data-col="ktr_hours" placeholder="=,>,<" /></th>
+                                        <th><input type="text" class="col-filter col-filter-num" data-col="farq" placeholder="=,>,<" /></th>
+                                        <th><input type="text" class="col-filter col-filter-num" data-col="ktr_farq" placeholder="=,>,<" /></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -292,7 +310,7 @@
                     if (!res.data || res.data.length === 0) {
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
-                        $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
+                        $('#btn-excel, #btn-excel-lessons').prop('disabled', true).css('opacity', '0.5');
                         return;
                     }
 
@@ -301,7 +319,7 @@
                     renderTable(res.data);
                     renderPagination(res);
                     $('#table-area').show();
-                    $('#btn-excel').prop('disabled', false).css('opacity', '1');
+                    $('#btn-excel, #btn-excel-lessons').prop('disabled', false).css('opacity', '1');
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -337,31 +355,32 @@
                 var r = data[i];
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
-                html += '<td><span class="text-cell text-emerald">' + esc(r.faculty_name) + '</span></td>';
-                html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
-                html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
-                html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
-                html += '<td><a href="#" class="subject-link" onclick="openKtrCompareModal(event, ' + r.cs_id + ')">' + esc(r.subject_name) + '</a></td>';
-                html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
+                html += '<td data-filter-col="faculty_name"><span class="text-cell text-emerald">' + esc(r.faculty_name) + '</span></td>';
+                html += '<td data-filter-col="specialty_name"><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
+                html += '<td data-filter-col="level_name"><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
+                html += '<td data-filter-col="semester_name"><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
+                html += '<td data-filter-col="subject_name"><a href="#" class="subject-link" onclick="openKtrCompareModal(event, ' + r.cs_id + ', ' + (r.group_id || 0) + ')">' + esc(r.subject_name) + '</a></td>';
+                html += '<td data-filter-col="group_name"><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td data-filter-col="planned_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
+                html += '<td data-filter-col="scheduled_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
                 if (r.ktr_exists) {
-                    html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.ktr_hours + '</td>';
+                    html += '<td data-filter-col="ktr_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.ktr_hours + '</td>';
                 } else {
-                    html += '<td style="text-align:center;"><span class="badge badge-status-none" style="font-size:11px;">yo\'q</span></td>';
+                    html += '<td data-filter-col="ktr_hours" style="text-align:center;"><span class="badge badge-status-none" style="font-size:11px;">yo\'q</span></td>';
                 }
-                html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
+                html += '<td data-filter-col="farq" style="text-align:center;">' + farqBadge(r.farq) + '</td>';
                 if (r.ktr_exists) {
-                    html += '<td style="text-align:center;">' + farqBadge(r.ktr_farq) + '</td>';
+                    html += '<td data-filter-col="ktr_farq" style="text-align:center;">' + farqBadge(r.ktr_farq) + '</td>';
                 } else {
-                    html += '<td style="text-align:center;color:#94a3b8;">-</td>';
+                    html += '<td data-filter-col="ktr_farq" style="text-align:center;color:#94a3b8;">-</td>';
                 }
                 html += '</tr>';
             }
             $('#table-body').html(html);
+            applyColumnFilters();
         }
 
-        function openKtrCompareModal(e, csId) {
+        function openKtrCompareModal(e, csId, groupId) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
             var params = getFilters();
             $('#ktr-compare-modal-title').text('Yuklanmoqda...');
@@ -373,7 +392,7 @@
                 url: '{{ url('admin/reports/schedule-report/detail') }}/' + csId,
                 type: 'GET',
                 data: {
-                    group: params.group || '',
+                    group: groupId || params.group || '',
                     date_from: params.date_from || '',
                     date_to: params.date_to || '',
                     auditorium: params.auditorium || '',
@@ -418,7 +437,7 @@
 
             var html = '<div style="overflow-x:auto;">';
             html += '<table class="ktr-cmp-table"><thead>';
-            html += '<tr><th rowspan="2" class="wk-col">Hafta</th>';
+            html += '<tr><th rowspan="2" class="wk-col">Dars</th>';
             typeCodes.forEach(function(code, idx) {
                 var c = idx % 6;
                 html += '<th colspan="3" class="tt-col-head tt-head-' + c + '">' + esc(types[code].name) + '</th>';
@@ -435,18 +454,26 @@
             var totalHemis = {}, totalKtr = {};
             typeCodes.forEach(function(c) { totalHemis[c] = 0; totalKtr[c] = 0; });
 
-            (res.weeks || []).forEach(function(wk) {
-                html += '<tr><td class="wk-col">' + wk.week + '-hafta</td>';
+            function fmt(v) {
+                if (v === null || v === undefined) return 0;
+                if (Math.abs(v - Math.round(v)) < 0.01) return Math.round(v);
+                return Math.round(v * 10) / 10;
+            }
+
+            (res.lessons || []).forEach(function(wk) {
+                html += '<tr><td class="wk-col">' + wk.lesson + '-dars</td>';
                 typeCodes.forEach(function(code, idx) {
                     var c = idx % 6;
                     var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, diff:0};
                     totalHemis[code] += (cell.hemis || 0);
-                    totalKtr[code] += (cell.ktr || 0);
+                    if (cell.ktr) totalKtr[code] += (cell.ktr || 0);
                     var diff = cell.diff;
-                    var diffCls = diff === 0 ? 'diff-zero' : (diff > 0 ? 'diff-pos' : 'diff-neg');
-                    html += '<td class="num-cell tt-body-' + c + '">' + (cell.hemis || 0) + '</td>';
-                    html += '<td class="num-cell tt-body-' + c + '">' + (cell.ktr || 0) + '</td>';
-                    html += '<td class="num-cell tt-body-' + c + ' ' + diffCls + '">' + (diff > 0 ? '+' + diff : diff) + '</td>';
+                    var diffNum = diff === null || diff === undefined ? 0 : diff;
+                    var diffCls = Math.abs(diffNum) < 0.01 ? 'diff-zero' : (diffNum > 0 ? 'diff-pos' : 'diff-neg');
+                    var diffDisp = diff === null ? '-' : (diffNum > 0 ? '+' + fmt(diffNum) : fmt(diffNum));
+                    html += '<td class="num-cell tt-body-' + c + '">' + fmt(cell.hemis) + '</td>';
+                    html += '<td class="num-cell tt-body-' + c + '">' + fmt(cell.ktr) + '</td>';
+                    html += '<td class="num-cell tt-body-' + c + ' ' + diffCls + '">' + diffDisp + '</td>';
                 });
                 html += '</tr>';
             });
@@ -455,10 +482,10 @@
             typeCodes.forEach(function(code, idx) {
                 var c = idx % 6;
                 var d = totalKtr[code] - totalHemis[code];
-                var diffCls = d === 0 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
-                html += '<td class="num-cell tt-foot-' + c + '">' + totalHemis[code] + '</td>';
-                html += '<td class="num-cell tt-foot-' + c + '">' + totalKtr[code] + '</td>';
-                html += '<td class="num-cell tt-foot-' + c + ' ' + diffCls + '">' + (d > 0 ? '+' + d : d) + '</td>';
+                var diffCls = Math.abs(d) < 0.01 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalHemis[code]) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalKtr[code]) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + ' ' + diffCls + '">' + (d > 0 ? '+' + fmt(d) : fmt(d)) + '</td>';
             });
             html += '</tr></tfoot></table></div>';
             html += '<div style="padding:10px 16px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11.5px;color:#64748b;display:flex;gap:14px;flex-wrap:wrap;">' +
@@ -470,9 +497,54 @@
             $('#ktr-compare-modal-body').html(html);
         }
 
-        function downloadExcel() {
+        function applyColumnFilters() {
+            var filters = {};
+            $('.col-filter').each(function() {
+                var col = $(this).data('col');
+                var val = ($(this).val() || '').trim().toLowerCase();
+                if (val !== '') filters[col] = val;
+            });
+
+            function matchNumeric(filterStr, value) {
+                // Faqat sonlar: =5, >5, <5, >=5, <=5, 5 (teng)
+                var m = filterStr.match(/^\s*(=|>=|<=|>|<)?\s*(-?\d+(?:[.,]\d+)?)\s*$/);
+                if (!m) return null;
+                var op = m[1] || '=';
+                var num = parseFloat(m[2].replace(',', '.'));
+                var v = parseFloat(value);
+                if (isNaN(v)) return false;
+                switch (op) {
+                    case '>': return v > num;
+                    case '<': return v < num;
+                    case '>=': return v >= num;
+                    case '<=': return v <= num;
+                    default: return Math.abs(v - num) < 0.01;
+                }
+            }
+
+            $('#table-body tr').each(function() {
+                var $row = $(this);
+                var show = true;
+                for (var col in filters) {
+                    var fv = filters[col];
+                    var cell = $row.find('[data-filter-col="' + col + '"]');
+                    var cellText = (cell.text() || '').trim().toLowerCase();
+                    var numMatch = matchNumeric(fv, cellText);
+                    var ok;
+                    if (numMatch !== null) {
+                        ok = numMatch;
+                    } else {
+                        ok = cellText.indexOf(fv) !== -1;
+                    }
+                    if (!ok) { show = false; break; }
+                }
+                $row.toggle(show);
+            });
+        }
+
+        function downloadExcel(type) {
             var params = getFilters();
-            params.export = 'excel';
+            params.export = type || 'excel';
             var query = $.param(params);
             window.location.href = '{{ route("admin.reports.schedule-report.data") }}?' + query;
         }
@@ -498,6 +570,15 @@
             // Kalendarlarni yaratish
             new ScrollCalendar('date_from');
             new ScrollCalendar('date_to');
+
+            // Ustun filtrlari: matn kiritilganda jadvalni filtrlash
+            var colFilterTimer = null;
+            $(document).on('input', '.col-filter', function() {
+                clearTimeout(colFilterTimer);
+                colFilterTimer = setTimeout(applyColumnFilters, 120);
+            });
+            // Filtr inputlari bosilganda sortlash ishlamasin
+            $(document).on('click keydown', '.col-filter', function(e) { e.stopPropagation(); });
 
             // Sort links
             $(document).on('click', '.sort-link', function(e) {
@@ -607,9 +688,12 @@
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
-        .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
+        .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
+        .btn-excel-lessons { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: linear-gradient(135deg, #0891b2, #06b6d4); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(8,145,178,0.3); height: 36px; }
+        .btn-excel-lessons:hover:not(:disabled) { background: linear-gradient(135deg, #0e7490, #0891b2); box-shadow: 0 4px 12px rgba(8,145,178,0.4); transform: translateY(-1px); }
+        .btn-excel-lessons:disabled { cursor: not-allowed; opacity: 0.5; }
 
         .btn-sync { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: linear-gradient(135deg, #6366f1, #818cf8); color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(99,102,241,0.3); flex-shrink: 0; }
         .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #4f46e5, #6366f1); box-shadow: 0 4px 10px rgba(99,102,241,0.4); transform: translateY(-1px); }
@@ -679,6 +763,13 @@
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
+
+        /* Ustun filtrlari */
+        .col-filter-row th { padding: 4px 6px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+        .col-filter { width: 100%; min-width: 60px; height: 26px; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11.5px; font-weight: 500; color: #1e293b; background: #f8fafc; outline: none; transition: all 0.15s; }
+        .col-filter:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); background: #fff; }
+        .col-filter::placeholder { color: #94a3b8; font-weight: 400; font-size: 11px; }
+        .col-filter-num { text-align: center; }
 
         .subject-link { color: #0f172a; font-weight: 700; font-size: 12.5px; text-decoration: none; border-bottom: 1.5px dashed #6d28d9; cursor: pointer; max-width: 260px; display: inline-block; word-break: break-word; }
         .subject-link:hover { color: #6d28d9; border-bottom-color: #7c3aed; }

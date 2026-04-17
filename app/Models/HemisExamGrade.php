@@ -21,6 +21,7 @@ class HemisExamGrade extends Model
         'exam_date',
         'employee_hemis_id',
         'exam_schedule_id',
+        'hemis_updated_at',
     ];
 
     protected $casts = [

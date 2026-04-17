@@ -370,178 +370,188 @@
                             {{-- TAB 6: QABUL --}}
                             @if($canUploadFiles)
                             <div id="ptab-content-qabul" class="sp-content" style="display:none;">
-                                <div class="bg-white rounded-xl">
+                                <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form">
+                                    @csrf
 
-                                    {{-- Ma'lumotlar formasi --}}
-                                    <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="p-5 space-y-5">
-                                        @csrf
-
-                                        {{-- Shaxsiy ma'lumotlar --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-indigo-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Shaxsiy ma'lumotlar</h5>
-                                            </div>
+                                    {{-- 1. Shaxsiy ma'lumotlar --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#6366f1;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Shaxsiy ma'lumotlar</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                                 @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['tugilgan_sana',"Tug'ilgan sana",'date'],['jshshir','JSHSHIR'],['jinsi','Jinsi'],['tel1','Tel 1'],['tel2','Tel 2'],['email','Email'],['millat','Millat']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
                                                            value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
+                                                           class="qabul-input"
                                                            placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {{-- Tug'ilgan joy + Manzil (yonma-yon) --}}
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-sky-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Tug'ilgan joy</h5>
+                                    {{-- 2. Tug'ilgan joy --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#0ea5e9;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Tug'ilgan joy</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                @foreach([['tugilgan_davlat','Davlat'],['tugilgan_viloyat','Viloyat'],['tugulgan_tuman','Tuman']] as $f)
+                                                <div>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
                                                 </div>
-                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    @foreach([['tugilgan_davlat','Davlat'],['tugilgan_viloyat','Viloyat'],['tugulgan_tuman','Tuman']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-sky-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Manzil</h5>
-                                                </div>
-                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    @foreach([['doimiy_manzil','Doimiy manzil'],['yashash_davlat','Yashash davlat'],['yashash_viloyat','Yashash viloyat'],['yashash_tuman','Yashash tuman'],['yashash_manzil','Yashash manzil']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
-                                                </div>
+                                                @endforeach
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {{-- Pasport --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-amber-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pasport</h5>
+                                    {{-- 3. Manzil --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#14b8a6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Manzil</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                                                @foreach([['doimiy_manzil','Doimiy manzil'],['yashash_davlat','Yashash davlat'],['yashash_viloyat','Yashash viloyat'],['yashash_tuman','Yashash tuman'],['yashash_manzil','Yashash manzil']] as $f)
+                                                <div>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                </div>
+                                                @endforeach
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- 4. Pasport --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#f59e0b;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Pasport</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                                 @foreach([['passport_seriya','Seriya'],['passport_raqam','Raqam'],['passport_sana','Berilgan sana','date'],['passport_joy','Berilgan joy']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
                                                            value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                           placeholder="{{ $f[1] }}">
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {{-- Ta'lim ma'lumotlari --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-emerald-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ta'lim ma'lumotlari</h5>
-                                            </div>
+                                    {{-- 5. Ta'lim ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#10b981;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Ta'lim ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                                 @foreach([['oliy_malumot',"Oliy ma'lumot"],['otm_nomi','OTM nomi'],['talim_turi',"Ta'lim turi"],['talim_shakli',"Ta'lim shakli"],['mutaxassislik','Mutaxassislik'],['toplagan_ball','Toplagan ball'],['tolov_shakli',"To'lov shakli"],['muassasa_nomi','Muassasa nomi'],['hujjat_seriya','Hujjat seriya'],['ortalacha_ball','Ortalacha ball']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                           placeholder="{{ $f[1] }}">
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {{-- Til sertifikatlari --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-violet-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Til sertifikatlari</h5>
-                                            </div>
+                                    {{-- 6. Til sertifikatlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#8b5cf6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Til sertifikatlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                 @foreach([['sertifikat_turi','Sertifikat turi'],['sertifikat_ball','Sertifikat ball'],['milliy_sertifikat','Milliy sertifikat']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                           placeholder="{{ $f[1] }}">
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {{-- Ota-ona (yonma-yon) --}}
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-blue-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ota ma'lumotlari</h5>
+                                    {{-- 7. Ota ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#3b82f6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Ota ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                                @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Tel'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
+                                                <div>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
                                                 </div>
-                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                    @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Tel'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-pink-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ona ma'lumotlari</h5>
-                                                </div>
-                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                    @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
-                                                </div>
+                                                @endforeach
                                             </div>
                                         </div>
+                                    </div>
 
-                                        {{-- Saqlash tugmasi --}}
-                                        <div class="flex items-center gap-3 pt-2">
-                                            <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-slate-800 to-slate-600 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-                                                Saqlash
-                                            </button>
-                                            @if($admissionData)
-                                            <span class="text-[11px] text-slate-400">Oxirgi yangilangan: {{ $admissionData->updated_at->format('d.m.Y H:i') }}</span>
-                                            @endif
+                                    {{-- 8. Ona ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#ec4899;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Ona ma'lumotlari</h5>
                                         </div>
-                                    </form>
-
-                                    {{-- Hujjatlar bo'limi --}}
-                                    <div class="px-5 pb-5">
-                                        <div class="border-t border-slate-200 pt-5">
-                                            <div class="flex items-center gap-2 mb-4">
-                                                <span class="w-1 h-4 rounded-full bg-teal-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Hujjatlar (PDF / Rasm)</h5>
-                                                <span class="text-[10px] text-slate-400 font-medium ml-1">max 1MB</span>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                                @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
+                                                <div>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                </div>
+                                                @endforeach
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- Saqlash tugmasi --}}
+                                    <div class="qabul-card qabul-save-card">
+                                        <div class="flex items-center justify-between flex-wrap gap-3">
+                                            <div class="flex items-center gap-3">
+                                                <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-700 to-blue-500 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                                                    Ma'lumotlarni saqlash
+                                                </button>
+                                                @if($admissionData)
+                                                <span class="text-[11px] text-slate-500">Oxirgi yangilangan: <strong>{{ $admissionData->updated_at->format('d.m.Y H:i') }}</strong></span>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                {{-- 9. Hujjatlar --}}
+                                <div class="qabul-card">
+                                    <div class="qabul-card-header" style="--accent:#14b8a6;">
+                                        <span class="qabul-dot"></span>
+                                        <h5 class="qabul-card-title">Hujjatlar (PDF / Rasm)</h5>
+                                        <span class="ml-auto text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-full">Har fayl max 1MB</span>
+                                    </div>
+                                    <div class="qabul-card-body">
 
                                             @php
                                                 $docTypes = [
@@ -615,10 +625,9 @@
                                                 </div>
                                                 @endforeach
                                             </div>
-                                        </div>
                                     </div>
-
                                 </div>
+
                             </div>{{-- /qabul tab --}}
                             @endif
 
@@ -642,6 +651,21 @@
     .sp-table td:last-child { padding:6px 8px; color:#0f172a; }
     .sp-table tr:nth-child(even) { background:#f0f4f8; }
     .sp-table tr:hover { background:#e8edf5; }
+
+    /* Qabul form cards */
+    .qabul-form { display:flex; flex-direction:column; gap:16px; }
+    #ptab-content-qabul { display:flex; flex-direction:column; gap:16px; }
+    .qabul-card { background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 1px 2px rgba(15,23,42,.04); overflow:hidden; }
+    .qabul-card-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(90deg, color-mix(in srgb, var(--accent,#1a3268) 8%, #ffffff), #ffffff); border-bottom:1px solid #e2e8f0; border-left:4px solid var(--accent,#1a3268); }
+    .qabul-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#1a3268); flex-shrink:0; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent,#1a3268) 20%, transparent); }
+    .qabul-card-title { font-size:12.5px; font-weight:800; color:#1e293b; letter-spacing:.04em; text-transform:uppercase; margin:0; }
+    .qabul-card-body { padding:16px; }
+    .qabul-label { display:block; font-size:11.5px; font-weight:700; color:#475569; margin-bottom:6px; letter-spacing:.01em; }
+    .qabul-input { width:100%; padding:8px 12px; font-size:13px; color:#0f172a; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; transition:all .15s; box-shadow:0 1px 2px rgba(15,23,42,.03); }
+    .qabul-input::placeholder { color:#94a3b8; font-size:12px; }
+    .qabul-input:hover { border-color:#94a3b8; }
+    .qabul-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }
+    .qabul-save-card { background:linear-gradient(135deg,#f8fafc,#eef2f7); border-color:#cbd5e1; padding:14px 16px; }
     </style>
 
     <script>

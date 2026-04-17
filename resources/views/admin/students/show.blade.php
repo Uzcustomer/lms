@@ -1092,7 +1092,8 @@
     .qabul-input:hover { border-color:#94a3b8; }
     .qabul-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }
     .qabul-save-card { background:linear-gradient(135deg,#f8fafc,#eef2f7); border-color:#cbd5e1; padding:14px 16px; }
-    .qabul-input.qabul-error { border-color:#ef4444 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
+    .qabul-input.qabul-error, input[type="file"].qabul-error { border-color:#ef4444 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
+    input[type="file"].qabul-error { border:2px solid #ef4444; border-radius:8px; padding:4px; }
     .qabul-error-msg { color:#ef4444; font-size:10.5px; font-weight:600; margin-top:3px; }
 
     /* Vertical stepper */
@@ -1167,9 +1168,17 @@
                 var hasError = false;
                 panel.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
                 panel.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
-                panel.querySelectorAll('input.qabul-input, select.qabul-input').forEach(function(el) {
-                    if (el.disabled || el.type === 'file' || el.readOnly) return;
+                panel.querySelectorAll('input.qabul-input, select.qabul-input, input[type="file"][name^="files["]').forEach(function(el) {
+                    if (el.disabled || el.readOnly) return;
                     if (el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
+                    if (el.type === 'file') {
+                        if (!el.files || !el.files.length) {
+                            el.classList.add('qabul-error');
+                            var msg = document.createElement('p'); msg.className = 'qabul-error-msg'; msg.textContent = 'Fayl yuklash majburiy';
+                            el.parentNode.appendChild(msg); hasError = true;
+                        }
+                        return;
+                    }
                     var val = (el.value || '').trim();
                     if (!val || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
                         el.classList.add('qabul-error');
@@ -1363,9 +1372,17 @@
             panel.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
             panel.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
             var errors = [];
-            panel.querySelectorAll('input.qabul-input, select.qabul-input').forEach(function(el) {
-                if (el.disabled || el.type === 'file' || el.readOnly) return;
+            panel.querySelectorAll('input.qabul-input, select.qabul-input, input[type="file"][name^="files["]').forEach(function(el) {
+                if (el.disabled || el.readOnly) return;
                 if (el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
+                if (el.type === 'file') {
+                    if (!el.files || !el.files.length) {
+                        el.classList.add('qabul-error');
+                        var msg = document.createElement('p'); msg.className = 'qabul-error-msg'; msg.textContent = 'Fayl yuklash majburiy';
+                        el.parentNode.appendChild(msg); errors.push(el);
+                    }
+                    return;
+                }
                 var val = (el.value || '').trim();
                 if (!val || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
                     el.classList.add('qabul-error');
@@ -1379,7 +1396,11 @@
             if (e.target.classList.contains('qabul-error')) { e.target.classList.remove('qabul-error'); var m=e.target.parentNode.querySelector('.qabul-error-msg'); if(m) m.remove(); }
         });
         qabulForm.addEventListener('change', function(e) {
-            if (e.target.classList.contains('qabul-error')) { e.target.classList.remove('qabul-error'); var m=e.target.parentNode.querySelector('.qabul-error-msg'); if(m) m.remove(); }
+            if (e.target.classList.contains('qabul-error')) {
+                e.target.classList.remove('qabul-error');
+                var m = e.target.parentNode.querySelector('.qabul-error-msg');
+                if (m) m.remove();
+            }
         });
     }
     </script>

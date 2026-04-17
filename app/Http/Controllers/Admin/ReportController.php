@@ -1494,8 +1494,7 @@ class ReportController extends Controller
             ->pluck('load_hours', 'ck');
 
         // Juftlik davomidan akademik soatni hisoblash.
-        // O'zbekiston OTM standartida 1 akademik soat ≈ 40 daqiqa.
-        //   40 daq  → 1 soat,  80–90 daq → 2 soat,  120–135 daq → 3 soat va h.k.
+        // HEMIS da faqat 1 soatlik (≈40 daq) yoki 2 soatlik (≈80 daq) darslar bo'ladi.
         $pairHours = function ($start, $end): int {
             if (!$start || !$end) return 2;
             $startTs = strtotime((string) $start);
@@ -1503,7 +1502,8 @@ class ReportController extends Controller
             if ($startTs === false || $endTs === false) return 2;
             $minutes = ($endTs - $startTs) / 60;
             if ($minutes <= 0) return 2;
-            return max(1, (int) round($minutes / 40));
+            // ≤ 60 daq → 1 akademik soat, aks holda 2 akademik soat.
+            return $minutes <= 60 ? 1 : 2;
         };
 
         $grouped = [];

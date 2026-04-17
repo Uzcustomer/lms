@@ -105,17 +105,9 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="filter-item" style="min-width: 290px;">
+                        <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel('excel')" disabled title="Umumiy Excel (har fan+guruh bir qator)">
-                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                    Umumiy
-                                </button>
-                                <button type="button" id="btn-excel-lessons" class="btn-excel-lessons" onclick="downloadExcel('excel_lessons')" disabled title="Darslar bo'yicha batafsil Excel">
-                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                                    Darslar
-                                </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
@@ -138,9 +130,19 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;">
+                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span id="total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                            <div style="margin-left:auto;display:flex;gap:8px;">
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel('excel')" disabled title="Umumiy Excel (har fan+guruh bir qator)">
+                                    <svg style="width:17px;height:17px;" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 8V3.5L18.5 9H14a1 1 0 0 1-1-1zM8.2 13l1.6 2.4L11.4 13h1.8l-2.4 3.5L13.4 20H11.6l-1.8-2.7L8 20H6.2l2.6-3.7L6.4 13h1.8z"/></svg>
+                                    Excel (umumiy)
+                                </button>
+                                <button type="button" id="btn-excel-lessons" class="btn-excel-lessons" onclick="downloadExcel('excel_lessons')" disabled title="Darslar bo'yicha batafsil Excel">
+                                    <svg style="width:17px;height:17px;" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 8V3.5L18.5 9H14a1 1 0 0 1-1-1zM8.2 13l1.6 2.4L11.4 13h1.8l-2.4 3.5L13.4 20H11.6l-1.8-2.7L8 20H6.2l2.6-3.7L6.4 13h1.8z"/></svg>
+                                    Excel (darslar)
+                                </button>
+                            </div>
                         </div>
                         <div style="max-height:calc(100vh - 380px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table" id="report-table">

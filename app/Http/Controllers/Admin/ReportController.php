@@ -1990,6 +1990,9 @@ class ReportController extends Controller
      */
     private function exportScheduleReportLessonsExcel($curriculumSubjects, Request $request)
     {
+        try {
+        @set_time_limit(300);
+        @ini_set('memory_limit', '1G');
         $isMustaqil = function ($name) {
             $normalized = preg_replace('/[^a-z\x{0400}-\x{04FF}]/u', '', mb_strtolower((string) $name));
             return str_contains($normalized, 'mustaqil');
@@ -2295,6 +2298,17 @@ class ReportController extends Controller
         return response()->download($temp, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+        } catch (\Throwable $e) {
+            \Log::error('Lessons Excel export error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'error' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ], 500);
+        }
     }
 
     /**

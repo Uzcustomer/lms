@@ -1420,11 +1420,6 @@ class ReportController extends Controller
             return response()->json(['data' => [], 'total' => 0]);
         }
 
-        // Excel export turi: darslar bo'yicha batafsil ko'rinish
-        if ($request->get('export') === 'excel_lessons') {
-            return $this->exportScheduleReportLessonsExcel($curriculumSubjects, $request);
-        }
-
         // 2-QADAM: Jadvaldan darslar sonini dars turi bo'yicha hisoblash
         // Akademik soat = (lesson_pair_end_time - lesson_pair_start_time) / 40 daqiqa
         $groupIds = $curriculumSubjects->pluck('group_hemis_id')->unique()->toArray();
@@ -1562,7 +1557,7 @@ class ReportController extends Controller
         }
 
         if (empty($results)) {
-            return response()->json(['data' => [], 'total' => 0]);
+            return response()->json(['data' => [], 'total' => 0, 'column_values' => []]);
         }
 
         // Saralash (standart: farq bo'yicha kamayish tartibida)
@@ -1578,9 +1573,46 @@ class ReportController extends Controller
             return $sortDirection === 'desc' ? -$cmp : $cmp;
         });
 
+        // Filtrlanadigan ustunlar va ulardagi mavjud (noyob) qiymatlar (filtrgacha)
+        $filterableCols = ['faculty_name', 'specialty_name', 'level_name', 'semester_name', 'subject_name', 'group_name', 'planned_hours', 'scheduled_hours', 'ktr_hours', 'farq', 'ktr_farq'];
+        $columnValues = [];
+        foreach ($filterableCols as $col) {
+            $vals = [];
+            foreach ($results as $row) {
+                $v = $row[$col] ?? null;
+                if ($v === null) $v = '';
+                $vals[(string) $v] = true;
+            }
+            $columnValues[$col] = array_keys($vals);
+        }
+
+        // Ustun filtrlari (frontend dropdown'larda tanlangan qiymatlar)
+        $colFilters = $request->input('col_filters', []);
+        if (is_array($colFilters) && !empty($colFilters)) {
+            $results = array_values(array_filter($results, function ($row) use ($colFilters) {
+                foreach ($colFilters as $col => $allowed) {
+                    if (!is_array($allowed) || empty($allowed)) {
+                        return false; // bo'sh ro'yxat - hech qanday qator ko'rinmasin
+                    }
+                    $v = $row[$col] ?? '';
+                    if ($v === null) $v = '';
+                    if (!in_array((string) $v, $allowed, true)) {
+                        return false;
+                    }
+                }
+                return true;
+            }));
+        }
+
         // Excel export (umumiy) - yig'ilgan ma'lumot asosida
         if ($request->get('export') === 'excel') {
             return $this->exportScheduleReportSummaryExcel($results);
+        }
+        // Excel export (batafsil) - faqat filtrlangan (cs_id) lar uchun
+        if ($request->get('export') === 'excel_lessons') {
+            $allowedCsIds = array_flip(array_map(fn($r) => (int) $r['cs_id'], $results));
+            $filteredCs = $curriculumSubjects->filter(fn($cs) => isset($allowedCsIds[(int) $cs->cs_id]));
+            return $this->exportScheduleReportLessonsExcel($filteredCs, $request);
         }
 
         // Pagination
@@ -1601,6 +1633,7 @@ class ReportController extends Controller
             'per_page' => $perPage,
             'current_page' => (int) $page,
             'last_page' => ceil($total / $perPage),
+            'column_values' => $columnValues,
         ]);
         } catch (\Throwable $e) {
             \Log::error('Schedule report error: ' . $e->getMessage(), [
@@ -1891,8 +1924,22 @@ class ReportController extends Controller
             // Darslar ro'yxatini tuzish (har bir dars turi uchun kesishma)
             $lessonsList = [];
             for ($k = 1; $k <= $maxLessons; $k++) {
+                // Shu dars uchun eng erta sana (HEMIS dan)
+                $earliestTs = null;
+                foreach ($trainingTypes as $code => $info) {
+                    $hl = $hemisLessonsByType[$code][$k - 1] ?? null;
+                    if ($hl && !empty($hl['date'])) {
+                        $ts = strtotime((string) $hl['date']);
+                        if ($ts && ($earliestTs === null || $ts < $earliestTs)) {
+                            $earliestTs = $ts;
+                        }
+                    }
+                }
+                $dateLabel = $earliestTs ? date('d.m.Y', $earliestTs) : '';
+
                 $rowData = [
                     'lesson' => $k,
+                    'date' => $dateLabel,
                     'cells' => [],
                 ];
                 foreach ($trainingTypes as $code => $info) {
@@ -1901,7 +1948,6 @@ class ReportController extends Controller
                     $hemisH = isset($hemisLessons[$k - 1]) ? (int) $hemisLessons[$k - 1]['hours'] : 0;
                     if ($ktrExists) {
                         $ktrHraw = isset($ktrLessons[$k - 1]) ? $ktrLessons[$k - 1]['ktr'] : 0;
-                        // Butun son bo'lsa butun, aks holda 1 o'nlikgacha yaxlitlash
                         $ktrH = (abs($ktrHraw - round($ktrHraw)) < 0.01) ? (int) round($ktrHraw) : round($ktrHraw, 1);
                     } else {
                         $ktrH = null;
@@ -2085,14 +2131,14 @@ class ReportController extends Controller
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Darslar mosligi');
+        $sheet->setTitle('Batafsil mosligi');
 
-        // 1-bosqich: barcha (cs+training_type) uchun darslar massivlarini tayyorlash
-        $blocks = []; // har bir element: ['cs'=>..., 'tt_name'=>..., 'hemis'=>[per-lesson hours], 'ktr'=>[per-lesson hours], 'ktr_exists'=>bool]
-        $maxLessons = 0;
+        // 1-bosqich: har bir (cs) uchun barcha dars turlari ma'lumotini tayyorlash
+        // $blocks[csIdx] = ['cs'=>..., 'training_types'=>['code'=>['name','hemis'=>[],'ktr'=>[],'dates'=>[]]], 'ktr_exists'=>bool]
+        $blocks = [];
+        $globalTrainingTypes = []; // code => name (barcha cs lar bo'ylab birlashtirilgan)
 
         foreach ($curriculumSubjects as $cs) {
-            // Dars turlarini yig'ish (subject_details dan)
             $details = is_string($cs->subject_details) ? json_decode($cs->subject_details, true) : $cs->subject_details;
             $trainingTypes = [];
             if (is_array($details)) {
@@ -2108,9 +2154,9 @@ class ReportController extends Controller
             $semId = (string) ($cs->semester_hemis_id ?? '');
             $wMap = $weekIndexMap[$semId] ?? [];
 
-            // HEMIS darslarini dars turi bo'yicha yig'ish (bir kundagi soatlar bitta darsga jamlanadi)
+            // HEMIS darslarini dars turi bo'yicha (bir kundagi soatlar bitta darsga jamlanadi)
             $hemisLessonsRaw = [];
-            $dayAcc = []; // code|YYYY-MM-DD => index in hemisLessonsRaw[code]
+            $dayAcc = [];
             $key = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
             foreach ($schedBySubject[$key] ?? [] as $r) {
                 $wIdx = $wMap[(string) $r->week_number] ?? null;
@@ -2123,7 +2169,6 @@ class ReportController extends Controller
                 $end = strtotime($r->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
 
-                // Sana bo'yicha kalit
                 $dateStr = '';
                 if (!empty($r->lesson_date)) {
                     $dateStr = substr((string) $r->lesson_date, 0, 10);
@@ -2131,10 +2176,8 @@ class ReportController extends Controller
                 $dayKey = $code . '|' . $dateStr;
 
                 if (isset($dayAcc[$dayKey])) {
-                    // Shu kunda shu dars turida allaqachon qator bor - soatlarni qo'shamiz
                     $idx = $dayAcc[$dayKey];
                     $hemisLessonsRaw[$code][$idx]['hours'] += $hours;
-                    // Eng erta boshlangan vaqtni saqlash
                     if (strcmp($r->lesson_pair_start_time, $hemisLessonsRaw[$code][$idx]['start']) < 0) {
                         $hemisLessonsRaw[$code][$idx]['start'] = $r->lesson_pair_start_time;
                     }
@@ -2147,12 +2190,10 @@ class ReportController extends Controller
                     ];
                     $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
                 }
-
                 if (!isset($trainingTypes[$code])) {
                     $trainingTypes[$code] = $name;
                 }
             }
-            // Sana+vaqt bo'yicha tartibga solish
             foreach ($hemisLessonsRaw as $code => &$list) {
                 usort($list, function ($a, $b) {
                     $ad = strtotime(($a['date'] ?? '') . ' ' . ($a['start'] ?? '00:00:00'));
@@ -2162,7 +2203,7 @@ class ReportController extends Controller
             }
             unset($list);
 
-            // KTR haftalik soatlar
+            // KTR rejasi
             $ktrWeeks = [];
             $ktrExists = false;
             if (isset($ktrPlans[$cs->cs_id])) {
@@ -2189,86 +2230,112 @@ class ReportController extends Controller
                 }
             }
 
-            if (empty($trainingTypes)) {
-                continue;
-            }
+            if (empty($trainingTypes)) continue;
 
-            // Dars turlari tartibini belgilash
-            uksort($trainingTypes, function ($a, $b) use ($trainingTypes, $typeOrder, $normalize) {
-                $nameA = $normalize($trainingTypes[$a]);
-                $nameB = $normalize($trainingTypes[$b]);
-                $posA = count($typeOrder);
-                $posB = count($typeOrder);
-                foreach ($typeOrder as $i => $kw) {
-                    if ($posA === count($typeOrder) && str_contains($nameA, $kw)) $posA = $i;
-                    if ($posB === count($typeOrder) && str_contains($nameB, $kw)) $posB = $i;
-                }
-                return $posA <=> $posB;
-            });
-
+            // Har bir dars turi uchun darslar massivlarini tuzish
+            $ttData = [];
             foreach ($trainingTypes as $code => $name) {
                 $lessons = $hemisLessonsRaw[$code] ?? [];
                 $weeklyCount = [];
                 foreach ($lessons as $l) {
                     $weeklyCount[$l['week']] = ($weeklyCount[$l['week']] ?? 0) + 1;
                 }
-
                 $hemisVals = [];
                 $ktrVals = [];
+                $dates = [];
                 foreach ($lessons as $lesson) {
                     $hemisVals[] = (int) $lesson['hours'];
-                    $w = $lesson['week'];
+                    $dates[] = $lesson['date'] ?? '';
                     if ($ktrExists) {
-                        $kRaw = ($ktrWeeks[$w][$code] ?? 0) / max(1, $weeklyCount[$w]);
+                        $kRaw = ($ktrWeeks[$lesson['week']][$code] ?? 0) / max(1, $weeklyCount[$lesson['week']]);
                         $ktrVals[] = (abs($kRaw - round($kRaw)) < 0.01) ? (int) round($kRaw) : round($kRaw, 1);
                     }
                 }
-
-                // HEMIS darsi yo'q, lekin KTR soati bor haftalar - alohida darslar sifatida qo'shish
                 if ($ktrExists) {
                     $hemisWeeksSet = [];
                     foreach ($lessons as $l) $hemisWeeksSet[$l['week']] = true;
                     $extra = [];
-                    foreach ($ktrWeeks as $w => $weekData) {
-                        if (!empty($weekData[$code]) && empty($hemisWeeksSet[$w])) {
-                            $extra[] = ['week' => (int) $w, 'ktr' => (int) $weekData[$code]];
+                    foreach ($ktrWeeks as $w => $wd) {
+                        if (!empty($wd[$code]) && empty($hemisWeeksSet[$w])) {
+                            $extra[] = ['week' => (int) $w, 'ktr' => (int) $wd[$code]];
                         }
                     }
                     usort($extra, fn($a, $b) => $a['week'] <=> $b['week']);
                     foreach ($extra as $ex) {
                         $hemisVals[] = 0;
                         $ktrVals[] = $ex['ktr'];
+                        $dates[] = '';
                     }
                 }
-
                 if (empty($hemisVals) && empty($ktrVals)) continue;
-
-                $maxLessons = max($maxLessons, count($hemisVals), count($ktrVals));
-
-                $blocks[] = [
-                    'cs' => $cs,
-                    'tt_name' => $name,
-                    'hemis' => $hemisVals,
-                    'ktr' => $ktrVals,
-                    'ktr_exists' => $ktrExists,
-                ];
+                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'dates' => $dates];
+                if (!isset($globalTrainingTypes[$code])) {
+                    $globalTrainingTypes[$code] = $name;
+                }
             }
+
+            if (empty($ttData)) continue;
+
+            $blocks[] = ['cs' => $cs, 'training_types' => $ttData, 'ktr_exists' => $ktrExists];
         }
 
-        if ($maxLessons === 0) $maxLessons = 1;
+        // Global dars turlarini standart tartibda saralash
+        uksort($globalTrainingTypes, function ($a, $b) use ($globalTrainingTypes, $typeOrder, $normalize) {
+            $nameA = $normalize($globalTrainingTypes[$a]);
+            $nameB = $normalize($globalTrainingTypes[$b]);
+            $posA = count($typeOrder);
+            $posB = count($typeOrder);
+            foreach ($typeOrder as $i => $kw) {
+                if ($posA === count($typeOrder) && str_contains($nameA, $kw)) $posA = $i;
+                if ($posB === count($typeOrder) && str_contains($nameB, $kw)) $posB = $i;
+            }
+            return $posA <=> $posB;
+        });
 
-        // 2-bosqich: Excel sarlavha
-        $staticHeaders = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', "Mashg'ulot turi", 'Manba'];
-        $staticCols = count($staticHeaders); // 9
+        $globalTtCodes = array_keys($globalTrainingTypes);
+        $ttCount = count($globalTtCodes);
+        if ($ttCount === 0) {
+            // Bo'sh natija - sarlavha bilan qaytarish
+            $sheet->setCellValue('A1', "Ma'lumot topilmadi");
+            $fileName = 'Jadval_mosligi_batafsil_' . date('Y-m-d_H-i') . '.xlsx';
+            $temp = tempnam(sys_get_temp_dir(), 'sr_');
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save($temp);
+            $spreadsheet->disconnectWorksheets();
+            return response()->download($temp, $fileName)->deleteFileAfterSend(true);
+        }
+
+        // 2-bosqich: Excel sarlavha (2 qatorli)
+        // Static ustunlar: # | Fakultet | Yo'nalish | Kurs | Semestr | Fan | Guruh | Dars (sana)
+        $staticHeaders = ['#', 'Fakultet', "Yo'nalish", 'Kurs', 'Semestr', 'Fan', 'Guruh', 'Dars (sana)'];
+        $staticCols = count($staticHeaders); // 8
+
         foreach ($staticHeaders as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
+            $sheet->mergeCells([$col + 1, 1, $col + 1, 2]);
         }
-        for ($k = 1; $k <= $maxLessons; $k++) {
-            $sheet->setCellValue([$staticCols + $k, 1], $k . '-dars');
-        }
-        $sheet->setCellValue([$staticCols + $maxLessons + 1, 1], 'Jami');
 
-        $totalCols = $staticCols + $maxLessons + 1;
+        // Dars turi guruhli sarlavhalar
+        $col = $staticCols + 1;
+        foreach ($globalTtCodes as $code) {
+            $name = $globalTrainingTypes[$code];
+            // Guruh sarlavhasi (3 ustun): training type nomi
+            $sheet->setCellValue([$col, 1], $name);
+            $sheet->mergeCells([$col, 1, $col + 2, 1]);
+            // Pastki sub-headerlar
+            $sheet->setCellValue([$col, 2], 'HEMIS');
+            $sheet->setCellValue([$col + 1, 2], 'KTR');
+            $sheet->setCellValue([$col + 2, 2], 'Farq');
+            $col += 3;
+        }
+        // Jami guruhi
+        $sheet->setCellValue([$col, 1], 'Jami');
+        $sheet->mergeCells([$col, 1, $col + 2, 1]);
+        $sheet->setCellValue([$col, 2], 'HEMIS');
+        $sheet->setCellValue([$col + 1, 2], 'KTR');
+        $sheet->setCellValue([$col + 2, 2], 'Farq');
+
+        $totalCols = $staticCols + ($ttCount + 1) * 3;
         $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($totalCols);
 
         $headerStyle = [
@@ -2277,95 +2344,152 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER, 'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
         ];
-        $sheet->getStyle("A1:{$lastColLetter}1")->applyFromArray($headerStyle);
-        $sheet->getRowDimension(1)->setRowHeight(24);
+        $sheet->getStyle("A1:{$lastColLetter}2")->applyFromArray($headerStyle);
+        $sheet->getRowDimension(1)->setRowHeight(22);
+        $sheet->getRowDimension(2)->setRowHeight(20);
 
-        $excelRow = 2;
+        $excelRow = 3;
         $num = 1;
 
-        // 3-bosqich: ma'lumotni yozish (har bir block uchun 3 qator: HEMIS, KTR, Farq)
+        // Sana formatlovchi
+        $fmtDate = function ($d) {
+            if (empty($d)) return '';
+            $ts = strtotime($d);
+            return $ts ? date('d.m.Y', $ts) : '';
+        };
+
+        // 3-bosqich: ma'lumotni yozish (har bir block uchun: maxLessons darslari uchun qatorlar)
         foreach ($blocks as $block) {
             $cs = $block['cs'];
-            $hemisVals = $block['hemis'];
-            $ktrVals = $block['ktr'];
+            $ttData = $block['training_types'];
             $ktrExists = $block['ktr_exists'];
-            $maxLen = max(count($hemisVals), count($ktrVals));
+
+            // Bu (cs) bo'yicha eng ko'p darslari soni
+            $maxK = 0;
+            foreach ($ttData as $code => $td) {
+                $maxK = max($maxK, count($td['hemis']), count($td['ktr']));
+            }
+            if ($maxK === 0) continue;
 
             $blockStartRow = $excelRow;
 
-            // HEMIS qatori
-            $sheet->setCellValue([1, $excelRow], $num++);
-            $sheet->setCellValue([2, $excelRow], $cs->faculty_name ?? '-');
-            $sheet->setCellValue([3, $excelRow], $cs->specialty_name ?? '-');
-            $sheet->setCellValue([4, $excelRow], $cs->level_name ?? '-');
-            $sheet->setCellValue([5, $excelRow], $cs->semester_name ?? '-');
-            $sheet->setCellValue([6, $excelRow], $cs->subject_name ?? '-');
-            $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
-            $sheet->setCellValue([8, $excelRow], $block['tt_name']);
-            $sheet->setCellValue([9, $excelRow], 'HEMIS');
-            $hemisSum = 0;
-            for ($k = 0; $k < $maxLessons; $k++) {
-                $v = $hemisVals[$k] ?? '';
-                if ($v !== '') $hemisSum += $v;
-                $sheet->setCellValue([$staticCols + $k + 1, $excelRow], $v);
-            }
-            $sheet->setCellValue([$totalCols, $excelRow], $hemisSum);
-            $sheet->getStyle("A{$excelRow}:I{$excelRow}")->applyFromArray([
-                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EFF6FF']],
-            ]);
-            $excelRow++;
-
-            // KTR qatori
-            $sheet->setCellValue([9, $excelRow], 'KTR');
-            $ktrSum = 0;
-            if ($ktrExists) {
-                for ($k = 0; $k < $maxLessons; $k++) {
-                    $v = $ktrVals[$k] ?? '';
-                    if ($v !== '') $ktrSum += $v;
-                    $sheet->setCellValue([$staticCols + $k + 1, $excelRow], $v);
+            for ($k = 0; $k < $maxK; $k++) {
+                // Birinchi mavjud sanani topib dars yorlig'ini tuzish
+                $rowDate = '';
+                foreach ($globalTtCodes as $code) {
+                    if (isset($ttData[$code]['dates'][$k]) && !empty($ttData[$code]['dates'][$k])) {
+                        $rowDate = $fmtDate($ttData[$code]['dates'][$k]);
+                        if ($rowDate !== '') break;
+                    }
                 }
-                $sheet->setCellValue([$totalCols, $excelRow], $ktrSum);
-            } else {
-                $sheet->setCellValue([$staticCols + 1, $excelRow], "KTR yo'q");
-            }
-            $sheet->getStyle("I{$excelRow}")->applyFromArray([
-                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FCE7F3']],
-            ]);
-            $excelRow++;
+                $darsLabel = ($k + 1) . '-dars' . ($rowDate ? ' (' . $rowDate . ')' : '');
 
-            // Farq qatori
-            $sheet->setCellValue([9, $excelRow], 'Farq');
-            $farqSum = 0;
-            if ($ktrExists) {
-                for ($k = 0; $k < $maxLessons; $k++) {
-                    $h = $hemisVals[$k] ?? null;
-                    $kt = $ktrVals[$k] ?? null;
-                    if ($h === null && $kt === null) continue;
-                    $diff = ($kt ?? 0) - ($h ?? 0);
-                    $diff = (abs($diff - round($diff)) < 0.01) ? (int) round($diff) : round($diff, 1);
-                    $farqSum += $diff;
-                    $sheet->setCellValue([$staticCols + $k + 1, $excelRow], $diff);
-                    if ($diff !== 0) {
-                        $color = $diff > 0 ? 'FEF3C7' : 'FEE2E2';
-                        $sheet->getStyle([$staticCols + $k + 1, $excelRow, $staticCols + $k + 1, $excelRow])->applyFromArray([
+                // Static cells
+                $sheet->setCellValue([1, $excelRow], $num++);
+                $sheet->setCellValue([2, $excelRow], $cs->faculty_name ?? '-');
+                $sheet->setCellValue([3, $excelRow], $cs->specialty_name ?? '-');
+                $sheet->setCellValue([4, $excelRow], $cs->level_name ?? '-');
+                $sheet->setCellValue([5, $excelRow], $cs->semester_name ?? '-');
+                $sheet->setCellValue([6, $excelRow], $cs->subject_name ?? '-');
+                $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
+                $sheet->setCellValue([8, $excelRow], $darsLabel);
+
+                // Dars turi cells
+                $col = $staticCols + 1;
+                $rowHemisSum = 0;
+                $rowKtrSum = 0;
+                $rowFarqSum = 0;
+                $hasKtrAny = false;
+                foreach ($globalTtCodes as $code) {
+                    $td = $ttData[$code] ?? null;
+                    $h = ($td && isset($td['hemis'][$k])) ? $td['hemis'][$k] : '';
+                    $kt = ($td && isset($td['ktr'][$k])) ? $td['ktr'][$k] : '';
+                    $sheet->setCellValue([$col, $excelRow], $h);
+                    if ($ktrExists) {
+                        $sheet->setCellValue([$col + 1, $excelRow], $kt);
+                        if ($h !== '' || $kt !== '') {
+                            $diff = (is_numeric($kt) ? $kt : 0) - (is_numeric($h) ? $h : 0);
+                            $diff = (abs($diff - round($diff)) < 0.01) ? (int) round($diff) : round($diff, 1);
+                            $sheet->setCellValue([$col + 2, $excelRow], $diff);
+                            if ($diff !== 0) {
+                                $color = $diff > 0 ? 'FEF3C7' : 'FEE2E2';
+                                $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
+                                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
+                                ]);
+                            }
+                            $rowFarqSum += $diff;
+                            $hasKtrAny = true;
+                        }
+                        if (is_numeric($kt)) $rowKtrSum += $kt;
+                    } else {
+                        $sheet->setCellValue([$col + 1, $excelRow], '-');
+                        $sheet->setCellValue([$col + 2, $excelRow], '-');
+                    }
+                    if (is_numeric($h)) $rowHemisSum += $h;
+                    $col += 3;
+                }
+
+                // Jami ustunlari
+                $sheet->setCellValue([$col, $excelRow], $rowHemisSum);
+                if ($ktrExists) {
+                    $sheet->setCellValue([$col + 1, $excelRow], $rowKtrSum);
+                    $sheet->setCellValue([$col + 2, $excelRow], $rowFarqSum);
+                    if ($rowFarqSum !== 0) {
+                        $color = $rowFarqSum > 0 ? 'FEF3C7' : 'FEE2E2';
+                        $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
                             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                         ]);
                     }
+                } else {
+                    $sheet->setCellValue([$col + 1, $excelRow], '-');
+                    $sheet->setCellValue([$col + 2, $excelRow], '-');
                 }
-                $sheet->setCellValue([$totalCols, $excelRow], $farqSum);
-            } else {
-                $sheet->setCellValue([$staticCols + 1, $excelRow], "-");
+
+                $excelRow++;
             }
-            $sheet->getStyle("I{$excelRow}")->applyFromArray([
-                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FFFBEB']],
+
+            // Jami satri (ushbu cs uchun barcha darslar yig'indisi)
+            $sheet->setCellValue([8, $excelRow], 'Jami');
+            $col = $staticCols + 1;
+            $totalHemis = 0; $totalKtr = 0; $totalFarq = 0;
+            foreach ($globalTtCodes as $code) {
+                $td = $ttData[$code] ?? null;
+                $h = $td ? array_sum($td['hemis']) : 0;
+                $kt = ($td && $ktrExists) ? array_sum($td['ktr']) : 0;
+                $f = $ktrExists ? round($kt - $h, 1) : 0;
+                $sheet->setCellValue([$col, $excelRow], $h);
+                if ($ktrExists) {
+                    $sheet->setCellValue([$col + 1, $excelRow], $kt);
+                    $sheet->setCellValue([$col + 2, $excelRow], $f);
+                } else {
+                    $sheet->setCellValue([$col + 1, $excelRow], '-');
+                    $sheet->setCellValue([$col + 2, $excelRow], '-');
+                }
+                $totalHemis += $h;
+                $totalKtr += $kt;
+                $totalFarq += $f;
+                $col += 3;
+            }
+            $sheet->setCellValue([$col, $excelRow], $totalHemis);
+            if ($ktrExists) {
+                $sheet->setCellValue([$col + 1, $excelRow], $totalKtr);
+                $sheet->setCellValue([$col + 2, $excelRow], $totalFarq);
+            } else {
+                $sheet->setCellValue([$col + 1, $excelRow], '-');
+                $sheet->setCellValue([$col + 2, $excelRow], '-');
+            }
+            $sheet->getStyle("A{$excelRow}:{$lastColLetter}{$excelRow}")->applyFromArray([
+                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F1F5F9']],
+                'font' => ['bold' => true],
             ]);
             $excelRow++;
 
-            // Static ustunlarni 3 qatorga merge
-            for ($c = 1; $c <= 8; $c++) {
+            // Static metadata (1-7) ustunlarni block qatorlariga merge qilish (Jami satrini ham qo'shib)
+            for ($c = 1; $c <= 7; $c++) {
                 $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
                 $sheet->mergeCells("{$colLetter}{$blockStartRow}:{$colLetter}" . ($excelRow - 1));
-                $sheet->getStyle("{$colLetter}{$blockStartRow}")->getAlignment()->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+                $sheet->getStyle("{$colLetter}{$blockStartRow}")->getAlignment()
+                    ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
             }
 
             // Block ostiga chegarasi
@@ -2375,29 +2499,30 @@ class ReportController extends Controller
         }
 
         // Ustun kengliklari
-        $widths = [5, 22, 28, 8, 10, 32, 14, 18, 9];
+        $widths = [5, 22, 28, 8, 10, 30, 14, 22];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
-        for ($k = 1; $k <= $maxLessons; $k++) {
-            $sheet->getColumnDimensionByColumn($staticCols + $k)->setWidth(8);
+        for ($c = $staticCols + 1; $c <= $totalCols; $c++) {
+            $sheet->getColumnDimensionByColumn($c)->setWidth(8);
         }
-        $sheet->getColumnDimensionByColumn($totalCols)->setWidth(9);
 
         $lastRow = $excelRow - 1;
-        if ($lastRow > 1) {
-            $sheet->getStyle("A2:{$lastColLetter}{$lastRow}")->applyFromArray([
+        if ($lastRow > 2) {
+            $sheet->getStyle("A3:{$lastColLetter}{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['rgb' => 'E2E8F0']]],
                 'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
             ]);
-            // Raqamli ustunlarni markazga
-            $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("I2:{$lastColLetter}{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("A3:A{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $firstNumColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($staticCols + 1);
+            $sheet->getStyle("{$firstNumColLetter}3:{$lastColLetter}{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
         }
 
-        $sheet->freezePane('J2');
+        // Sarlavhalar va birinchi ustunlarni muzlatish
+        $freezeColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($staticCols + 1);
+        $sheet->freezePane("{$freezeColLetter}3");
 
-        $fileName = 'Jadval_mosligi_darslar_' . date('Y-m-d_H-i') . '.xlsx';
+        $fileName = 'Jadval_mosligi_batafsil_' . date('Y-m-d_H-i') . '.xlsx';
         $temp = tempnam(sys_get_temp_dir(), 'sr_');
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $writer->save($temp);

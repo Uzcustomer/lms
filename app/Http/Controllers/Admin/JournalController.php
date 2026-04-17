@@ -3299,6 +3299,10 @@ class JournalController extends Controller
         if ($request->filled('specialty_id')) {
             $query->where('sp.specialty_hemis_id', $request->specialty_id);
         }
+        // Nom bo'yicha filtr (bir xil nomga ega bir nechta specialty_hemis_id bo'lsa ham mos keladi)
+        if ($request->filled('specialty_name')) {
+            $query->where('g.specialty_name', $request->specialty_name);
+        }
         if ($request->filled('semester_code')) {
             $query->where('cs.semester_code', $request->semester_code);
         }
@@ -3367,6 +3371,10 @@ class JournalController extends Controller
 
         if ($request->filled('specialty_id')) {
             $query->where('specialty_hemis_id', $request->specialty_id);
+        }
+        // Nom bo'yicha filtr (bir xil nomga ega bir nechta specialty_hemis_id bo'lsa ham mos keladi)
+        if ($request->filled('specialty_name')) {
+            $query->where('specialty_name', $request->specialty_name);
         }
 
         // Ta'lim turi bo'yicha filtrlash (curriculum orqali)

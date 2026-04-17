@@ -370,7 +370,7 @@
                             {{-- TAB 6: QABUL --}}
                             @if($canUploadFiles)
                             <div id="ptab-content-qabul" class="sp-content" style="display:none;">
-                                <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form">
+                                <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form" enctype="multipart/form-data">
                                     @csrf
 
                                     {{-- 1. Shaxsiy ma'lumotlar --}}
@@ -479,7 +479,7 @@
                                                         <button type="button" onclick="qabulDelete({{ $passportFile->id }},'Pasport nusxasi')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
                                                     </div>
                                                     @else
-                                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'Pasport nusxasi (PDF)')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
+                                                    <input type="file" name="files[Pasport nusxasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
                                                     @endif
                                                 </div>
                                                 <div class="rounded-lg border p-3 {{ $photoFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}" id="qf-3x4-rasm">
@@ -493,7 +493,7 @@
                                                         <button type="button" onclick="qabulDelete({{ $photoFile->id }},'3x4 rasm')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
                                                     </div>
                                                     @else
-                                                    <input type="file" accept=".jpg,.jpeg,.png" onchange="qabulUpload(this,'3x4 rasm')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
+                                                    <input type="file" name="files[3x4 rasm]" accept=".jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
                                                     @endif
                                                 </div>
                                             </div>
@@ -660,7 +660,7 @@
                                                         <button type="button" onclick="qabulDelete({{ $attestatFile->id }},'Attestat')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
                                                     </div>
                                                     @else
-                                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'Attestat/Diplom (PDF)')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer">
+                                                    <input type="file" name="files[Attestat/Diplom (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer">
                                                     @endif
                                                 </div>
                                             </div>
@@ -691,7 +691,7 @@
                                                             <button type="button" onclick="qabulDelete({{ $sertFile->id }},'Til sertifikati')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
                                                         </div>
                                                         @else
-                                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'Til sertifikati')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        <input type="file" name="files[Til sertifikati]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
                                                         @endif
                                                     </div>
                                                 </div>
@@ -788,7 +788,7 @@
                                                     <button type="button" onclick="qabulDelete({{ $uploaded->id }},'{{ addslashes($doc['short']) }}')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
                                                 </div>
                                                 @else
-                                                <input type="file" accept=".pdf,.jpg,.jpeg,.png" onchange="qabulUpload(this,'{{ addslashes($doc['full']) }}')" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200 file:cursor-pointer">
+                                                <input type="file" name="files[{{ $doc['full'] }}]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200 file:cursor-pointer">
                                                 @endif
                                             </div>
                                             @endforeach
@@ -904,25 +904,14 @@
     var qabulStudentId = {{ $student->id }};
     var qabulCsrf = '{{ csrf_token() }}';
 
-    function qabulUpload(input, fileName) {
-        if (!input.files.length) return;
-        var file = input.files[0];
-        if (file.size > 1 * 1024 * 1024) { alert('Fayl hajmi 1 MB dan oshmasligi kerak!'); input.value = ''; return; }
-        var fd = new FormData();
-        fd.append('admission_file', file);
-        fd.append('admission_file_name', fileName);
-        fd.append('_token', qabulCsrf);
-        input.disabled = true;
-        fetch('/admin/students/' + qabulStudentId + '/admission-files', { method: 'POST', body: fd })
-            .then(function(r) { if (r.ok) location.reload(); else { alert('Yuklashda xatolik!'); input.disabled = false; } })
-            .catch(function() { alert('Tarmoq xatosi!'); input.disabled = false; });
-    }
-
     function qabulDelete(fileId, label) {
         if (!confirm(label + " faylini o'chirmoqchimisiz?")) return;
-        fetch('/admin/students/' + qabulStudentId + '/admission-files/' + fileId, {
-            method: 'DELETE', headers: { 'X-CSRF-TOKEN': qabulCsrf, 'Accept': 'application/json' }
-        }).then(function(r) { if (r.ok) location.reload(); else alert("O'chirishda xatolik!"); });
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/admin/students/' + qabulStudentId + '/admission-files/' + fileId;
+        f.innerHTML = '<input type="hidden" name="_token" value="'+qabulCsrf+'"><input type="hidden" name="_method" value="DELETE">';
+        document.body.appendChild(f);
+        f.submit();
     }
 
     // Til sertifikati toggle
@@ -1051,5 +1040,9 @@
     @endif
 
     ['tugilgan','yashash','talim'].forEach(initLocationGroup);
+
+    @if(session('active_tab'))
+    switchProfileTab('{{ session('active_tab') }}');
+    @endif
     </script>
 </x-app-layout>

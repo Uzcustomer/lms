@@ -487,7 +487,24 @@ class StudentController extends Controller
             $data
         );
 
-        return back()->with('success', "Qabul ma'lumotlari saqlandi.");
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $name => $file) {
+                if (!$file || !$file->isValid()) continue;
+                $path = $file->store('student-files/' . $student->id, 'public');
+                \App\Models\StudentFile::updateOrCreate(
+                    ['student_id' => $student->id, 'name' => $name],
+                    [
+                        'original_name' => $file->getClientOriginalName(),
+                        'path' => $path,
+                        'mime_type' => $file->getClientMimeType(),
+                        'size' => $file->getSize(),
+                        'uploaded_by' => $user?->id,
+                    ]
+                );
+            }
+        }
+
+        return back()->with('success', "Qabul ma'lumotlari saqlandi.")->with('active_tab', 'qabul');
     }
 
     public function uploadAdmissionFile(Request $request, Student $student)
@@ -549,7 +566,7 @@ class StudentController extends Controller
         \Illuminate\Support\Facades\Storage::disk('public')->delete($file->path);
         $file->delete();
 
-        return back()->with('success', "Fayl o'chirildi.");
+        return back()->with('success', "Fayl o'chirildi.")->with('active_tab', 'qabul');
     }
 
     public function clearAdmissionData(Student $student)

@@ -487,167 +487,221 @@
                                 </div>
 
                                 {{-- Body --}}
-                                <div id="admission-body" class="border border-t-0 border-slate-200 rounded-b-xl bg-white">
+                                <div id="admission-body" class="border border-t-0 border-slate-200 rounded-b-xl bg-slate-100/50">
 
                                     {{-- Ma'lumotlar formasi --}}
-                                    <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="p-5 space-y-5">
+                                    <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="p-5 space-y-4">
                                         @csrf
 
-                                        {{-- Shaxsiy ma'lumotlar --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-indigo-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Shaxsiy ma'lumotlar</h5>
-                                            </div>
-                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['tugilgan_sana',"Tug'ilgan sana",'date'],['jshshir','JSHSHIR'],['jinsi','Jinsi'],['tel1','Tel 1'],['tel2','Tel 2'],['email','Email'],['millat','Millat']] as $f)
-                                                <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
-                                                    <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
-                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                           placeholder="{{ $f[1] }}">
+                                        @php
+                                            $sectionCard = 'group bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow';
+                                            $sectionAccent = 'h-1 w-full';
+                                            $sectionBody = 'p-4';
+                                            $sectionTitle = 'flex items-center gap-2 mb-3.5';
+                                            $sectionTitleText = 'text-[13px] font-bold text-slate-700';
+                                            $sectionLabel = 'block text-[11px] font-semibold text-slate-500 mb-1.5';
+                                            $sectionInput = 'w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/15 focus:border-indigo-400 transition placeholder:text-slate-300 hover:border-slate-300';
+                                            $sectionIconWrap = 'flex items-center justify-center w-7 h-7 rounded-lg';
+                                        @endphp
+
+                                        {{-- 1. Shaxsiy ma'lumotlar --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-indigo-500 to-indigo-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-indigo-50 text-indigo-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Shaxsiy ma'lumotlar</h5>
                                                 </div>
-                                                @endforeach
+                                                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                                                    @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['tugilgan_sana',"Tug'ilgan sana",'date'],['jshshir','JSHSHIR'],['jinsi','Jinsi'],['tel1','Tel 1'],['tel2','Tel 2'],['email','Email'],['millat','Millat']] as $f)
+                                                    <div>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
+                                                        <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
+                                                               value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
+                                                               class="{{ $sectionInput }}"
+                                                               placeholder="{{ $f[1] }}">
+                                                    </div>
+                                                    @endforeach
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {{-- Tug'ilgan joy + Manzil (yonma-yon) --}}
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-sky-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Tug'ilgan joy</h5>
+                                        {{-- 2. Tug'ilgan joy --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-sky-500 to-sky-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-sky-50 text-sky-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Tug'ilgan joy</h5>
                                                 </div>
                                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                     @foreach([['tugilgan_davlat','Davlat'],['tugilgan_viloyat','Viloyat'],['tugulgan_tuman','Tuman']] as $f)
                                                     <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
                                                         <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                               placeholder="{{ $f[1] }}">
+                                                               class="{{ $sectionInput }}" placeholder="{{ $f[1] }}">
                                                     </div>
                                                     @endforeach
                                                 </div>
                                             </div>
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-sky-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Manzil</h5>
+                                        </div>
+
+                                        {{-- 3. Manzil --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-cyan-500 to-cyan-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-cyan-50 text-cyan-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Doimiy manzil</h5>
                                                 </div>
-                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                                                     @foreach([['doimiy_manzil','Doimiy manzil'],['yashash_davlat','Yashash davlat'],['yashash_viloyat','Yashash viloyat'],['yashash_tuman','Yashash tuman'],['yashash_manzil','Yashash manzil']] as $f)
                                                     <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
                                                         <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                               placeholder="{{ $f[1] }}">
+                                                               class="{{ $sectionInput }}" placeholder="{{ $f[1] }}">
                                                     </div>
                                                     @endforeach
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {{-- Pasport --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-amber-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pasport</h5>
-                                            </div>
-                                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                                @foreach([['passport_seriya','Seriya'],['passport_raqam','Raqam'],['passport_sana','Berilgan sana','date'],['passport_joy','Berilgan joy']] as $f)
-                                                <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
-                                                    <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
-                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                           placeholder="{{ $f[1] }}">
+                                        {{-- 4. Pasport --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-amber-500 to-amber-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-amber-50 text-amber-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Pasport ma'lumotlari</h5>
                                                 </div>
-                                                @endforeach
+                                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                    @foreach([['passport_seriya','Seriya'],['passport_raqam','Raqam'],['passport_sana','Berilgan sana','date'],['passport_joy','Berilgan joy']] as $f)
+                                                    <div>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
+                                                        <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
+                                                               value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
+                                                               class="{{ $sectionInput }}" placeholder="{{ $f[1] }}">
+                                                    </div>
+                                                    @endforeach
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {{-- Ta'lim ma'lumotlari --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-emerald-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ta'lim ma'lumotlari</h5>
-                                            </div>
-                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                @foreach([['oliy_malumot',"Oliy ma'lumot"],['otm_nomi','OTM nomi'],['talim_turi',"Ta'lim turi"],['talim_shakli',"Ta'lim shakli"],['mutaxassislik','Mutaxassislik'],['toplagan_ball','Toplagan ball'],['tolov_shakli',"To'lov shakli"],['muassasa_nomi','Muassasa nomi'],['hujjat_seriya','Hujjat seriya'],['ortalacha_ball','Ortalacha ball']] as $f)
-                                                <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                           placeholder="{{ $f[1] }}">
+                                        {{-- 5. Ta'lim ma'lumotlari --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-emerald-500 to-emerald-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-emerald-50 text-emerald-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Ta'lim ma'lumotlari</h5>
                                                 </div>
-                                                @endforeach
+                                                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                                                    @foreach([['oliy_malumot',"Oliy ma'lumot"],['otm_nomi','OTM nomi'],['talim_turi',"Ta'lim turi"],['talim_shakli',"Ta'lim shakli"],['mutaxassislik','Mutaxassislik'],['toplagan_ball','Toplagan ball'],['tolov_shakli',"To'lov shakli"],['muassasa_nomi','Muassasa nomi'],['hujjat_seriya','Hujjat seriya'],['ortalacha_ball','Ortalacha ball']] as $f)
+                                                    <div>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
+                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                               class="{{ $sectionInput }}" placeholder="{{ $f[1] }}">
+                                                    </div>
+                                                    @endforeach
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {{-- Til sertifikatlari --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-violet-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Til sertifikatlari</h5>
-                                            </div>
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                @foreach([['sertifikat_turi','Sertifikat turi'],['sertifikat_ball','Sertifikat ball'],['milliy_sertifikat','Milliy sertifikat']] as $f)
-                                                <div>
-                                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                           placeholder="{{ $f[1] }}">
+                                        {{-- 6. Til sertifikatlari --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-violet-500 to-violet-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-violet-50 text-violet-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Til sertifikatlari</h5>
                                                 </div>
-                                                @endforeach
+                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                    @foreach([['sertifikat_turi','Sertifikat turi'],['sertifikat_ball','Sertifikat ball'],['milliy_sertifikat','Milliy sertifikat']] as $f)
+                                                    <div>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
+                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                               class="{{ $sectionInput }}" placeholder="{{ $f[1] }}">
+                                                    </div>
+                                                    @endforeach
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {{-- Ota-ona (yonma-yon) --}}
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-blue-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ota ma'lumotlari</h5>
+                                        {{-- 7. Ota ma'lumotlari --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-blue-500 to-blue-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-blue-50 text-blue-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Ota ma'lumotlari</h5>
                                                 </div>
-                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                                                     @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Tel'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
                                                     <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
                                                         <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-pink-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ona ma'lumotlari</h5>
-                                                </div>
-                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                    @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
-                                                    <div>
-                                                        <label class="block text-[11px] font-semibold text-slate-400 mb-1">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 focus:bg-white transition placeholder:text-slate-300"
-                                                               placeholder="{{ $f[1] }}">
+                                                               class="{{ $sectionInput }}" placeholder="{{ $f[1] }}">
                                                     </div>
                                                     @endforeach
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {{-- Saqlash tugmasi --}}
-                                        <div class="flex items-center gap-3 pt-2">
-                                            <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-slate-800 to-slate-600 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                                        {{-- 8. Ona ma'lumotlari --}}
+                                        <div class="{{ $sectionCard }}">
+                                            <div class="{{ $sectionAccent }} bg-gradient-to-r from-pink-500 to-pink-400"></div>
+                                            <div class="{{ $sectionBody }}">
+                                                <div class="{{ $sectionTitle }}">
+                                                    <span class="{{ $sectionIconWrap }} bg-pink-50 text-pink-600">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                                    </span>
+                                                    <h5 class="{{ $sectionTitleText }}">Ona ma'lumotlari</h5>
+                                                </div>
+                                                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                                    @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
+                                                    <div>
+                                                        <label class="{{ $sectionLabel }}">{{ $f[1] }}</label>
+                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                               class="{{ $sectionInput }}" placeholder="{{ $f[1] }}">
+                                                    </div>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {{-- Saqlash paneli (sticky) --}}
+                                        <div class="sticky bottom-0 z-10 bg-white rounded-xl shadow-md border border-slate-200 px-4 py-3 flex items-center justify-between">
+                                            <div class="flex items-center gap-2">
+                                                <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-slate-500">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                                </span>
+                                                @if($admissionData)
+                                                    <div class="text-xs">
+                                                        <div class="font-semibold text-slate-700">Oxirgi yangilangan</div>
+                                                        <div class="text-slate-400">{{ $admissionData->updated_at->format('d.m.Y H:i') }}</div>
+                                                    </div>
+                                                @else
+                                                    <span class="text-xs text-slate-400">Hali saqlanmagan</span>
+                                                @endif
+                                            </div>
+                                            <button type="submit" class="inline-flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-sm font-bold rounded-lg hover:opacity-90 transition shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
                                                 Saqlash
                                             </button>
-                                            @if($admissionData)
-                                            <span class="text-[11px] text-slate-400">Oxirgi yangilangan: {{ $admissionData->updated_at->format('d.m.Y H:i') }}</span>
-                                            @endif
                                         </div>
                                     </form>
 

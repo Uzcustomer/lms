@@ -1406,6 +1406,7 @@ class ReportController extends Controller
             'cs.subject_name',
             'cs.semester_code',
             'cs.subject_details',
+            'g.id as group_id',
             'g.group_hemis_id',
             'g.name as group_name',
             'f.name as faculty_name',
@@ -1544,6 +1545,7 @@ class ReportController extends Controller
 
             $results[] = [
                 'cs_id' => (int) $cs->cs_id,
+                'group_id' => (int) ($cs->group_id ?? 0),
                 'faculty_name' => $cs->faculty_name ?? '-',
                 'specialty_name' => $cs->specialty_name ?? '-',
                 'level_name' => $cs->level_name ?? '-',

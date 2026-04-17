@@ -359,7 +359,7 @@
                 html += '<td data-filter-col="specialty_name"><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td data-filter-col="level_name"><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td data-filter-col="semester_name"><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
-                html += '<td data-filter-col="subject_name"><a href="#" class="subject-link" onclick="openKtrCompareModal(event, ' + r.cs_id + ')">' + esc(r.subject_name) + '</a></td>';
+                html += '<td data-filter-col="subject_name"><a href="#" class="subject-link" onclick="openKtrCompareModal(event, ' + r.cs_id + ', ' + (r.group_id || 0) + ')">' + esc(r.subject_name) + '</a></td>';
                 html += '<td data-filter-col="group_name"><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td data-filter-col="planned_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
                 html += '<td data-filter-col="scheduled_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
@@ -380,7 +380,7 @@
             applyColumnFilters();
         }
 
-        function openKtrCompareModal(e, csId) {
+        function openKtrCompareModal(e, csId, groupId) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
             var params = getFilters();
             $('#ktr-compare-modal-title').text('Yuklanmoqda...');
@@ -392,7 +392,7 @@
                 url: '{{ url('admin/reports/schedule-report/detail') }}/' + csId,
                 type: 'GET',
                 data: {
-                    group: params.group || '',
+                    group: groupId || params.group || '',
                     date_from: params.date_from || '',
                     date_to: params.date_to || '',
                     auditorium: params.auditorium || '',

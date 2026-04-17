@@ -1351,8 +1351,8 @@ class ReportController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
 
-        // Joriy semestr filtri
-        if ($request->get('current_semester', '1') == '1') {
+        // Joriy semestr filtri - foydalanuvchi aniq semestr tanlagan bo'lsa qo'llanmaydi
+        if ($request->get('current_semester', '1') == '1' && !$request->filled('semester_code')) {
             $csQuery->where('s.current', true);
         }
 

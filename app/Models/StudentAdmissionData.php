@@ -15,6 +15,7 @@ class StudentAdmissionData extends Model
         'tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman',
         'doimiy_manzil',
         'yashash_davlat', 'yashash_viloyat', 'yashash_tuman', 'yashash_manzil',
+        'vaqtinchalik_manzil',
         'passport_seriya', 'passport_raqam', 'passport_sana', 'passport_joy',
         'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik',
         'toplagan_ball', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',

@@ -1493,8 +1493,18 @@ class ReportController extends Controller
             ->groupBy(DB::raw("CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code)"))
             ->pluck('load_hours', 'ck');
 
-        // Bir juftlik = 2 akademik soat
-        $scheduledHoursPerPair = 2;
+        // Juftlik davomidan akademik soatni hisoblash.
+        // HEMIS da faqat 1 soatlik (≈40 daq) yoki 2 soatlik (≈80 daq) darslar bo'ladi.
+        $pairHours = function ($start, $end): int {
+            if (!$start || !$end) return 2;
+            $startTs = strtotime((string) $start);
+            $endTs = strtotime((string) $end);
+            if ($startTs === false || $endTs === false) return 2;
+            $minutes = ($endTs - $startTs) / 60;
+            if ($minutes <= 0) return 2;
+            // ≤ 60 daq → 1 akademik soat, aks holda 2 akademik soat.
+            return $minutes <= 60 ? 1 : 2;
+        };
 
         $grouped = [];
         foreach ($schedules as $sch) {
@@ -1509,6 +1519,8 @@ class ReportController extends Controller
             $loadBySch = (int) ($loadByScheduleId[$sch->schedule_hemis_id] ?? 0);
             $loadByK = (int) ($loadByKey[$attKey] ?? 0);
             $hemisHours = max($loadBySch, $loadByK);
+
+            $scheduledHours = $pairHours($sch->lesson_pair_start_time, $sch->lesson_pair_end_time);
 
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
@@ -1528,10 +1540,10 @@ class ReportController extends Controller
                     'training_type' => $sch->training_type_name,
                     'lesson_pair_time' => $pairTime,
                     'lesson_date' => $sch->lesson_date_str,
-                    'scheduled_hours' => $scheduledHoursPerPair,
+                    'scheduled_hours' => $scheduledHours,
                     'hemis_hours' => $hemisHours,
-                    'hours_diff' => $scheduledHoursPerPair - $hemisHours,
-                    'hours_match' => $hemisHours === $scheduledHoursPerPair,
+                    'hours_diff' => $scheduledHours - $hemisHours,
+                    'hours_match' => $hemisHours === $scheduledHours,
                 ];
             } elseif ($hemisHours > $grouped[$key]['hemis_hours']) {
                 $grouped[$key]['hemis_hours'] = $hemisHours;

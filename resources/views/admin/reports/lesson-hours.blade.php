@@ -91,8 +91,8 @@
                         <div class="filter-item" style="min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Soat holati</label>
                             <select id="status_filter" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                <option value="mismatch" selected>Farq bor</option>
+                                <option value="" selected>Barchasi</option>
+                                <option value="mismatch">Farq bor</option>
                                 <option value="not_marked">Belgilanmagan (0)</option>
                                 <option value="partial">Qisman belgilangan</option>
                                 <option value="over_marked">Ortiqcha belgilangan</option>
@@ -114,7 +114,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Jadval soati va HEMIS da belgilangan soat taqqoslanadi</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Jadvalda qo'yilgan soat va o'qituvchi HEMIS da belgilagan soat taqqoslanadi</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -123,9 +123,9 @@
                     <div id="table-area" style="display:none;">
                         <div id="summary-bar" style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span id="total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
-                            <span class="summary-chip" style="background:#e0e7ff;color:#3730a3;">Jami jadval: <b id="sum-scheduled">0</b> soat</span>
-                            <span class="summary-chip" style="background:#dbeafe;color:#1e40af;">Jami HEMIS: <b id="sum-hemis">0</b> soat</span>
-                            <span class="summary-chip" id="sum-diff-chip">Farq: <b id="sum-diff">0</b> soat</span>
+                            <span class="summary-chip" style="background:#e0e7ff;color:#3730a3;" title="Dars jadvaliga qo'yilgan jami soat">Jadvalda: <b id="sum-scheduled">0</b> soat</span>
+                            <span class="summary-chip" style="background:#dbeafe;color:#1e40af;" title="O'qituvchilar HEMIS da belgilagan jami soat">O'qituvchi belgilagan: <b id="sum-hemis">0</b> soat</span>
+                            <span class="summary-chip" id="sum-diff-chip" title="Jadvaldagi soat − O'qituvchi belgilagan soat">Farq: <b id="sum-diff">0</b> soat</span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;margin-left:auto;"></span>
                         </div>
                         <div style="max-height:calc(100vh - 380px);overflow-y:auto;overflow-x:auto;">
@@ -141,9 +141,9 @@
                                         <th><a href="#" class="sort-link" data-sort="training_type">Mashg'ulot turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_pair_time">Juftlik vaqti <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Jadvalga qo'yilgan soat"><a href="#" class="sort-link" data-sort="scheduled_hours">Jadval soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="O'qituvchi HEMIS da belgilagan soat"><a href="#" class="sort-link" data-sort="hemis_hours">HEMIS soati <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Jadval − HEMIS"><a href="#" class="sort-link" data-sort="hours_diff">Farq <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Dars jadvaliga qo'yilgan soat (1 juftlik = 2 akademik soat)"><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvaldagi soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="O'qituvchi HEMIS davomat nazoratida belgilagan soat"><a href="#" class="sort-link" data-sort="hemis_hours">O'qituvchi belgilagan soat <span class="text-xs" style="font-weight:400;opacity:0.7;">(HEMIS)</span> <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Jadvaldagi soat − O'qituvchi belgilagan soat"><a href="#" class="sort-link" data-sort="hours_diff">Farq <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;">Jurnal</th>
                                     </tr>
                                 </thead>
@@ -343,7 +343,8 @@
             });
 
             $('.select2').each(function() {
-                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher });
+                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
+                .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
 
             var calFrom = new ScrollCalendar('date_from');
@@ -400,9 +401,21 @@
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+        .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); outline: none; }
+        .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .select2-container--classic.select2-container--focus .select2-selection--single,
+        .select2-container--classic.select2-container--open .select2-selection--single { border-color: #2b5ea7; box-shadow: 0 0 0 3px rgba(43,94,167,0.15); outline: none; }
         .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
+        .select2-container--classic .select2-selection--single .select2-selection__arrow b { border-color: #64748b transparent transparent transparent; }
+        .select2-container--classic.select2-container--open .select2-selection--single .select2-selection__arrow b { border-color: transparent transparent #64748b transparent; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }
+        .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }
+        .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #2b5ea7; box-shadow: 0 8px 24px rgba(0,0,0,0.12); overflow: hidden; }
+        .select2-container--classic .select2-search--dropdown .select2-search__field { border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.8rem; outline: none; }
+        .select2-container--classic .select2-search--dropdown .select2-search__field:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .select2-container--classic .select2-results__option { padding: 8px 12px; }
+        .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; color: #fff; }
 
         .toggle-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 0; height: 36px; user-select: none; }
         .toggle-track { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; transition: background 0.25s; flex-shrink: 0; }

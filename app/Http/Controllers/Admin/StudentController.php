@@ -482,25 +482,41 @@ class StudentController extends Controller
 
         $data['updated_by'] = $user?->id;
 
-        \App\Models\StudentAdmissionData::updateOrCreate(
-            ['student_id' => $student->id],
-            $data
-        );
+        try {
+            $fillable = (new \App\Models\StudentAdmissionData)->getFillable();
+            $data = array_intersect_key($data, array_flip($fillable));
+
+            \App\Models\StudentAdmissionData::updateOrCreate(
+                ['student_id' => $student->id],
+                $data
+            );
+        } catch (\Exception $e) {
+            \Log::error('Admission data save error: ' . $e->getMessage());
+            return back()->withInput()->with('error', "Ma'lumotlarni saqlashda xatolik: " . $e->getMessage())->with('active_tab', 'qabul');
+        }
 
         if ($request->hasFile('files')) {
             foreach ($request->file('files') as $name => $file) {
                 if (!$file || !$file->isValid()) continue;
-                $path = $file->store('student-files/' . $student->id, 'public');
-                \App\Models\StudentFile::updateOrCreate(
-                    ['student_id' => $student->id, 'name' => $name],
-                    [
-                        'original_name' => $file->getClientOriginalName(),
-                        'path' => $path,
-                        'mime_type' => $file->getClientMimeType(),
-                        'size' => $file->getSize(),
-                        'uploaded_by' => $user?->id,
-                    ]
-                );
+                try {
+                    $oldFile = \App\Models\StudentFile::where('student_id', $student->id)->where('name', $name)->first();
+                    if ($oldFile) {
+                        \Illuminate\Support\Facades\Storage::disk('public')->delete($oldFile->path);
+                    }
+                    $path = $file->store('student-files/' . $student->id, 'public');
+                    \App\Models\StudentFile::updateOrCreate(
+                        ['student_id' => $student->id, 'name' => $name],
+                        [
+                            'original_name' => $file->getClientOriginalName(),
+                            'path' => $path,
+                            'mime_type' => $file->getClientMimeType(),
+                            'size' => $file->getSize(),
+                            'uploaded_by' => $user?->id,
+                        ]
+                    );
+                } catch (\Exception $e) {
+                    \Log::error("File upload error [{$name}]: " . $e->getMessage());
+                }
             }
         }
 

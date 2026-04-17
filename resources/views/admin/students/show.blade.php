@@ -1127,37 +1127,40 @@
         if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
     }
 
-    // Sana mask (dd.mm.yyyy) + mini calendar popup
-    document.querySelectorAll('.qabul-date').forEach(function(el) {
-        el.addEventListener('input', function(e) {
-            var v = e.target.value.replace(/[^0-9]/g, '');
-            if (v.length > 8) v = v.slice(0, 8);
-            var formatted = '';
-            if (v.length > 0) formatted = v.slice(0, 2);
-            if (v.length > 2) formatted += '.' + v.slice(2, 4);
-            if (v.length > 4) formatted += '.' + v.slice(4, 8);
-            e.target.value = formatted;
+    // Flatpickr kalendar — tab ochilganda init qilinadi
+    var qabulFpInited = false;
+    function initQabulDatepickers() {
+        if (qabulFpInited) return;
+        if (typeof window.flatpickr === 'undefined') return;
+        document.querySelectorAll('.qabul-date').forEach(function(el) {
+            if (el._flatpickr) return;
+            var savedVal = el.value;
+            flatpickr(el, {
+                dateFormat: 'd.m.Y',
+                allowInput: true,
+                clickOpens: true,
+                disableMobile: true,
+                parseDate: function(datestr) {
+                    if (!datestr) return null;
+                    var p = datestr.split('.');
+                    if (p.length === 3) return new Date(p[2], p[1]-1, p[0]);
+                    return new Date(datestr);
+                }
+            });
+            if (savedVal) el.value = savedVal;
         });
-        // Hidden date input for calendar popup
-        var cal = document.createElement('input');
-        cal.type = 'date';
-        cal.style.cssText = 'position:absolute;right:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;opacity:0;cursor:pointer;';
-        cal.tabIndex = -1;
-        cal.addEventListener('change', function() {
-            if (!cal.value) return;
-            var parts = cal.value.split('-');
-            el.value = parts[2] + '.' + parts[1] + '.' + parts[0];
-            el.dispatchEvent(new Event('input', {bubbles:true}));
-        });
-        el.parentNode.style.position = 'relative';
-        el.parentNode.appendChild(cal);
-        // Calendar icon
-        var icon = document.createElement('span');
-        icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-        icon.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;';
-        el.parentNode.appendChild(icon);
-        el.style.paddingRight = '36px';
-    });
+        qabulFpInited = true;
+    }
+    // Init on tab switch
+    var origSwitchTab = window.switchProfileTab;
+    window.switchProfileTab = function(tab) {
+        origSwitchTab(tab);
+        if (tab === 'qabul') setTimeout(initQabulDatepickers, 50);
+    };
+    // Init if already on qabul tab
+    if (document.getElementById('ptab-content-qabul') && document.getElementById('ptab-content-qabul').style.display !== 'none') {
+        setTimeout(initQabulDatepickers, 100);
+    }
 
     // +998 telefon mask
     document.querySelectorAll('.qabul-phone').forEach(function(el) {
@@ -1275,6 +1278,8 @@
     @if(session('active_tab'))
     switchProfileTab('{{ session('active_tab') }}');
     @endif
+    // Also try init after Vite bundle fully loads
+    window.addEventListener('load', function() { if (document.getElementById('ptab-content-qabul') && document.getElementById('ptab-content-qabul').style.display !== 'none') setTimeout(initQabulDatepickers, 50); });
 
     // Form validation
     var qabulForm = document.getElementById('qabul-main-form');

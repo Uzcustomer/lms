@@ -373,6 +373,23 @@
                                 <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form" enctype="multipart/form-data" id="qabul-main-form" novalidate>
                                     @csrf
 
+                                <div class="flex gap-5" style="min-height:400px;">
+                                    {{-- Vertical stepper navigation --}}
+                                    <div class="qstep-nav flex-shrink-0" style="width:200px;">
+                                        <button type="button" class="qstep-btn qstep-active" onclick="goStep(0)"><span class="qstep-num">1</span><span class="qstep-label">Shaxsiy</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(1)"><span class="qstep-num">2</span><span class="qstep-label">Manzil</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(2)"><span class="qstep-num">3</span><span class="qstep-label">Ta'lim</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(3)"><span class="qstep-num">4</span><span class="qstep-label">Sertifikatlar</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(4)"><span class="qstep-num">5</span><span class="qstep-label">Ota-ona</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(5)"><span class="qstep-num">6</span><span class="qstep-label">Yakun</span></button>
+                                    </div>
+
+                                    {{-- Step content panels --}}
+                                    <div class="flex-1 min-w-0">
+
+                                    {{-- STEP 1: Shaxsiy --}}
+                                    <div class="qstep-panel" data-step="0">
+
                                     {{-- 1. Shaxsiy ma'lumotlar --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#6366f1;">
@@ -499,6 +516,12 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="flex justify-end mt-3"><button type="button" class="qstep-next-btn" onclick="goStep(1)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 1 --}}
+
+                                    {{-- STEP 2: Manzil --}}
+                                    <div class="qstep-panel" data-step="1" style="display:none;">
+
                                     {{-- 2. Tug'ilgan joy --}}
                                     <div class="qabul-card">
                                         <div class="qabul-card-header" style="--accent:#0ea5e9;">
@@ -580,6 +603,12 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(0)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(2)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 2 --}}
+
+                                    {{-- STEP 3: Ta'lim --}}
+                                    <div class="qstep-panel" data-step="2" style="display:none;">
 
                                     {{-- 4. Avvalgi ta'lim ma'lumotlari --}}
                                     <div class="qabul-card">
@@ -816,6 +845,12 @@
                                         </div>
                                     </div>
 
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(1)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(3)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 3 --}}
+
+                                    {{-- STEP 4: Sertifikatlar --}}
+                                    <div class="qstep-panel" data-step="3" style="display:none;">
+
                                     {{-- 5. Til sertifikatlari --}}
                                     @php $milliySertFile = $studentFiles->firstWhere('name', 'Milliy sertifikat'); $chetSertFile = $studentFiles->firstWhere('name', 'Chet tili sertifikati'); @endphp
                                     <div class="qabul-card">
@@ -879,6 +914,12 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(2)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(4)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 4 --}}
+
+                                    {{-- STEP 5: Ota-ona --}}
+                                    <div class="qstep-panel" data-step="4" style="display:none;">
 
                                     {{-- 7. Ota ma'lumotlari --}}
                                     @php $otaPasport = $studentFiles->firstWhere('name', 'Ota pasporti (PDF)'); @endphp
@@ -946,6 +987,12 @@
                                         </div>
                                     </div>
 
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(3)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(5)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 5 --}}
+
+                                    {{-- STEP 6: Yakun --}}
+                                    <div class="qstep-panel" data-step="5" style="display:none;">
+
                                     {{-- Boshqa hujjatlar --}}
                                     @php $obyektivkaFile = $studentFiles->firstWhere('name', 'Obyektivka'); @endphp
                                     <div class="qabul-card">
@@ -970,20 +1017,22 @@
                                         </div>
                                     </div>
 
-                                    {{-- Saqlash + Tozalash tugmalari --}}
-                                    <div class="qabul-card qabul-save-card">
-                                        <div class="flex items-center justify-between flex-wrap gap-3">
-                                            <div class="flex items-center gap-3">
-                                                <button type="submit" style="background:#059669;" class="inline-flex items-center gap-2 px-6 py-2.5 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
-                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-                                                    Ma'lumotlarni saqlash
-                                                </button>
-                                                @if($admissionData)
-                                                <span class="text-[11px] text-slate-500">Oxirgi yangilangan: <strong>{{ $admissionData->updated_at->format('d.m.Y H:i') }}</strong></span>
-                                                @endif
-                                            </div>
+                                    <div class="flex justify-between mt-3">
+                                        <button type="button" class="qstep-prev-btn" onclick="goStep(4)">&larr; Oldingi</button>
+                                        <div class="flex items-center gap-3">
+                                            <button type="submit" style="background:#059669;" class="inline-flex items-center gap-2 px-6 py-2.5 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                                                Ma'lumotlarni saqlash
+                                            </button>
+                                            @if($admissionData)
+                                            <span class="text-[11px] text-slate-500">Oxirgi yangilangan: <strong>{{ $admissionData->updated_at->format('d.m.Y H:i') }}</strong></span>
+                                            @endif
                                         </div>
                                     </div>
+                                    </div>{{-- /STEP 6 --}}
+
+                                    </div>{{-- /flex-1 step content --}}
+                                </div>{{-- /flex gap-5 container --}}
                                 </form>
 
                                 @if($admissionData || $studentFiles->count() > 0)
@@ -1045,6 +1094,24 @@
     .qabul-save-card { background:linear-gradient(135deg,#f8fafc,#eef2f7); border-color:#cbd5e1; padding:14px 16px; }
     .qabul-input.qabul-error { border-color:#ef4444 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
     .qabul-error-msg { color:#ef4444; font-size:10.5px; font-weight:600; margin-top:3px; }
+
+    /* Vertical stepper */
+    .qstep-nav { display:flex; flex-direction:column; gap:0; position:relative; }
+    .qstep-nav::before { content:''; position:absolute; left:18px; top:28px; bottom:28px; width:2px; background:#e2e8f0; z-index:0; }
+    .qstep-btn { display:flex; align-items:center; gap:10px; padding:12px 8px; background:none; border:none; cursor:pointer; position:relative; z-index:1; text-align:left; transition:all .15s; border-radius:8px; }
+    .qstep-btn:hover { background:#f1f5f9; }
+    .qstep-num { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; background:#e2e8f0; color:#64748b; flex-shrink:0; transition:all .2s; }
+    .qstep-label { font-size:13px; font-weight:600; color:#64748b; transition:color .15s; }
+    .qstep-active .qstep-num { background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; box-shadow:0 2px 8px rgba(37,99,235,.35); }
+    .qstep-active .qstep-label { color:#1e293b; }
+    .qstep-done .qstep-num { background:#059669; color:#fff; }
+    .qstep-done .qstep-label { color:#059669; }
+    .qstep-next-btn,.qstep-prev-btn { padding:8px 20px; font-size:13px; font-weight:700; border:none; border-radius:8px; cursor:pointer; transition:all .15s; }
+    .qstep-next-btn { background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; }
+    .qstep-next-btn:hover { opacity:.9; }
+    .qstep-prev-btn { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+    .qstep-prev-btn:hover { background:#e2e8f0; }
+    @media(max-width:768px) { .qstep-nav { width:100% !important; flex-direction:row; overflow-x:auto; gap:0; } .qstep-nav::before { display:none; } .qstep-label { display:none; } .qstep-btn { padding:8px 6px; } }
     select.qabul-input { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; cursor:pointer; }
     </style>
 
@@ -1089,6 +1156,49 @@
             }
         }
     });
+
+    // Vertical stepper
+    var currentStep = 0;
+    var totalSteps = 6;
+    function goStep(n, skipValidation) {
+        if (n > currentStep && !skipValidation) {
+            var panel = document.querySelector('.qstep-panel[data-step="'+currentStep+'"]');
+            if (panel) {
+                var hasError = false;
+                panel.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
+                panel.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
+                panel.querySelectorAll('input.qabul-input, select.qabul-input').forEach(function(el) {
+                    if (el.disabled || el.type === 'file' || el.readOnly) return;
+                    if (el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
+                    var val = (el.value || '').trim();
+                    if (!val || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
+                        el.classList.add('qabul-error');
+                        var msg = document.createElement('p');
+                        msg.className = 'qabul-error-msg';
+                        msg.textContent = 'Bu maydon majburiy';
+                        el.parentNode.appendChild(msg);
+                        hasError = true;
+                    }
+                });
+                if (hasError) {
+                    var firstErr = panel.querySelector('.qabul-error');
+                    if (firstErr) { firstErr.scrollIntoView({behavior:'smooth',block:'center'}); firstErr.focus(); }
+                    return;
+                }
+            }
+        }
+        currentStep = n;
+        document.querySelectorAll('.qstep-panel').forEach(function(p) { p.style.display = 'none'; });
+        var target = document.querySelector('.qstep-panel[data-step="'+n+'"]');
+        if (target) target.style.display = '';
+        document.querySelectorAll('.qstep-btn').forEach(function(b, i) {
+            b.classList.remove('qstep-active','qstep-done');
+            if (i === n) b.classList.add('qstep-active');
+            else if (i < n) b.classList.add('qstep-done');
+        });
+        var contentArea = document.getElementById('ptab-content-qabul');
+        if (contentArea) contentArea.scrollTop = 0;
+    }
 
     // AJAX fayl yuklash va o'chirish
     var qabulStudentId = {{ $student->id }};
@@ -1244,49 +1354,32 @@
     switchProfileTab('{{ session('active_tab') }}');
     @endif
 
-    // Form validation
+    // Form submit — validate last step
     var qabulForm = document.getElementById('qabul-main-form');
     if (qabulForm) {
         qabulForm.addEventListener('submit', function(e) {
-            document.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
-            document.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
-
+            var panel = document.querySelector('.qstep-panel[data-step="'+currentStep+'"]');
+            if (!panel) return;
+            panel.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
+            panel.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
             var errors = [];
-            var fields = qabulForm.querySelectorAll('input.qabul-input, select.qabul-input');
-            fields.forEach(function(el) {
-                if (el.disabled || el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
-                if (el.type === 'file' || el.readOnly) return;
+            panel.querySelectorAll('input.qabul-input, select.qabul-input').forEach(function(el) {
+                if (el.disabled || el.type === 'file' || el.readOnly) return;
+                if (el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
                 var val = (el.value || '').trim();
-                if (!val || val === '' || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
+                if (!val || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
                     el.classList.add('qabul-error');
-                    var msg = document.createElement('p');
-                    msg.className = 'qabul-error-msg';
-                    msg.textContent = 'Bu maydon majburiy';
-                    el.parentNode.appendChild(msg);
-                    errors.push(el);
+                    var msg = document.createElement('p'); msg.className = 'qabul-error-msg'; msg.textContent = 'Bu maydon majburiy';
+                    el.parentNode.appendChild(msg); errors.push(el);
                 }
             });
-
-            if (errors.length > 0) {
-                e.preventDefault();
-                errors[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                errors[0].focus();
-            }
+            if (errors.length > 0) { e.preventDefault(); errors[0].scrollIntoView({behavior:'smooth',block:'center'}); errors[0].focus(); }
         });
-
         qabulForm.addEventListener('input', function(e) {
-            if (e.target.classList.contains('qabul-error')) {
-                e.target.classList.remove('qabul-error');
-                var msg = e.target.parentNode.querySelector('.qabul-error-msg');
-                if (msg) msg.remove();
-            }
+            if (e.target.classList.contains('qabul-error')) { e.target.classList.remove('qabul-error'); var m=e.target.parentNode.querySelector('.qabul-error-msg'); if(m) m.remove(); }
         });
         qabulForm.addEventListener('change', function(e) {
-            if (e.target.classList.contains('qabul-error')) {
-                e.target.classList.remove('qabul-error');
-                var msg = e.target.parentNode.querySelector('.qabul-error-msg');
-                if (msg) msg.remove();
-            }
+            if (e.target.classList.contains('qabul-error')) { e.target.classList.remove('qabul-error'); var m=e.target.parentNode.querySelector('.qabul-error-msg'); if(m) m.remove(); }
         });
     }
     </script>

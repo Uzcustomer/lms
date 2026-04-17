@@ -381,11 +381,11 @@
                                         </div>
                                         <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['email','Email'],['millat','Millat']] as $f)
+                                                @foreach([['familya','Familya',$student->second_name],['ism','Ism',$student->first_name],['otasining_ismi',"Otasining ismi",$student->third_name],['email','Email',''],['millat','Millat','']] as $f)
                                                 <div>
                                                     <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}"
-                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ?? $f[2] ?? '') }}"
                                                            class="qabul-input" placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
@@ -399,8 +399,8 @@
                                                 <div>
                                                     <label class="qabul-label">Tug'ilgan sana</label>
                                                     <input type="text" name="tugilgan_sana"
-                                                           value="{{ old('tugilgan_sana', $admissionData?->tugilgan_sana ? \Carbon\Carbon::parse($admissionData->tugilgan_sana)->format('Y-m-d') : '') }}"
-                                                           class="qabul-input" type="date">
+                                                           value="{{ old('tugilgan_sana', $admissionData?->tugilgan_sana ? \Carbon\Carbon::parse($admissionData->tugilgan_sana)->format('d.m.Y') : '') }}"
+                                                           class="qabul-input qabul-date" placeholder="kk.oo.yyyy" maxlength="10">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Jinsi</label>
@@ -459,7 +459,7 @@
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan sana</label>
-                                                    <input type="date" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}" class="qabul-input">
+                                                    <input type="text" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('d.m.Y') : '') }}" class="qabul-input qabul-date" placeholder="kk.oo.yyyy" maxlength="10">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Berilgan joy</label>
@@ -889,11 +889,11 @@
                                         </div>
                                         <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                                                @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Tel'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
+                                                @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Telefon raqami','phone'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
                                                 <div>
                                                     <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                           class="qabul-input {{ ($f[2] ?? '') === 'phone' ? 'qabul-phone' : '' }}" placeholder="{{ ($f[2] ?? '') === 'phone' ? '+998 __ ___ __ __' : $f[1] }}">
                                                 </div>
                                                 @endforeach
                                             </div>
@@ -922,7 +922,7 @@
                                         </div>
                                         <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                                                @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
+                                                @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Telefon raqami','phone'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
                                                 <div>
                                                     <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
@@ -1037,9 +1037,9 @@
     .qabul-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#1a3268); flex-shrink:0; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent,#1a3268) 20%, transparent); }
     .qabul-card-title { font-size:12.5px; font-weight:800; color:#1e293b; letter-spacing:.04em; text-transform:uppercase; margin:0; }
     .qabul-card-body { padding:16px; }
-    .qabul-label { display:block; font-size:11.5px; font-weight:700; color:#475569; margin-bottom:6px; letter-spacing:.01em; }
-    .qabul-input { width:100%; padding:8px 12px; font-size:13px; color:#0f172a; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; transition:all .15s; box-shadow:0 1px 2px rgba(15,23,42,.03); }
-    .qabul-input::placeholder { color:#94a3b8; font-size:12px; }
+    .qabul-label { display:block; font-size:13px; font-weight:700; color:#475569; margin-bottom:6px; letter-spacing:.01em; }
+    .qabul-input { width:100%; padding:9px 12px; font-size:14px; color:#0f172a; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; transition:all .15s; box-shadow:0 1px 2px rgba(15,23,42,.03); }
+    .qabul-input::placeholder { color:#94a3b8; font-size:13px; }
     .qabul-input:hover { border-color:#94a3b8; }
     .qabul-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }
     .qabul-save-card { background:linear-gradient(135deg,#f8fafc,#eef2f7); border-color:#cbd5e1; padding:14px 16px; }
@@ -1126,6 +1126,38 @@
         var wrap = document.getElementById('qabul_otm_nomi_wrap');
         if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
     }
+
+    // Sana mask (dd.mm.yyyy) + mini calendar popup
+    document.querySelectorAll('.qabul-date').forEach(function(el) {
+        el.addEventListener('input', function(e) {
+            var v = e.target.value.replace(/[^0-9]/g, '');
+            if (v.length > 8) v = v.slice(0, 8);
+            var formatted = '';
+            if (v.length > 0) formatted = v.slice(0, 2);
+            if (v.length > 2) formatted += '.' + v.slice(2, 4);
+            if (v.length > 4) formatted += '.' + v.slice(4, 8);
+            e.target.value = formatted;
+        });
+        // Hidden date input for calendar popup
+        var cal = document.createElement('input');
+        cal.type = 'date';
+        cal.style.cssText = 'position:absolute;right:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;opacity:0;cursor:pointer;';
+        cal.tabIndex = -1;
+        cal.addEventListener('change', function() {
+            if (!cal.value) return;
+            var parts = cal.value.split('-');
+            el.value = parts[2] + '.' + parts[1] + '.' + parts[0];
+            el.dispatchEvent(new Event('input', {bubbles:true}));
+        });
+        el.parentNode.style.position = 'relative';
+        el.parentNode.appendChild(cal);
+        // Calendar icon
+        var icon = document.createElement('span');
+        icon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+        icon.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;';
+        el.parentNode.appendChild(icon);
+        el.style.paddingRight = '36px';
+    });
 
     // +998 telefon mask
     document.querySelectorAll('.qabul-phone').forEach(function(el) {

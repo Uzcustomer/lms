@@ -1748,6 +1748,7 @@ class ReportController extends Controller
 
             $scheduleRows = $scheduleQuery
                 ->select(
+                    'sch.schedule_hemis_id',
                     'sch.training_type_code',
                     'sch.training_type_name',
                     'sch.week_number',
@@ -1756,6 +1757,21 @@ class ReportController extends Controller
                     'sch.lesson_pair_end_time'
                 )
                 ->get();
+
+            // O'qituvchi belgilagan soatlar (attendance_controls.load) - subject_schedule_id bo'yicha
+            $markedByScheduleId = [];
+            if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
+                $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
+                if (!empty($scheduleHemisIds)) {
+                    $markedByScheduleId = DB::table('attendance_controls')
+                        ->whereNull('deleted_at')
+                        ->whereIn('subject_schedule_id', $scheduleHemisIds)
+                        ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                        ->groupBy('subject_schedule_id')
+                        ->pluck('marked_load', 'subject_schedule_id')
+                        ->toArray();
+                }
+            }
 
             // hemisWeeks[weekIdx][tt_code] = hours (haftalik yig'indi)
             // hemisLessonsRaw[tt_code] = [{week, date, start, hours}, ...] - bir kundagi soatlar jamlanadi
@@ -1775,6 +1791,7 @@ class ReportController extends Controller
                 $end = strtotime($row->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
                 $hemisWeeks[$weekIdx][$code] = ($hemisWeeks[$weekIdx][$code] ?? 0) + $hours;
+                $marked = (int) ($markedByScheduleId[$row->schedule_hemis_id] ?? 0);
 
                 $dateStr = '';
                 if (!empty($row->lesson_date)) {
@@ -1785,6 +1802,7 @@ class ReportController extends Controller
                 if (isset($dayAcc[$dayKey])) {
                     $idx = $dayAcc[$dayKey];
                     $hemisLessonsRaw[$code][$idx]['hours'] += $hours;
+                    $hemisLessonsRaw[$code][$idx]['marked'] += $marked;
                     if (strcmp($row->lesson_pair_start_time, $hemisLessonsRaw[$code][$idx]['start']) < 0) {
                         $hemisLessonsRaw[$code][$idx]['start'] = $row->lesson_pair_start_time;
                     }
@@ -1794,6 +1812,7 @@ class ReportController extends Controller
                         'date' => $row->lesson_date,
                         'start' => $row->lesson_pair_start_time,
                         'hours' => $hours,
+                        'marked' => $marked,
                     ];
                     $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
                 }
@@ -1914,6 +1933,7 @@ class ReportController extends Controller
                                 'date' => substr((string) ($d['date'] ?? ''), 0, 10),
                                 'hemis' => (int) $d['hours'],
                                 'ktr' => $ktrPerDay,
+                                'marked' => (int) ($d['marked'] ?? 0),
                             ];
                         }
                     } elseif ($ktrWeekHours > 0) {
@@ -1922,6 +1942,7 @@ class ReportController extends Controller
                             'date' => $weekStartByIdx[$w] ?? '',
                             'hemis' => 0,
                             'ktr' => $ktrWeekHours,
+                            'marked' => 0,
                         ];
                     }
                     // ikkalasi ham yo'q - qator qo'shmaymiz
@@ -1961,6 +1982,7 @@ class ReportController extends Controller
                 foreach ($trainingTypes as $code => $info) {
                     $l = $lessonsByType[$code][$k] ?? null;
                     $hemisH = $l ? (int) $l['hemis'] : 0;
+                    $markedH = $l ? (int) ($l['marked'] ?? 0) : 0;
                     if ($ktrExists) {
                         $kRaw = $l ? (float) $l['ktr'] : 0;
                         $ktrH = (abs($kRaw - round($kRaw)) < 0.01) ? (int) round($kRaw) : round($kRaw, 1);
@@ -1970,6 +1992,7 @@ class ReportController extends Controller
                     $rowData['cells'][$code] = [
                         'hemis' => $hemisH,
                         'ktr' => $ktrH,
+                        'marked' => $markedH,
                         'diff' => $ktrExists ? (round($ktrH - $hemisH, 1) + 0) : null,
                     ];
                 }
@@ -2122,6 +2145,7 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.auditorium_code', $request->auditorium);
         }
         $scheduleRows = $scheduleQuery->select(
+            'sch.schedule_hemis_id',
             'sch.group_id', 'sch.subject_id', 'sch.semester_code',
             'sch.training_type_code', 'sch.training_type_name',
             'sch.week_number', 'sch.lesson_date',
@@ -2132,6 +2156,21 @@ class ReportController extends Controller
         foreach ($scheduleRows as $row) {
             $key = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
             $schedBySubject[$key][] = $row;
+        }
+
+        // O'qituvchi belgilagan soatlar (attendance_controls)
+        $markedByScheduleId = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
+            $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
+            if (!empty($scheduleHemisIds)) {
+                $markedByScheduleId = DB::table('attendance_controls')
+                    ->whereNull('deleted_at')
+                    ->whereIn('subject_schedule_id', $scheduleHemisIds)
+                    ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                    ->groupBy('subject_schedule_id')
+                    ->pluck('marked_load', 'subject_schedule_id')
+                    ->toArray();
+            }
         }
 
         // KTR rejalarini cs_id bo'yicha olish
@@ -2186,6 +2225,7 @@ class ReportController extends Controller
                 $start = strtotime($r->lesson_pair_start_time);
                 $end = strtotime($r->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
+                $marked = (int) ($markedByScheduleId[$r->schedule_hemis_id] ?? 0);
 
                 $dateStr = '';
                 if (!empty($r->lesson_date)) {
@@ -2196,6 +2236,7 @@ class ReportController extends Controller
                 if (isset($dayAcc[$dayKey])) {
                     $idx = $dayAcc[$dayKey];
                     $hemisLessonsRaw[$code][$idx]['hours'] += $hours;
+                    $hemisLessonsRaw[$code][$idx]['marked'] += $marked;
                     if (strcmp($r->lesson_pair_start_time, $hemisLessonsRaw[$code][$idx]['start']) < 0) {
                         $hemisLessonsRaw[$code][$idx]['start'] = $r->lesson_pair_start_time;
                     }
@@ -2205,6 +2246,7 @@ class ReportController extends Controller
                         'date' => $r->lesson_date,
                         'start' => $r->lesson_pair_start_time,
                         'hours' => $hours,
+                        'marked' => $marked,
                     ];
                     $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
                 }
@@ -2277,6 +2319,7 @@ class ReportController extends Controller
             foreach ($trainingTypes as $code => $name) {
                 $hemisVals = [];
                 $ktrVals = [];
+                $markedVals = [];
                 $dates = [];
                 foreach ($orderedWeeks as $w) {
                     $hemisList = $hemisByWeek[$code][$w] ?? [];
@@ -2288,6 +2331,7 @@ class ReportController extends Controller
                         foreach ($hemisList as $d) {
                             $hemisVals[] = (int) $d['hours'];
                             $dates[] = substr((string) ($d['date'] ?? ''), 0, 10);
+                            $markedVals[] = (int) ($d['marked'] ?? 0);
                             if ($ktrExists) {
                                 $ktrVals[] = (abs($ktrPerDay - round($ktrPerDay)) < 0.01) ? (int) round($ktrPerDay) : round($ktrPerDay, 1);
                             }
@@ -2295,12 +2339,13 @@ class ReportController extends Controller
                     } elseif ($ktrExists && $ktrWeekHours > 0) {
                         $hemisVals[] = 0;
                         $ktrVals[] = $ktrWeekHours;
+                        $markedVals[] = 0;
                         $dates[] = $weekStartByIdx[$w] ?? '';
                     }
                 }
 
                 if (empty($hemisVals) && empty($ktrVals)) continue;
-                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'dates' => $dates];
+                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'marked' => $markedVals, 'dates' => $dates];
                 if (!isset($globalTrainingTypes[$code])) {
                     $globalTrainingTypes[$code] = $name;
                 }
@@ -2347,27 +2392,27 @@ class ReportController extends Controller
             $sheet->mergeCells([$col + 1, 1, $col + 1, 2]);
         }
 
-        // Dars turi guruhli sarlavhalar
+        // Dars turi guruhli sarlavhalar (HEMIS / KTR / Belgi / Farq)
         $col = $staticCols + 1;
         foreach ($globalTtCodes as $code) {
             $name = $globalTrainingTypes[$code];
-            // Guruh sarlavhasi (3 ustun): training type nomi
             $sheet->setCellValue([$col, 1], $name);
-            $sheet->mergeCells([$col, 1, $col + 2, 1]);
-            // Pastki sub-headerlar
+            $sheet->mergeCells([$col, 1, $col + 3, 1]);
             $sheet->setCellValue([$col, 2], 'HEMIS');
             $sheet->setCellValue([$col + 1, 2], 'KTR');
-            $sheet->setCellValue([$col + 2, 2], 'Farq');
-            $col += 3;
+            $sheet->setCellValue([$col + 2, 2], 'Belgi');
+            $sheet->setCellValue([$col + 3, 2], 'Farq');
+            $col += 4;
         }
         // Jami guruhi
         $sheet->setCellValue([$col, 1], 'Jami');
-        $sheet->mergeCells([$col, 1, $col + 2, 1]);
+        $sheet->mergeCells([$col, 1, $col + 3, 1]);
         $sheet->setCellValue([$col, 2], 'HEMIS');
         $sheet->setCellValue([$col + 1, 2], 'KTR');
-        $sheet->setCellValue([$col + 2, 2], 'Farq');
+        $sheet->setCellValue([$col + 2, 2], 'Belgi');
+        $sheet->setCellValue([$col + 3, 2], 'Farq');
 
-        $totalCols = $staticCols + ($ttCount + 1) * 3;
+        $totalCols = $staticCols + ($ttCount + 1) * 4;
         $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($totalCols);
 
         $headerStyle = [
@@ -2426,55 +2471,70 @@ class ReportController extends Controller
                 $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
                 $sheet->setCellValue([8, $excelRow], $darsLabel);
 
-                // Dars turi cells
+                // Dars turi cells (HEMIS / KTR / Belgi / Farq)
                 $col = $staticCols + 1;
                 $rowHemisSum = 0;
                 $rowKtrSum = 0;
+                $rowMarkedSum = 0;
                 $rowFarqSum = 0;
-                $hasKtrAny = false;
                 foreach ($globalTtCodes as $code) {
                     $td = $ttData[$code] ?? null;
                     $h = ($td && isset($td['hemis'][$k])) ? $td['hemis'][$k] : '';
                     $kt = ($td && isset($td['ktr'][$k])) ? $td['ktr'][$k] : '';
+                    $mk = ($td && isset($td['marked'][$k])) ? $td['marked'][$k] : '';
                     $sheet->setCellValue([$col, $excelRow], $h);
                     if ($ktrExists) {
                         $sheet->setCellValue([$col + 1, $excelRow], $kt);
+                    } else {
+                        $sheet->setCellValue([$col + 1, $excelRow], '-');
+                    }
+                    $sheet->setCellValue([$col + 2, $excelRow], $mk);
+                    if (is_numeric($mk) && $mk > 0) {
+                        $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
+                            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'BBF7D0']],
+                            'font' => ['bold' => true, 'color' => ['rgb' => '14532D']],
+                        ]);
+                        $rowMarkedSum += $mk;
+                    }
+                    if ($ktrExists) {
                         if ($h !== '' || $kt !== '') {
                             $diff = (is_numeric($kt) ? $kt : 0) - (is_numeric($h) ? $h : 0);
                             $diff = (abs($diff - round($diff)) < 0.01) ? (int) round($diff) : round($diff, 1);
-                            $sheet->setCellValue([$col + 2, $excelRow], $diff);
+                            $sheet->setCellValue([$col + 3, $excelRow], $diff);
                             if ($diff !== 0) {
                                 $color = $diff > 0 ? 'FEF3C7' : 'FEE2E2';
-                                $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
+                                $sheet->getStyle([$col + 3, $excelRow, $col + 3, $excelRow])->applyFromArray([
                                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                                 ]);
                             }
                             $rowFarqSum += $diff;
-                            $hasKtrAny = true;
                         }
                         if (is_numeric($kt)) $rowKtrSum += $kt;
                     } else {
-                        $sheet->setCellValue([$col + 1, $excelRow], '-');
-                        $sheet->setCellValue([$col + 2, $excelRow], '-');
+                        $sheet->setCellValue([$col + 3, $excelRow], '-');
                     }
                     if (is_numeric($h)) $rowHemisSum += $h;
-                    $col += 3;
+                    $col += 4;
                 }
 
                 // Jami ustunlari
                 $sheet->setCellValue([$col, $excelRow], $rowHemisSum);
                 if ($ktrExists) {
                     $sheet->setCellValue([$col + 1, $excelRow], $rowKtrSum);
-                    $sheet->setCellValue([$col + 2, $excelRow], $rowFarqSum);
+                } else {
+                    $sheet->setCellValue([$col + 1, $excelRow], '-');
+                }
+                $sheet->setCellValue([$col + 2, $excelRow], $rowMarkedSum);
+                if ($ktrExists) {
+                    $sheet->setCellValue([$col + 3, $excelRow], $rowFarqSum);
                     if ($rowFarqSum !== 0) {
                         $color = $rowFarqSum > 0 ? 'FEF3C7' : 'FEE2E2';
-                        $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
+                        $sheet->getStyle([$col + 3, $excelRow, $col + 3, $excelRow])->applyFromArray([
                             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                         ]);
                     }
                 } else {
-                    $sheet->setCellValue([$col + 1, $excelRow], '-');
-                    $sheet->setCellValue([$col + 2, $excelRow], '-');
+                    $sheet->setCellValue([$col + 3, $excelRow], '-');
                 }
 
                 $excelRow++;
@@ -2490,32 +2550,42 @@ class ReportController extends Controller
             $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
             $sheet->setCellValue([8, $excelRow], 'Jami');
             $col = $staticCols + 1;
-            $totalHemis = 0; $totalKtr = 0; $totalFarq = 0;
+            $totalHemis = 0; $totalKtr = 0; $totalMarked = 0; $totalFarq = 0;
             foreach ($globalTtCodes as $code) {
                 $td = $ttData[$code] ?? null;
                 $h = $td ? array_sum($td['hemis']) : 0;
                 $kt = ($td && $ktrExists) ? array_sum($td['ktr']) : 0;
+                $mk = $td ? array_sum($td['marked'] ?? []) : 0;
                 $f = $ktrExists ? round($kt - $h, 1) : 0;
                 $sheet->setCellValue([$col, $excelRow], $h);
                 if ($ktrExists) {
                     $sheet->setCellValue([$col + 1, $excelRow], $kt);
-                    $sheet->setCellValue([$col + 2, $excelRow], $f);
                 } else {
                     $sheet->setCellValue([$col + 1, $excelRow], '-');
-                    $sheet->setCellValue([$col + 2, $excelRow], '-');
+                }
+                $sheet->setCellValue([$col + 2, $excelRow], $mk);
+                if ($ktrExists) {
+                    $sheet->setCellValue([$col + 3, $excelRow], $f);
+                } else {
+                    $sheet->setCellValue([$col + 3, $excelRow], '-');
                 }
                 $totalHemis += $h;
                 $totalKtr += $kt;
+                $totalMarked += $mk;
                 $totalFarq += $f;
-                $col += 3;
+                $col += 4;
             }
             $sheet->setCellValue([$col, $excelRow], $totalHemis);
             if ($ktrExists) {
                 $sheet->setCellValue([$col + 1, $excelRow], $totalKtr);
-                $sheet->setCellValue([$col + 2, $excelRow], $totalFarq);
             } else {
                 $sheet->setCellValue([$col + 1, $excelRow], '-');
-                $sheet->setCellValue([$col + 2, $excelRow], '-');
+            }
+            $sheet->setCellValue([$col + 2, $excelRow], $totalMarked);
+            if ($ktrExists) {
+                $sheet->setCellValue([$col + 3, $excelRow], $totalFarq);
+            } else {
+                $sheet->setCellValue([$col + 3, $excelRow], '-');
             }
             $sheet->getStyle("A{$excelRow}:{$lastColLetter}{$excelRow}")->applyFromArray([
                 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F1F5F9']],

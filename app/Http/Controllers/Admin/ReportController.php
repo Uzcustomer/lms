@@ -2200,9 +2200,12 @@ class ReportController extends Controller
             foreach ($trainingTypes as $code => $info) {
                 $list = $hemisLessonsRaw[$code] ?? [];
                 usort($list, function ($a, $b) {
-                    $ad = strtotime(($a['date'] ?? '') . ' ' . ($a['start'] ?? '00:00:00'));
-                    $bd = strtotime(($b['date'] ?? '') . ' ' . ($b['start'] ?? '00:00:00'));
-                    return $ad <=> $bd;
+                    // Sanani YYYY-MM-DD ko'rinishiga qirqib, string sifatida solishtiramiz
+                    $ad = substr((string) ($a['date'] ?? ''), 0, 10);
+                    $bd = substr((string) ($b['date'] ?? ''), 0, 10);
+                    $cmp = strcmp($ad, $bd);
+                    if ($cmp !== 0) return $cmp;
+                    return strcmp((string) ($a['start'] ?? ''), (string) ($b['start'] ?? ''));
                 });
                 $hemisLessonsByType[$code] = $list;
             }
@@ -2539,9 +2542,11 @@ class ReportController extends Controller
             }
             foreach ($hemisLessonsRaw as $code => &$list) {
                 usort($list, function ($a, $b) {
-                    $ad = strtotime(($a['date'] ?? '') . ' ' . ($a['start'] ?? '00:00:00'));
-                    $bd = strtotime(($b['date'] ?? '') . ' ' . ($b['start'] ?? '00:00:00'));
-                    return $ad <=> $bd;
+                    $ad = substr((string) ($a['date'] ?? ''), 0, 10);
+                    $bd = substr((string) ($b['date'] ?? ''), 0, 10);
+                    $cmp = strcmp($ad, $bd);
+                    if ($cmp !== 0) return $cmp;
+                    return strcmp((string) ($a['start'] ?? ''), (string) ($b['start'] ?? ''));
                 });
             }
             unset($list);

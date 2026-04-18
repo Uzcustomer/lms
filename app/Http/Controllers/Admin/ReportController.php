@@ -2397,37 +2397,32 @@ class ReportController extends Controller
                 $lessonsByType[$code] = $list;
             }
 
-            // Jami darslar qatorlari soni
-            $maxLessons = 0;
-            foreach ($lessonsByType as $list) {
-                $maxLessons = max($maxLessons, count($list));
-            }
-            if ($maxLessons <= 0) {
-                $maxLessons = 1;
-            }
-
-            // Darslar ro'yxatini tuzish
-            $lessonsList = [];
-            for ($k = 0; $k < $maxLessons; $k++) {
-                // Shu dars uchun eng erta sana (barcha dars turlari orasida)
-                $earliestDate = null;
-                foreach ($trainingTypes as $code => $info) {
-                    $l = $lessonsByType[$code][$k] ?? null;
-                    if ($l && !empty($l['date'])) {
-                        if ($earliestDate === null || strcmp($l['date'], $earliestDate) < 0) {
-                            $earliestDate = $l['date'];
-                        }
-                    }
+            // Har bir dars turi uchun sana -> lesson xaritasi
+            $byTypeByDate = [];
+            $allDates = [];
+            foreach ($lessonsByType as $code => $list) {
+                foreach ($list as $l) {
+                    $d = $l['date'] ?? '';
+                    if ($d === '') continue;
+                    $byTypeByDate[$code][$d] = $l;
+                    $allDates[$d] = true;
                 }
-                $dateLabel = $earliestDate ? date('d.m.Y', strtotime($earliestDate)) : '';
+            }
+            ksort($allDates);
+            $uniqueDates = array_keys($allDates);
+            $maxLessons = count($uniqueDates);
+            if ($maxLessons <= 0) $maxLessons = 1;
 
+            // Darslar ro'yxatini tuzish - har bir noyob sana = bitta qator
+            $lessonsList = [];
+            foreach ($uniqueDates as $k => $date) {
                 $rowData = [
                     'lesson' => $k + 1,
-                    'date' => $dateLabel,
+                    'date' => date('d.m.Y', strtotime($date)),
                     'cells' => [],
                 ];
                 foreach ($trainingTypes as $code => $info) {
-                    $l = $lessonsByType[$code][$k] ?? null;
+                    $l = $byTypeByDate[$code][$date] ?? null;
                     $hemisH = $l ? (int) $l['hemis'] : 0;
                     $markedH = $l ? (int) ($l['marked'] ?? 0) : 0;
                     if ($ktrExists) {
@@ -2446,37 +2441,6 @@ class ReportController extends Controller
                 $lessonsList[] = $rowData;
             }
 
-            // Diagnostik: nima topilgani
-            $debugInfo = [
-                'cs_id' => $cs->cs_id,
-                'subject_id' => $cs->subject_id,
-                'group_hemis_id' => $cs->group_hemis_id,
-                'semester_code' => $cs->semester_code,
-                'schedule_row_count' => $scheduleRows->count(),
-                'schedule_dates' => $scheduleRows->map(fn($r) => [
-                    'date' => substr((string) $r->lesson_date, 0, 10),
-                    'code' => $r->training_type_code,
-                    'name' => $r->training_type_name,
-                    'sch_id' => $r->schedule_hemis_id,
-                    'week' => $r->week_number,
-                ])->values()->toArray(),
-                'ac_row_count' => $acRows->count(),
-                'ac_dates' => $acRows->map(fn($a) => [
-                    'date' => substr((string) $a->lesson_date, 0, 10),
-                    'code' => $a->training_type_code,
-                    'name' => $a->training_type_name,
-                    'load' => $a->load,
-                ])->values()->toArray(),
-            ];
-            $debugCounts = [];
-            foreach ($hemisLessonsByType as $code => $list) {
-                $debugCounts[$code] = [
-                    'name' => $trainingTypes[$code]['name'] ?? $code,
-                    'hemis_days' => count($list),
-                    'dates' => array_values(array_unique(array_map(fn($l) => substr((string) $l['date'], 0, 10), $list))),
-                ];
-            }
-
             return response()->json([
                 'subject_name' => $cs->subject_name,
                 'group_name' => $cs->group_name,
@@ -2485,8 +2449,6 @@ class ReportController extends Controller
                 'total_lessons' => $maxLessons,
                 'training_types' => $trainingTypes,
                 'lessons' => $lessonsList,
-                'debug' => $debugCounts,
-                'debug_raw' => $debugInfo,
             ]);
         } catch (\Throwable $e) {
             \Log::error('Schedule-KTR compare detail error: ' . $e->getMessage(), [
@@ -3055,24 +3017,25 @@ class ReportController extends Controller
             $ttData = $block['training_types'];
             $ktrExists = $block['ktr_exists'];
 
-            // Bu (cs) bo'yicha eng ko'p darslari soni
-            $maxK = 0;
+            // Har bir dars turi uchun sana -> indeks xaritasi
+            $byTypeByDate = [];
+            $allDates = [];
             foreach ($ttData as $code => $td) {
-                $maxK = max($maxK, count($td['hemis']), count($td['ktr']));
+                foreach ($td['dates'] ?? [] as $i => $d) {
+                    if (empty($d)) continue;
+                    $byTypeByDate[$code][$d] = $i;
+                    $allDates[$d] = true;
+                }
             }
+            ksort($allDates);
+            $uniqueDates = array_keys($allDates);
+            $maxK = count($uniqueDates);
             if ($maxK === 0) continue;
 
             $blockStartRow = $excelRow;
 
-            for ($k = 0; $k < $maxK; $k++) {
-                // Birinchi mavjud sanani topib dars yorlig'ini tuzish
-                $rowDate = '';
-                foreach ($globalTtCodes as $code) {
-                    if (isset($ttData[$code]['dates'][$k]) && !empty($ttData[$code]['dates'][$k])) {
-                        $rowDate = $fmtDate($ttData[$code]['dates'][$k]);
-                        if ($rowDate !== '') break;
-                    }
-                }
+            foreach ($uniqueDates as $k => $rowDateRaw) {
+                $rowDate = $fmtDate($rowDateRaw);
                 $darsLabel = ($k + 1) . '-dars' . ($rowDate ? ' (' . $rowDate . ')' : '');
 
                 // Static cells
@@ -3093,9 +3056,10 @@ class ReportController extends Controller
                 $rowFarqSum = 0;
                 foreach ($globalTtCodes as $code) {
                     $td = $ttData[$code] ?? null;
-                    $h = ($td && isset($td['hemis'][$k])) ? $td['hemis'][$k] : '';
-                    $kt = ($td && isset($td['ktr'][$k])) ? $td['ktr'][$k] : '';
-                    $mk = ($td && isset($td['marked'][$k])) ? $td['marked'][$k] : '';
+                    $tdIdx = $byTypeByDate[$code][$rowDateRaw] ?? null;
+                    $h = ($td && $tdIdx !== null && isset($td['hemis'][$tdIdx])) ? $td['hemis'][$tdIdx] : '';
+                    $kt = ($td && $tdIdx !== null && isset($td['ktr'][$tdIdx])) ? $td['ktr'][$tdIdx] : '';
+                    $mk = ($td && $tdIdx !== null && isset($td['marked'][$tdIdx])) ? $td['marked'][$tdIdx] : '';
                     $sheet->setCellValue([$col, $excelRow], $h);
                     if ($ktrExists) {
                         $sheet->setCellValue([$col + 1, $excelRow], $kt);

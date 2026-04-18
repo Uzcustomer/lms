@@ -55,32 +55,25 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     }
   }
 
-  Future<void> _pickDate(bool isStart) async {
+  Future<void> _pickDateRange() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final range = await showDateRangePicker(
       context: context,
-      initialDate: isStart ? (_startDate ?? now) : (_endDate ?? _startDate ?? now),
       firstDate: now.subtract(const Duration(days: 40)),
       lastDate: now.add(const Duration(days: 30)),
-      selectableDayPredicate: (date) => date.weekday != DateTime.sunday,
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
     );
-    if (picked != null && mounted) {
+    if (range != null && mounted) {
       setState(() {
-        if (isStart) {
-          _startDate = picked;
-          if (_endDate != null && _endDate!.isBefore(picked)) {
-            _endDate = null;
-            _missedAssessments = [];
-            _assessmentsLoaded = false;
-          }
-        } else {
-          _endDate = picked;
-        }
+        _startDate = range.start;
+        _endDate = range.end;
+        _missedAssessments = [];
+        _assessmentsLoaded = false;
+        _makeupSelections.clear();
       });
-
-      if (_startDate != null && _endDate != null) {
-        _fetchMissedAssessments();
-      }
+      _fetchMissedAssessments();
     }
   }
 
@@ -515,29 +508,52 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             const SizedBox(height: 12),
 
             // Date range
-            Container(
-              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _DateButton(
-                      label: l.startDate,
-                      value: _startDate != null ? dateFormat.format(_startDate!) : null,
-                      onTap: () => _pickDate(true),
-                      isDark: isDark,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _DateButton(
-                      label: l.endDate,
-                      value: _endDate != null ? dateFormat.format(_endDate!) : null,
-                      onTap: () => _pickDate(false),
-                      isDark: isDark,
-                    ),
-                  ),
-                ],
+            InkWell(
+              onTap: _pickDateRange,
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.all(16),
+                child: _startDate != null && _endDate != null
+                    ? Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 18, color: AppTheme.primaryColor),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '${dateFormat.format(_startDate!)} — ${dateFormat.format(_endDate!)} ($_excuseDays kun)',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _startDate = null;
+                                _endDate = null;
+                                _missedAssessments = [];
+                                _assessmentsLoaded = false;
+                                _makeupSelections.clear();
+                                _excuseDays = 0;
+                              });
+                            },
+                            child: Text(l.clear, style: TextStyle(fontSize: 12, color: AppTheme.primaryColor)),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(Icons.edit_calendar, size: 18, color: AppTheme.primaryColor),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Icon(Icons.calendar_today, size: 18, color: subColor),
+                          const SizedBox(width: 10),
+                          Text(
+                            '${l.startDate} — ${l.endDate}',
+                            style: TextStyle(fontSize: 14, color: subColor),
+                          ),
+                          const Spacer(),
+                          Icon(Icons.edit_calendar, size: 18, color: subColor),
+                        ],
+                      ),
               ),
             ),
 
@@ -883,54 +899,6 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _DateButton extends StatelessWidget {
-  final String label;
-  final String? value;
-  final VoidCallback onTap;
-  final bool isDark;
-
-  const _DateButton({required this.label, this.value, required this.onTap, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: TextStyle(fontSize: 11, color: subColor)),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.calendar_today, size: 16, color: value != null ? AppTheme.primaryColor : subColor),
-                const SizedBox(width: 6),
-                Text(
-                  value ?? '—',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: value != null ? textColor : subColor,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

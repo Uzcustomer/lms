@@ -968,7 +968,7 @@ class JournalController extends Controller
                     ->where('semester_code', $semesterCode)
                     ->where(function ($q) use ($allCsHemisIds, $subject) {
                         $q->whereIn('subject_hemis_id', $allCsHemisIds)
-                          ->orWhere('subject_name', $subject->subject_name);
+                          ->orWhereRaw('LOWER(subject_name) = ?', [mb_strtolower($subject->subject_name)]);
                     })
                     ->pluck('id')
                     ->toArray();
@@ -2338,7 +2338,7 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->where(function ($q) use ($allCsHemisIds, $subject) {
                 $q->whereIn('subject_hemis_id', !empty($allCsHemisIds) ? $allCsHemisIds : [0])
-                  ->orWhere('subject_name', $subject->subject_name);
+                  ->orWhereRaw('LOWER(subject_name) = ?', [mb_strtolower($subject->subject_name)]);
             })
             ->get();
 

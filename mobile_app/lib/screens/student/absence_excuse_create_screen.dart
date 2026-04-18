@@ -97,8 +97,15 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         dateFormat.format(_endDate!),
       );
       if (mounted) {
+        final list = List<dynamic>.from(response['data'] as List<dynamic>? ?? []);
+        const typeOrder = {'jn': 0, 'mt': 1, 'oski': 2, 'test': 3};
+        list.sort((a, b) {
+          final aType = (a as Map<String, dynamic>)['assessment_type'] as String? ?? '';
+          final bType = (b as Map<String, dynamic>)['assessment_type'] as String? ?? '';
+          return (typeOrder[aType] ?? 9).compareTo(typeOrder[bType] ?? 9);
+        });
         setState(() {
-          _missedAssessments = response['data'] as List<dynamic>? ?? [];
+          _missedAssessments = list;
           _excuseDays = response['excuse_days'] as int? ?? 15;
           _assessmentsLoaded = true;
         });
@@ -247,7 +254,30 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     return maxDate;
   }
 
+  List<DateTimeRange> _getJnBlockedRanges() {
+    final ranges = <DateTimeRange>[];
+    for (int i = 0; i < _missedAssessments.length; i++) {
+      final a = _missedAssessments[i] as Map<String, dynamic>;
+      if (a['assessment_type'] != 'jn') continue;
+      final sel = _makeupSelections[i];
+      if (sel == null || sel['status'] != 'retake') continue;
+      final start = sel['makeup_start'] ?? '';
+      final end = sel['makeup_end'] ?? '';
+      if (start.isNotEmpty && end.isNotEmpty) {
+        ranges.add(DateTimeRange(
+          start: DateTime.parse(start),
+          end: DateTime.parse(end),
+        ));
+      }
+    }
+    return ranges;
+  }
+
   Future<void> _pickMakeupDate(int index) async {
+    final a = _missedAssessments[index] as Map<String, dynamic>;
+    final type = a['assessment_type'] as String? ?? '';
+    final blockedRanges = (type != 'jn') ? _getJnBlockedRanges() : <DateTimeRange>[];
+
     final now = DateTime.now();
     final maxDate = _calcMaxDate();
     final picked = await showModalBottomSheet<DateTime>(
@@ -259,6 +289,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         lastDate: maxDate,
         isRange: false,
         excludeSundays: true,
+        blockedRanges: blockedRanges.isNotEmpty ? blockedRanges : null,
       ),
     );
     if (picked != null && mounted) {
@@ -977,6 +1008,7 @@ class _CalendarPicker extends StatefulWidget {
   final DateTime? initialEnd;
   final bool isRange;
   final bool excludeSundays;
+  final List<DateTimeRange>? blockedRanges;
 
   const _CalendarPicker({
     required this.firstDate,
@@ -985,6 +1017,7 @@ class _CalendarPicker extends StatefulWidget {
     this.initialEnd,
     this.isRange = true,
     this.excludeSundays = false,
+    this.blockedRanges,
   });
 
   @override
@@ -1055,8 +1088,16 @@ class _CalendarPickerState extends State<_CalendarPicker> {
             selectedDayPredicate: widget.isRange
                 ? null
                 : (day) => isSameDay(_selectedDay, day),
-            enabledDayPredicate: widget.excludeSundays
-                ? (day) => day.weekday != DateTime.sunday
+            enabledDayPredicate: (widget.excludeSundays || widget.blockedRanges != null)
+                ? (day) {
+                    if (widget.excludeSundays && day.weekday == DateTime.sunday) return false;
+                    if (widget.blockedRanges != null) {
+                      for (final range in widget.blockedRanges!) {
+                        if (!day.isBefore(range.start) && !day.isAfter(range.end)) return false;
+                      }
+                    }
+                    return true;
+                  }
                 : null,
             onDaySelected: widget.isRange
                 ? null

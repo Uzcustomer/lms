@@ -2038,6 +2038,16 @@ class ReportController extends Controller
                 $lessonsList[] = $rowData;
             }
 
+            // Diagnostik: ma'lumotlar bazasidagi HEMIS darslari soni (tashxis qo'yish uchun)
+            $debugCounts = [];
+            foreach ($hemisLessonsByType as $code => $list) {
+                $debugCounts[$code] = [
+                    'name' => $trainingTypes[$code]['name'] ?? $code,
+                    'hemis_days' => count($list),
+                    'dates' => array_values(array_unique(array_map(fn($l) => substr((string) $l['date'], 0, 10), $list))),
+                ];
+            }
+
             return response()->json([
                 'subject_name' => $cs->subject_name,
                 'group_name' => $cs->group_name,
@@ -2046,6 +2056,7 @@ class ReportController extends Controller
                 'total_lessons' => $maxLessons,
                 'training_types' => $trainingTypes,
                 'lessons' => $lessonsList,
+                'debug' => $debugCounts,
             ]);
         } catch (\Throwable $e) {
             \Log::error('Schedule-KTR compare detail error: ' . $e->getMessage(), [

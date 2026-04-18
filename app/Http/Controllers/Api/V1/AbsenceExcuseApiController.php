@@ -225,6 +225,28 @@ class AbsenceExcuseApiController extends Controller
 
         $assessments = $this->findMissedAssessments($student->group_id, $startDate, $endDate);
 
+        // Web versiya kabi: dars jadvalida bo'lgan lekin JN topilmagan fanlarga default JN qo'shish
+        $jnSubjects = Schedule::where('group_id', $student->group_id)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->select('subject_name', 'subject_id')
+            ->distinct()
+            ->get();
+
+        $existingJnSubjects = $assessments->where('assessment_type', 'jn')->pluck('subject_name')->unique()->toArray();
+
+        foreach ($jnSubjects as $sub) {
+            if (!in_array($sub->subject_name, $existingJnSubjects)) {
+                $assessments->push([
+                    'subject_name' => $sub->subject_name,
+                    'subject_id' => $sub->subject_id,
+                    'assessment_type' => 'jn',
+                    'assessment_type_code' => '100',
+                    'original_date' => $startDate->format('Y-m-d'),
+                ]);
+            }
+        }
+
         $jnSubjectIds = $assessments->where('assessment_type', 'jn')->pluck('subject_id')->unique()->filter()->values();
 
         $futureAssessments = collect();

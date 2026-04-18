@@ -480,14 +480,8 @@ class StudentController extends Controller
             }
         }
 
-        $userId = $user?->id;
-        if ($userId && \Illuminate\Support\Facades\DB::table('users')->where('id', $userId)->exists()) {
-            $data['updated_by'] = $userId;
-        } else {
-            $data['updated_by'] = null;
-        }
-
-        \Log::info('Admission save attempt', ['student_id' => $student->id, 'data_keys' => array_keys($data), 'has_files' => $request->hasFile('files'), 'data_count' => count(array_filter($data))]);
+        $data['otm_nomi'] = 'Toshkent davlat tibbiyot universiteti Termiz filiali';
+        unset($data['doimiy_manzil'], $data['updated_by']);
 
         try {
             $columns = \Illuminate\Support\Facades\Schema::getColumnListing('student_admission_data');

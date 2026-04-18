@@ -190,6 +190,11 @@ class StudentProvider extends ChangeNotifier {
     return await _service.getExcuseDetail(id);
   }
 
+  Future<List<dynamic>> getMissedAssessments(String startDate, String endDate) async {
+    final response = await _service.getMissedAssessments(startDate, endDate);
+    return response['data'] as List<dynamic>? ?? [];
+  }
+
   Future<Map<String, dynamic>> submitExcuse({
     required String reason,
     required String docNumber,

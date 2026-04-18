@@ -180,6 +180,10 @@ class AppLocalizations {
   String get noExcuses => get('no_excuses');
   String get requiredDocument => get('required_document');
   String get maxDays => get('max_days');
+  String get loadingAssessments => get('loading_assessments');
+  String get noMissedAssessments => get('no_missed_assessments');
+  String get originalDate => get('original_date');
+  String get subjectName => get('subject_name');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -265,6 +269,10 @@ class AppLocalizations {
       'no_excuses': 'Arizalar topilmadi',
       'required_document': 'Kerakli hujjat',
       'max_days': 'Maksimum kun',
+      'loading_assessments': 'Nazoratlar tekshirilmoqda...',
+      'no_missed_assessments': 'Bu oraliqda o\'tkazib yuborilgan nazoratlar topilmadi',
+      'original_date': 'Asl sanasi',
+      'subject_name': 'Fan nomi',
       'tuition_fee': 'Shartnoma turi',
       'payment_form': 'To\'lov shakli',
       'paid': 'To\'langan',
@@ -426,6 +434,10 @@ class AppLocalizations {
       'no_excuses': 'Заявления не найдены',
       'required_document': 'Необходимый документ',
       'max_days': 'Максимум дней',
+      'loading_assessments': 'Проверка контрольных...',
+      'no_missed_assessments': 'За этот период пропущенных контрольных не найдено',
+      'original_date': 'Дата проведения',
+      'subject_name': 'Предмет',
       'tuition_fee': 'Тип договора',
       'payment_form': 'Форма оплаты',
       'paid': 'Оплачено',
@@ -587,6 +599,10 @@ class AppLocalizations {
       'no_excuses': 'No excuses found',
       'required_document': 'Required document',
       'max_days': 'Max days',
+      'loading_assessments': 'Checking assessments...',
+      'no_missed_assessments': 'No missed assessments found for this period',
+      'original_date': 'Original date',
+      'subject_name': 'Subject',
       'tuition_fee': 'Contract Type',
       'payment_form': 'Payment form',
       'paid': 'Paid',

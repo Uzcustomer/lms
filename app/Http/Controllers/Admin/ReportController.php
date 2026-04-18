@@ -2052,6 +2052,7 @@ class ReportController extends Controller
 
             // Semestr haftalarini olish va ketma-ket indeks xaritasini yaratish
             $weekIndexMap = [];
+            $weekStartByIdx = []; // weekIdx => 'YYYY-MM-DD' (hafta boshlanish sanasi)
             if ($cs->semester_hemis_id) {
                 $weeks = DB::table('curriculum_weeks')
                     ->where('semester_hemis_id', $cs->semester_hemis_id)
@@ -2059,7 +2060,9 @@ class ReportController extends Controller
                     ->select('curriculum_week_hemis_id', 'start_date', 'end_date')
                     ->get();
                 foreach ($weeks->values() as $i => $w) {
-                    $weekIndexMap[(string) $w->curriculum_week_hemis_id] = $i + 1;
+                    $idx = $i + 1;
+                    $weekIndexMap[(string) $w->curriculum_week_hemis_id] = $idx;
+                    $weekStartByIdx[$idx] = substr((string) $w->start_date, 0, 10);
                 }
             }
 
@@ -2085,6 +2088,7 @@ class ReportController extends Controller
 
             $scheduleRows = $scheduleQuery
                 ->select(
+                    'sch.schedule_hemis_id',
                     'sch.training_type_code',
                     'sch.training_type_name',
                     'sch.week_number',
@@ -2093,6 +2097,21 @@ class ReportController extends Controller
                     'sch.lesson_pair_end_time'
                 )
                 ->get();
+
+            // O'qituvchi belgilagan soatlar (attendance_controls.load) - subject_schedule_id bo'yicha
+            $markedByScheduleId = [];
+            if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
+                $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
+                if (!empty($scheduleHemisIds)) {
+                    $markedByScheduleId = DB::table('attendance_controls')
+                        ->whereNull('deleted_at')
+                        ->whereIn('subject_schedule_id', $scheduleHemisIds)
+                        ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                        ->groupBy('subject_schedule_id')
+                        ->pluck('marked_load', 'subject_schedule_id')
+                        ->toArray();
+                }
+            }
 
             // hemisWeeks[weekIdx][tt_code] = hours (haftalik yig'indi)
             // hemisLessonsRaw[tt_code] = [{week, date, start, hours}, ...] - bir kundagi soatlar jamlanadi
@@ -2112,6 +2131,7 @@ class ReportController extends Controller
                 $end = strtotime($row->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
                 $hemisWeeks[$weekIdx][$code] = ($hemisWeeks[$weekIdx][$code] ?? 0) + $hours;
+                $marked = (int) ($markedByScheduleId[$row->schedule_hemis_id] ?? 0);
 
                 $dateStr = '';
                 if (!empty($row->lesson_date)) {
@@ -2122,6 +2142,7 @@ class ReportController extends Controller
                 if (isset($dayAcc[$dayKey])) {
                     $idx = $dayAcc[$dayKey];
                     $hemisLessonsRaw[$code][$idx]['hours'] += $hours;
+                    $hemisLessonsRaw[$code][$idx]['marked'] += $marked;
                     if (strcmp($row->lesson_pair_start_time, $hemisLessonsRaw[$code][$idx]['start']) < 0) {
                         $hemisLessonsRaw[$code][$idx]['start'] = $row->lesson_pair_start_time;
                     }
@@ -2131,6 +2152,7 @@ class ReportController extends Controller
                         'date' => $row->lesson_date,
                         'start' => $row->lesson_pair_start_time,
                         'hours' => $hours,
+                        'marked' => $marked,
                     ];
                     $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
                 }
@@ -2196,12 +2218,11 @@ class ReportController extends Controller
                 return $posA <=> $posB;
             });
 
-            // Har bir dars turi bo'yicha HEMIS darslarini sana+vaqt bo'yicha tartibga solish va raqamlash
+            // Har bir dars turi bo'yicha HEMIS darslarini hafta va sana bo'yicha tartibga solish
             $hemisLessonsByType = [];
             foreach ($trainingTypes as $code => $info) {
                 $list = $hemisLessonsRaw[$code] ?? [];
                 usort($list, function ($a, $b) {
-                    // Sanani YYYY-MM-DD ko'rinishiga qirqib, string sifatida solishtiramiz
                     $ad = substr((string) ($a['date'] ?? ''), 0, 10);
                     $bd = substr((string) ($b['date'] ?? ''), 0, 10);
                     $cmp = strcmp($ad, $bd);
@@ -2211,97 +2232,107 @@ class ReportController extends Controller
                 $hemisLessonsByType[$code] = $list;
             }
 
-            // Har bir dars turi uchun haftalik dars sonini hisoblash (KTR ni dars bo'yicha bo'lish uchun)
-            $lessonsPerWeek = [];
+            // Har bir dars turi uchun: hafta bo'yicha HEMIS darslari guruhlari
+            $hemisByWeek = []; // [$code][$weekIdx] = [{date, hours}, ...]
             foreach ($hemisLessonsByType as $code => $list) {
                 foreach ($list as $lesson) {
-                    $lessonsPerWeek[$code][$lesson['week']] = ($lessonsPerWeek[$code][$lesson['week']] ?? 0) + 1;
+                    $hemisByWeek[$code][$lesson['week']][] = $lesson;
                 }
             }
 
-            // Har bir dars turi uchun KTR darslar ro'yxati: haftalik KTR soatini shu haftadagi darslarga taqsimlash
-            $ktrLessonsByType = [];
-            if ($ktrExists) {
-                foreach ($trainingTypes as $code => $info) {
-                    $weekToHours = $ktrWeeks[(string) $code] ?? null;
-                    // ktrWeeks uses int wIdx as key, reread
-                    $byWeek = [];
-                    foreach ($ktrWeeks as $w => $weekData) {
-                        if (isset($weekData[$code])) {
-                            $byWeek[(int) $w] = (int) $weekData[$code];
-                        }
-                    }
+            // Har bir dars turi uchun: hafta raqamlari ro'yxati (HEMIS yoki KTR mavjud bo'lgan haftalar)
+            // Curriculum_weeks tartibi bo'yicha
+            $orderedWeeks = array_keys($weekStartByIdx); // 1, 2, 3, ... sana bo'yicha tartibda
 
-                    $lessons = [];
-                    // HEMIS darslari bor haftalar bo'yicha taqsimlash
-                    foreach ($hemisLessonsByType[$code] ?? [] as $lesson) {
-                        $w = $lesson['week'];
-                        $totalKtr = $byWeek[$w] ?? 0;
-                        $cnt = max(1, $lessonsPerWeek[$code][$w] ?? 1);
-                        $perLesson = $totalKtr / $cnt;
-                        $lessons[] = ['week' => $w, 'ktr' => $perLesson];
-                    }
-                    // HEMIS darslari bo'lmagan haftalarda KTR bor bo'lsa, alohida qator sifatida qo'shish
-                    $hemisWeeksSet = [];
-                    foreach ($hemisLessonsByType[$code] ?? [] as $l) {
-                        $hemisWeeksSet[$l['week']] = true;
-                    }
-                    foreach ($byWeek as $w => $h) {
-                        if ($h > 0 && !isset($hemisWeeksSet[$w])) {
-                            $lessons[] = ['week' => $w, 'ktr' => $h];
-                        }
-                    }
-                    // Haftalar bo'yicha tartiblash
-                    usort($lessons, fn($a, $b) => $a['week'] <=> $b['week']);
-                    $ktrLessonsByType[$code] = $lessons;
+            // Agar curriculum_weeks bo'sh bo'lsa, HEMIS va KTR'dagi haftalardan tuzamiz
+            if (empty($orderedWeeks)) {
+                $allWeeks = [];
+                foreach ($hemisByWeek as $code => $byW) {
+                    foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
                 }
+                foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
+                ksort($allWeeks);
+                $orderedWeeks = array_keys($allWeeks);
             }
 
-            // Jami darslar qatorlari sonini aniqlash
-            $maxLessons = 0;
+            // Har bir dars turi uchun darslar ro'yxatini hafta bo'yicha qurib chiqamiz
+            // $lessonsByType[$code] = [{date, hemis_hours, ktr_hours}, ...]
+            $lessonsByType = [];
             foreach ($trainingTypes as $code => $info) {
-                $hemisCnt = count($hemisLessonsByType[$code] ?? []);
-                $ktrCnt = count($ktrLessonsByType[$code] ?? []);
-                $maxLessons = max($maxLessons, $hemisCnt, $ktrCnt);
+                $lessons = [];
+                foreach ($orderedWeeks as $w) {
+                    $hemisList = $hemisByWeek[$code][$w] ?? [];
+                    $ktrWeekHours = (int) ($ktrWeeks[$w][$code] ?? 0);
+
+                    if (!empty($hemisList)) {
+                        // HEMIS darslari bor - har bir kun uchun alohida qator
+                        $dayCount = count($hemisList);
+                        $ktrPerDay = $dayCount > 0 ? ($ktrWeekHours / $dayCount) : 0;
+                        foreach ($hemisList as $d) {
+                            $lessons[] = [
+                                'date' => substr((string) ($d['date'] ?? ''), 0, 10),
+                                'hemis' => (int) $d['hours'],
+                                'ktr' => $ktrPerDay,
+                                'marked' => (int) ($d['marked'] ?? 0),
+                            ];
+                        }
+                    } elseif ($ktrWeekHours > 0) {
+                        // HEMIS yo'q, KTR bor - hafta boshlanish sanasini ishlatamiz
+                        $lessons[] = [
+                            'date' => $weekStartByIdx[$w] ?? '',
+                            'hemis' => 0,
+                            'ktr' => $ktrWeekHours,
+                            'marked' => 0,
+                        ];
+                    }
+                    // ikkalasi ham yo'q - qator qo'shmaymiz
+                }
+                $lessonsByType[$code] = $lessons;
+            }
+
+            // Jami darslar qatorlari soni
+            $maxLessons = 0;
+            foreach ($lessonsByType as $list) {
+                $maxLessons = max($maxLessons, count($list));
             }
             if ($maxLessons <= 0) {
                 $maxLessons = 1;
             }
 
-            // Darslar ro'yxatini tuzish (har bir dars turi uchun kesishma)
+            // Darslar ro'yxatini tuzish
             $lessonsList = [];
-            for ($k = 1; $k <= $maxLessons; $k++) {
-                // Shu dars uchun eng erta sana (HEMIS dan)
-                $earliestTs = null;
+            for ($k = 0; $k < $maxLessons; $k++) {
+                // Shu dars uchun eng erta sana (barcha dars turlari orasida)
+                $earliestDate = null;
                 foreach ($trainingTypes as $code => $info) {
-                    $hl = $hemisLessonsByType[$code][$k - 1] ?? null;
-                    if ($hl && !empty($hl['date'])) {
-                        $ts = strtotime((string) $hl['date']);
-                        if ($ts && ($earliestTs === null || $ts < $earliestTs)) {
-                            $earliestTs = $ts;
+                    $l = $lessonsByType[$code][$k] ?? null;
+                    if ($l && !empty($l['date'])) {
+                        if ($earliestDate === null || strcmp($l['date'], $earliestDate) < 0) {
+                            $earliestDate = $l['date'];
                         }
                     }
                 }
-                $dateLabel = $earliestTs ? date('d.m.Y', $earliestTs) : '';
+                $dateLabel = $earliestDate ? date('d.m.Y', strtotime($earliestDate)) : '';
 
                 $rowData = [
-                    'lesson' => $k,
+                    'lesson' => $k + 1,
                     'date' => $dateLabel,
                     'cells' => [],
                 ];
                 foreach ($trainingTypes as $code => $info) {
-                    $hemisLessons = $hemisLessonsByType[$code] ?? [];
-                    $ktrLessons = $ktrLessonsByType[$code] ?? [];
-                    $hemisH = isset($hemisLessons[$k - 1]) ? (int) $hemisLessons[$k - 1]['hours'] : 0;
+                    $l = $lessonsByType[$code][$k] ?? null;
+                    $hemisH = $l ? (int) $l['hemis'] : 0;
+                    $markedH = $l ? (int) ($l['marked'] ?? 0) : 0;
                     if ($ktrExists) {
-                        $ktrHraw = isset($ktrLessons[$k - 1]) ? $ktrLessons[$k - 1]['ktr'] : 0;
-                        $ktrH = (abs($ktrHraw - round($ktrHraw)) < 0.01) ? (int) round($ktrHraw) : round($ktrHraw, 1);
+                        $kRaw = $l ? (float) $l['ktr'] : 0;
+                        $ktrH = (abs($kRaw - round($kRaw)) < 0.01) ? (int) round($kRaw) : round($kRaw, 1);
                     } else {
                         $ktrH = null;
                     }
                     $rowData['cells'][$code] = [
                         'hemis' => $hemisH,
                         'ktr' => $ktrH,
+                        'marked' => $markedH,
                         'diff' => $ktrExists ? (round($ktrH - $hemisH, 1) + 0) : null,
                     ];
                 }
@@ -2413,19 +2444,22 @@ class ReportController extends Controller
         $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar'];
         $trainingTypeFilter = $request->has('training_types') ? (array) $request->training_types : [];
 
-        // Semestrlarning haftalari (tartib raqami)
+        // Semestrlarning haftalari (tartib raqami va boshlanish sanasi)
         $semIds = $curriculumSubjects->pluck('semester_hemis_id')->filter()->unique()->toArray();
         $weekIndexMap = [];
+        $weekStartMap = []; // [$semId][$weekIdx] = 'YYYY-MM-DD'
         if (!empty($semIds)) {
             $weeks = DB::table('curriculum_weeks')
                 ->whereIn('semester_hemis_id', $semIds)
                 ->orderBy('start_date')
-                ->select('curriculum_week_hemis_id', 'semester_hemis_id')
+                ->select('curriculum_week_hemis_id', 'semester_hemis_id', 'start_date')
                 ->get()
                 ->groupBy('semester_hemis_id');
             foreach ($weeks as $sId => $rows) {
                 foreach ($rows->values() as $i => $w) {
-                    $weekIndexMap[(string) $sId][(string) $w->curriculum_week_hemis_id] = $i + 1;
+                    $idx = $i + 1;
+                    $weekIndexMap[(string) $sId][(string) $w->curriculum_week_hemis_id] = $idx;
+                    $weekStartMap[(string) $sId][$idx] = substr((string) $w->start_date, 0, 10);
                 }
             }
         }
@@ -2451,6 +2485,7 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.auditorium_code', $request->auditorium);
         }
         $scheduleRows = $scheduleQuery->select(
+            'sch.schedule_hemis_id',
             'sch.group_id', 'sch.subject_id', 'sch.semester_code',
             'sch.training_type_code', 'sch.training_type_name',
             'sch.week_number', 'sch.lesson_date',
@@ -2461,6 +2496,21 @@ class ReportController extends Controller
         foreach ($scheduleRows as $row) {
             $key = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
             $schedBySubject[$key][] = $row;
+        }
+
+        // O'qituvchi belgilagan soatlar (attendance_controls)
+        $markedByScheduleId = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
+            $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
+            if (!empty($scheduleHemisIds)) {
+                $markedByScheduleId = DB::table('attendance_controls')
+                    ->whereNull('deleted_at')
+                    ->whereIn('subject_schedule_id', $scheduleHemisIds)
+                    ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                    ->groupBy('subject_schedule_id')
+                    ->pluck('marked_load', 'subject_schedule_id')
+                    ->toArray();
+            }
         }
 
         // KTR rejalarini cs_id bo'yicha olish
@@ -2515,6 +2565,7 @@ class ReportController extends Controller
                 $start = strtotime($r->lesson_pair_start_time);
                 $end = strtotime($r->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
+                $marked = (int) ($markedByScheduleId[$r->schedule_hemis_id] ?? 0);
 
                 $dateStr = '';
                 if (!empty($r->lesson_date)) {
@@ -2525,6 +2576,7 @@ class ReportController extends Controller
                 if (isset($dayAcc[$dayKey])) {
                     $idx = $dayAcc[$dayKey];
                     $hemisLessonsRaw[$code][$idx]['hours'] += $hours;
+                    $hemisLessonsRaw[$code][$idx]['marked'] += $marked;
                     if (strcmp($r->lesson_pair_start_time, $hemisLessonsRaw[$code][$idx]['start']) < 0) {
                         $hemisLessonsRaw[$code][$idx]['start'] = $r->lesson_pair_start_time;
                     }
@@ -2534,6 +2586,7 @@ class ReportController extends Controller
                         'date' => $r->lesson_date,
                         'start' => $r->lesson_pair_start_time,
                         'hours' => $hours,
+                        'marked' => $marked,
                     ];
                     $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
                 }
@@ -2581,43 +2634,58 @@ class ReportController extends Controller
 
             if (empty($trainingTypes)) continue;
 
-            // Har bir dars turi uchun darslar massivlarini tuzish
+            // Har bir dars turi uchun: hafta bo'yicha HEMIS darslari
+            $hemisByWeek = [];
+            foreach ($hemisLessonsRaw as $code => $list) {
+                foreach ($list as $lesson) {
+                    $hemisByWeek[$code][$lesson['week']][] = $lesson;
+                }
+            }
+
+            // Hafta tartibini aniqlash (semestr bo'yicha curriculum_weeks, aks holda HEMIS+KTR dan)
+            $semId = (string) ($cs->semester_hemis_id ?? '');
+            $weekStartByIdx = $weekStartMap[$semId] ?? [];
+            $orderedWeeks = array_keys($weekStartByIdx);
+            if (empty($orderedWeeks)) {
+                $allWeeks = [];
+                foreach ($hemisByWeek as $code => $byW) foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
+                foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
+                ksort($allWeeks);
+                $orderedWeeks = array_keys($allWeeks);
+            }
+
+            // Har bir dars turi uchun darslar massivlarini hafta bo'yicha qurib chiqamiz
             $ttData = [];
             foreach ($trainingTypes as $code => $name) {
-                $lessons = $hemisLessonsRaw[$code] ?? [];
-                $weeklyCount = [];
-                foreach ($lessons as $l) {
-                    $weeklyCount[$l['week']] = ($weeklyCount[$l['week']] ?? 0) + 1;
-                }
                 $hemisVals = [];
                 $ktrVals = [];
+                $markedVals = [];
                 $dates = [];
-                foreach ($lessons as $lesson) {
-                    $hemisVals[] = (int) $lesson['hours'];
-                    $dates[] = $lesson['date'] ?? '';
-                    if ($ktrExists) {
-                        $kRaw = ($ktrWeeks[$lesson['week']][$code] ?? 0) / max(1, $weeklyCount[$lesson['week']]);
-                        $ktrVals[] = (abs($kRaw - round($kRaw)) < 0.01) ? (int) round($kRaw) : round($kRaw, 1);
-                    }
-                }
-                if ($ktrExists) {
-                    $hemisWeeksSet = [];
-                    foreach ($lessons as $l) $hemisWeeksSet[$l['week']] = true;
-                    $extra = [];
-                    foreach ($ktrWeeks as $w => $wd) {
-                        if (!empty($wd[$code]) && empty($hemisWeeksSet[$w])) {
-                            $extra[] = ['week' => (int) $w, 'ktr' => (int) $wd[$code]];
+                foreach ($orderedWeeks as $w) {
+                    $hemisList = $hemisByWeek[$code][$w] ?? [];
+                    $ktrWeekHours = (int) ($ktrWeeks[$w][$code] ?? 0);
+
+                    if (!empty($hemisList)) {
+                        $dayCount = count($hemisList);
+                        $ktrPerDay = $ktrExists && $dayCount > 0 ? ($ktrWeekHours / $dayCount) : 0;
+                        foreach ($hemisList as $d) {
+                            $hemisVals[] = (int) $d['hours'];
+                            $dates[] = substr((string) ($d['date'] ?? ''), 0, 10);
+                            $markedVals[] = (int) ($d['marked'] ?? 0);
+                            if ($ktrExists) {
+                                $ktrVals[] = (abs($ktrPerDay - round($ktrPerDay)) < 0.01) ? (int) round($ktrPerDay) : round($ktrPerDay, 1);
+                            }
                         }
-                    }
-                    usort($extra, fn($a, $b) => $a['week'] <=> $b['week']);
-                    foreach ($extra as $ex) {
+                    } elseif ($ktrExists && $ktrWeekHours > 0) {
                         $hemisVals[] = 0;
-                        $ktrVals[] = $ex['ktr'];
-                        $dates[] = '';
+                        $ktrVals[] = $ktrWeekHours;
+                        $markedVals[] = 0;
+                        $dates[] = $weekStartByIdx[$w] ?? '';
                     }
                 }
+
                 if (empty($hemisVals) && empty($ktrVals)) continue;
-                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'dates' => $dates];
+                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'marked' => $markedVals, 'dates' => $dates];
                 if (!isset($globalTrainingTypes[$code])) {
                     $globalTrainingTypes[$code] = $name;
                 }
@@ -2664,27 +2732,27 @@ class ReportController extends Controller
             $sheet->mergeCells([$col + 1, 1, $col + 1, 2]);
         }
 
-        // Dars turi guruhli sarlavhalar
+        // Dars turi guruhli sarlavhalar (HEMIS / KTR / Belgi / Farq)
         $col = $staticCols + 1;
         foreach ($globalTtCodes as $code) {
             $name = $globalTrainingTypes[$code];
-            // Guruh sarlavhasi (3 ustun): training type nomi
             $sheet->setCellValue([$col, 1], $name);
-            $sheet->mergeCells([$col, 1, $col + 2, 1]);
-            // Pastki sub-headerlar
+            $sheet->mergeCells([$col, 1, $col + 3, 1]);
             $sheet->setCellValue([$col, 2], 'HEMIS');
             $sheet->setCellValue([$col + 1, 2], 'KTR');
-            $sheet->setCellValue([$col + 2, 2], 'Farq');
-            $col += 3;
+            $sheet->setCellValue([$col + 2, 2], 'Belgi');
+            $sheet->setCellValue([$col + 3, 2], 'Farq');
+            $col += 4;
         }
         // Jami guruhi
         $sheet->setCellValue([$col, 1], 'Jami');
-        $sheet->mergeCells([$col, 1, $col + 2, 1]);
+        $sheet->mergeCells([$col, 1, $col + 3, 1]);
         $sheet->setCellValue([$col, 2], 'HEMIS');
         $sheet->setCellValue([$col + 1, 2], 'KTR');
-        $sheet->setCellValue([$col + 2, 2], 'Farq');
+        $sheet->setCellValue([$col + 2, 2], 'Belgi');
+        $sheet->setCellValue([$col + 3, 2], 'Farq');
 
-        $totalCols = $staticCols + ($ttCount + 1) * 3;
+        $totalCols = $staticCols + ($ttCount + 1) * 4;
         $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($totalCols);
 
         $headerStyle = [
@@ -2743,103 +2811,127 @@ class ReportController extends Controller
                 $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
                 $sheet->setCellValue([8, $excelRow], $darsLabel);
 
-                // Dars turi cells
+                // Dars turi cells (HEMIS / KTR / Belgi / Farq)
                 $col = $staticCols + 1;
                 $rowHemisSum = 0;
                 $rowKtrSum = 0;
+                $rowMarkedSum = 0;
                 $rowFarqSum = 0;
-                $hasKtrAny = false;
                 foreach ($globalTtCodes as $code) {
                     $td = $ttData[$code] ?? null;
                     $h = ($td && isset($td['hemis'][$k])) ? $td['hemis'][$k] : '';
                     $kt = ($td && isset($td['ktr'][$k])) ? $td['ktr'][$k] : '';
+                    $mk = ($td && isset($td['marked'][$k])) ? $td['marked'][$k] : '';
                     $sheet->setCellValue([$col, $excelRow], $h);
                     if ($ktrExists) {
                         $sheet->setCellValue([$col + 1, $excelRow], $kt);
+                    } else {
+                        $sheet->setCellValue([$col + 1, $excelRow], '-');
+                    }
+                    $sheet->setCellValue([$col + 2, $excelRow], $mk);
+                    if (is_numeric($mk) && $mk > 0) {
+                        $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
+                            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'BBF7D0']],
+                            'font' => ['bold' => true, 'color' => ['rgb' => '14532D']],
+                        ]);
+                        $rowMarkedSum += $mk;
+                    }
+                    if ($ktrExists) {
                         if ($h !== '' || $kt !== '') {
                             $diff = (is_numeric($kt) ? $kt : 0) - (is_numeric($h) ? $h : 0);
                             $diff = (abs($diff - round($diff)) < 0.01) ? (int) round($diff) : round($diff, 1);
-                            $sheet->setCellValue([$col + 2, $excelRow], $diff);
+                            $sheet->setCellValue([$col + 3, $excelRow], $diff);
                             if ($diff !== 0) {
                                 $color = $diff > 0 ? 'FEF3C7' : 'FEE2E2';
-                                $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
+                                $sheet->getStyle([$col + 3, $excelRow, $col + 3, $excelRow])->applyFromArray([
                                     'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                                 ]);
                             }
                             $rowFarqSum += $diff;
-                            $hasKtrAny = true;
                         }
                         if (is_numeric($kt)) $rowKtrSum += $kt;
                     } else {
-                        $sheet->setCellValue([$col + 1, $excelRow], '-');
-                        $sheet->setCellValue([$col + 2, $excelRow], '-');
+                        $sheet->setCellValue([$col + 3, $excelRow], '-');
                     }
                     if (is_numeric($h)) $rowHemisSum += $h;
-                    $col += 3;
+                    $col += 4;
                 }
 
                 // Jami ustunlari
                 $sheet->setCellValue([$col, $excelRow], $rowHemisSum);
                 if ($ktrExists) {
                     $sheet->setCellValue([$col + 1, $excelRow], $rowKtrSum);
-                    $sheet->setCellValue([$col + 2, $excelRow], $rowFarqSum);
+                } else {
+                    $sheet->setCellValue([$col + 1, $excelRow], '-');
+                }
+                $sheet->setCellValue([$col + 2, $excelRow], $rowMarkedSum);
+                if ($ktrExists) {
+                    $sheet->setCellValue([$col + 3, $excelRow], $rowFarqSum);
                     if ($rowFarqSum !== 0) {
                         $color = $rowFarqSum > 0 ? 'FEF3C7' : 'FEE2E2';
-                        $sheet->getStyle([$col + 2, $excelRow, $col + 2, $excelRow])->applyFromArray([
+                        $sheet->getStyle([$col + 3, $excelRow, $col + 3, $excelRow])->applyFromArray([
                             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
                         ]);
                     }
                 } else {
-                    $sheet->setCellValue([$col + 1, $excelRow], '-');
-                    $sheet->setCellValue([$col + 2, $excelRow], '-');
+                    $sheet->setCellValue([$col + 3, $excelRow], '-');
                 }
 
                 $excelRow++;
             }
 
             // Jami satri (ushbu cs uchun barcha darslar yig'indisi)
+            $sheet->setCellValue([1, $excelRow], $num++);
+            $sheet->setCellValue([2, $excelRow], $cs->faculty_name ?? '-');
+            $sheet->setCellValue([3, $excelRow], $cs->specialty_name ?? '-');
+            $sheet->setCellValue([4, $excelRow], $cs->level_name ?? '-');
+            $sheet->setCellValue([5, $excelRow], $cs->semester_name ?? '-');
+            $sheet->setCellValue([6, $excelRow], $cs->subject_name ?? '-');
+            $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
             $sheet->setCellValue([8, $excelRow], 'Jami');
             $col = $staticCols + 1;
-            $totalHemis = 0; $totalKtr = 0; $totalFarq = 0;
+            $totalHemis = 0; $totalKtr = 0; $totalMarked = 0; $totalFarq = 0;
             foreach ($globalTtCodes as $code) {
                 $td = $ttData[$code] ?? null;
                 $h = $td ? array_sum($td['hemis']) : 0;
                 $kt = ($td && $ktrExists) ? array_sum($td['ktr']) : 0;
+                $mk = $td ? array_sum($td['marked'] ?? []) : 0;
                 $f = $ktrExists ? round($kt - $h, 1) : 0;
                 $sheet->setCellValue([$col, $excelRow], $h);
                 if ($ktrExists) {
                     $sheet->setCellValue([$col + 1, $excelRow], $kt);
-                    $sheet->setCellValue([$col + 2, $excelRow], $f);
                 } else {
                     $sheet->setCellValue([$col + 1, $excelRow], '-');
-                    $sheet->setCellValue([$col + 2, $excelRow], '-');
+                }
+                $sheet->setCellValue([$col + 2, $excelRow], $mk);
+                if ($ktrExists) {
+                    $sheet->setCellValue([$col + 3, $excelRow], $f);
+                } else {
+                    $sheet->setCellValue([$col + 3, $excelRow], '-');
                 }
                 $totalHemis += $h;
                 $totalKtr += $kt;
+                $totalMarked += $mk;
                 $totalFarq += $f;
-                $col += 3;
+                $col += 4;
             }
             $sheet->setCellValue([$col, $excelRow], $totalHemis);
             if ($ktrExists) {
                 $sheet->setCellValue([$col + 1, $excelRow], $totalKtr);
-                $sheet->setCellValue([$col + 2, $excelRow], $totalFarq);
             } else {
                 $sheet->setCellValue([$col + 1, $excelRow], '-');
-                $sheet->setCellValue([$col + 2, $excelRow], '-');
+            }
+            $sheet->setCellValue([$col + 2, $excelRow], $totalMarked);
+            if ($ktrExists) {
+                $sheet->setCellValue([$col + 3, $excelRow], $totalFarq);
+            } else {
+                $sheet->setCellValue([$col + 3, $excelRow], '-');
             }
             $sheet->getStyle("A{$excelRow}:{$lastColLetter}{$excelRow}")->applyFromArray([
                 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F1F5F9']],
                 'font' => ['bold' => true],
             ]);
             $excelRow++;
-
-            // Static metadata (1-7) ustunlarni block qatorlariga merge qilish (Jami satrini ham qo'shib)
-            for ($c = 1; $c <= 7; $c++) {
-                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
-                $sheet->mergeCells("{$colLetter}{$blockStartRow}:{$colLetter}" . ($excelRow - 1));
-                $sheet->getStyle("{$colLetter}{$blockStartRow}")->getAlignment()
-                    ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
-            }
 
             // Block ostiga chegarasi
             $sheet->getStyle("A" . ($excelRow - 1) . ":{$lastColLetter}" . ($excelRow - 1))->applyFromArray([

@@ -463,19 +463,20 @@
             html += '<tr><th rowspan="2" class="wk-col">Dars</th>';
             typeCodes.forEach(function(code, idx) {
                 var c = idx % 6;
-                html += '<th colspan="3" class="tt-col-head tt-head-' + c + '">' + esc(types[code].name) + '</th>';
+                html += '<th colspan="4" class="tt-col-head tt-head-' + c + '">' + esc(types[code].name) + '</th>';
             });
             html += '</tr><tr>';
             typeCodes.forEach(function(code, idx) {
                 var c = idx % 6;
                 html += '<th class="sub-head tt-sub-' + c + '">HEMIS</th>';
                 html += '<th class="sub-head tt-sub-' + c + '">KTR</th>';
+                html += '<th class="sub-head tt-sub-' + c + '" title="O\'qituvchi belgilagan soat">Belgi</th>';
                 html += '<th class="sub-head tt-sub-' + c + '">Farq</th>';
             });
             html += '</tr></thead><tbody>';
 
-            var totalHemis = {}, totalKtr = {};
-            typeCodes.forEach(function(c) { totalHemis[c] = 0; totalKtr[c] = 0; });
+            var totalHemis = {}, totalKtr = {}, totalMarked = {};
+            typeCodes.forEach(function(c) { totalHemis[c] = 0; totalKtr[c] = 0; totalMarked[c] = 0; });
 
             function fmt(v) {
                 if (v === null || v === undefined) return 0;
@@ -488,15 +489,19 @@
                 html += '<tr><td class="wk-col">' + darsLabel + '</td>';
                 typeCodes.forEach(function(code, idx) {
                     var c = idx % 6;
-                    var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, diff:0};
+                    var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, marked:0, diff:0};
+                    var markedV = cell.marked || 0;
                     totalHemis[code] += (cell.hemis || 0);
                     if (cell.ktr) totalKtr[code] += (cell.ktr || 0);
+                    totalMarked[code] += markedV;
                     var diff = cell.diff;
                     var diffNum = diff === null || diff === undefined ? 0 : diff;
                     var diffCls = Math.abs(diffNum) < 0.01 ? 'diff-zero' : (diffNum > 0 ? 'diff-pos' : 'diff-neg');
                     var diffDisp = diff === null ? '-' : (diffNum > 0 ? '+' + fmt(diffNum) : fmt(diffNum));
                     html += '<td class="num-cell tt-body-' + c + '">' + fmt(cell.hemis) + '</td>';
                     html += '<td class="num-cell tt-body-' + c + '">' + fmt(cell.ktr) + '</td>';
+                    var markedCls = markedV > 0 ? 'marked-yes' : '';
+                    html += '<td class="num-cell tt-body-' + c + ' ' + markedCls + '">' + fmt(markedV) + '</td>';
                     html += '<td class="num-cell tt-body-' + c + ' ' + diffCls + '">' + diffDisp + '</td>';
                 });
                 html += '</tr>';
@@ -509,6 +514,7 @@
                 var diffCls = Math.abs(d) < 0.01 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
                 html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalHemis[code]) + '</td>';
                 html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalKtr[code]) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalMarked[code]) + '</td>';
                 html += '<td class="num-cell tt-foot-' + c + ' ' + diffCls + '">' + (d > 0 ? '+' + fmt(d) : fmt(d)) + '</td>';
             });
             html += '</tr></tfoot></table></div>';
@@ -516,6 +522,7 @@
                 '<span><span class="legend-dot" style="background:#16a34a;"></span> Farq = 0 (mos)</span>' +
                 '<span><span class="legend-dot" style="background:#d97706;"></span> Farq &gt; 0 (KTR ko\'p)</span>' +
                 '<span><span class="legend-dot" style="background:#dc2626;"></span> Farq &lt; 0 (HEMIS ko\'p)</span>' +
+                '<span><span class="legend-dot" style="background:#bbf7d0;border:1px solid #16a34a;"></span> Belgi: o\'qituvchi belgilagan dars</span>' +
                 '</div>';
 
             $('#ktr-compare-modal-body').html(html);
@@ -965,5 +972,6 @@
         .tt-foot-5 { background: #e2e8f0; color: #1e293b; }
 
         .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+        .ktr-cmp-table td.marked-yes { background: #bbf7d0 !important; color: #14532d; font-weight: 700; }
     </style>
 </x-app-layout>

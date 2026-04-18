@@ -2126,17 +2126,45 @@ class ReportController extends Controller
 
             // O'qituvchi belgilagan soatlar (attendance_controls.load) - subject_schedule_id bo'yicha
             $markedByScheduleId = [];
+            $acRows = collect();
             if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
                 $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
                 if (!empty($scheduleHemisIds)) {
                     $markedByScheduleId = DB::table('attendance_controls')
                         ->whereNull('deleted_at')
                         ->whereIn('subject_schedule_id', $scheduleHemisIds)
-                        ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                        ->select('subject_schedule_id', DB::raw('SUM(`load`) as marked_load'))
                         ->groupBy('subject_schedule_id')
                         ->pluck('marked_load', 'subject_schedule_id')
                         ->toArray();
                 }
+
+                // attendance_controls dan ALOHIDA darslar ham chiqishi kerak
+                // (agar schedules da yo'q bo'lsa: o'chirilgan yoki sinxron qilinmagan)
+                $acQuery = DB::table('attendance_controls')
+                    ->whereNull('deleted_at')
+                    ->where('subject_id', $cs->subject_id)
+                    ->where('semester_code', $cs->semester_code)
+                    ->whereNotNull('lesson_date');
+                if ($cs->group_hemis_id) {
+                    $acQuery->where('group_id', $cs->group_hemis_id);
+                }
+                if ($request->filled('date_from')) {
+                    $acQuery->whereRaw('DATE(lesson_date) >= ?', [$request->date_from]);
+                }
+                if ($request->filled('date_to')) {
+                    $acQuery->whereRaw('DATE(lesson_date) <= ?', [$request->date_to]);
+                }
+                $acRows = $acQuery
+                    ->select(
+                        'training_type_code',
+                        'training_type_name',
+                        'lesson_date',
+                        'lesson_pair_start_time',
+                        'lesson_pair_end_time',
+                        'load'
+                    )
+                    ->get();
             }
 
             // hemisWeeks[weekIdx][tt_code] = hours (haftalik yig'indi)
@@ -2186,6 +2214,46 @@ class ReportController extends Controller
                 if (!isset($trainingTypes[$code])) {
                     $trainingTypes[$code] = [
                         'name' => $row->training_type_name ?? $code,
+                        'planned_hours' => 0,
+                    ];
+                }
+            }
+
+            // attendance_controls dan qo'shimcha darslarni qo'shish (schedules da yo'q bo'lsa)
+            foreach ($acRows as $ac) {
+                $code = (string) $ac->training_type_code;
+                if ($isMustaqil($ac->training_type_name ?? $code)) {
+                    continue;
+                }
+                $dateStr = substr((string) $ac->lesson_date, 0, 10);
+                if (!$dateStr) continue;
+
+                $dayKey = $code . '|' . $dateStr;
+                if (isset($dayAcc[$dayKey])) {
+                    // Schedule'da bor - AC dan faqat marked qiymatini yangilaymiz (agar hali belgilanmagan bo'lsa)
+                    $idx = $dayAcc[$dayKey];
+                    if (($hemisLessonsRaw[$code][$idx]['marked'] ?? 0) === 0) {
+                        $hemisLessonsRaw[$code][$idx]['marked'] = (int) $ac->load;
+                    }
+                    continue;
+                }
+                // Schedule'da yo'q - AC dan yangi dars sifatida qo'shamiz
+                $weekIdx = $resolveWeek($ac->lesson_date, null);
+                if ($weekIdx === null) continue;
+                $hours = max(1, (int) $ac->load);
+
+                $hemisLessonsRaw[$code][] = [
+                    'week' => $weekIdx,
+                    'date' => $ac->lesson_date,
+                    'start' => $ac->lesson_pair_start_time,
+                    'hours' => $hours,
+                    'marked' => (int) $ac->load,
+                ];
+                $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
+
+                if (!isset($trainingTypes[$code])) {
+                    $trainingTypes[$code] = [
+                        'name' => $ac->training_type_name ?? $code,
                         'planned_hours' => 0,
                     ];
                 }
@@ -2378,16 +2446,6 @@ class ReportController extends Controller
                 $lessonsList[] = $rowData;
             }
 
-            // Diagnostik: ma'lumotlar bazasidagi HEMIS darslari soni (tashxis qo'yish uchun)
-            $debugCounts = [];
-            foreach ($hemisLessonsByType as $code => $list) {
-                $debugCounts[$code] = [
-                    'name' => $trainingTypes[$code]['name'] ?? $code,
-                    'hemis_days' => count($list),
-                    'dates' => array_values(array_unique(array_map(fn($l) => substr((string) $l['date'], 0, 10), $list))),
-                ];
-            }
-
             return response()->json([
                 'subject_name' => $cs->subject_name,
                 'group_name' => $cs->group_name,
@@ -2396,7 +2454,6 @@ class ReportController extends Controller
                 'total_lessons' => $maxLessons,
                 'training_types' => $trainingTypes,
                 'lessons' => $lessonsList,
-                'debug' => $debugCounts,
             ]);
         } catch (\Throwable $e) {
             \Log::error('Schedule-KTR compare detail error: ' . $e->getMessage(), [
@@ -2556,16 +2613,40 @@ class ReportController extends Controller
 
         // O'qituvchi belgilagan soatlar (attendance_controls)
         $markedByScheduleId = [];
+        $acBySubject = []; // [group|subject|semester] => [AC qatorlari]
         if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
             $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
             if (!empty($scheduleHemisIds)) {
                 $markedByScheduleId = DB::table('attendance_controls')
                     ->whereNull('deleted_at')
                     ->whereIn('subject_schedule_id', $scheduleHemisIds)
-                    ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                    ->select('subject_schedule_id', DB::raw('SUM(`load`) as marked_load'))
                     ->groupBy('subject_schedule_id')
                     ->pluck('marked_load', 'subject_schedule_id')
                     ->toArray();
+            }
+
+            // attendance_controls dan alohida darslar (schedules da bo'lmaganlar)
+            $acAll = DB::table('attendance_controls')
+                ->whereNull('deleted_at')
+                ->whereIn('group_id', $groupIds)
+                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('semester_code', $semesterCodes)
+                ->whereNotNull('lesson_date');
+            if ($request->filled('date_from')) {
+                $acAll->whereRaw('DATE(lesson_date) >= ?', [$request->date_from]);
+            }
+            if ($request->filled('date_to')) {
+                $acAll->whereRaw('DATE(lesson_date) <= ?', [$request->date_to]);
+            }
+            $acAllRows = $acAll->select(
+                'group_id', 'subject_id', 'semester_code',
+                'training_type_code', 'training_type_name',
+                'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time', 'load'
+            )->get();
+            foreach ($acAllRows as $ac) {
+                $key = $ac->group_id . '|' . $ac->subject_id . '|' . $ac->semester_code;
+                $acBySubject[$key][] = $ac;
             }
         }
 
@@ -2670,6 +2751,42 @@ class ReportController extends Controller
                     $trainingTypes[$code] = $name;
                 }
             }
+
+            // attendance_controls dan qo'shimcha darslarni qo'shish
+            $acKey = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
+            foreach ($acBySubject[$acKey] ?? [] as $ac) {
+                $code = (string) $ac->training_type_code;
+                $name = $ac->training_type_name ?? $code;
+                if ($isMustaqil($name)) continue;
+                if (!empty($trainingTypeFilter) && !in_array($code, $trainingTypeFilter)) continue;
+                $dateStr = substr((string) $ac->lesson_date, 0, 10);
+                if (!$dateStr) continue;
+
+                $dayKey = $code . '|' . $dateStr;
+                if (isset($dayAcc[$dayKey])) {
+                    $idx = $dayAcc[$dayKey];
+                    if (($hemisLessonsRaw[$code][$idx]['marked'] ?? 0) === 0) {
+                        $hemisLessonsRaw[$code][$idx]['marked'] = (int) $ac->load;
+                    }
+                    continue;
+                }
+                $wIdx = $resolveWeek($ac->lesson_date, null);
+                if ($wIdx === null) continue;
+                $hours = max(1, (int) $ac->load);
+
+                $hemisLessonsRaw[$code][] = [
+                    'week' => $wIdx,
+                    'date' => $ac->lesson_date,
+                    'start' => $ac->lesson_pair_start_time,
+                    'hours' => $hours,
+                    'marked' => (int) $ac->load,
+                ];
+                $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
+                if (!isset($trainingTypes[$code])) {
+                    $trainingTypes[$code] = $name;
+                }
+            }
+
             foreach ($hemisLessonsRaw as $code => &$list) {
                 usort($list, function ($a, $b) {
                     $ad = substr((string) ($a['date'] ?? ''), 0, 10);

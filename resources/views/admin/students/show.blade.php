@@ -474,7 +474,7 @@
                                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                                 <div>
                                                     <label class="qabul-label">Seriya</label>
-                                                    <input type="text" name="passport_seriya" value="{{ old('passport_seriya', $admissionData?->passport_seriya ?? '') }}" class="qabul-input" placeholder="AA" maxlength="2" style="text-transform:uppercase;">
+                                                    <input type="text" name="passport_seriya" value="{{ old('passport_seriya', $admissionData?->passport_seriya ?? '') }}" class="qabul-input" placeholder="AA" maxlength="2">
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">Raqam</label>
@@ -1094,7 +1094,7 @@
     .qabul-card-title { font-size:12.5px; font-weight:800; color:#1e293b; letter-spacing:.04em; text-transform:uppercase; margin:0; }
     .qabul-card-body { padding:16px; }
     .qabul-label { display:block; font-size:13px; font-weight:700; color:#475569; margin-bottom:6px; letter-spacing:.01em; }
-    .qabul-input { width:100%; padding:9px 12px; font-size:14px; color:#0f172a; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; transition:all .15s; box-shadow:0 1px 2px rgba(15,23,42,.03); }
+    .qabul-input { width:100%; padding:9px 12px; font-size:14px; color:#0f172a; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; transition:all .15s; box-shadow:0 1px 2px rgba(15,23,42,.03); text-transform:uppercase; }
     .qabul-input::placeholder { color:#94a3b8; font-size:13px; }
     .qabul-input:hover { border-color:#94a3b8; }
     .qabul-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }

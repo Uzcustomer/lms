@@ -221,10 +221,90 @@ class AbsenceExcuseApiController extends Controller
         $student = $request->user();
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
+        $excuseDays = $this->countNonSundays($startDate, $endDate);
 
         $assessments = $this->findMissedAssessments($student->group_id, $startDate, $endDate);
 
-        return response()->json(['data' => $assessments->values()]);
+        $jnSubjectIds = $assessments->where('assessment_type', 'jn')->pluck('subject_id')->unique()->filter()->values();
+
+        $futureAssessments = collect();
+        if ($jnSubjectIds->isNotEmpty()) {
+            $futureEnd = Carbon::today()->copy();
+            $daysAdded = 0;
+            while ($daysAdded < $excuseDays) {
+                $futureEnd->addDay();
+                if ($futureEnd->dayOfWeek !== Carbon::SUNDAY) {
+                    $daysAdded++;
+                }
+            }
+
+            $futureSchedules = Schedule::where('group_id', $student->group_id)
+                ->whereDate('lesson_date', '>', $endDate)
+                ->whereDate('lesson_date', '<=', $futureEnd)
+                ->whereIn('training_type_code', [101, 102])
+                ->whereIn('subject_id', $jnSubjectIds)
+                ->get();
+
+            $typeMap = [101 => 'oski', 102 => 'test'];
+            foreach ($futureSchedules as $s) {
+                $type = $typeMap[$s->training_type_code] ?? null;
+                if ($type) {
+                    $futureAssessments->push([
+                        'subject_name' => $s->subject_name,
+                        'subject_id' => $s->subject_id,
+                        'assessment_type' => $type,
+                        'assessment_type_code' => (string) $s->training_type_code,
+                        'original_date' => Carbon::parse($s->lesson_date)->format('Y-m-d'),
+                        'is_future' => true,
+                    ]);
+                }
+            }
+
+            $futureExamSchedules = ExamSchedule::where('group_hemis_id', $student->group_id)
+                ->whereIn('subject_id', $jnSubjectIds)
+                ->where(function ($q) use ($endDate, $futureEnd) {
+                    $q->where(function ($q2) use ($endDate, $futureEnd) {
+                        $q2->whereDate('oski_date', '>', $endDate)->whereDate('oski_date', '<=', $futureEnd);
+                    })->orWhere(function ($q2) use ($endDate, $futureEnd) {
+                        $q2->whereDate('test_date', '>', $endDate)->whereDate('test_date', '<=', $futureEnd);
+                    });
+                })->get();
+
+            foreach ($futureExamSchedules as $es) {
+                if ($es->oski_date && $es->oski_date->gt($endDate) && $es->oski_date->lte($futureEnd)) {
+                    $futureAssessments->push([
+                        'subject_name' => $es->subject_name,
+                        'subject_id' => $es->subject_id,
+                        'assessment_type' => 'oski',
+                        'assessment_type_code' => '101',
+                        'original_date' => $es->oski_date->format('Y-m-d'),
+                        'is_future' => true,
+                    ]);
+                }
+                if ($es->test_date && $es->test_date->gt($endDate) && $es->test_date->lte($futureEnd)) {
+                    $futureAssessments->push([
+                        'subject_name' => $es->subject_name,
+                        'subject_id' => $es->subject_id,
+                        'assessment_type' => 'test',
+                        'assessment_type_code' => '102',
+                        'original_date' => $es->test_date->format('Y-m-d'),
+                        'is_future' => true,
+                    ]);
+                }
+            }
+
+            $futureAssessments = $futureAssessments->unique(fn($item) => $item['subject_name'] . '|' . $item['assessment_type'] . '|' . $item['original_date']);
+        }
+
+        $allAssessments = $assessments->map(function ($a) {
+            $a['is_future'] = false;
+            return $a;
+        })->merge($futureAssessments)->values();
+
+        return response()->json([
+            'data' => $allAssessments,
+            'excuse_days' => $excuseDays,
+        ]);
     }
 
     public function download(Request $request, $id)

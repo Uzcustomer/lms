@@ -34,6 +34,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   List<dynamic> _missedAssessments = [];
   bool _isLoadingAssessments = false;
   bool _assessmentsLoaded = false;
+  int _excuseDays = 0;
   final Map<int, Map<String, String>> _makeupSelections = {};
 
   @override
@@ -94,13 +95,14 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     try {
       final provider = context.read<StudentProvider>();
       final dateFormat = DateFormat('yyyy-MM-dd');
-      final assessments = await provider.getMissedAssessments(
+      final response = await provider.getMissedAssessments(
         dateFormat.format(_startDate!),
         dateFormat.format(_endDate!),
       );
       if (mounted) {
         setState(() {
-          _missedAssessments = assessments;
+          _missedAssessments = response['data'] as List<dynamic>? ?? [];
+          _excuseDays = response['excuse_days'] as int? ?? 15;
           _assessmentsLoaded = true;
         });
       }
@@ -218,6 +220,10 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     for (int i = 0; i < _missedAssessments.length; i++) {
       final sel = _makeupSelections[i];
       if (sel == null) continue;
+      if (sel['status'] == 'submitted' || sel['status'] == 'on_time') {
+        count++;
+        continue;
+      }
       final type = (_missedAssessments[i] as Map<String, dynamic>)['assessment_type'];
       if (type == 'jn') {
         if ((sel['makeup_start'] ?? '').isNotEmpty && (sel['makeup_end'] ?? '').isNotEmpty) count++;
@@ -233,18 +239,31 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     return _selectedCount() == _missedAssessments.length;
   }
 
+  DateTime _calcMaxDate() {
+    final now = DateTime.now();
+    var maxDate = DateTime(now.year, now.month, now.day);
+    int daysAdded = 0;
+    while (daysAdded < _excuseDays) {
+      maxDate = maxDate.add(const Duration(days: 1));
+      if (maxDate.weekday != DateTime.sunday) daysAdded++;
+    }
+    return maxDate;
+  }
+
   Future<void> _pickMakeupDate(int index) async {
     final now = DateTime.now();
+    final maxDate = _calcMaxDate();
     final picked = await showDatePicker(
       context: context,
       initialDate: now,
       firstDate: now,
-      lastDate: now.add(const Duration(days: 90)),
+      lastDate: maxDate,
       selectableDayPredicate: (date) => date.weekday != DateTime.sunday,
     );
     if (picked != null && mounted) {
       setState(() {
         _makeupSelections[index] = {
+          'status': 'retake',
           'makeup_date': DateFormat('yyyy-MM-dd').format(picked),
         };
       });
@@ -253,19 +272,51 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
 
   Future<void> _pickMakeupDateRange(int index) async {
     final now = DateTime.now();
+    final maxDate = _calcMaxDate();
     final range = await showDateRangePicker(
       context: context,
       firstDate: now,
-      lastDate: now.add(const Duration(days: 90)),
+      lastDate: maxDate,
     );
     if (range != null && mounted) {
       setState(() {
         _makeupSelections[index] = {
+          'status': 'retake',
           'makeup_start': DateFormat('yyyy-MM-dd').format(range.start),
           'makeup_end': DateFormat('yyyy-MM-dd').format(range.end),
         };
       });
     }
+  }
+
+  void _markSubmitted(int index) {
+    setState(() {
+      final a = _missedAssessments[index] as Map<String, dynamic>;
+      final originalDate = a['original_date'] as String? ?? '';
+      if (a['assessment_type'] == 'jn') {
+        _makeupSelections[index] = {
+          'status': 'submitted',
+          'makeup_start': originalDate,
+          'makeup_end': originalDate,
+        };
+      } else {
+        _makeupSelections[index] = {
+          'status': 'submitted',
+          'makeup_date': originalDate,
+        };
+      }
+    });
+  }
+
+  void _markOnTime(int index) {
+    setState(() {
+      final a = _missedAssessments[index] as Map<String, dynamic>;
+      final originalDate = a['original_date'] as String? ?? '';
+      _makeupSelections[index] = {
+        'status': 'on_time',
+        'makeup_date': originalDate,
+      };
+    });
   }
 
   Color _assessmentColor(String type) {
@@ -681,24 +732,28 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     final type = assessment['assessment_type'] as String? ?? '';
     final color = _assessmentColor(type);
     final originalDate = assessment['original_date'] as String? ?? '';
+    final isFuture = assessment['is_future'] == true;
     final sel = _makeupSelections[index];
     final isJn = type == 'jn';
     final dateFormat = DateFormat('dd.MM.yyyy');
+    final status = sel?['status'] ?? '';
 
-    bool hasDate = false;
+    bool isSelected = false;
     String dateDisplay = '';
     if (sel != null) {
-      if (isJn) {
+      if (status == 'submitted' || status == 'on_time') {
+        isSelected = true;
+      } else if (isJn) {
         final start = sel['makeup_start'] ?? '';
         final end = sel['makeup_end'] ?? '';
         if (start.isNotEmpty && end.isNotEmpty) {
-          hasDate = true;
+          isSelected = true;
           dateDisplay = '${dateFormat.format(DateTime.parse(start))} — ${dateFormat.format(DateTime.parse(end))}';
         }
       } else {
         final d = sel['makeup_date'] ?? '';
         if (d.isNotEmpty) {
-          hasDate = true;
+          isSelected = true;
           dateDisplay = dateFormat.format(DateTime.parse(d));
         }
       }
@@ -710,7 +765,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       decoration: BoxDecoration(
         color: color.withAlpha(10),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: hasDate ? AppTheme.successColor.withAlpha(80) : color.withAlpha(40)),
+        border: Border.all(color: isSelected ? AppTheme.successColor.withAlpha(80) : color.withAlpha(40)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -724,49 +779,110 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               ),
               const SizedBox(width: 8),
               Text(originalDate, style: TextStyle(fontSize: 12, color: subColor)),
+              if (isFuture) ...[
+                const SizedBox(width: 6),
+                Icon(Icons.info_outline, size: 13, color: AppTheme.warningColor),
+              ],
             ],
           ),
+          if (isFuture)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Joriy nazoratdan keyingi test kunlari',
+                style: TextStyle(fontSize: 11, color: AppTheme.warningColor),
+              ),
+            ),
           const SizedBox(height: 8),
-          InkWell(
+          if (isFuture)
+            _buildFutureButtons(index, status, textColor, subColor, l)
+          else
+            _buildPastButtons(index, isJn, status, dateDisplay, textColor, subColor, l),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPastButtons(int index, bool isJn, String status, String dateDisplay, Color textColor, Color subColor, AppLocalizations l) {
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionChip(
+            label: l.submitted,
+            icon: Icons.check_circle,
+            isActive: status == 'submitted',
+            activeColor: AppTheme.successColor,
+            onTap: () {
+              if (status == 'submitted') {
+                setState(() => _makeupSelections.remove(index));
+              } else {
+                _markSubmitted(index);
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: InkWell(
             onTap: () => isJn ? _pickMakeupDateRange(index) : _pickMakeupDate(index),
             borderRadius: BorderRadius.circular(8),
             child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: hasDate ? AppTheme.successColor.withAlpha(15) : Colors.transparent,
+                color: status == 'retake' ? AppTheme.primaryColor.withAlpha(15) : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: hasDate ? AppTheme.successColor.withAlpha(60) : subColor.withAlpha(40)),
+                border: Border.all(color: status == 'retake' ? AppTheme.primaryColor.withAlpha(60) : subColor.withAlpha(40)),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    hasDate ? Icons.check_circle : Icons.calendar_today,
-                    size: 16,
-                    color: hasDate ? AppTheme.successColor : subColor,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                  Icon(Icons.calendar_today, size: 14, color: status == 'retake' ? AppTheme.primaryColor : subColor),
+                  const SizedBox(width: 4),
+                  Flexible(
                     child: Text(
-                      hasDate ? dateDisplay : (isJn ? l.selectDateRange : l.selectDate),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: hasDate ? textColor : subColor,
-                        fontWeight: hasDate ? FontWeight.w500 : FontWeight.normal,
-                      ),
+                      status == 'retake' ? dateDisplay : (isJn ? l.selectDateRange : l.selectDate),
+                      style: TextStyle(fontSize: 11, color: status == 'retake' ? textColor : subColor),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (hasDate)
-                    GestureDetector(
-                      onTap: () => setState(() => _makeupSelections.remove(index)),
-                      child: Text(l.clear, style: TextStyle(fontSize: 11, color: AppTheme.errorColor)),
-                    ),
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFutureButtons(int index, String status, Color textColor, Color subColor, AppLocalizations l) {
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionChip(
+            label: l.onTime,
+            icon: Icons.access_time,
+            isActive: status == 'on_time',
+            activeColor: AppTheme.successColor,
+            onTap: () {
+              if (status == 'on_time') {
+                setState(() => _makeupSelections.remove(index));
+              } else {
+                _markOnTime(index);
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _ActionChip(
+            label: l.retake,
+            icon: Icons.calendar_today,
+            isActive: status == 'retake',
+            activeColor: AppTheme.primaryColor,
+            onTap: () => _pickMakeupDate(index),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -811,6 +927,59 @@ class _DateButton extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _ActionChip({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? activeColor.withAlpha(15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isActive ? activeColor.withAlpha(60) : subColor.withAlpha(40)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: isActive ? activeColor : subColor),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                  color: isActive ? activeColor : subColor,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

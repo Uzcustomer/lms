@@ -2053,6 +2053,7 @@ class ReportController extends Controller
             // Semestr haftalarini olish va ketma-ket indeks xaritasini yaratish
             $weekIndexMap = [];
             $weekStartByIdx = []; // weekIdx => 'YYYY-MM-DD' (hafta boshlanish sanasi)
+            $weekRanges = []; // [{idx, start, end}] - sanaga qarab hafta topish uchun
             if ($cs->semester_hemis_id) {
                 $weeks = DB::table('curriculum_weeks')
                     ->where('semester_hemis_id', $cs->semester_hemis_id)
@@ -2063,8 +2064,34 @@ class ReportController extends Controller
                     $idx = $i + 1;
                     $weekIndexMap[(string) $w->curriculum_week_hemis_id] = $idx;
                     $weekStartByIdx[$idx] = substr((string) $w->start_date, 0, 10);
+                    $weekRanges[] = [
+                        'idx' => $idx,
+                        'start' => substr((string) $w->start_date, 0, 10),
+                        'end' => substr((string) $w->end_date, 0, 10),
+                    ];
                 }
             }
+
+            // Yordamchi: sana berilsa, shu sanaga mos hafta indeksini topadi
+            $resolveWeek = function ($lessonDate, $fallbackWeekNumber) use ($weekIndexMap, $weekRanges, &$weekStartByIdx) {
+                // 1-usul: week_number (curriculum_week_hemis_id) orqali
+                $idx = $weekIndexMap[(string) $fallbackWeekNumber] ?? null;
+                if ($idx !== null) return $idx;
+                // 2-usul: lesson_date curriculum_weeks ichida bormi?
+                $d = substr((string) $lessonDate, 0, 10);
+                if ($d !== '') {
+                    foreach ($weekRanges as $r) {
+                        if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
+                    }
+                    // 3-usul: sana diapazonga tushmasa, yangi "sintetik" hafta yaratib qo'shamiz
+                    // curriculum_weeks bilan siklikga keyin qo'shiladigan hafta
+                    $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
+                    $newIdx = $maxIdx + 1;
+                    $weekStartByIdx[$newIdx] = $d;
+                    return $newIdx;
+                }
+                return null;
+            };
 
             // HEMIS jadvaldan dars soatlarini hafta+dars_turi bo'yicha yig'ish
             $scheduleQuery = DB::table('schedules as sch')
@@ -2119,12 +2146,12 @@ class ReportController extends Controller
             $hemisLessonsRaw = [];
             $dayAcc = []; // code|YYYY-MM-DD => index in hemisLessonsRaw[code]
             foreach ($scheduleRows as $row) {
-                $weekIdx = $weekIndexMap[(string) $row->week_number] ?? null;
-                if ($weekIdx === null) {
-                    continue;
-                }
                 $code = (string) $row->training_type_code;
                 if ($isMustaqil($row->training_type_name ?? $code)) {
+                    continue;
+                }
+                $weekIdx = $resolveWeek($row->lesson_date, $row->week_number);
+                if ($weekIdx === null) {
                     continue;
                 }
                 $start = strtotime($row->lesson_pair_start_time);
@@ -2241,19 +2268,21 @@ class ReportController extends Controller
             }
 
             // Har bir dars turi uchun: hafta raqamlari ro'yxati (HEMIS yoki KTR mavjud bo'lgan haftalar)
-            // Curriculum_weeks tartibi bo'yicha
-            $orderedWeeks = array_keys($weekStartByIdx); // 1, 2, 3, ... sana bo'yicha tartibda
-
-            // Agar curriculum_weeks bo'sh bo'lsa, HEMIS va KTR'dagi haftalardan tuzamiz
-            if (empty($orderedWeeks)) {
-                $allWeeks = [];
-                foreach ($hemisByWeek as $code => $byW) {
-                    foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
-                }
-                foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
-                ksort($allWeeks);
-                $orderedWeeks = array_keys($allWeeks);
+            // Curriculum_weeks + HEMIS/KTR'dan kelgan haftalarni birlashtirib, sanaga ko'ra saralash
+            $allWeeks = [];
+            foreach ($weekStartByIdx as $w => $_) $allWeeks[$w] = true;
+            foreach ($hemisByWeek as $code => $byW) {
+                foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
             }
+            foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
+            $orderedWeeks = array_keys($allWeeks);
+            // Haftalarni sanaga ko'ra saralash (mavjud start_date'ga asosan)
+            usort($orderedWeeks, function ($a, $b) use ($weekStartByIdx) {
+                $ad = $weekStartByIdx[$a] ?? '9999-12-31';
+                $bd = $weekStartByIdx[$b] ?? '9999-12-31';
+                if ($ad === $bd) return $a <=> $b;
+                return strcmp($ad, $bd);
+            });
 
             // Har bir dars turi uchun darslar ro'yxatini hafta bo'yicha qurib chiqamiz
             // $lessonsByType[$code] = [{date, hemis_hours, ktr_hours}, ...]
@@ -2444,15 +2473,16 @@ class ReportController extends Controller
         $typeOrder = ['maruza', 'amaliy', 'laboratoriya', 'klinik', 'seminar'];
         $trainingTypeFilter = $request->has('training_types') ? (array) $request->training_types : [];
 
-        // Semestrlarning haftalari (tartib raqami va boshlanish sanasi)
+        // Semestrlarning haftalari (tartib raqami, boshlanish va tugash sanalari)
         $semIds = $curriculumSubjects->pluck('semester_hemis_id')->filter()->unique()->toArray();
         $weekIndexMap = [];
         $weekStartMap = []; // [$semId][$weekIdx] = 'YYYY-MM-DD'
+        $weekRangesMap = []; // [$semId] = [{idx, start, end}, ...]
         if (!empty($semIds)) {
             $weeks = DB::table('curriculum_weeks')
                 ->whereIn('semester_hemis_id', $semIds)
                 ->orderBy('start_date')
-                ->select('curriculum_week_hemis_id', 'semester_hemis_id', 'start_date')
+                ->select('curriculum_week_hemis_id', 'semester_hemis_id', 'start_date', 'end_date')
                 ->get()
                 ->groupBy('semester_hemis_id');
             foreach ($weeks as $sId => $rows) {
@@ -2460,6 +2490,11 @@ class ReportController extends Controller
                     $idx = $i + 1;
                     $weekIndexMap[(string) $sId][(string) $w->curriculum_week_hemis_id] = $idx;
                     $weekStartMap[(string) $sId][$idx] = substr((string) $w->start_date, 0, 10);
+                    $weekRangesMap[(string) $sId][] = [
+                        'idx' => $idx,
+                        'start' => substr((string) $w->start_date, 0, 10),
+                        'end' => substr((string) $w->end_date, 0, 10),
+                    ];
                 }
             }
         }
@@ -2550,18 +2585,37 @@ class ReportController extends Controller
 
             $semId = (string) ($cs->semester_hemis_id ?? '');
             $wMap = $weekIndexMap[$semId] ?? [];
+            $wRanges = $weekRangesMap[$semId] ?? [];
+            $weekStartByIdx = $weekStartMap[$semId] ?? [];
+
+            // week_number yoki lesson_date orqali hafta indeksini topadi
+            $resolveWeek = function ($lessonDate, $fallbackWeekNumber) use ($wMap, $wRanges, &$weekStartByIdx) {
+                $idx = $wMap[(string) $fallbackWeekNumber] ?? null;
+                if ($idx !== null) return $idx;
+                $d = substr((string) $lessonDate, 0, 10);
+                if ($d !== '') {
+                    foreach ($wRanges as $r) {
+                        if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
+                    }
+                    $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
+                    $newIdx = $maxIdx + 1;
+                    $weekStartByIdx[$newIdx] = $d;
+                    return $newIdx;
+                }
+                return null;
+            };
 
             // HEMIS darslarini dars turi bo'yicha (bir kundagi soatlar bitta darsga jamlanadi)
             $hemisLessonsRaw = [];
             $dayAcc = [];
             $key = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
             foreach ($schedBySubject[$key] ?? [] as $r) {
-                $wIdx = $wMap[(string) $r->week_number] ?? null;
-                if ($wIdx === null) continue;
                 $code = (string) $r->training_type_code;
                 $name = $r->training_type_name ?? $code;
                 if ($isMustaqil($name)) continue;
                 if (!empty($trainingTypeFilter) && !in_array($code, $trainingTypeFilter)) continue;
+                $wIdx = $resolveWeek($r->lesson_date, $r->week_number);
+                if ($wIdx === null) continue;
                 $start = strtotime($r->lesson_pair_start_time);
                 $end = strtotime($r->lesson_pair_end_time);
                 $hours = max(1, round((($end - $start) / 60) / 40));
@@ -2642,17 +2696,18 @@ class ReportController extends Controller
                 }
             }
 
-            // Hafta tartibini aniqlash (semestr bo'yicha curriculum_weeks, aks holda HEMIS+KTR dan)
-            $semId = (string) ($cs->semester_hemis_id ?? '');
-            $weekStartByIdx = $weekStartMap[$semId] ?? [];
-            $orderedWeeks = array_keys($weekStartByIdx);
-            if (empty($orderedWeeks)) {
-                $allWeeks = [];
-                foreach ($hemisByWeek as $code => $byW) foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
-                foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
-                ksort($allWeeks);
-                $orderedWeeks = array_keys($allWeeks);
-            }
+            // Hafta tartibini aniqlash: curriculum_weeks + resolveWeek qo'shgan sintetik haftalar + KTR haftalari
+            $allWeeks = [];
+            foreach ($weekStartByIdx as $w => $_) $allWeeks[$w] = true;
+            foreach ($hemisByWeek as $code => $byW) foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
+            foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
+            $orderedWeeks = array_keys($allWeeks);
+            usort($orderedWeeks, function ($a, $b) use ($weekStartByIdx) {
+                $ad = $weekStartByIdx[$a] ?? '9999-12-31';
+                $bd = $weekStartByIdx[$b] ?? '9999-12-31';
+                if ($ad === $bd) return $a <=> $b;
+                return strcmp($ad, $bd);
+            });
 
             // Har bir dars turi uchun darslar massivlarini hafta bo'yicha qurib chiqamiz
             $ttData = [];

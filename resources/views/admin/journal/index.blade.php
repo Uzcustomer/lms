@@ -297,18 +297,52 @@
             }
 
             $('.select2').each(function () {
-                $(this).select2({
-                    theme: 'classic',
-                    width: '100%',
-                    allowClear: true,
-                    placeholder: $(this).find('option:first').text(),
-                    matcher: fuzzyMatcher
-                }).on('select2:open', function() {
-                    setTimeout(function() {
-                        var sf = document.querySelector('.select2-container--open .select2-search__field');
-                        if (sf) sf.focus();
-                    }, 10);
-                });
+                // Guruh uchun alohida: AJAX universal qidiruv (22 deb yozilsa, 22 bo'lgan hamma guruhlar chiqsin)
+                if ($(this).attr('id') === 'group') {
+                    $(this).select2({
+                        theme: 'classic',
+                        width: '100%',
+                        allowClear: true,
+                        placeholder: 'Barchasi',
+                        minimumInputLength: 0,
+                        ajax: {
+                            url: '{{ route("admin.journal.get-groups") }}',
+                            dataType: 'json',
+                            delay: 200,
+                            data: function (params) {
+                                var p = getFilterParams();
+                                p.search = params.term || '';
+                                return p;
+                            },
+                            processResults: function (data) {
+                                var results = [];
+                                $.each(data, function (id, name) {
+                                    results.push({ id: id, text: name });
+                                });
+                                return { results: results };
+                            },
+                            cache: true
+                        }
+                    }).on('select2:open', function() {
+                        setTimeout(function() {
+                            var sf = document.querySelector('.select2-container--open .select2-search__field');
+                            if (sf) sf.focus();
+                        }, 10);
+                    });
+                } else {
+                    $(this).select2({
+                        theme: 'classic',
+                        width: '100%',
+                        allowClear: true,
+                        placeholder: $(this).find('option:first').text(),
+                        matcher: fuzzyMatcher
+                    }).on('select2:open', function() {
+                        setTimeout(function() {
+                            var sf = document.querySelector('.select2-container--open .select2-search__field');
+                            if (sf) sf.focus();
+                        }, 10);
+                    });
+                }
             });
 
             const selectedSpecialty = @json(request('specialty'));
@@ -356,8 +390,8 @@
             }
 
             function refreshGroups() {
-                resetDropdown('#group', 'Barchasi');
-                populateDropdown('{{ route("admin.journal.get-groups") }}', getFilterParams(), '#group');
+                // Guruh AJAX select2 — har safar ochilganda yangi qidiruv
+                $('#group').val(null).trigger('change');
             }
             function refreshSubjects() {
                 resetDropdown('#subject', 'Barchasi');
@@ -397,9 +431,18 @@
                 populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', p, '#subject', () => {
                     if (selectedSubject) $('#subject').val(selectedSubject).trigger('change.select2');
                 });
-                populateDropdown('{{ route("admin.journal.get-groups") }}', p, '#group', () => {
-                    if (selectedGroup) $('#group').val(selectedGroup).trigger('change.select2');
-                });
+                // Guruh AJAX rejimda — tanlangan qiymatni ko'rsatish uchun option qo'shamiz
+                if (selectedGroup) {
+                    $.ajax({
+                        url: '{{ route("admin.journal.get-groups") }}',
+                        data: { group_id: selectedGroup },
+                        dataType: 'json'
+                    }).done(function (data) {
+                        var text = data[selectedGroup] || selectedGroup;
+                        var option = new Option(text, selectedGroup, true, true);
+                        $('#group').append(option).trigger('change.select2');
+                    });
+                }
                 if (selectedDepartment) $('#department').val(selectedDepartment).trigger('change.select2');
             }
 

@@ -127,6 +127,31 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  Future<Map<String, dynamic>> multipartPost(String endpoint, Map<String, String> fields, {Uint8List? fileBytes, String? fileName, String fileField = 'file'}) async {
+    final token = await getToken();
+    final uri = Uri.parse('${ApiConfig.baseUrl}$endpoint');
+    final request = http.MultipartRequest('POST', uri);
+
+    if (token != null) {
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+    }
+
+    request.fields.addAll(fields);
+
+    if (fileBytes != null && fileName != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        fileField,
+        fileBytes,
+        filename: fileName,
+      ));
+    }
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    return _handleResponse(response);
+  }
+
   Map<String, dynamic> _handleResponse(http.Response response) {
     final body = jsonDecode(response.body) as Map<String, dynamic>;
 

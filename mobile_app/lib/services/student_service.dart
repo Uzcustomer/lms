@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../config/api_config.dart';
 import 'api_service.dart';
 
@@ -55,5 +56,44 @@ class StudentService {
 
   Future<Map<String, dynamic>> getContract() async {
     return await _api.get(ApiConfig.studentContract);
+  }
+
+  // Absence excuse methods
+  Future<Map<String, dynamic>> getExcuseReasons() async {
+    return await _api.get(ApiConfig.studentExcuseReasons);
+  }
+
+  Future<Map<String, dynamic>> getExcuses() async {
+    return await _api.get(ApiConfig.studentExcuses);
+  }
+
+  Future<Map<String, dynamic>> getExcuseDetail(int id) async {
+    return await _api.get('${ApiConfig.studentExcuses}/$id');
+  }
+
+  Future<Map<String, dynamic>> submitExcuse({
+    required String reason,
+    required String docNumber,
+    required String startDate,
+    required String endDate,
+    String? description,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final fields = <String, String>{
+      'reason': reason,
+      'doc_number': docNumber,
+      'start_date': startDate,
+      'end_date': endDate,
+    };
+    if (description != null && description.isNotEmpty) {
+      fields['description'] = description;
+    }
+    return await _api.multipartPost(
+      ApiConfig.studentExcuses,
+      fields,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
   }
 }

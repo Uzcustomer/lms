@@ -157,6 +157,29 @@ class AppLocalizations {
   String get contractList => get('contract_list');
   String get statusPaid => get('status_paid');
   String get statusUnpaid => get('status_unpaid');
+  String get absenceExcuse => get('absence_excuse');
+  String get absenceExcuseDesc => get('absence_excuse_desc');
+  String get comingSoon => get('coming_soon');
+  String get comingSoonDesc => get('coming_soon_desc');
+  String get newExcuse => get('new_excuse');
+  String get submitExcuse => get('submit_excuse');
+  String get selectReason => get('select_reason');
+  String get docNumber => get('doc_number');
+  String get startDate => get('start_date');
+  String get endDate => get('end_date');
+  String get selectFile => get('select_file');
+  String get description => get('description');
+  String get excuseSubmitted => get('excuse_submitted');
+  String get statusApproved => get('status_approved');
+  String get statusRejected => get('status_rejected');
+  String get statusPending => get('status_pending');
+  String get downloadPdf => get('download_pdf');
+  String get rejectionReason => get('rejection_reason');
+  String get reviewedBy => get('reviewed_by');
+  String get missedAssessments => get('missed_assessments');
+  String get noExcuses => get('no_excuses');
+  String get requiredDocument => get('required_document');
+  String get maxDays => get('max_days');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -219,6 +242,29 @@ class AppLocalizations {
       'mt_deadline': 'Muddat',
       'mt_remaining': 'Qolgan urinish',
       'services': 'Xizmatlar',
+      'absence_excuse': 'Sababli ariza',
+      'absence_excuse_desc': 'Darsga kelmaganlik uchun sababli ariza yuborish',
+      'coming_soon': 'Tez kunda',
+      'coming_soon_desc': 'Bu xizmat hozircha ishlab chiqilmoqda',
+      'new_excuse': 'Yangi ariza',
+      'submit_excuse': 'Ariza yuborish',
+      'select_reason': 'Sababni tanlang',
+      'doc_number': 'Hujjat raqami',
+      'start_date': 'Boshlanish sanasi',
+      'end_date': 'Tugash sanasi',
+      'select_file': 'Fayl tanlash (PDF, JPG)',
+      'description': 'Izoh (ixtiyoriy)',
+      'excuse_submitted': 'Arizangiz muvaffaqiyatli yuborildi!',
+      'status_approved': 'Tasdiqlangan',
+      'status_rejected': 'Rad etilgan',
+      'status_pending': 'Kutilmoqda',
+      'download_pdf': 'PDF yuklab olish',
+      'rejection_reason': 'Rad etilish sababi',
+      'reviewed_by': 'Tekshirgan',
+      'missed_assessments': 'O\'tkazib yuborilgan nazoratlar',
+      'no_excuses': 'Arizalar topilmadi',
+      'required_document': 'Kerakli hujjat',
+      'max_days': 'Maksimum kun',
       'tuition_fee': 'Shartnoma turi',
       'payment_form': 'To\'lov shakli',
       'paid': 'To\'langan',
@@ -357,6 +403,29 @@ class AppLocalizations {
       'mt_deadline': 'Срок',
       'mt_remaining': 'Осталось попыток',
       'services': 'Услуги',
+      'absence_excuse': 'Заявление об отсутствии',
+      'absence_excuse_desc': 'Подать заявление об уважительной причине отсутствия',
+      'coming_soon': 'Скоро',
+      'coming_soon_desc': 'Этот сервис находится в разработке',
+      'new_excuse': 'Новое заявление',
+      'submit_excuse': 'Отправить заявление',
+      'select_reason': 'Выберите причину',
+      'doc_number': 'Номер документа',
+      'start_date': 'Дата начала',
+      'end_date': 'Дата окончания',
+      'select_file': 'Выбрать файл (PDF, JPG)',
+      'description': 'Комментарий (необязательно)',
+      'excuse_submitted': 'Заявление успешно отправлено!',
+      'status_approved': 'Одобрено',
+      'status_rejected': 'Отклонено',
+      'status_pending': 'На рассмотрении',
+      'download_pdf': 'Скачать PDF',
+      'rejection_reason': 'Причина отказа',
+      'reviewed_by': 'Проверил',
+      'missed_assessments': 'Пропущенные контрольные',
+      'no_excuses': 'Заявления не найдены',
+      'required_document': 'Необходимый документ',
+      'max_days': 'Максимум дней',
       'tuition_fee': 'Тип договора',
       'payment_form': 'Форма оплаты',
       'paid': 'Оплачено',
@@ -495,6 +564,29 @@ class AppLocalizations {
       'mt_deadline': 'Deadline',
       'mt_remaining': 'Remaining attempts',
       'services': 'Services',
+      'absence_excuse': 'Absence Excuse',
+      'absence_excuse_desc': 'Submit an excuse for class absence',
+      'coming_soon': 'Coming Soon',
+      'coming_soon_desc': 'This service is under development',
+      'new_excuse': 'New Excuse',
+      'submit_excuse': 'Submit Excuse',
+      'select_reason': 'Select reason',
+      'doc_number': 'Document number',
+      'start_date': 'Start date',
+      'end_date': 'End date',
+      'select_file': 'Select file (PDF, JPG)',
+      'description': 'Description (optional)',
+      'excuse_submitted': 'Excuse submitted successfully!',
+      'status_approved': 'Approved',
+      'status_rejected': 'Rejected',
+      'status_pending': 'Pending',
+      'download_pdf': 'Download PDF',
+      'rejection_reason': 'Rejection reason',
+      'reviewed_by': 'Reviewed by',
+      'missed_assessments': 'Missed assessments',
+      'no_excuses': 'No excuses found',
+      'required_document': 'Required document',
+      'max_days': 'Max days',
       'tuition_fee': 'Contract Type',
       'payment_form': 'Payment form',
       'paid': 'Paid',

@@ -937,8 +937,12 @@
         .ktr-cmp-table td.diff-neg { color: #dc2626; background: #fef2f2 !important; }
         .ktr-cmp-table tfoot td { padding: 10px 8px; font-weight: 800; border-top: 2px solid #cbd5e1; text-align: center; }
         .ktr-cmp-table tfoot td.wk-col { background: #1e3a5f; color: #fff; }
-        .ktr-cmp-table th.tt-col-head, .ktr-cmp-table td.num-cell:nth-child(3n+2) { border-left: 2px solid #cbd5e1; }
-        .ktr-cmp-table tfoot td.num-cell:nth-child(3n+2) { border-left: 2px solid #cbd5e1; }
+        /* Har bir dars turi guruhi 4 sub-ustun (HEMIS|KTR|Belgi|Farq) bilan. Dars ustuni 1-chi.
+           Guruhlar orasiga qalin chiziq: 2-ustun, 6, 10, 14, ... (4n+2) */
+        .ktr-cmp-table th.tt-col-head { border-left: 3px solid #1e3a5f; }
+        .ktr-cmp-table tbody td.num-cell:nth-child(4n+2),
+        .ktr-cmp-table thead tr:last-child th.sub-head:nth-child(4n+2),
+        .ktr-cmp-table tfoot td.num-cell:nth-child(4n+2) { border-left: 3px solid #1e3a5f; }
 
         /* Mashg'ulot turlari uchun ranglar */
         .tt-head-0 { background: linear-gradient(135deg, #bfdbfe, #93c5fd); color: #1e3a8a; border-bottom: 1px solid #93c5fd; }

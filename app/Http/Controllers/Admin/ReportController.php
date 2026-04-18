@@ -1400,7 +1400,14 @@ class ReportController extends Controller
         }
 
         if ($request->filled('group')) {
-            $csQuery->where('g.id', $request->group);
+            $val = $request->group;
+            if (is_numeric($val)) {
+                // Eski format - primary key orqali
+                $csQuery->where('g.id', $val);
+            } else {
+                // Yangi format - nom orqali (bir xil nomdagi barcha guruhlar)
+                $csQuery->where('g.name', $val);
+            }
         }
 
         $curriculumSubjects = $csQuery->select(
@@ -1668,7 +1675,12 @@ class ReportController extends Controller
                 ->where('cs.id', $csId);
 
             if ($request->filled('group')) {
-                $cs->where('g.id', $request->group);
+                $val = $request->group;
+                if (is_numeric($val)) {
+                    $cs->where('g.id', $val);
+                } else {
+                    $cs->where('g.name', $val);
+                }
             }
 
             $cs = $cs->select(

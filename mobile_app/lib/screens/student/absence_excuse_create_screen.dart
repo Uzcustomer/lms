@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/student_provider.dart';
@@ -57,18 +58,21 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
-    final range = await showDateRangePicker(
+    final result = await showModalBottomSheet<DateTimeRange>(
       context: context,
-      firstDate: now.subtract(const Duration(days: 40)),
-      lastDate: now.add(const Duration(days: 30)),
-      initialDateRange: _startDate != null && _endDate != null
-          ? DateTimeRange(start: _startDate!, end: _endDate!)
-          : null,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CalendarPicker(
+        firstDate: now.subtract(const Duration(days: 40)),
+        lastDate: now.add(const Duration(days: 30)),
+        initialStart: _startDate,
+        initialEnd: _endDate,
+      ),
     );
-    if (range != null && mounted) {
+    if (result != null && mounted) {
       setState(() {
-        _startDate = range.start;
-        _endDate = range.end;
+        _startDate = result.start;
+        _endDate = result.end;
         _missedAssessments = [];
         _assessmentsLoaded = false;
         _makeupSelections.clear();
@@ -246,12 +250,16 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   Future<void> _pickMakeupDate(int index) async {
     final now = DateTime.now();
     final maxDate = _calcMaxDate();
-    final picked = await showDatePicker(
+    final picked = await showModalBottomSheet<DateTime>(
       context: context,
-      initialDate: now,
-      firstDate: now,
-      lastDate: maxDate,
-      selectableDayPredicate: (date) => date.weekday != DateTime.sunday,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CalendarPicker(
+        firstDate: now,
+        lastDate: maxDate,
+        isRange: false,
+        excludeSundays: true,
+      ),
     );
     if (picked != null && mounted) {
       setState(() {
@@ -266,17 +274,23 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   Future<void> _pickMakeupDateRange(int index) async {
     final now = DateTime.now();
     final maxDate = _calcMaxDate();
-    final range = await showDateRangePicker(
+    final result = await showModalBottomSheet<DateTimeRange>(
       context: context,
-      firstDate: now,
-      lastDate: maxDate,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CalendarPicker(
+        firstDate: now,
+        lastDate: maxDate,
+        isRange: true,
+        excludeSundays: true,
+      ),
     );
-    if (range != null && mounted) {
+    if (result != null && mounted) {
       setState(() {
         _makeupSelections[index] = {
           'status': 'retake',
-          'makeup_start': DateFormat('yyyy-MM-dd').format(range.start),
-          'makeup_end': DateFormat('yyyy-MM-dd').format(range.end),
+          'makeup_start': DateFormat('yyyy-MM-dd').format(result.start),
+          'makeup_end': DateFormat('yyyy-MM-dd').format(result.end),
         };
       });
     }
@@ -953,5 +967,210 @@ class _ActionChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _CalendarPicker extends StatefulWidget {
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final DateTime? initialStart;
+  final DateTime? initialEnd;
+  final bool isRange;
+  final bool excludeSundays;
+
+  const _CalendarPicker({
+    required this.firstDate,
+    required this.lastDate,
+    this.initialStart,
+    this.initialEnd,
+    this.isRange = true,
+    this.excludeSundays = false,
+  });
+
+  @override
+  State<_CalendarPicker> createState() => _CalendarPickerState();
+}
+
+class _CalendarPickerState extends State<_CalendarPicker> {
+  late DateTime _focusedDay;
+  DateTime? _selectedDay;
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isRange) {
+      _rangeStart = widget.initialStart;
+      _rangeEnd = widget.initialEnd;
+      _focusedDay = widget.initialStart ?? DateTime.now();
+    } else {
+      _focusedDay = DateTime.now();
+    }
+    if (_focusedDay.isBefore(widget.firstDate)) _focusedDay = widget.firstDate;
+    if (_focusedDay.isAfter(widget.lastDate)) _focusedDay = widget.lastDate;
+  }
+
+  bool get _canConfirm {
+    if (widget.isRange) return _rangeStart != null && _rangeEnd != null;
+    return _selectedDay != null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 4),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: subColor.withAlpha(80),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          TableCalendar(
+            firstDay: widget.firstDate,
+            lastDay: widget.lastDate,
+            focusedDay: _focusedDay,
+            startingDayOfWeek: StartingDayOfWeek.monday,
+            rangeStartDay: widget.isRange ? _rangeStart : null,
+            rangeEndDay: widget.isRange ? _rangeEnd : null,
+            rangeSelectionMode: widget.isRange
+                ? RangeSelectionMode.enforced
+                : RangeSelectionMode.disabled,
+            selectedDayPredicate: widget.isRange
+                ? null
+                : (day) => isSameDay(_selectedDay, day),
+            enabledDayPredicate: widget.excludeSundays
+                ? (day) => day.weekday != DateTime.sunday
+                : null,
+            onDaySelected: widget.isRange
+                ? null
+                : (selectedDay, focusedDay) {
+                    setState(() {
+                      _selectedDay = selectedDay;
+                      _focusedDay = focusedDay;
+                    });
+                  },
+            onRangeSelected: widget.isRange
+                ? (start, end, focusedDay) {
+                    setState(() {
+                      _rangeStart = start;
+                      _rangeEnd = end;
+                      _focusedDay = focusedDay;
+                    });
+                  }
+                : null,
+            onPageChanged: (focusedDay) => _focusedDay = focusedDay,
+            rowHeight: 42,
+            daysOfWeekHeight: 28,
+            calendarStyle: CalendarStyle(
+              outsideDaysVisible: false,
+              cellMargin: const EdgeInsets.all(4),
+              rangeHighlightColor: AppTheme.primaryColor.withAlpha(30),
+              rangeStartDecoration: const BoxDecoration(
+                color: AppTheme.primaryColor,
+                shape: BoxShape.circle,
+              ),
+              rangeEndDecoration: const BoxDecoration(
+                color: AppTheme.primaryColor,
+                shape: BoxShape.circle,
+              ),
+              withinRangeTextStyle: TextStyle(color: textColor),
+              selectedDecoration: const BoxDecoration(
+                color: AppTheme.primaryColor,
+                shape: BoxShape.circle,
+              ),
+              todayDecoration: BoxDecoration(
+                color: Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.primaryColor, width: 1.5),
+              ),
+              todayTextStyle: TextStyle(
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w600,
+              ),
+              defaultTextStyle: TextStyle(color: textColor, fontSize: 14),
+              weekendTextStyle: TextStyle(color: subColor, fontSize: 14),
+              disabledTextStyle: TextStyle(
+                color: subColor.withAlpha(80),
+                fontSize: 14,
+              ),
+            ),
+            headerStyle: HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+              titleTextStyle: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+              leftChevronIcon: Icon(Icons.chevron_left, color: textColor, size: 24),
+              rightChevronIcon: Icon(Icons.chevron_right, color: textColor, size: 24),
+              headerPadding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+            daysOfWeekStyle: DaysOfWeekStyle(
+              weekdayStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: subColor,
+              ),
+              weekendStyle: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: subColor.withAlpha(150),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: SafeArea(
+              child: SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton(
+                  onPressed: _canConfirm ? _confirm : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppTheme.primaryColor.withAlpha(60),
+                    disabledForegroundColor: Colors.white54,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Tanlash',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirm() {
+    if (widget.isRange && _rangeStart != null && _rangeEnd != null) {
+      Navigator.pop(context, DateTimeRange(start: _rangeStart!, end: _rangeEnd!));
+    } else if (!widget.isRange && _selectedDay != null) {
+      Navigator.pop(context, _selectedDay);
+    }
   }
 }

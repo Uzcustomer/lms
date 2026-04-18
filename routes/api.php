@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use Illuminate\Support\Facades\Route;
@@ -49,6 +50,15 @@ Route::prefix('v1')->group(function () {
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);
             Route::post('/complete-profile/telegram', [StudentApiController::class, 'saveTelegram']);
             Route::get('/complete-profile/telegram/check', [StudentApiController::class, 'checkTelegramVerification']);
+
+            // Absence excuses
+            Route::get('/excuses/reasons', [AbsenceExcuseApiController::class, 'reasons']);
+            Route::get('/excuses', [AbsenceExcuseApiController::class, 'index']);
+            Route::post('/excuses', [AbsenceExcuseApiController::class, 'store']);
+            Route::get('/excuses/{id}', [AbsenceExcuseApiController::class, 'show']);
+            Route::post('/excuses/missed-assessments', [AbsenceExcuseApiController::class, 'missedAssessments']);
+            Route::get('/excuses/{id}/download', [AbsenceExcuseApiController::class, 'download']);
+            Route::get('/excuses/{id}/download-pdf', [AbsenceExcuseApiController::class, 'downloadPdf']);
         });
 
         // ── Teacher endpoints ─────────────────────────────

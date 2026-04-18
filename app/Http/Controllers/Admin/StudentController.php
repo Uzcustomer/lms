@@ -485,8 +485,8 @@ class StudentController extends Controller
         \Log::info('Admission save attempt', ['student_id' => $student->id, 'data_keys' => array_keys($data), 'has_files' => $request->hasFile('files'), 'data_count' => count(array_filter($data))]);
 
         try {
-            $fillable = (new \App\Models\StudentAdmissionData)->getFillable();
-            $data = array_intersect_key($data, array_flip($fillable));
+            $columns = \Illuminate\Support\Facades\Schema::getColumnListing('student_admission_data');
+            $data = array_intersect_key($data, array_flip($columns));
 
             \App\Models\StudentAdmissionData::updateOrCreate(
                 ['student_id' => $student->id],

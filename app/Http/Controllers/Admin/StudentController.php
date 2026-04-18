@@ -462,31 +462,73 @@ class StudentController extends Controller
             'familya', 'ism', 'otasining_ismi', 'tugilgan_sana', 'jshshir', 'jinsi',
             'tel1', 'tel2', 'email', 'millat',
             'tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman',
-            'doimiy_manzil',
             'yashash_davlat', 'yashash_viloyat', 'yashash_tuman', 'yashash_manzil',
+            'vaqtinchalik_manzil',
             'passport_seriya', 'passport_raqam', 'passport_sana', 'passport_joy',
-            'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik',
-            'toplagan_ball', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',
-            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat',
+            'abituriyent_id', 'javoblar_varaqasi', 'talim_tili', 'imtihon_alifbosi',
+            'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik', 'hozirgi_talim_turi',
+            'toplagan_ball', 'tavsiya_turi', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',
+            'talim_davlat', 'talim_viloyat', 'talim_tuman', 'oqigan_yili_boshi', 'oqigan_yili_tugashi',
+            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat', 'chet_til_sertifikat', 'chet_til_ball',
             'ota_familiya', 'ota_ismi', 'ota_sharifi', 'ota_tel', 'ota_ish_joyi', 'ota_lavozimi',
             'ona_familiya', 'ona_ismi', 'ona_sharifi', 'ona_tel', 'ona_ish_joyi', 'ona_lavozimi',
         ]);
 
-        // Nullify empty date fields
         foreach (['tugilgan_sana', 'passport_sana'] as $df) {
             if (empty($data[$df])) {
                 $data[$df] = null;
             }
         }
 
-        $data['updated_by'] = $user?->id;
+        $skipUpper = ['tugilgan_sana', 'passport_sana', 'email'];
+        foreach ($data as $key => $val) {
+            if (is_string($val) && !in_array($key, $skipUpper)) {
+                $data[$key] = mb_strtoupper($val, 'UTF-8');
+            }
+        }
 
-        \App\Models\StudentAdmissionData::updateOrCreate(
-            ['student_id' => $student->id],
-            $data
-        );
+        $data['otm_nomi'] = 'Toshkent davlat tibbiyot universiteti Termiz filiali';
+        unset($data['doimiy_manzil'], $data['updated_by']);
 
-        return back()->with('success', "Qabul ma'lumotlari saqlandi.");
+        try {
+            $columns = \Illuminate\Support\Facades\Schema::getColumnListing('student_admission_data');
+            $data = array_intersect_key($data, array_flip($columns));
+
+            \App\Models\StudentAdmissionData::updateOrCreate(
+                ['student_id' => $student->id],
+                $data
+            );
+        } catch (\Exception $e) {
+            \Log::error('Admission data save error: ' . $e->getMessage());
+            return back()->withInput()->with('error', "Ma'lumotlarni saqlashda xatolik: " . $e->getMessage())->with('active_tab', 'qabul');
+        }
+
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $name => $file) {
+                if (!$file || !$file->isValid()) continue;
+                try {
+                    $oldFile = \App\Models\StudentFile::where('student_id', $student->id)->where('name', $name)->first();
+                    if ($oldFile) {
+                        \Illuminate\Support\Facades\Storage::disk('public')->delete($oldFile->path);
+                    }
+                    $path = $file->store('student-files/' . $student->id, 'public');
+                    \App\Models\StudentFile::updateOrCreate(
+                        ['student_id' => $student->id, 'name' => $name],
+                        [
+                            'original_name' => $file->getClientOriginalName(),
+                            'path' => $path,
+                            'mime_type' => $file->getClientMimeType(),
+                            'size' => $file->getSize(),
+                            'uploaded_by' => $user?->id,
+                        ]
+                    );
+                } catch (\Exception $e) {
+                    \Log::error("File upload error [{$name}]: " . $e->getMessage());
+                }
+            }
+        }
+
+        return back()->with('success', "Qabul ma'lumotlari saqlandi.")->with('active_tab', 'qabul');
     }
 
     public function uploadAdmissionFile(Request $request, Student $student)
@@ -548,7 +590,35 @@ class StudentController extends Controller
         \Illuminate\Support\Facades\Storage::disk('public')->delete($file->path);
         $file->delete();
 
-        return back()->with('success', "Fayl o'chirildi.");
+        return back()->with('success', "Fayl o'chirildi.")->with('active_tab', 'qabul');
+    }
+
+    public function clearAdmissionData(Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda tozalash huquqi yo'q.");
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+
+        $files = \App\Models\StudentFile::where('student_id', $student->id)->get();
+        foreach ($files as $file) {
+            $disk->delete($file->path);
+            $file->delete();
+        }
+
+        $disk->deleteDirectory('student-files/' . $student->id);
+
+        \App\Models\StudentAdmissionData::where('student_id', $student->id)->delete();
+
+        return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.");
     }
 
     public function getCurricula(Request $request)

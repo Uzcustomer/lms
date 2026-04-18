@@ -106,7 +106,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     })->name('login');
 
 
-    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi|javobgar_firma'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi|javobgar_firma'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('admin.dashboard');
         });
@@ -142,6 +142,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/students/{student}/admission-data', [AdminStudentController::class, 'saveAdmissionData'])->name('students.admission-data.save');
         Route::post('/students/{student}/admission-files', [AdminStudentController::class, 'uploadAdmissionFile'])->name('students.admission-files.upload');
         Route::delete('/students/{student}/admission-files/{file}', [AdminStudentController::class, 'deleteAdmissionFile'])->name('students.admission-files.delete');
+        Route::delete('/students/{student}/admission-data/clear', [AdminStudentController::class, 'clearAdmissionData'])->name('students.admission-data.clear');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');
@@ -271,6 +272,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
+            Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade');
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
             Route::get('/download-lesson-file/{lessonOpening}', [JournalController::class, 'downloadLessonFile'])->name('download-lesson-file');
@@ -310,6 +312,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
             Route::get('/search', [VedomostTekshirishController::class, 'search'])->name('search');
             Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
+            Route::post('/sync-hemis', [VedomostTekshirishController::class, 'syncHemis'])->name('sync-hemis');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');
@@ -418,6 +421,37 @@ Route::prefix('admin')->name('admin.')->group(function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculaExport, 'curricula.xlsx');
         })->name('export.curricula');
 
+        // Tyutorlar ro'yxati + har bir tyutor guruhlarini Excelga eksport qilish
+        Route::get('/tutors', function () {
+            $search = request('search');
+
+            $tutors = \App\Models\Teacher::query()
+                ->whereHas('groups')
+                ->with(['groups' => function ($q) {
+                    $q->orderBy('name');
+                }])
+                ->when($search, function ($q) use ($search) {
+                    $q->where(function ($sub) use ($search) {
+                        $sub->where('full_name', 'like', "%{$search}%")
+                            ->orWhere('department', 'like', "%{$search}%");
+                    });
+                })
+                ->orderBy('full_name')
+                ->paginate(25);
+
+            return view('admin.tutors.index', compact('tutors'));
+        })->name('tutors.index');
+
+        Route::get('/tutors/{teacher}/export', function (\App\Models\Teacher $teacher) {
+            $safeName = preg_replace('/[^A-Za-z0-9_\-]/u', '_', trim($teacher->full_name ?? 'tyutor'));
+            $fileName = 'tyutor_' . $safeName . '_guruhlari_' . date('Y_m_d') . '.xlsx';
+
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\TutorGroupsExport($teacher),
+                $fileName
+            );
+        })->name('tutors.export');
+
         // Xabarnomalar (Notifications)
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
@@ -517,8 +551,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/lesson-assignment/export-status', [ReportController::class, 'lessonAssignmentExportStatus'])->name('reports.lesson-assignment.export-status');
         Route::get('/reports/lesson-assignment/export-download', [ReportController::class, 'lessonAssignmentExportDownload'])->name('reports.lesson-assignment.export-download');
 
+        Route::get('/reports/lesson-hours', [ReportController::class, 'lessonHours'])->name('reports.lesson-hours');
+        Route::get('/reports/lesson-hours/data', [ReportController::class, 'lessonHoursData'])->name('reports.lesson-hours.data');
+
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
         Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');
+        Route::get('/reports/schedule-report/detail/{csId}', [ReportController::class, 'scheduleKtrCompareDetail'])->name('reports.schedule-report.detail');
         Route::get('/reports/schedule-report/get-auditoriums', [ReportController::class, 'getAuditoriums'])->name('reports.schedule-report.get-auditoriums');
         Route::post('/reports/schedule-report/sync-auditoriums', [ReportController::class, 'syncAuditoriums'])->name('reports.schedule-report.sync-auditoriums');
 
@@ -611,6 +649,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
             Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/reupload-preview', [QuizResultController::class, 'getReuploadPreview'])->name('reupload-preview');
             Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
             Route::post('/compare-grades', [QuizResultController::class, 'compareGrades'])->name('compare-grades');
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
@@ -895,7 +934,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/verify-telegram/check', [TeacherAuthController::class, 'checkTelegramVerification'])->name('verify-telegram.check');
     });
 
-    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
+    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('teacher.dashboard');
         });
@@ -1028,6 +1067,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
             Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/reupload-preview', [QuizResultController::class, 'getReuploadPreview'])->name('reupload-preview');
             Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
             Route::post('/compare-grades', [QuizResultController::class, 'compareGrades'])->name('compare-grades');
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');

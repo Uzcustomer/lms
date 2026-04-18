@@ -161,6 +161,28 @@
         .spinner { width: 36px; height: 36px; margin: 0 auto; border: 3px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         .spinner-sm { width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* === REUPLOAD MODAL === */
+        .reupload-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .reupload-modal { background: #fff; border-radius: 12px; max-width: 1100px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 25px 60px rgba(0,0,0,0.3); overflow: hidden; }
+        .reupload-modal-header { padding: 16px 24px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; display: flex; align-items: center; justify-content: space-between; }
+        .reupload-modal-header h3 { margin: 0; font-size: 17px; font-weight: 700; }
+        .reupload-modal-close { background: none; border: none; color: #fff; font-size: 28px; line-height: 1; cursor: pointer; padding: 0 8px; }
+        .reupload-modal-close:hover { opacity: 0.8; }
+        .reupload-modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+        .reupload-modal-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .reupload-modal-table thead tr { background: #f8fafc; }
+        .reupload-modal-table th { padding: 10px 12px; text-align: left; font-weight: 700; font-size: 11px; color: #475569; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
+        .reupload-modal-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .reupload-modal-table tbody tr:hover { background: #fffbeb; }
+        .reupload-grade-badge { display: inline-flex; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; background: #eff6ff; color: #1d4ed8; }
+        .reupload-modal-footer { padding: 14px 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc; }
+        .reupload-btn-cancel { padding: 8px 18px; background: #f1f5f9; color: #475569; font-size: 13px; font-weight: 600; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; }
+        .reupload-btn-cancel:hover { background: #e2e8f0; }
+        .reupload-btn-confirm { padding: 8px 24px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-size: 13px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 8px rgba(245,158,11,0.3); }
+        .reupload-btn-confirm:hover { box-shadow: 0 4px 12px rgba(245,158,11,0.4); }
+        .reupload-btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+        .reupload-subject-select:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
     </style>
 
     <div class="py-4">
@@ -378,6 +400,7 @@
         var tartibgaSolUrl = '{{ route($routePrefix . ".diagnostika.tartibga-sol") }}';
         var uploadUrl = '{{ route($routePrefix . ".quiz-results.upload") }}';
         var reuploadUrl = '{{ route($routePrefix . ".quiz-results.reupload") }}';
+        var reuploadPreviewUrl = '{{ route($routePrefix . ".quiz-results.reupload-preview") }}';
         var deleteGradesUrl = '{{ route($routePrefix . ".quiz-results.delete-grades") }}';
         var compareGradesUrl = '{{ route($routePrefix . ".quiz-results.compare-grades") }}';
         var deleteStudentGradeUrl = '{{ route($routePrefix . ".quiz-results.delete-student-grade") }}';
@@ -409,6 +432,7 @@
         function getXulosaBadge(code, text, resultId) {
             var styles = {
                 'ok':               'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+                'mavzu':            'background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;',
                 'uploaded':         'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
                 '2O':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 '2T':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
@@ -522,9 +546,15 @@
 
             renderTable(filteredData);
             // Statistika
-            var okCount = 0, errCount = 0;
-            filteredData.forEach(function(r) { if (r.xulosa_code === 'ok') okCount++; else errCount++; });
-            $('#total-info').html('Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>').show();
+            var okCount = 0, mavzuCount = 0, errCount = 0;
+            filteredData.forEach(function(r) {
+                if (r.xulosa_code === 'ok') okCount++;
+                else if (r.xulosa_code === 'mavzu') mavzuCount++;
+                else errCount++;
+            });
+            var parts = 'Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>';
+            if (mavzuCount > 0) parts += ' | <span style="color:#0369a1;">Mavzu retake: ' + mavzuCount + '</span>';
+            $('#total-info').html(parts).show();
             updateButtons();
         }
 
@@ -682,13 +712,16 @@
             $('#selected-count').text(count);
             $('#btn-upload').prop('disabled', count === 0);
 
-            // Qayta yuklash va o'chirish button — tanlangan ichida "uploaded" bor-yo'qligini tekshirish
+            // Qayta yuklash — har qanday tanlov ochiq (modal orqali fan_id o'zgartirish mumkin,
+            // mavjud yuklangan baholar bo'lsa avval o'chiriladi, bo'lmasa shunchaki yuklanadi)
+            $('#btn-reupload').prop('disabled', count === 0);
+
+            // Bahoni o'chirish — faqat "uploaded" tanlanganda
             var hasUploaded = false;
             ids.forEach(function(id) {
                 var row = allData.find(function(r) { return r.id === id; });
                 if (row && row.xulosa_code === 'uploaded') hasUploaded = true;
             });
-            $('#btn-reupload').prop('disabled', !hasUploaded);
             $('#btn-delete-grades').prop('disabled', !hasUploaded);
             $('#btn-compare').prop('disabled', count === 0);
         }
@@ -843,12 +876,12 @@
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
 
-                // Faqat "ok" xulosa bilan tanlanganlarnigina yuklash
+                // "ok" (OSKI/YN test) va "mavzu" (JN mavzu retake) tanlanganlarini yuklash
                 var okIds = [];
                 var skippedCount = 0;
                 ids.forEach(function(id) {
                     var row = allData.find(function(r) { return r.id === id; });
-                    if (row && row.xulosa_code === 'ok') {
+                    if (row && (row.xulosa_code === 'ok' || row.xulosa_code === 'mavzu')) {
                         okIds.push(id);
                     } else {
                         skippedCount++;
@@ -913,26 +946,11 @@
                 });
             });
 
-            // Qayta yuklash handler
+            // Qayta yuklash handler — modal orqali fan_id ni o'zgartirish imkoniyati bilan
+            // Har qanday tanlov ochiq: yuklangan bo'lsa qayta yuklanadi, yo'q bo'lsa shunchaki yuklanadi
             $('#btn-reupload').on('click', function() {
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
-
-                // Faqat "uploaded" tanlanganlarnigina qayta yuklash
-                var uploadedIds = [];
-                ids.forEach(function(id) {
-                    var row = allData.find(function(r) { return r.id === id; });
-                    if (row && row.xulosa_code === 'uploaded') {
-                        uploadedIds.push(id);
-                    }
-                });
-
-                if (uploadedIds.length === 0) {
-                    alert('Tanlangan natijalar orasida qayta yuklanishi mumkin bo\'lgani yo\'q.');
-                    return;
-                }
-
-                if (!confirm(uploadedIds.length + ' ta natijani qayta yuklashni tasdiqlaysizmi?\nEski baholar o\'chiriladi va yangidan yuklanadi.')) return;
 
                 var btn = $(this);
                 btn.prop('disabled', true);
@@ -940,30 +958,150 @@
                 btn.html('<span class="spinner-sm"></span> Yuklanmoqda...');
 
                 $.ajax({
-                    url: reuploadUrl, type: 'POST',
+                    url: reuploadPreviewUrl, type: 'POST',
                     headers: { 'X-CSRF-TOKEN': csrfToken },
                     contentType: 'application/json',
-                    data: JSON.stringify({ ids: uploadedIds }),
+                    data: JSON.stringify({ ids: ids }),
                     success: function(data) {
-                        var html = '';
-                        if (data.success_count > 0) {
-                            html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija qayta yuklandi.</div>';
+                        if (!data.success || !data.groups || data.groups.length === 0) {
+                            alert('Preview ma\'lumot olinmadi.');
+                            return;
                         }
-                        if (data.error_count > 0) {
-                            html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
-                            data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
-                            html += '</ul></div>';
-                        }
-                        $('#upload-result').html(html).show();
-                        updateButtons();
+                        showReuploadModal(data.groups, ids);
                     },
                     error: function(xhr) {
                         var msg = xhr.responseJSON?.message || 'Server xatosi';
-                        $('#upload-result').html('<div class="diag-msg diag-error"><strong>Xato!</strong> ' + msg + '</div>').show();
+                        alert('Xato: ' + msg);
                     },
                     complete: function() { btn.prop('disabled', false).html(origHtml); }
                 });
             });
+
+            // Qayta yuklash modal
+            function showReuploadModal(groups, ids) {
+                var html = '<div id="reupload-modal-overlay" class="reupload-modal-overlay">';
+                html += '<div class="reupload-modal">';
+                html += '<div class="reupload-modal-header">';
+                html += '<h3>Qayta yuklash — fan ID ni tasdiqlang</h3>';
+                html += '<button type="button" class="reupload-modal-close" onclick="closeReuploadModal()">&times;</button>';
+                html += '</div>';
+                html += '<div class="reupload-modal-body">';
+                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Dropdown — talabaning <strong>joriy semestriga biriktirilgan fanlar</strong>. Default — Moodledan kelgan fan, lekin to\'g\'ri fanga o\'zgartirib yuklash mumkin.</p>';
+                html += '<table class="reupload-modal-table">';
+                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>Yuklanadigan fan</th></tr></thead>';
+                html += '<tbody>';
+                groups.forEach(function(g, i) {
+                    html += '<tr>';
+                    html += '<td>' + (i + 1) + '</td>';
+                    html += '<td><strong>' + esc(g.group_name) + '</strong></td>';
+                    html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
+                    html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
+                    html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
+                    html += '<td>';
+                    if (g.available_subjects && g.available_subjects.length > 0) {
+                        // Moodle ID semestr ro'yxatida bormi tekshirish
+                        var foundOriginal = g.available_subjects.some(function(s) {
+                            return String(s.subject_id) === String(g.original_fan_id);
+                        });
+
+                        var selectHtml = '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
+
+                        // Agar Moodle ID ro'yxatda bo'lmasa — yuqoriga "Moodle (jadvalda yo'q)" qator qo'shamiz
+                        if (!foundOriginal) {
+                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" selected style="color:#dc2626;">';
+                            selectHtml += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
+                            selectHtml += '</option>';
+                            selectHtml += '<option disabled>──── Joriy semestr fanlari ────</option>';
+                        }
+
+                        g.available_subjects.forEach(function(s) {
+                            var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
+                            selectHtml += '<option value="' + esc(s.subject_id) + '"' + (selected ? ' selected' : '') + '>';
+                            selectHtml += esc(s.subject_name);
+                            if (s.subject_code) selectHtml += ' [' + esc(s.subject_code) + ']';
+                            selectHtml += ' (ID: ' + s.subject_id + ')';
+                            selectHtml += '</option>';
+                        });
+                        selectHtml += '</select>';
+                        html += selectHtml;
+                    } else {
+                        html += '<div style="color:#dc2626;font-size:12px;">Joriy semestrda fanlar topilmadi — faqat asl ID (' + g.original_fan_id + ') ishlatiladi</div>';
+                    }
+                    html += '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                html += '</div>';
+                html += '<div class="reupload-modal-footer">';
+                html += '<button type="button" onclick="closeReuploadModal()" class="reupload-btn-cancel">Bekor qilish</button>';
+                html += '<button type="button" id="reupload-modal-submit" class="reupload-btn-confirm">Qayta yuklash</button>';
+                html += '</div>';
+                html += '</div></div>';
+                $('body').append(html);
+
+                $('#reupload-modal-submit').on('click', function() {
+                    var overrides = {};
+                    $('.reupload-subject-select').each(function() {
+                        var key = $(this).data('key');
+                        var newSubjectId = $(this).val();
+                        // Faqat o'zgartirilganlarini yuborish — backend default sifatida fan_id ni ishlatadi
+                        var origFanId = key.split('_')[0];
+                        if (String(newSubjectId) !== String(origFanId)) {
+                            overrides[key] = newSubjectId;
+                        }
+                    });
+
+                    var btn = $(this);
+                    btn.prop('disabled', true).html('<span class="spinner-sm"></span> Yuklanmoqda...');
+
+                    $.ajax({
+                        url: reuploadUrl, type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        contentType: 'application/json',
+                        data: JSON.stringify({ ids: ids, subject_overrides: overrides }),
+                        success: function(data) {
+                            closeReuploadModal();
+                            var html = '';
+                            if (data.success_count > 0) {
+                                html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija qayta yuklandi.</div>';
+                            }
+                            if (data.error_count > 0) {
+                                html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                                data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
+                                html += '</ul></div>';
+                            }
+                            $('#upload-result').html(html).show();
+
+                            // Yuklangan qatorlarni yashil rangga bo'yash (huddi /upload kabi)
+                            if (data.success_count > 0) {
+                                ids.forEach(function(id) {
+                                    var hasError = false;
+                                    if (data.errors) {
+                                        data.errors.forEach(function(err) { if (err.id == id) hasError = true; });
+                                    }
+                                    if (!hasError) {
+                                        $('#row-' + id).addClass('row-uploaded')
+                                            .find('.row-checkbox').prop('checked', false).prop('disabled', true);
+                                        var row = allData.find(function(r) { return r.id === id; });
+                                        if (row) { row.xulosa_code = 'uploaded'; row.xulosa = 'Oldin yuklangan'; }
+                                        $('#row-' + id).find('td:last').html(getXulosaBadge('uploaded', 'Oldin yuklangan'));
+                                    }
+                                });
+                            }
+                            updateButtons();
+                        },
+                        error: function(xhr) {
+                            var msg = xhr.responseJSON?.message || 'Server xatosi';
+                            alert('Xato: ' + msg);
+                            btn.prop('disabled', false).html('Qayta yuklash');
+                        }
+                    });
+                });
+            }
+
+            window.closeReuploadModal = function() {
+                $('#reupload-modal-overlay').remove();
+            };
 
             // ========== BAHONI O'CHIRISH ==========
             $('#btn-delete-grades').on('click', function() {

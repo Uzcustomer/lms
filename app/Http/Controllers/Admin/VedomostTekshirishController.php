@@ -8,9 +8,11 @@ use App\Models\CurriculumSubject;
 use App\Models\Curriculum;
 use App\Models\Department;
 use App\Models\Group;
+use App\Models\HemisExamGrade;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Services\HemisService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +29,7 @@ class VedomostTekshirishController extends Controller
 {
     private array $allowedRoles = [
         'superadmin', 'admin', 'kichik_admin',
-        'registrator_ofisi', 'oquv_bolimi', 'oquv_prorektori',
+        'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori',
     ];
 
     public function index()
@@ -235,6 +237,59 @@ class VedomostTekshirishController extends Controller
         }
     }
 
+    /**
+     * Export'dan oldin HEMIS exam grades ni sync qilish (AJAX).
+     * Frontend avval shu endpointni chaqiradi, keyin export formni yuboradi.
+     */
+    public function syncHemis(Request $request)
+    {
+        abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
+
+        $rows = $request->input('rows', []);
+        $synced = 0;
+
+        foreach ($rows as $rowData) {
+            $groupId      = $rowData['group_id'] ?? null;
+            $subjectId    = $rowData['subject_id'] ?? null;
+            $semesterCode = $rowData['semester_code'] ?? null;
+            if (!$groupId || !$subjectId) continue;
+
+            $group = is_numeric($groupId)
+                ? Group::find($groupId)
+                : Group::where('group_hemis_id', $groupId)->first();
+            if (!$group) continue;
+
+            // Guruh talabalarining HEMIS ID'larini olamiz
+            $studentHemisIds = Student::where('group_id', $group->group_hemis_id)
+                ->pluck('hemis_id')
+                ->toArray();
+            if (empty($studentHemisIds)) continue;
+
+            // Curriculum'dan educationYearCode
+            $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
+            $educationYearCode = $curriculum?->education_year_code;
+            $scheduleYear = DB::table('schedules')
+                ->where('group_id', $group->group_hemis_id)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleYear) $educationYearCode = $scheduleYear;
+
+            try {
+                $synced += app(HemisService::class)->syncExamGradesForGroup(
+                    $studentHemisIds, $subjectId, $semesterCode ?? '', $educationYearCode, 15
+                );
+            } catch (\Throwable $e) {
+                // HEMIS javob bermasa — davom etamiz
+            }
+        }
+
+        return response()->json(['synced' => $synced]);
+    }
+
     public function export(Request $request)
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
@@ -311,10 +366,19 @@ class VedomostTekshirishController extends Controller
             'AH' => 'Soat',
             'AI' => 'Kredit',
             'AJ' => 'Ma\'ruzachi',
-            'AK' => 'Divisor',
-            'AL' => 'Davomat %',
-            'AM' => 'JN (asl)',
-            'AY' => 'Zanjir',
+            'AK' => 'JN soni',
+            'AL' => 'Divisor',
+            'AM' => 'Davomat %',
+            'AN' => 'jn_vazn',
+            'AO' => 'mt_vazn',
+            'AP' => 'on_vazn',
+            'AQ' => 'oski_vazn',
+            'AR' => 'test_vazn',
+            'AS' => 'Zanjir',
+            'AT' => 'JN+MT tekshiruv',
+            'AU' => 'JN+MT izoh',
+            'AV' => 'YN tekshiruv',
+            'AW' => 'YN izoh',
         ];
 
         $sheet->getRowDimension(1)->setRowHeight(30);
@@ -349,8 +413,10 @@ class VedomostTekshirishController extends Controller
             'U' => 2, 'V' => 7, 'W' => 6, 'X' => 20, 'Y' => 10,
             'Z' => 14, 'AA' => 10, 'AB' => 28, 'AC' => 14,
             'AD' => 14, 'AE' => 8, 'AF' => 12, 'AG' => 16,
-            'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 7,
-            'AL' => 8, 'AM' => 8, 'AY' => 25,
+            'AH' => 6, 'AI' => 6, 'AJ' => 22, 'AK' => 8,
+            'AL' => 7, 'AM' => 8,
+            'AN' => 8, 'AO' => 8, 'AP' => 8, 'AQ' => 9, 'AR' => 9,
+            'AS' => 25, 'AT' => 12, 'AU' => 20, 'AV' => 12, 'AW' => 20,
         ];
         foreach ($colWidths as $col => $width) {
             $sheet->getColumnDimension($col)->setWidth($width);
@@ -409,8 +475,8 @@ class VedomostTekshirishController extends Controller
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             if (empty($studentHemisIds)) continue;
 
-            // Education year (schedules dan)
-            $scheduleYear = DB::table('schedules')
+            // Education year (schedules dan — hisobot qilinayotgan joriy yil)
+            $scheduleYearRow = DB::table('schedules')
                 ->where('group_id', $groupHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
@@ -418,8 +484,13 @@ class VedomostTekshirishController extends Controller
                 ->whereNotNull('lesson_date')
                 ->whereNotNull('education_year_code')
                 ->orderBy('lesson_date', 'desc')
-                ->value('education_year_code');
-            if ($scheduleYear) $educationYearCode = $scheduleYear;
+                ->select('education_year_code', 'education_year_name')
+                ->first();
+            $educationYearName = null;
+            if ($scheduleYearRow) {
+                $educationYearCode = $scheduleYearRow->education_year_code;
+                $educationYearName = $scheduleYearRow->education_year_name;
+            }
 
             // --- JN schedule ---
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
@@ -563,40 +634,23 @@ class VedomostTekshirishController extends Controller
             }
 
             // --- ON, OSKI, Test baholar ---
-            $otherRaw = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $studentHemisIds)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereIn('training_type_code', [100, 101, 102, 103])
-                ->when($educationYearCode, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                    $q2->where('education_year_code', $educationYearCode)
-                        ->orWhere(fn($q3) => $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate)));
-                }))
-                ->when(!$educationYearCode && $minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-                ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
-                ->get();
-
-            $otherGrouped = [];
-            foreach ($otherRaw as $g) {
-                $eff = $getEffectiveGrade($g);
-                if ($eff === null) continue;
-                $typeCode = $g->training_type_code;
-                if ($typeCode == 103 && $g->quiz_result_id) {
-                    $qt = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
-                    if (in_array($qt, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'])) $typeCode = 101;
-                    elseif (in_array($qt, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'])) $typeCode = 102;
-                }
-                $otherGrouped[$g->student_hemis_id][$typeCode][] = $eff;
-            }
+            // YN qaydnoma yaratish bilan bir xil qiymat chiqishi uchun
+            // YnQaytnomaController::generateYnQaydnoma() dagi logikani
+            // aynan takrorlaymiz: har bir training_type_code uchun MAX(grade)
+            // to'g'ridan-to'g'ri SQL darajasida, education_year_code/
+            // lesson_date filtrlarisiz.
             $gradesByType = [100 => [], 101 => [], 102 => []];
-            foreach ($otherGrouped as $sId => $types) {
-                foreach ([100, 101, 102] as $tc) {
-                    if (!empty($types[$tc])) {
-                        $gradesByType[$tc][$sId] = array_sum($types[$tc]) / count($types[$tc]);
-                    }
-                }
+            foreach ([100, 101, 102] as $tc) {
+                $gradesByType[$tc] = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->where('training_type_code', $tc)
+                    ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
+                    ->groupBy('student_hemis_id')
+                    ->pluck('grade', 'student_hemis_id')
+                    ->toArray();
             }
 
             // --- O'qituvchilar ---
@@ -654,6 +708,15 @@ class VedomostTekshirishController extends Controller
             $validDates = $dateCounts->filter(fn($r) => $r->cnt >= $threshold)->count();
             $divisor = max(1, $validDates);
 
+            // --- HEMIS exam grades bilan taqqoslash (lokal jadvaldan) ---
+            // Sync export'dan oldin alohida AJAX so'rov (syncHemis) orqali
+            // amalga oshiriladi. Bu yerda faqat lokal ma'lumot o'qiladi.
+            // subject_id bo'yicha filtrlash — HEMIS API'dagi subject.id
+            // bilan bizning subject_id mos kelishi kerak.
+            $hemisExamGrades = HemisExamGrade::forComparison($studentHemisIds, $subjectId, $semesterCode)
+                ->get()
+                ->groupBy('student_hemis_id');
+
             // --- Qatorlarni yozish ---
             foreach ($students as $stu) {
                 $hId = $stu->hemis_id;
@@ -665,21 +728,100 @@ class VedomostTekshirishController extends Controller
                 $test    = round($gradesByType[102][$hId] ?? 0, 0, PHP_ROUND_HALF_UP);
                 $dav     = $davomatByStudent[$hId] ?? 0;
 
-                // Davomat >= 25% bo'lsa JN = 0
-                $jn = $dav >= 25 ? 0 : $jnOrig;
+                // JN soni — shu talaba JN (JB) darslaridan nechta kunda baho
+                // yoki nb (yo'q) belgilangan bo'lsa, shuni sanaydi. Bir kunda
+                // bir nechta pair bo'lsa ham 1 kun sifatida sanaladi.
+                // Sanash qoidasi:
+                //   * kiritilgan numerik baho (>0) — sanaladi;
+                //   * nb (reason='absent') — sanaladi (retake bo'lsa yoki
+                //     bo'lmasa ham);
+                //   * retake_grade (otrabotka) mavjud — sanaladi;
+                //   * grade = 0 va nb emas (ya'ni bo'sh ham emas) — sanaladi
+                //     (o'qituvchi aniq 0 qo'ygan);
+                //   * umuman yozuv yo'q yoki status='pending' — sanalmaydi.
+                $jnDaysAttended = [];
+                foreach ($allGradesRaw as $g) {
+                    $date = Carbon::parse($g->lesson_date)->format('Y-m-d');
+                    $key  = $date . '_' . $g->lesson_pair_code;
+                    if (!isset($jbDatePairSet[$key])) continue;          // faqat JB jadvalidagi kunlar
+                    if ($g->student_hemis_id !== $hId) continue;
+                    if ($g->status === 'pending') continue;               // tugallanmagan
+                    // "Yozuv mavjud" deb hisoblaymiz agar biror ma'lumot bor:
+                    //   grade > 0 (HEMIS kamida 1 dan boshlab qabul qiladi,
+                    //     shuning uchun 0 tozalanmagan/xato yozuv deb e'tibor
+                    //     berilmaydi), retake_grade > 0, yoki reason='absent'
+                    //     (nb — o'qituvchi yo'q deb belgilagan, kun sanaladi).
+                    $hasEntry = ($g->grade !== null && (float) $g->grade > 0)
+                        || ($g->retake_grade !== null && (float) $g->retake_grade > 0)
+                        || ($g->reason === 'absent');
+                    if ($hasEntry) {
+                        $jnDaysAttended[$date] = true;
+                    }
+                }
+                $jnCount = count($jnDaysAttended);
 
-                // Balllar
-                $jnBall   = $jn >= 60   ? $roundHalfUp($jn * $wJn / 100)     : 0;
-                $mtBall   = $mt >= 60   ? $roundHalfUp($mt * $wMt / 100)     : 0;
-                $onBall   = $on >= 60   ? $roundHalfUp($on * $wOn / 100)     : 0;
-                $oskiBall = $oski >= 60 ? $roundHalfUp($oski * $wOski / 100) : 0;
-                $testBall = $test >= 60 ? $roundHalfUp($test * $wTest / 100) : 0;
+                // Davomat >= 25% bo'lsa ham JN o'rtacha qiymati saqlanadi —
+                // ma'muriyatga haqiqiy ko'rsatkich ko'rinib tursin. V esa -3
+                // qaytaradi va talaba FISH'iga "(≥25% davomat)" qo'shiladi.
+                $jn = $jnOrig;
 
-                $sumBall = $jnBall + $mtBall + $onBall;
+                // Balllar:
+                //  JB/MT/ON ball — yaxlitlashsiz raw qiymat (excelda format
+                //  1 kasrni ko'rsatadi);
+                //  OSKI/Test ball — ikkalasi ham vaznga ega bo'lsa raw qiymat,
+                //  faqat bittasi vaznga ega bo'lsa butun songacha yaxlitlanadi.
+                //  Istisno: 4 yoki 5 kurs talabalari uchun JN/MT ball ham
+                //  butun songacha half-up yaxlitlanadi. Semestrda level_code
+                //  qiymatlari: 11=1-kurs, 12=2-kurs, 13=3-kurs, 14=4-kurs,
+                //  15=5-kurs, 16=6-kurs.
+                $levelCode = (string) ($semester?->level_code ?? '');
+                $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
+
+                if ($roundJnMtToInt) {
+                    $jnBall = $jn >= 60 ? (int) floor($jn * $wJn / 100 + 0.5) : 0;
+                    $mtBall = $mt >= 60 ? (int) floor($mt * $wMt / 100 + 0.5) : 0;
+                    $onBall = $on >= 60 ? (int) floor($on * $wOn / 100 + 0.5) : 0;
+                } else {
+                    $jnBall = $jn >= 60 ? $jn * $wJn / 100 : 0;
+                    $mtBall = $mt >= 60 ? $mt * $wMt / 100 : 0;
+                    $onBall = $on >= 60 ? $on * $wOn / 100 : 0;
+                }
+
+                if ($wOski > 0 && $wTest > 0) {
+                    $oskiBall = $oski >= 60 ? $oski * $wOski / 100 : 0;
+                    $testBall = $test >= 60 ? $test * $wTest / 100 : 0;
+                } elseif ($wOski > 0) {
+                    $oskiBall = $oski >= 60 ? (int) round($oski * $wOski / 100) : 0;
+                    $testBall = 0;
+                } elseif ($wTest > 0) {
+                    $oskiBall = 0;
+                    $testBall = $test >= 60 ? (int) round($test * $wTest / 100) : 0;
+                } else {
+                    $oskiBall = 0;
+                    $testBall = 0;
+                }
+
+                // M ustun (JN+MT) — shablon formulasi bilan bir xil:
+                // =IF(OR(D<60, G<60), 0, ROUND(E+H, 0.1))
+                // JN yoki MT 60 dan kichik bo'lsa M = 0.
+                $sumBall = ($jn < 60 || $mt < 60)
+                    ? 0
+                    : (int) floor($jnBall + $mtBall + $onBall + 0.5);
                 $maxSum  = $wJn + $wMt + $wOn;
 
-                // YN natija
-                $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav);
+                // YN natija — ekrandagi ball'lardan hisoblanadi, shuning uchun
+                // ularni ham uzatamiz (aks holda 4-5 kurs yoki faqat bitta
+                // imtihon vaznga ega bo'lgan holda V ekran yig'indisi bilan
+                // mos kelmaydi).
+                $yn = $this->calcYn($jn, $mt, $on, $oski, $test, $wJn, $wMt, $wOn, $wOski, $wTest, $dav,
+                    (float) $jnBall, (float) $mtBall, (float) $onBall, (float) $oskiBall, (float) $testBall);
+
+                // Yakuniy qiymatni butun songacha half-up yaxlitlaymiz (V ustun
+                // butun son chiqishi kerak). Maxsus qiymatlar ('', -2, -1, 0)
+                // o'zgartirilmaydi — ular shart kodlari.
+                if (is_numeric($yn) && $yn > 0) {
+                    $yn = (int) floor((float) $yn + 0.5);
+                }
 
                 // ECTS
                 $ects = $this->toEcts($yn);
@@ -694,14 +836,30 @@ class VedomostTekshirishController extends Controller
 
                 // Hujayralarga yozish
                 $sheet->setCellValue("A{$r}", $rowIndex);
-                $sheet->setCellValue("B{$r}", $stu->full_name);
+                $fioLabel = $stu->full_name;
+                if ($dav >= 25) {
+                    // Haqiqiy davomat foizini ko'rsatamiz (1 kasr, oxiridagi
+                    // nollar tozalanadi): 30 → "30", 30.5 → "30.5", 30.15 → "30.2"
+                    $davStr = rtrim(rtrim(number_format($dav, 1, '.', ''), '0'), '.');
+                    $fioLabel .= " ({$davStr}% davomat)";
+                }
+                $sheet->setCellValue("B{$r}", $fioLabel);
                 $sheet->setCellValueExplicit("C{$r}", (string) $stu->student_id_number, DataType::TYPE_STRING);
                 $sheet->setCellValue("D{$r}", $jn);
                 $sheet->setCellValue("E{$r}", $jnBall);
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle("E{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("G{$r}", $mt);
                 $sheet->setCellValue("H{$r}", $mtBall);
+                if (!$roundJnMtToInt) {
+                    $sheet->getStyle("H{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("J{$r}", $on);
                 $sheet->setCellValue("K{$r}", $onBall);
+                if ($wOn > 0 && !$roundJnMtToInt) {
+                    $sheet->getStyle("K{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("M{$r}", $sumBall);
                 if ($maxSum > 0) {
                     $sheet->setCellValue("N{$r}", $sumBall / $maxSum);
@@ -709,8 +867,15 @@ class VedomostTekshirishController extends Controller
                 }
                 $sheet->setCellValue("P{$r}", $oski);
                 $sheet->setCellValue("Q{$r}", $oskiBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    // Ikkalasi ham vaznga ega — 1 kasr ko'rinishi
+                    $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("S{$r}", $test);
                 $sheet->setCellValue("T{$r}", $testBall);
+                if ($wOski > 0 && $wTest > 0) {
+                    $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.0');
+                }
                 $sheet->setCellValue("V{$r}", $yn === '' ? '' : $yn);
                 $sheet->setCellValue("W{$r}", $ects);
                 $sheet->setCellValue("X{$r}", $practiceTeacher);
@@ -719,20 +884,64 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("AA{$r}", $subjectId);
                 $sheet->setCellValue("AB{$r}", $subject->subject_name ?? '');
                 $sheet->setCellValue("AC{$r}", $shaklName);
-                $sheet->setCellValue("AD{$r}", $curriculum?->education_year_name ?? '');
+                // Hisobot qilinayotgan joriy o'quv yili (schedule bo'yicha),
+                // mavjud bo'lmasa curriculum'dagi yilga qaytamiz.
+                $sheet->setCellValue("AD{$r}", $educationYearName ?? ($curriculum?->education_year_name ?? ''));
                 $sheet->setCellValue("AE{$r}", $semester?->name ?? $semesterCode);
                 $sheet->setCellValue("AF{$r}", (string) $groupHemisId);
                 $sheet->setCellValue("AG{$r}", $group->name ?? '');
                 $sheet->setCellValue("AH{$r}", $totalHours);
                 $sheet->setCellValue("AI{$r}", (int) ($subject->credit ?? 0));
                 $sheet->setCellValue("AJ{$r}", $lectureTeacher);
-                $sheet->setCellValue("AK{$r}", $divisor);
-                $sheet->setCellValue("AL{$r}", $dav / 100);
-                $sheet->getStyle("AL{$r}")->getNumberFormat()->setFormatCode('0.00%');
-                if ($dav >= 25 && $jnOrig > 0) {
-                    $sheet->setCellValue("AM{$r}", $jnOrig);
+                $sheet->setCellValue("AK{$r}", $jnCount);
+                $sheet->setCellValue("AL{$r}", $divisor);
+                $sheet->setCellValue("AM{$r}", $dav / 100);
+                $sheet->getStyle("AM{$r}")->getNumberFormat()->setFormatCode('0.00%');
+                $sheet->setCellValue("AN{$r}", $wJn);
+                $sheet->setCellValue("AO{$r}", $wMt);
+                $sheet->setCellValue("AP{$r}", $wOn);
+                $sheet->setCellValue("AQ{$r}", $wOski);
+                $sheet->setCellValue("AR{$r}", $wTest);
+                $sheet->setCellValue("AS{$r}", $zanjir);
+
+                // --- HEMIS bilan taqqoslash ---
+                $studentHemisRecords = $hemisExamGrades[$hId] ?? collect();
+
+                // JN+MT: examType.code = '11'
+                $hemisJnMt = $studentHemisRecords->firstWhere('exam_type_code', '11')?->grade;
+                if ($hemisJnMt === null) {
+                    $jnMtCheck = 'D';
+                    $jnMtReason = "Hemisda yo'q";
+                } elseif ((int) $hemisJnMt !== (int) $sumBall) {
+                    $jnMtCheck = 'D';
+                    $jnMtReason = "{$sumBall}≠{$hemisJnMt}";
+                } else {
+                    $jnMtCheck = '';
+                    $jnMtReason = '';
                 }
-                $sheet->setCellValue("AY{$r}", $zanjir);
+
+                // YN: examType.code = '13' (faqat V > 0 bo'lganda)
+                $hemisYn = $studentHemisRecords->firstWhere('exam_type_code', '13')?->grade;
+                if (is_numeric($yn) && $yn > 0) {
+                    if ($hemisYn === null) {
+                        $ynCheck = 'D';
+                        $ynReason = "Hemisda yo'q";
+                    } elseif ((int) $hemisYn !== (int) $yn) {
+                        $ynCheck = 'D';
+                        $ynReason = "{$yn}≠{$hemisYn}";
+                    } else {
+                        $ynCheck = '';
+                        $ynReason = '';
+                    }
+                } else {
+                    $ynCheck = '';
+                    $ynReason = '';
+                }
+
+                $sheet->setCellValue("AT{$r}", $jnMtCheck);
+                $sheet->setCellValue("AU{$r}", $jnMtReason);
+                $sheet->setCellValue("AV{$r}", $ynCheck);
+                $sheet->setCellValue("AW{$r}", $ynReason);
 
                 // Rang berish
                 $this->applyRowStyle($sheet, $r, $yn, $dav);
@@ -779,13 +988,13 @@ class VedomostTekshirishController extends Controller
         return $row?->employee_name ?? '';
     }
 
-    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav): string|int
+    private function calcYn(int $jn, int $mt, int $on, int|float $oski, int|float $test, int $wJn, int $wMt, int $wOn, int $wOski, int $wTest, float $dav, float $jnBall = 0.0, float $mtBall = 0.0, float $onBall = 0.0, float $oskiBall = 0.0, float $testBall = 0.0): string|int|float
     {
         // Bo'sh talaba
         if ($jn === 0 && $mt === 0) return '';
 
-        // Davomat >= 25% → qo'yilmadi (-2)
-        if ($dav >= 25) return -2;
+        // Davomat >= 25% → -3 (davomat ≥25%)
+        if ($dav >= 25) return -3;
 
         // Imtihonga kirmaganlar
         $oskiMissing = $wOski > 0 && $oski == 0;
@@ -804,21 +1013,29 @@ class VedomostTekshirishController extends Controller
             return 0;
         }
 
-        // Yakuniy ball
-        $sum = 0;
-        if ($wJn > 0)   $sum += $jn * $wJn / 100;
-        if ($wMt > 0)   $sum += $mt * $wMt / 100;
-        if ($wOn > 0)   $sum += $on * $wOn / 100;
-        if ($wOski > 0) $sum += $oski * $wOski / 100;
-        if ($wTest > 0) $sum += $test * $wTest / 100;
+        // Yakuniy ball — ekranga chiqadigan ball'lardan hisoblanadi (4-5 kurs
+        // uchun butun songa yaxlitlangan JN/MT/ON, faqat bittasi vaznga ega
+        // OSKI/Test holatlarida butun songa yaxlitlangan ball). Bu V'ni ekran
+        // ustunlari yig'indisiga mos qiladi.
+        $jbMtOnSum = round($jnBall + $mtBall + $onBall, 1);
 
-        return (int) floor($sum + 0.5);
+        if ($wOski > 0 && $wTest > 0) {
+            $examSum = round($oskiBall + $testBall, 1);
+        } elseif ($wOski > 0) {
+            $examSum = round($oskiBall, 1);
+        } elseif ($wTest > 0) {
+            $examSum = round($testBall, 1);
+        } else {
+            $examSum = 0;
+        }
+
+        return $jbMtOnSum + $examSum;
     }
 
-    private function toEcts(string|int $yn): string
+    private function toEcts(string|int|float $yn): string
     {
         if (!is_numeric($yn) || $yn < 0) return '';
-        $yn = (int) $yn;
+        $yn = (float) $yn;
         if ($yn >= 90) return 'A';
         if ($yn >= 85) return 'B+';
         if ($yn >= 70) return 'B';
@@ -826,12 +1043,14 @@ class VedomostTekshirishController extends Controller
         return 'F';
     }
 
-    private function toBaho(string|int $yn): string
+    private function toBaho(string|int|float $yn): string
     {
-        if ($yn === '' || $yn === -2) return "qo'yilmadi";
+        if ($yn === '') return '';
+        if ($yn === -3) return "davomat \u{2265}25%";
+        if ($yn === -2) return "qo\u{2018}yilmadi";
         if ($yn === -1) return 'kelmadi';
         if (!is_numeric($yn)) return '';
-        $yn = (int) $yn;
+        $yn = (float) $yn;
         if ($yn >= 90) return "a\u{02BC}lo";
         if ($yn >= 70) return 'yaxshi';
         if ($yn >= 60) return "o\u{02BB}rta";
@@ -860,9 +1079,9 @@ class VedomostTekshirishController extends Controller
         return implode(', ', $warnings);
     }
 
-    private function applyRowStyle($sheet, int $row, string|int $yn, float $dav): void
+    private function applyRowStyle($sheet, int $row, string|int|float $yn, float $dav): void
     {
-        $range = "A{$row}:AY{$row}";
+        $range = "A{$row}:AW{$row}";
 
         $sheet->getStyle($range)->applyFromArray([
             'font' => ['size' => 9],
@@ -874,13 +1093,19 @@ class VedomostTekshirishController extends Controller
             ],
         ]);
 
-        // Rang
-        if ($yn === -2 || $yn === 0) {
-            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFC7CE');
+        // Rang — YN qaydnoma shabloni bilan bir xil:
+        //  V = -3 → davomat ≥25%: butun qator kursiv qizil shrift
+        //  V = -2 → qizil (FFFFC1C1)
+        //  V = -1 → pushti (FFFEC2F1)
+        //  V =  0 → sariq (FFFFFFCC)
+        if ($yn === -3 || $dav >= 25) {
+            $sheet->getStyle($range)->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+        } elseif ($yn === -2) {
+            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFC1C1');
         } elseif ($yn === -1) {
-            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFEB9C');
-        } elseif ($dav >= 25) {
-            $sheet->getStyle("A{$row}:AY{$row}")->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEC2F1');
+        } elseif ($yn === 0) {
+            $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFFFFCC');
         }
     }
 }

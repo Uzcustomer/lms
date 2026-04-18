@@ -2458,6 +2458,13 @@ class ReportController extends Controller
             }
 
             // Jami satri (ushbu cs uchun barcha darslar yig'indisi)
+            $sheet->setCellValue([1, $excelRow], $num++);
+            $sheet->setCellValue([2, $excelRow], $cs->faculty_name ?? '-');
+            $sheet->setCellValue([3, $excelRow], $cs->specialty_name ?? '-');
+            $sheet->setCellValue([4, $excelRow], $cs->level_name ?? '-');
+            $sheet->setCellValue([5, $excelRow], $cs->semester_name ?? '-');
+            $sheet->setCellValue([6, $excelRow], $cs->subject_name ?? '-');
+            $sheet->setCellValue([7, $excelRow], $cs->group_name ?? '-');
             $sheet->setCellValue([8, $excelRow], 'Jami');
             $col = $staticCols + 1;
             $totalHemis = 0; $totalKtr = 0; $totalFarq = 0;
@@ -2492,14 +2499,6 @@ class ReportController extends Controller
                 'font' => ['bold' => true],
             ]);
             $excelRow++;
-
-            // Static metadata (1-7) ustunlarni block qatorlariga merge qilish (Jami satrini ham qo'shib)
-            for ($c = 1; $c <= 7; $c++) {
-                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c);
-                $sheet->mergeCells("{$colLetter}{$blockStartRow}:{$colLetter}" . ($excelRow - 1));
-                $sheet->getStyle("{$colLetter}{$blockStartRow}")->getAlignment()
-                    ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
-            }
 
             // Block ostiga chegarasi
             $sheet->getStyle("A" . ($excelRow - 1) . ":{$lastColLetter}" . ($excelRow - 1))->applyFromArray([

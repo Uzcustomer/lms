@@ -2033,19 +2033,8 @@ class ReportController extends Controller
                     if ($w !== null) $hemisWeeksSet[$w] = true;
                 }
 
-                // HEMIS yo'q, lekin KTR soati bor bo'lgan haftalar
-                if ($ktrExists) {
-                    foreach ($ktrWeeks as $w => $wd) {
-                        if (empty($wd[$code])) continue;
-                        if (isset($hemisWeeksSet[$w])) continue;
-                        $list[] = [
-                            'date' => $weekStartByIdx[$w] ?? '',
-                            'hemis' => 0,
-                            'ktr' => (int) $wd[$code],
-                            'marked' => 0,
-                        ];
-                    }
-                }
+                // HEMIS yo'q, lekin KTR soati bor haftalar uchun alohida qator YARATILMAYDI
+                // (KTR soatlari Jami satrida to'liq ko'rinadi)
 
                 // Sana bo'yicha saralash
                 usort($list, function ($a, $b) {
@@ -2109,6 +2098,7 @@ class ReportController extends Controller
                 'total_lessons' => $maxLessons,
                 'training_types' => $trainingTypes,
                 'lessons' => $lessonsList,
+                'totals' => $this->computeModalTotals($trainingTypes, $hemisLessonsByType, $ktrWeeks, $ktrExists),
             ]);
         } catch (\Throwable $e) {
             \Log::error('Schedule-KTR compare detail error: ' . $e->getMessage(), [
@@ -2120,6 +2110,32 @@ class ReportController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function computeModalTotals(array $trainingTypes, array $hemisLessonsByType, array $ktrWeeks, bool $ktrExists): array
+    {
+        $totals = [];
+        foreach ($trainingTypes as $code => $info) {
+            $totalHemis = 0;
+            $totalMarked = 0;
+            foreach ($hemisLessonsByType[$code] ?? [] as $l) {
+                $totalHemis += (int) $l['hours'];
+                $totalMarked += (int) ($l['marked'] ?? 0);
+            }
+            $totalKtr = 0;
+            if ($ktrExists) {
+                foreach ($ktrWeeks as $w => $wd) {
+                    $totalKtr += (int) ($wd[$code] ?? 0);
+                }
+            }
+            $totals[$code] = [
+                'hemis' => $totalHemis,
+                'ktr' => $ktrExists ? $totalKtr : null,
+                'marked' => $totalMarked,
+                'diff' => $ktrExists ? ($totalKtr - $totalHemis) : null,
+            ];
+        }
+        return $totals;
     }
 
     /**
@@ -2543,45 +2559,19 @@ class ReportController extends Controller
                     if ($w !== null) $hemisWeeksSet[$w] = true;
                 }
 
-                // HEMIS yo'q, lekin KTR soati bor haftalar - alohida sifatida qo'shamiz
-                if ($ktrExists) {
-                    $extra = [];
-                    foreach ($ktrWeeks as $w => $wd) {
-                        if (empty($wd[$code]) || isset($hemisWeeksSet[$w])) continue;
-                        $extra[] = [
-                            'date' => $weekStartByIdx[$w] ?? '',
-                            'hemis' => 0,
-                            'ktr' => (int) $wd[$code],
-                            'marked' => 0,
-                        ];
-                    }
+                // HEMIS yo'q, lekin KTR soati bor haftalar uchun ALOHIDA qator yaratilmaydi
+                // KTR'ning to'liq jami'si Jami satrida ko'rinadi
 
-                    // Birlashtirilgan ro'yxatni sana bo'yicha qayta saralash uchun tuzish
-                    if (!empty($extra)) {
-                        $combined = [];
-                        for ($i = 0; $i < count($hemisVals); $i++) {
-                            $combined[] = [
-                                'date' => $dates[$i],
-                                'hemis' => $hemisVals[$i],
-                                'ktr' => $ktrVals[$i],
-                                'marked' => $markedVals[$i],
-                            ];
-                        }
-                        foreach ($extra as $ex) $combined[] = $ex;
-                        usort($combined, function ($a, $b) {
-                            $ad = $a['date'] ?: '9999-12-31';
-                            $bd = $b['date'] ?: '9999-12-31';
-                            return strcmp($ad, $bd);
-                        });
-                        $hemisVals = array_column($combined, 'hemis');
-                        $ktrVals = array_column($combined, 'ktr');
-                        $markedVals = array_column($combined, 'marked');
-                        $dates = array_column($combined, 'date');
+                // Jami uchun alohida KTR jami (barcha haftalar bo'yicha)
+                $totalKtrForCode = 0;
+                if ($ktrExists) {
+                    foreach ($ktrWeeks as $w => $wd) {
+                        $totalKtrForCode += (int) ($wd[$code] ?? 0);
                     }
                 }
 
-                if (empty($hemisVals) && empty($ktrVals)) continue;
-                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'marked' => $markedVals, 'dates' => $dates];
+                if (empty($hemisVals) && empty($ktrVals) && $totalKtrForCode === 0) continue;
+                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'marked' => $markedVals, 'dates' => $dates, 'total_ktr' => $totalKtrForCode];
                 if (!isset($globalTrainingTypes[$code])) {
                     $globalTrainingTypes[$code] = $name;
                 }
@@ -2792,7 +2782,8 @@ class ReportController extends Controller
             foreach ($globalTtCodes as $code) {
                 $td = $ttData[$code] ?? null;
                 $h = $td ? array_sum($td['hemis']) : 0;
-                $kt = ($td && $ktrExists) ? array_sum($td['ktr']) : 0;
+                // KTR jami: total_ktr (to'liq yig'indi) ishlatiladi
+                $kt = ($td && $ktrExists) ? (int) ($td['total_ktr'] ?? array_sum($td['ktr'])) : 0;
                 $mk = $td ? array_sum($td['marked'] ?? []) : 0;
                 $f = $ktrExists ? round($kt - $h, 1) : 0;
                 $sheet->setCellValue([$col, $excelRow], $h);

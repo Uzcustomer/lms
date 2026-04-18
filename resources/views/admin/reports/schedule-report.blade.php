@@ -508,13 +508,18 @@
             });
 
             html += '</tbody><tfoot><tr><td class="wk-col">Jami</td>';
+            var serverTotals = res.totals || {};
             typeCodes.forEach(function(code, idx) {
                 var c = idx % 6;
-                var d = totalKtr[code] - totalHemis[code];
+                var t = serverTotals[code] || { hemis: totalHemis[code] || 0, ktr: totalKtr[code] || 0, marked: totalMarked[code] || 0, diff: 0 };
+                var h = t.hemis || 0;
+                var kt = t.ktr === null || t.ktr === undefined ? 0 : t.ktr;
+                var mk = t.marked || 0;
+                var d = t.diff === null || t.diff === undefined ? 0 : t.diff;
                 var diffCls = Math.abs(d) < 0.01 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
-                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalHemis[code]) + '</td>';
-                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalKtr[code]) + '</td>';
-                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalMarked[code]) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(h) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(kt) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(mk) + '</td>';
                 html += '<td class="num-cell tt-foot-' + c + ' ' + diffCls + '">' + (d > 0 ? '+' + fmt(d) : fmt(d)) + '</td>';
             });
             html += '</tr></tfoot></table></div>';

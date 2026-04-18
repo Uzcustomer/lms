@@ -1732,25 +1732,24 @@ class ReportController extends Controller
                 }
             }
 
-            // Yordamchi: sana berilsa, shu sanaga mos hafta indeksini topadi
+            // Yordamchi: sana berilsa, shu sanaga mos hafta indeksini topadi (yoki sintetik yaratadi)
             $resolveWeek = function ($lessonDate, $fallbackWeekNumber) use ($weekIndexMap, $weekRanges, &$weekStartByIdx) {
-                // 1-usul: week_number (curriculum_week_hemis_id) orqali
                 $idx = $weekIndexMap[(string) $fallbackWeekNumber] ?? null;
                 if ($idx !== null) return $idx;
-                // 2-usul: lesson_date curriculum_weeks ichida bormi?
                 $d = substr((string) $lessonDate, 0, 10);
-                if ($d !== '') {
-                    foreach ($weekRanges as $r) {
-                        if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
-                    }
-                    // 3-usul: sana diapazonga tushmasa, yangi "sintetik" hafta yaratib qo'shamiz
-                    // curriculum_weeks bilan siklikga keyin qo'shiladigan hafta
-                    $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
-                    $newIdx = $maxIdx + 1;
-                    $weekStartByIdx[$newIdx] = $d;
-                    return $newIdx;
+                if ($d === '') return null;
+                foreach ($weekRanges as $r) {
+                    if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
                 }
-                return null;
+                // Shu sana uchun sintetik indeks allaqachon bormi?
+                foreach ($weekStartByIdx as $wIdx => $startDate) {
+                    if ($startDate === $d) return $wIdx;
+                }
+                // Yangi sintetik hafta
+                $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
+                $newIdx = $maxIdx + 1;
+                $weekStartByIdx[$newIdx] = $d;
+                return $newIdx;
             };
 
             // HEMIS jadvaldan dars soatlarini hafta+dars_turi bo'yicha yig'ish
@@ -2253,16 +2252,17 @@ class ReportController extends Controller
                 $idx = $wMap[(string) $fallbackWeekNumber] ?? null;
                 if ($idx !== null) return $idx;
                 $d = substr((string) $lessonDate, 0, 10);
-                if ($d !== '') {
-                    foreach ($wRanges as $r) {
-                        if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
-                    }
-                    $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
-                    $newIdx = $maxIdx + 1;
-                    $weekStartByIdx[$newIdx] = $d;
-                    return $newIdx;
+                if ($d === '') return null;
+                foreach ($wRanges as $r) {
+                    if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
                 }
-                return null;
+                foreach ($weekStartByIdx as $wIdx => $startDate) {
+                    if ($startDate === $d) return $wIdx;
+                }
+                $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
+                $newIdx = $maxIdx + 1;
+                $weekStartByIdx[$newIdx] = $d;
+                return $newIdx;
             };
 
             // HEMIS darslarini dars turi bo'yicha (bir kundagi soatlar bitta darsga jamlanadi)

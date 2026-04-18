@@ -94,7 +94,7 @@
                                 <option value="" selected>Barchasi</option>
                                 <option value="mismatch">Farq bor</option>
                                 <option value="not_marked">Belgilanmagan (0)</option>
-                                <option value="partial">Qisman belgilangan</option>
+                                <option value="partial">Kam belgilangan</option>
                                 <option value="over_marked">Ortiqcha belgilangan</option>
                                 <option value="match">Mos</option>
                             </select>

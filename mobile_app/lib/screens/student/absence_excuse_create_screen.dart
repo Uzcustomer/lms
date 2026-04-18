@@ -34,6 +34,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   List<dynamic> _missedAssessments = [];
   bool _isLoadingAssessments = false;
   bool _assessmentsLoaded = false;
+  final Map<int, Map<String, String>> _makeupSelections = {};
 
   @override
   void initState() {
@@ -87,6 +88,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       _isLoadingAssessments = true;
       _missedAssessments = [];
       _assessmentsLoaded = false;
+      _makeupSelections.clear();
     });
 
     try {
@@ -141,11 +143,35 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       setState(() => _submitError = 'Fayl yuklang');
       return;
     }
+    if (_missedAssessments.isNotEmpty && !_allDatesSelected()) {
+      final l = AppLocalizations.of(context);
+      setState(() => _submitError = l.allDatesRequired);
+      return;
+    }
 
     setState(() {
       _isSubmitting = true;
       _submitError = null;
     });
+
+    List<Map<String, dynamic>>? makeupDates;
+    if (_missedAssessments.isNotEmpty) {
+      makeupDates = [];
+      for (int i = 0; i < _missedAssessments.length; i++) {
+        final a = _missedAssessments[i] as Map<String, dynamic>;
+        final sel = _makeupSelections[i] ?? {};
+        makeupDates.add({
+          'subject_name': a['subject_name'] ?? '',
+          'subject_id': a['subject_id']?.toString() ?? '',
+          'assessment_type': a['assessment_type'] ?? '',
+          'assessment_type_code': a['assessment_type_code'] ?? '',
+          'original_date': a['original_date'] ?? '',
+          'makeup_date': sel['makeup_date'] ?? '',
+          'makeup_start': sel['makeup_start'] ?? '',
+          'makeup_end': sel['makeup_end'] ?? '',
+        });
+      }
+    }
 
     try {
       final provider = context.read<StudentProvider>();
@@ -157,6 +183,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
         fileBytes: _fileBytes!,
         fileName: _fileName!,
+        makeupDates: makeupDates,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -173,6 +200,71 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       setState(() => _submitError = e.toString());
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  String _getTypeLabel(String type) {
+    switch (type) {
+      case 'jn': return 'Joriy nazorat';
+      case 'mt': return 'Mustaqil ta\'lim';
+      case 'oski': return 'YN (OSKE)';
+      case 'test': return 'YN (Test)';
+      default: return type.toUpperCase();
+    }
+  }
+
+  int _selectedCount() {
+    int count = 0;
+    for (int i = 0; i < _missedAssessments.length; i++) {
+      final sel = _makeupSelections[i];
+      if (sel == null) continue;
+      final type = (_missedAssessments[i] as Map<String, dynamic>)['assessment_type'];
+      if (type == 'jn') {
+        if ((sel['makeup_start'] ?? '').isNotEmpty && (sel['makeup_end'] ?? '').isNotEmpty) count++;
+      } else {
+        if ((sel['makeup_date'] ?? '').isNotEmpty) count++;
+      }
+    }
+    return count;
+  }
+
+  bool _allDatesSelected() {
+    if (_missedAssessments.isEmpty) return true;
+    return _selectedCount() == _missedAssessments.length;
+  }
+
+  Future<void> _pickMakeupDate(int index) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
+      selectableDayPredicate: (date) => date.weekday != DateTime.sunday,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _makeupSelections[index] = {
+          'makeup_date': DateFormat('yyyy-MM-dd').format(picked),
+        };
+      });
+    }
+  }
+
+  Future<void> _pickMakeupDateRange(int index) async {
+    final now = DateTime.now();
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
+    );
+    if (range != null && mounted) {
+      setState(() {
+        _makeupSelections[index] = {
+          'makeup_start': DateFormat('yyyy-MM-dd').format(range.start),
+          'makeup_end': DateFormat('yyyy-MM-dd').format(range.end),
+        };
+      });
     }
   }
 
@@ -329,6 +421,48 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
 
             const SizedBox(height: 12),
 
+            // File picker
+            Container(
+              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.all(16),
+              child: InkWell(
+                onTap: _pickFile,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: _fileName != null ? AppTheme.successColor : (isDark ? AppTheme.darkDivider : AppTheme.dividerColor),
+                      width: _fileName != null ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _fileName != null ? Icons.check_circle : Icons.upload_file,
+                        color: _fileName != null ? AppTheme.successColor : subColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          _fileName ?? l.selectFile,
+                          style: TextStyle(
+                            color: _fileName != null ? textColor : subColor,
+                            fontWeight: _fileName != null ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
             // Date range
             Container(
               decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
@@ -411,48 +545,6 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
 
             const SizedBox(height: 12),
 
-            // File picker
-            Container(
-              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.all(16),
-              child: InkWell(
-                onTap: _pickFile,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _fileName != null ? AppTheme.successColor : (isDark ? AppTheme.darkDivider : AppTheme.dividerColor),
-                      width: _fileName != null ? 2 : 1,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _fileName != null ? Icons.check_circle : Icons.upload_file,
-                        color: _fileName != null ? AppTheme.successColor : subColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          _fileName ?? l.selectFile,
-                          style: TextStyle(
-                            color: _fileName != null ? textColor : subColor,
-                            fontWeight: _fileName != null ? FontWeight.w500 : FontWeight.normal,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
             // Description
             Container(
               decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
@@ -517,12 +609,12 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   }
 
   Widget _buildMissedAssessmentsSection(Color cardColor, Color textColor, Color subColor, AppLocalizations l) {
-    final grouped = <String, List<Map<String, dynamic>>>{};
-    for (final item in _missedAssessments) {
-      final assessment = item as Map<String, dynamic>;
+    final grouped = <String, List<MapEntry<int, Map<String, dynamic>>>>{};
+    for (int i = 0; i < _missedAssessments.length; i++) {
+      final assessment = _missedAssessments[i] as Map<String, dynamic>;
       final subject = assessment['subject_name'] as String? ?? '';
       grouped.putIfAbsent(subject, () => []);
-      grouped[subject]!.add(assessment);
+      grouped[subject]!.add(MapEntry(i, assessment));
     }
 
     return Container(
@@ -537,30 +629,45 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '${l.missedAssessments} (${_missedAssessments.length})',
+                  l.missedAssessments,
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
                 ),
               ),
+              Text(
+                '${_selectedCount()}/${_missedAssessments.length}',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.primaryColor),
+              ),
+              const SizedBox(width: 4),
+              Text(l.selected, style: TextStyle(fontSize: 12, color: subColor)),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'Ariza yuborilganda avtomatik qayd etiladi',
+            l.selectMakeupDates,
             style: TextStyle(fontSize: 11, color: subColor, fontStyle: FontStyle.italic),
           ),
           const SizedBox(height: 12),
-          ...grouped.entries.map((entry) {
+          ...grouped.entries.toList().asMap().entries.map((groupEntry) {
+            final subjectIndex = groupEntry.key;
+            final entry = groupEntry.value;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    entry.key,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
+                  padding: const EdgeInsets.only(bottom: 6, top: 4),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22, height: 22,
+                        decoration: BoxDecoration(color: AppTheme.primaryColor.withAlpha(20), borderRadius: BorderRadius.circular(6)),
+                        child: Center(child: Text('${subjectIndex + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.primaryColor))),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(entry.key, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor))),
+                    ],
                   ),
                 ),
-                ...entry.value.map((assessment) => _buildAssessmentCard(assessment, textColor, subColor)),
+                ...entry.value.map((indexedAssessment) => _buildAssessmentCard(indexedAssessment.key, indexedAssessment.value, textColor, subColor, l)),
                 const SizedBox(height: 8),
               ],
             );
@@ -570,44 +677,92 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     );
   }
 
-  Widget _buildAssessmentCard(Map<String, dynamic> assessment, Color textColor, Color subColor) {
+  Widget _buildAssessmentCard(int index, Map<String, dynamic> assessment, Color textColor, Color subColor, AppLocalizations l) {
     final type = assessment['assessment_type'] as String? ?? '';
-    final typeLabel = type.toUpperCase();
     final color = _assessmentColor(type);
     final originalDate = assessment['original_date'] as String? ?? '';
+    final sel = _makeupSelections[index];
+    final isJn = type == 'jn';
+    final dateFormat = DateFormat('dd.MM.yyyy');
+
+    bool hasDate = false;
+    String dateDisplay = '';
+    if (sel != null) {
+      if (isJn) {
+        final start = sel['makeup_start'] ?? '';
+        final end = sel['makeup_end'] ?? '';
+        if (start.isNotEmpty && end.isNotEmpty) {
+          hasDate = true;
+          dateDisplay = '${dateFormat.format(DateTime.parse(start))} — ${dateFormat.format(DateTime.parse(end))}';
+        }
+      } else {
+        final d = sel['makeup_date'] ?? '';
+        if (d.isNotEmpty) {
+          hasDate = true;
+          dateDisplay = dateFormat.format(DateTime.parse(d));
+        }
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withAlpha(10),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withAlpha(40)),
+        border: Border.all(color: hasDate ? AppTheme.successColor.withAlpha(80) : color.withAlpha(40)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: color.withAlpha(25),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              typeLabel,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: color.withAlpha(25), borderRadius: BorderRadius.circular(6)),
+                child: Text(_getTypeLabel(type), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+              ),
+              const SizedBox(width: 8),
+              Text(originalDate, style: TextStyle(fontSize: 12, color: subColor)),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Row(
-              children: [
-                Icon(Icons.calendar_today, size: 13, color: subColor),
-                const SizedBox(width: 4),
-                Text(
-                  originalDate,
-                  style: TextStyle(fontSize: 12, color: subColor),
-                ),
-              ],
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: () => isJn ? _pickMakeupDateRange(index) : _pickMakeupDate(index),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: hasDate ? AppTheme.successColor.withAlpha(15) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: hasDate ? AppTheme.successColor.withAlpha(60) : subColor.withAlpha(40)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    hasDate ? Icons.check_circle : Icons.calendar_today,
+                    size: 16,
+                    color: hasDate ? AppTheme.successColor : subColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hasDate ? dateDisplay : (isJn ? l.selectDateRange : l.selectDate),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: hasDate ? textColor : subColor,
+                        fontWeight: hasDate ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  if (hasDate)
+                    GestureDetector(
+                      onTap: () => setState(() => _makeupSelections.remove(index)),
+                      child: Text(l.clear, style: TextStyle(fontSize: 11, color: AppTheme.errorColor)),
+                    ),
+                ],
+              ),
             ),
           ),
         ],

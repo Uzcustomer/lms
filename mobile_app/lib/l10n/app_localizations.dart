@@ -184,6 +184,17 @@ class AppLocalizations {
   String get noMissedAssessments => get('no_missed_assessments');
   String get originalDate => get('original_date');
   String get subjectName => get('subject_name');
+  String get submitted => get('submitted');
+  String get retake => get('retake');
+  String get selectDateRange => get('select_date_range');
+  String get selectDate => get('select_date');
+  String get selected => get('selected');
+  String get selectMakeupDates => get('select_makeup_dates');
+  String get from => get('from');
+  String get to => get('to');
+  String get onTime => get('on_time');
+  String get clear => get('clear');
+  String get allDatesRequired => get('all_dates_required');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -273,6 +284,17 @@ class AppLocalizations {
       'no_missed_assessments': 'Bu oraliqda o\'tkazib yuborilgan nazoratlar topilmadi',
       'original_date': 'Asl sanasi',
       'subject_name': 'Fan nomi',
+      'submitted': 'Topshirilgan',
+      'retake': 'Qayta topshiraman',
+      'select_date_range': 'Sana oralig\'ini tanlang',
+      'select_date': 'Sanani tanlang',
+      'selected': 'tanlangan',
+      'select_makeup_dates': 'Har bir nazorat uchun qayta topshirish sanasini tanlang',
+      'from': 'dan',
+      'to': 'gacha',
+      'on_time': 'O\'z vaqtida',
+      'clear': 'Tozalash',
+      'all_dates_required': 'Barcha nazoratlar uchun sanani tanlang',
       'tuition_fee': 'Shartnoma turi',
       'payment_form': 'To\'lov shakli',
       'paid': 'To\'langan',
@@ -438,6 +460,17 @@ class AppLocalizations {
       'no_missed_assessments': 'За этот период пропущенных контрольных не найдено',
       'original_date': 'Дата проведения',
       'subject_name': 'Предмет',
+      'submitted': 'Сдано',
+      'retake': 'Пересдам',
+      'select_date_range': 'Выберите диапазон дат',
+      'select_date': 'Выберите дату',
+      'selected': 'выбрано',
+      'select_makeup_dates': 'Выберите дату пересдачи для каждого контроля',
+      'from': 'с',
+      'to': 'по',
+      'on_time': 'Вовремя',
+      'clear': 'Очистить',
+      'all_dates_required': 'Выберите даты для всех контрольных',
       'tuition_fee': 'Тип договора',
       'payment_form': 'Форма оплаты',
       'paid': 'Оплачено',
@@ -603,6 +636,17 @@ class AppLocalizations {
       'no_missed_assessments': 'No missed assessments found for this period',
       'original_date': 'Original date',
       'subject_name': 'Subject',
+      'submitted': 'Submitted',
+      'retake': 'Retake',
+      'select_date_range': 'Select date range',
+      'select_date': 'Select date',
+      'selected': 'selected',
+      'select_makeup_dates': 'Select retake date for each assessment',
+      'from': 'from',
+      'to': 'to',
+      'on_time': 'On time',
+      'clear': 'Clear',
+      'all_dates_required': 'Select dates for all assessments',
       'tuition_fee': 'Contract Type',
       'payment_form': 'Payment form',
       'paid': 'Paid',

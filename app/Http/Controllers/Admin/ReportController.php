@@ -2141,8 +2141,8 @@ class ReportController extends Controller
 
                 // attendance_controls dan ALOHIDA darslar ham chiqishi kerak
                 // (agar schedules da yo'q bo'lsa: o'chirilgan yoki sinxron qilinmagan)
+                // Jurnal kabi deleted_at filtri qo'yilmaydi
                 $acQuery = DB::table('attendance_controls')
-                    ->whereNull('deleted_at')
                     ->where('subject_id', $cs->subject_id)
                     ->where('semester_code', $cs->semester_code)
                     ->whereNotNull('lesson_date');
@@ -2446,6 +2446,37 @@ class ReportController extends Controller
                 $lessonsList[] = $rowData;
             }
 
+            // Diagnostik: nima topilgani
+            $debugInfo = [
+                'cs_id' => $cs->cs_id,
+                'subject_id' => $cs->subject_id,
+                'group_hemis_id' => $cs->group_hemis_id,
+                'semester_code' => $cs->semester_code,
+                'schedule_row_count' => $scheduleRows->count(),
+                'schedule_dates' => $scheduleRows->map(fn($r) => [
+                    'date' => substr((string) $r->lesson_date, 0, 10),
+                    'code' => $r->training_type_code,
+                    'name' => $r->training_type_name,
+                    'sch_id' => $r->schedule_hemis_id,
+                    'week' => $r->week_number,
+                ])->values()->toArray(),
+                'ac_row_count' => $acRows->count(),
+                'ac_dates' => $acRows->map(fn($a) => [
+                    'date' => substr((string) $a->lesson_date, 0, 10),
+                    'code' => $a->training_type_code,
+                    'name' => $a->training_type_name,
+                    'load' => $a->load,
+                ])->values()->toArray(),
+            ];
+            $debugCounts = [];
+            foreach ($hemisLessonsByType as $code => $list) {
+                $debugCounts[$code] = [
+                    'name' => $trainingTypes[$code]['name'] ?? $code,
+                    'hemis_days' => count($list),
+                    'dates' => array_values(array_unique(array_map(fn($l) => substr((string) $l['date'], 0, 10), $list))),
+                ];
+            }
+
             return response()->json([
                 'subject_name' => $cs->subject_name,
                 'group_name' => $cs->group_name,
@@ -2454,6 +2485,8 @@ class ReportController extends Controller
                 'total_lessons' => $maxLessons,
                 'training_types' => $trainingTypes,
                 'lessons' => $lessonsList,
+                'debug' => $debugCounts,
+                'debug_raw' => $debugInfo,
             ]);
         } catch (\Throwable $e) {
             \Log::error('Schedule-KTR compare detail error: ' . $e->getMessage(), [
@@ -2626,9 +2659,8 @@ class ReportController extends Controller
                     ->toArray();
             }
 
-            // attendance_controls dan alohida darslar (schedules da bo'lmaganlar)
+            // attendance_controls dan alohida darslar (schedules da bo'lmaganlar) - jurnal kabi deleted_at qo'llanmaydi
             $acAll = DB::table('attendance_controls')
-                ->whereNull('deleted_at')
                 ->whereIn('group_id', $groupIds)
                 ->whereIn('subject_id', $subjectIds)
                 ->whereIn('semester_code', $semesterCodes)

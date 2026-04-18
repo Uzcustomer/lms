@@ -157,6 +157,10 @@ class AppLocalizations {
   String get contractList => get('contract_list');
   String get statusPaid => get('status_paid');
   String get statusUnpaid => get('status_unpaid');
+  String get absenceExcuse => get('absence_excuse');
+  String get absenceExcuseDesc => get('absence_excuse_desc');
+  String get comingSoon => get('coming_soon');
+  String get comingSoonDesc => get('coming_soon_desc');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -219,6 +223,10 @@ class AppLocalizations {
       'mt_deadline': 'Muddat',
       'mt_remaining': 'Qolgan urinish',
       'services': 'Xizmatlar',
+      'absence_excuse': 'Sababli ariza',
+      'absence_excuse_desc': 'Darsga kelmaganlik uchun sababli ariza yuborish',
+      'coming_soon': 'Tez kunda',
+      'coming_soon_desc': 'Bu xizmat hozircha ishlab chiqilmoqda',
       'tuition_fee': 'Shartnoma turi',
       'payment_form': 'To\'lov shakli',
       'paid': 'To\'langan',
@@ -357,6 +365,10 @@ class AppLocalizations {
       'mt_deadline': 'Срок',
       'mt_remaining': 'Осталось попыток',
       'services': 'Услуги',
+      'absence_excuse': 'Заявление об отсутствии',
+      'absence_excuse_desc': 'Подать заявление об уважительной причине отсутствия',
+      'coming_soon': 'Скоро',
+      'coming_soon_desc': 'Этот сервис находится в разработке',
       'tuition_fee': 'Тип договора',
       'payment_form': 'Форма оплаты',
       'paid': 'Оплачено',
@@ -495,6 +507,10 @@ class AppLocalizations {
       'mt_deadline': 'Deadline',
       'mt_remaining': 'Remaining attempts',
       'services': 'Services',
+      'absence_excuse': 'Absence Excuse',
+      'absence_excuse_desc': 'Submit an excuse for class absence',
+      'coming_soon': 'Coming Soon',
+      'coming_soon_desc': 'This service is under development',
       'tuition_fee': 'Contract Type',
       'payment_form': 'Payment form',
       'paid': 'Paid',

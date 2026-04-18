@@ -480,7 +480,12 @@ class StudentController extends Controller
             }
         }
 
-        $data['updated_by'] = $user?->id;
+        $userId = $user?->id;
+        if ($userId && \Illuminate\Support\Facades\DB::table('users')->where('id', $userId)->exists()) {
+            $data['updated_by'] = $userId;
+        } else {
+            $data['updated_by'] = null;
+        }
 
         \Log::info('Admission save attempt', ['student_id' => $student->id, 'data_keys' => array_keys($data), 'has_files' => $request->hasFile('files'), 'data_count' => count(array_filter($data))]);
 

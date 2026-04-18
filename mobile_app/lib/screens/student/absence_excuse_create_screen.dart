@@ -31,6 +31,10 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   List<dynamic> _reasons = [];
   Map<String, dynamic>? _selectedReasonData;
 
+  List<dynamic> _missedAssessments = [];
+  bool _isLoadingAssessments = false;
+  bool _assessmentsLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -64,11 +68,52 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
           _startDate = picked;
           if (_endDate != null && _endDate!.isBefore(picked)) {
             _endDate = null;
+            _missedAssessments = [];
+            _assessmentsLoaded = false;
           }
         } else {
           _endDate = picked;
         }
       });
+
+      if (_startDate != null && _endDate != null) {
+        _fetchMissedAssessments();
+      }
+    }
+  }
+
+  Future<void> _fetchMissedAssessments() async {
+    setState(() {
+      _isLoadingAssessments = true;
+      _missedAssessments = [];
+      _assessmentsLoaded = false;
+    });
+
+    try {
+      final provider = context.read<StudentProvider>();
+      final dateFormat = DateFormat('yyyy-MM-dd');
+      final assessments = await provider.getMissedAssessments(
+        dateFormat.format(_startDate!),
+        dateFormat.format(_endDate!),
+      );
+      if (mounted) {
+        setState(() {
+          _missedAssessments = assessments;
+          _assessmentsLoaded = true;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _submitError = e.message);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _submitError = e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingAssessments = false);
+      }
     }
   }
 
@@ -128,6 +173,21 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       setState(() => _submitError = e.toString());
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Color _assessmentColor(String type) {
+    switch (type) {
+      case 'jn':
+        return AppTheme.primaryColor;
+      case 'mt':
+        return Colors.orange;
+      case 'oski':
+        return Colors.purple;
+      case 'test':
+        return Colors.teal;
+      default:
+        return AppTheme.primaryColor;
     }
   }
 
@@ -296,6 +356,59 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               ),
             ),
 
+            // Missed assessments section
+            if (_isLoadingAssessments) ...[
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(l.loadingAssessments, style: TextStyle(fontSize: 13, color: subColor)),
+                  ],
+                ),
+              ),
+            ],
+
+            if (_assessmentsLoaded && _missedAssessments.isEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.successColor.withAlpha(15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.successColor.withAlpha(50)),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 20, color: AppTheme.successColor),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        l.noMissedAssessments,
+                        style: TextStyle(fontSize: 13, color: AppTheme.successColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            if (_assessmentsLoaded && _missedAssessments.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _buildMissedAssessmentsSection(cardColor, textColor, subColor, l),
+            ],
+
             const SizedBox(height: 12),
 
             // File picker
@@ -399,6 +512,105 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             const SizedBox(height: 30),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildMissedAssessmentsSection(Color cardColor, Color textColor, Color subColor, AppLocalizations l) {
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final item in _missedAssessments) {
+      final assessment = item as Map<String, dynamic>;
+      final subject = assessment['subject_name'] as String? ?? '';
+      grouped.putIfAbsent(subject, () => []);
+      grouped[subject]!.add(assessment);
+    }
+
+    return Container(
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.assignment_late, size: 20, color: AppTheme.warningColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${l.missedAssessments} (${_missedAssessments.length})',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Ariza yuborilganda avtomatik qayd etiladi',
+            style: TextStyle(fontSize: 11, color: subColor, fontStyle: FontStyle.italic),
+          ),
+          const SizedBox(height: 12),
+          ...grouped.entries.map((entry) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    entry.key,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
+                  ),
+                ),
+                ...entry.value.map((assessment) => _buildAssessmentCard(assessment, textColor, subColor)),
+                const SizedBox(height: 8),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssessmentCard(Map<String, dynamic> assessment, Color textColor, Color subColor) {
+    final type = assessment['assessment_type'] as String? ?? '';
+    final typeLabel = type.toUpperCase();
+    final color = _assessmentColor(type);
+    final originalDate = assessment['original_date'] as String? ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withAlpha(10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withAlpha(40)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withAlpha(25),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              typeLabel,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, size: 13, color: subColor),
+                const SizedBox(width: 4),
+                Text(
+                  originalDate,
+                  style: TextStyle(fontSize: 12, color: subColor),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

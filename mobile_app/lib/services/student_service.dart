@@ -71,6 +71,14 @@ class StudentService {
     return await _api.get('${ApiConfig.studentExcuses}/$id');
   }
 
+  Future<Map<String, dynamic>> getMissedAssessments(String startDate, String endDate) async {
+    return await _api.post(
+      ApiConfig.studentExcuseMissedAssessments,
+      {'start_date': startDate, 'end_date': endDate},
+      auth: true,
+    );
+  }
+
   Future<Map<String, dynamic>> submitExcuse({
     required String reason,
     required String docNumber,

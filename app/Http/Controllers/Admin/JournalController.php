@@ -3369,7 +3369,11 @@ class JournalController extends Controller
             $isOqituvchi = is_active_oqituvchi();
             $teacherHemisId = $isOqituvchi ? get_teacher_hemis_id() : null;
 
-            $query->where('name', 'like', '%' . $searchTerm . '%');
+            $normalized = str_replace(['/', '-'], '', $searchTerm);
+            $query->where(function ($q) use ($searchTerm, $normalized) {
+                $q->where('name', 'like', '%' . $searchTerm . '%')
+                  ->orWhereRaw("REPLACE(REPLACE(name, '/', ''), '-', '') LIKE ?", ['%' . $normalized . '%']);
+            });
 
             if ($isOqituvchi && $teacherHemisId) {
                 $query->whereIn('group_hemis_id', function ($sub) use ($teacherHemisId) {

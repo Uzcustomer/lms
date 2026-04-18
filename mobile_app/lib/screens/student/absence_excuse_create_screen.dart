@@ -329,6 +329,48 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
 
             const SizedBox(height: 12),
 
+            // File picker
+            Container(
+              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.all(16),
+              child: InkWell(
+                onTap: _pickFile,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: _fileName != null ? AppTheme.successColor : (isDark ? AppTheme.darkDivider : AppTheme.dividerColor),
+                      width: _fileName != null ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _fileName != null ? Icons.check_circle : Icons.upload_file,
+                        color: _fileName != null ? AppTheme.successColor : subColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          _fileName ?? l.selectFile,
+                          style: TextStyle(
+                            color: _fileName != null ? textColor : subColor,
+                            fontWeight: _fileName != null ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
             // Date range
             Container(
               decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
@@ -408,48 +450,6 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               const SizedBox(height: 12),
               _buildMissedAssessmentsSection(cardColor, textColor, subColor, l),
             ],
-
-            const SizedBox(height: 12),
-
-            // File picker
-            Container(
-              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.all(16),
-              child: InkWell(
-                onTap: _pickFile,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _fileName != null ? AppTheme.successColor : (isDark ? AppTheme.darkDivider : AppTheme.dividerColor),
-                      width: _fileName != null ? 2 : 1,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _fileName != null ? Icons.check_circle : Icons.upload_file,
-                        color: _fileName != null ? AppTheme.successColor : subColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          _fileName ?? l.selectFile,
-                          style: TextStyle(
-                            color: _fileName != null ? textColor : subColor,
-                            fontWeight: _fileName != null ? FontWeight.w500 : FontWeight.normal,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
 
             const SizedBox(height: 12),
 

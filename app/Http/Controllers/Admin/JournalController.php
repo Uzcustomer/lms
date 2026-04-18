@@ -3354,10 +3354,6 @@ class JournalController extends Controller
     {
         $query = Group::where('department_active', true)->where('active', true);
 
-        // Joriy curriculum'ga tegishli guruhlar (eski curricula yozuvlari chiqmasin)
-        $activeCurriculaIds = Curriculum::where('current', true)->pluck('curricula_hemis_id');
-        $query->whereIn('curriculum_hemis_id', $activeCurriculaIds);
-
         // Tanlangan guruhni ko'rsatish uchun (page load vaqtida select2 option uchun)
         if ($request->filled('group_id')) {
             return Group::where('id', $request->group_id)

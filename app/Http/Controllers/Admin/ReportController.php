@@ -1541,8 +1541,6 @@ class ReportController extends Controller
             $results[] = [
                 'cs_id' => (int) $cs->cs_id,
                 'group_id' => (int) ($cs->group_id ?? 0),
-                'subject_id' => (int) $cs->subject_id,
-                'group_hemis_id' => (int) ($cs->group_hemis_id ?? 0),
                 'faculty_name' => $cs->faculty_name ?? '-',
                 'specialty_name' => $cs->specialty_name ?? '-',
                 'level_name' => $cs->level_name ?? '-',
@@ -1556,23 +1554,6 @@ class ReportController extends Controller
                 'farq' => $farq,
                 'ktr_farq' => $ktrFarq,
             ];
-        }
-
-        // Dublikatlarni olib tashlash: bir xil (subject_id + group_hemis_id) uchun bir nechta curriculum_subjects yozuvi bo'lsa,
-        // HEMIS jadval va KTR ma'lumotiga eng boy (scheduled_hours + ktr_hours yig'indisi eng katta) bo'lganini qoldiramiz.
-        $dedup = [];
-        foreach ($results as $row) {
-            $key = $row['subject_id'] . '|' . $row['group_hemis_id'];
-            $score = (int) $row['scheduled_hours'] + (!empty($row['ktr_exists']) ? (int) $row['ktr_hours'] : 0);
-            if (!isset($dedup[$key]) || $score > $dedup[$key]['__score']) {
-                $row['__score'] = $score;
-                $dedup[$key] = $row;
-            }
-        }
-        $results = [];
-        foreach ($dedup as $row) {
-            unset($row['__score']);
-            $results[] = $row;
         }
 
         if (empty($results)) {

@@ -480,6 +480,13 @@ class StudentController extends Controller
             }
         }
 
+        $skipUpper = ['tugilgan_sana', 'passport_sana', 'email'];
+        foreach ($data as $key => $val) {
+            if (is_string($val) && !in_array($key, $skipUpper)) {
+                $data[$key] = mb_strtoupper($val, 'UTF-8');
+            }
+        }
+
         $data['otm_nomi'] = 'Toshkent davlat tibbiyot universiteti Termiz filiali';
         unset($data['doimiy_manzil'], $data['updated_by']);
 

@@ -3449,16 +3449,6 @@ class JournalController extends Controller
             });
         }
 
-        // by_name=1 bo'lsa noyob nomlar ro'yxatini qaytaradi (bir xil nomga ega dublikatlarni birlashtiradi)
-        if ($request->get('by_name') == '1') {
-            $names = $query->select('name')->orderBy('name')->pluck('name')->unique()->values();
-            $result = [];
-            foreach ($names as $n) {
-                $result[$n] = $n;
-            }
-            return $result;
-        }
-
         return $query->select('id', 'name')
             ->orderBy('name')
             ->get()

@@ -3354,6 +3354,10 @@ class JournalController extends Controller
     {
         $query = Group::where('department_active', true)->where('active', true);
 
+        // Joriy curriculum'ga tegishli guruhlar (eski curricula yozuvlari chiqmasin)
+        $activeCurriculaIds = Curriculum::where('current', true)->pluck('curricula_hemis_id');
+        $query->whereIn('curriculum_hemis_id', $activeCurriculaIds);
+
         // Tanlangan guruhni ko'rsatish uchun (page load vaqtida select2 option uchun)
         if ($request->filled('group_id')) {
             return Group::where('id', $request->group_id)
@@ -3369,7 +3373,10 @@ class JournalController extends Controller
             $isOqituvchi = is_active_oqituvchi();
             $teacherHemisId = $isOqituvchi ? get_teacher_hemis_id() : null;
 
-            $query->where('name', 'like', '%' . $searchTerm . '%');
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'like', '%' . $searchTerm . '%')
+                  ->orWhereRaw("REPLACE(REPLACE(name, '/', ''), '-', '') LIKE ?", ['%' . str_replace(['/', '-'], '', $searchTerm) . '%']);
+            });
 
             if ($isOqituvchi && $teacherHemisId) {
                 $query->whereIn('group_hemis_id', function ($sub) use ($teacherHemisId) {

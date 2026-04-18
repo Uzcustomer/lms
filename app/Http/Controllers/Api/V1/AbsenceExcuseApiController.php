@@ -111,6 +111,15 @@ class AbsenceExcuseApiController extends Controller
                 },
             ],
             'description' => 'nullable|string|max:1000',
+            'makeup_dates' => 'nullable|array',
+            'makeup_dates.*.subject_name' => 'required|string',
+            'makeup_dates.*.subject_id' => 'nullable|string',
+            'makeup_dates.*.assessment_type' => 'required|string|in:jn,mt,oski,test',
+            'makeup_dates.*.assessment_type_code' => 'required|string',
+            'makeup_dates.*.original_date' => 'required|date',
+            'makeup_dates.*.makeup_date' => 'nullable|date',
+            'makeup_dates.*.makeup_start' => 'nullable|date',
+            'makeup_dates.*.makeup_end' => 'nullable|date',
         ], [
             'reason.required' => 'Sababni tanlang',
             'doc_number.required' => 'Hujjat raqamini kiriting',
@@ -141,22 +150,49 @@ class AbsenceExcuseApiController extends Controller
                 'status' => 'pending',
             ]);
 
-            // O'tkazib yuborilgan nazoratlarni avtomatik topish va saqlash
-            $startDate = Carbon::parse($request->start_date);
-            $endDate = Carbon::parse($request->end_date);
-            $missedAssessments = $this->findMissedAssessments($student->group_id, $startDate, $endDate);
+            $makeupDates = $request->input('makeup_dates', []);
 
-            foreach ($missedAssessments as $assessment) {
-                AbsenceExcuseMakeup::create([
-                    'absence_excuse_id' => $excuse->id,
-                    'student_id' => $student->id,
-                    'subject_name' => $assessment['subject_name'],
-                    'subject_id' => $assessment['subject_id'] ?? null,
-                    'assessment_type' => $assessment['assessment_type'],
-                    'assessment_type_code' => $assessment['assessment_type_code'],
-                    'original_date' => $assessment['original_date'],
-                    'status' => 'pending',
-                ]);
+            if (!empty($makeupDates)) {
+                foreach ($makeupDates as $makeup) {
+                    $dateToSave = ($makeup['assessment_type'] === 'jn')
+                        ? ($makeup['makeup_start'] ?? $makeup['makeup_date'] ?? null)
+                        : ($makeup['makeup_date'] ?? null);
+
+                    $makeupEndDate = null;
+                    if (($makeup['assessment_type'] ?? '') === 'jn' && !empty($makeup['makeup_end'])) {
+                        $makeupEndDate = $makeup['makeup_end'];
+                    }
+
+                    AbsenceExcuseMakeup::create([
+                        'absence_excuse_id' => $excuse->id,
+                        'student_id' => $student->id,
+                        'subject_name' => $makeup['subject_name'],
+                        'subject_id' => $makeup['subject_id'] ?? null,
+                        'assessment_type' => $makeup['assessment_type'],
+                        'assessment_type_code' => $makeup['assessment_type_code'],
+                        'original_date' => $makeup['original_date'],
+                        'makeup_date' => $dateToSave,
+                        'makeup_end_date' => $makeupEndDate,
+                        'status' => 'scheduled',
+                    ]);
+                }
+            } else {
+                $startDate = Carbon::parse($request->start_date);
+                $endDate = Carbon::parse($request->end_date);
+                $missedAssessments = $this->findMissedAssessments($student->group_id, $startDate, $endDate);
+
+                foreach ($missedAssessments as $assessment) {
+                    AbsenceExcuseMakeup::create([
+                        'absence_excuse_id' => $excuse->id,
+                        'student_id' => $student->id,
+                        'subject_name' => $assessment['subject_name'],
+                        'subject_id' => $assessment['subject_id'] ?? null,
+                        'assessment_type' => $assessment['assessment_type'],
+                        'assessment_type_code' => $assessment['assessment_type_code'],
+                        'original_date' => $assessment['original_date'],
+                        'status' => 'pending',
+                    ]);
+                }
             }
 
             DB::commit();

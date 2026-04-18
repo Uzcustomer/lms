@@ -203,6 +203,7 @@ class StudentProvider extends ChangeNotifier {
     String? description,
     required Uint8List fileBytes,
     required String fileName,
+    List<Map<String, dynamic>>? makeupDates,
   }) async {
     return await _service.submitExcuse(
       reason: reason,
@@ -212,6 +213,7 @@ class StudentProvider extends ChangeNotifier {
       description: description,
       fileBytes: fileBytes,
       fileName: fileName,
+      makeupDates: makeupDates,
     );
   }
 

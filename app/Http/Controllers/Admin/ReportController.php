@@ -1690,6 +1690,7 @@ class ReportController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
+            ->where('c.current', true)
             ->where(function ($q) {
                 $q->where('cs.is_active', true)->orWhereNull('cs.is_active');
             });

@@ -973,7 +973,7 @@
                                                 <div>
                                                     <label class="qabul-label">{{ $f[1] }}</label>
                                                     <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="qabul-input" placeholder="{{ $f[1] }}">
+                                                           class="qabul-input {{ ($f[2] ?? '') === 'phone' ? 'qabul-phone' : '' }}" placeholder="{{ ($f[2] ?? '') === 'phone' ? '+998 __ ___ __ __' : $f[1] }}">
                                                 </div>
                                                 @endforeach
                                             </div>
@@ -1085,9 +1085,10 @@
     .sp-table tr:hover { background:#e8edf5; }
 
     /* Qabul form cards */
-    .qabul-form { display:flex; flex-direction:column; gap:16px; }
-    #ptab-content-qabul { display:flex; flex-direction:column; gap:16px; }
-    .qabul-card { background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 1px 2px rgba(15,23,42,.04); overflow:hidden; }
+    .qabul-form { display:flex; flex-direction:column; gap:10px; }
+    #ptab-content-qabul { display:flex; flex-direction:column; gap:10px; }
+    .qstep-panel { display:flex; flex-direction:column; gap:10px; }
+    .qabul-card { background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 2px 8px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04); overflow:hidden; }
     .qabul-card-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(90deg, color-mix(in srgb, var(--accent,#1a3268) 8%, #ffffff), #ffffff); border-bottom:1px solid #e2e8f0; border-left:4px solid var(--accent,#1a3268); }
     .qabul-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#1a3268); flex-shrink:0; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent,#1a3268) 20%, transparent); }
     .qabul-card-title { font-size:12.5px; font-weight:800; color:#1e293b; letter-spacing:.04em; text-transform:uppercase; margin:0; }

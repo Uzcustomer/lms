@@ -88,3 +88,7 @@ Schedule::command('hemis:sync-exam-grades')->dailyAt('03:00')->withoutOverlappin
 
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)
+
+// Teacher dashboard snapshot — har kuni 05:00 da (nightly import va final retry 04:00 dan keyin).
+// Dashboardga kirganda og'ir hisob-kitob qilinmasligi uchun kechagi kun holati saqlab qo'yiladi.
+Schedule::command('teachers:build-dashboard-snapshots')->dailyAt('05:00')->withoutOverlapping(120);

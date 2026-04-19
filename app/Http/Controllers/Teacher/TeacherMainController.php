@@ -48,15 +48,17 @@ class TeacherMainController extends Controller
 
         // Dashboard ma'lumoti kunlik snapshotdan o'qiladi (teachers:build-dashboard-snapshots).
         // Snapshot har kuni 05:00 da hisoblanadi, dashboardda kechagi kun holati ko'rsatiladi.
-        [$tutorStats, $gradingTimeStats, $snapshotGeneratedAt] = $this->loadDashboardSnapshot($teacher);
+        [$tutorStats, $gradingTimeStats, $workloadStats, $subjectStudents, $snapshotGeneratedAt] = $this->loadDashboardSnapshot($teacher);
 
-        return view('teacher.dashboard', compact('tutorStats', 'gradingTimeStats', 'snapshotGeneratedAt'));
+        return view('teacher.dashboard', compact(
+            'tutorStats', 'gradingTimeStats', 'workloadStats', 'subjectStudents', 'snapshotGeneratedAt'
+        ));
     }
 
     private function loadDashboardSnapshot($teacher): array
     {
         if (!$teacher || !$teacher->hemis_id) {
-            return [null, null, null];
+            return [null, null, null, null, null];
         }
 
         $teacherSnapshot = TeacherDashboardSnapshot::forTeacher((string) $teacher->hemis_id);
@@ -65,6 +67,8 @@ class TeacherMainController extends Controller
         $payload = $teacherSnapshot ? ($teacherSnapshot->payload ?? []) : [];
         $tutorStats = $payload['tutor'] ?? null;
         $gradingPerTeacher = $payload['grading'] ?? null;
+        $workloadStats = $payload['workload'] ?? null;
+        $subjectStudents = $payload['subjects'] ?? null;
 
         $gradingTimeStats = null;
         if ($gradingPerTeacher && $globalSnapshot) {
@@ -85,7 +89,7 @@ class TeacherMainController extends Controller
             ?? $globalSnapshot?->generated_at
             ?? null;
 
-        return [$tutorStats, $gradingTimeStats, $generatedAt];
+        return [$tutorStats, $gradingTimeStats, $workloadStats, $subjectStudents, $generatedAt];
     }
 
     public function info()

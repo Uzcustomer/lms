@@ -46,14 +46,22 @@ class BuildTeacherDashboardSnapshots extends Command
         $tutorData = $this->buildTutorStats();
         $this->info('Tutor stats hisoblandi: ' . count($tutorData) . ' ta tyutor.');
 
+        $workloadData = $this->buildWorkloadAndLoadErrors($semesterCodes, $dateFrom, $dateTo);
+        $this->info('Yuklama va load xatoliklari hisoblandi: ' . count($workloadData) . ' ta o\'qituvchi.');
+
+        $studentsData = $this->buildSubjectTopStudents($semesterCodes, $dateFrom, $dateTo);
+        $this->info('Eng yaxshi/eng yomon talabalar ro\'yxati hisoblandi: ' . count($studentsData) . ' ta o\'qituvchi.');
+
         $now = now();
-        $this->persistSnapshots($gradingData, $tutorData, $now);
+        $this->persistSnapshots($gradingData, $tutorData, $workloadData, $studentsData, $now);
 
         $elapsed = round(microtime(true) - $startedAt, 2);
         $this->info("Snapshot tayyor. Vaqt: {$elapsed}s");
         Log::info('teachers:build-dashboard-snapshots yakunlandi', [
             'teachers' => count($gradingData['per_teacher']),
             'tutors' => count($tutorData),
+            'workload' => count($workloadData),
+            'students' => count($studentsData),
             'elapsed_seconds' => $elapsed,
         ]);
 
@@ -75,13 +83,12 @@ class BuildTeacherDashboardSnapshots extends Command
         $caseWorkHours   = "SUM(CASE WHEN created_at_api > {$pairEndExpr} AND created_at_api <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
         $caseAfterHours  = "SUM(CASE WHEN created_at_api > {$dayLimitExpr} THEN 1 ELSE 0 END)";
 
-        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
-
+        // Faqat joriy baholar (JN) — training_type_code = 100.
+        // status = 'recorded' bo'lgan asl baholargina hisobga olinadi (otrabotka/yo'qlama placeholder'lari tashlanadi).
         $query = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('semester_code', $semesterCodes)
             ->where('training_type_code', 100)
-            ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->where('status', 'recorded')
             ->whereNotNull('created_at_api')
             ->whereNotNull('lesson_date')
@@ -238,9 +245,176 @@ class BuildTeacherDashboardSnapshots extends Command
         return $result;
     }
 
-    private function persistSnapshots(array $gradingData, array $tutorData, $generatedAt): void
+    /**
+     * Attendance_controls asosida har o'qituvchining joriy semestrdagi:
+     *  - umumiy akademik soat yuklamasi (SUM(load))
+     *  - "load" va juftlik davomidan hisoblangan soat orasidagi nomuvofiqlik (xatolik)
+     * ro'yxatini tayyorlaydi.
+     *
+     * Juftlik akademik soati: max(1, round(minutes / 40))  — 40 daq = 1, 80 daq = 2.
+     */
+    private function buildWorkloadAndLoadErrors(array $semesterCodes, ?string $dateFrom, ?string $dateTo): array
     {
-        DB::transaction(function () use ($gradingData, $tutorData, $generatedAt) {
+        $query = DB::table('attendance_controls')
+            ->whereIn('semester_code', $semesterCodes)
+            ->whereNull('deleted_at');
+
+        if ($dateFrom && $dateTo) {
+            $query->whereBetween('lesson_date', [$dateFrom, $dateTo]);
+        }
+
+        $rows = $query->select(
+                'employee_id', 'subject_id', 'subject_name',
+                'group_id', 'group_name',
+                'lesson_date', 'lesson_pair_name',
+                'lesson_pair_start_time', 'lesson_pair_end_time',
+                'load'
+            )
+            ->orderBy('employee_id')
+            ->orderBy('lesson_date')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $hemisId = (string) $row->employee_id;
+            if ($hemisId === '') continue;
+
+            $pairHours = $this->computePairHours($row->lesson_pair_start_time, $row->lesson_pair_end_time);
+            $loadHours = (int) $row->load;
+
+            if (!isset($result[$hemisId])) {
+                $result[$hemisId] = [
+                    'workload_hours'     => 0,
+                    'total_checked'      => 0,
+                    'errors_count'       => 0,
+                    'errors'             => [],
+                ];
+            }
+
+            $result[$hemisId]['workload_hours'] += $loadHours;
+            $result[$hemisId]['total_checked'] += 1;
+
+            if ($pairHours > 0 && $pairHours !== $loadHours) {
+                $result[$hemisId]['errors_count'] += 1;
+                $result[$hemisId]['errors'][] = [
+                    'subject_name' => $row->subject_name ?? '-',
+                    'group_name'   => $row->group_name ?? '-',
+                    'lesson_date'  => $row->lesson_date,
+                    'pair_name'    => $row->lesson_pair_name ?? '-',
+                    'pair_start'   => $row->lesson_pair_start_time,
+                    'pair_end'     => $row->lesson_pair_end_time,
+                    'pair_hours'   => $pairHours,
+                    'load_hours'   => $loadHours,
+                    'diff'         => $pairHours - $loadHours,
+                ];
+            }
+        }
+
+        foreach ($result as &$entry) {
+            $entry['error_rate_percent'] = $entry['total_checked'] > 0
+                ? round($entry['errors_count'] / $entry['total_checked'] * 100, 1)
+                : 0;
+        }
+        unset($entry);
+
+        return $result;
+    }
+
+    private function computePairHours(?string $start, ?string $end): int
+    {
+        if (!$start || !$end) return 0;
+        $startTs = strtotime((string) $start);
+        $endTs   = strtotime((string) $end);
+        if (!$startTs || !$endTs || $endTs <= $startTs) return 0;
+        $minutes = ($endTs - $startTs) / 60;
+        return (int) max(1, round($minutes / 40));
+    }
+
+    /**
+     * Har o'qituvchining har fani bo'yicha joriy semestrdagi eng yaxshi 5
+     * va eng yomon 5 talabani (o'rtacha JN bahosi bo'yicha) tayyorlaydi.
+     *
+     * Natija: [
+     *   hemis_id => [
+     *     [
+     *       'subject_id' => ..., 'subject_name' => ...,
+     *       'top'    => [['student_hemis_id','full_name','group_name','avg_grade','grades_count'], ...],
+     *       'bottom' => [...],
+     *     ],
+     *   ],
+     * ]
+     */
+    private function buildSubjectTopStudents(array $semesterCodes, ?string $dateFrom, ?string $dateTo): array
+    {
+        $query = DB::table('student_grades as sg')
+            ->leftJoin('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('sg.semester_code', $semesterCodes)
+            ->where('sg.training_type_code', 100)
+            ->where('sg.status', 'recorded')
+            ->whereNotNull('sg.grade');
+
+        if ($dateFrom && $dateTo) {
+            $query->whereBetween('sg.lesson_date', [$dateFrom, $dateTo]);
+        }
+
+        $rows = $query->selectRaw('
+                sg.employee_id,
+                sg.subject_id,
+                MAX(sg.subject_name) as subject_name,
+                sg.student_hemis_id,
+                MAX(s.full_name)  as full_name,
+                MAX(s.group_name) as group_name,
+                AVG(sg.grade)     as avg_grade,
+                COUNT(*)          as grades_count
+            ')
+            ->groupBy('sg.employee_id', 'sg.subject_id', 'sg.student_hemis_id')
+            ->get();
+
+        $bySubject = [];
+        foreach ($rows as $r) {
+            $hemisId = (string) $r->employee_id;
+            $subjectId = (string) $r->subject_id;
+            if ($hemisId === '' || $subjectId === '') continue;
+
+            $bySubject[$hemisId][$subjectId]['subject_name'] = $r->subject_name ?: '-';
+            $bySubject[$hemisId][$subjectId]['students'][] = [
+                'student_hemis_id' => $r->student_hemis_id,
+                'full_name'        => $r->full_name ?: '-',
+                'group_name'       => $r->group_name ?: '-',
+                'avg_grade'        => round((float) $r->avg_grade, 1),
+                'grades_count'     => (int) $r->grades_count,
+            ];
+        }
+
+        $result = [];
+        foreach ($bySubject as $hemisId => $subjects) {
+            $list = [];
+            foreach ($subjects as $subjectId => $data) {
+                $students = $data['students'];
+                usort($students, fn($a, $b) => $b['avg_grade'] <=> $a['avg_grade']);
+                $top = array_slice($students, 0, 5);
+                $bottom = count($students) >= 10
+                    ? array_reverse(array_slice($students, -5))
+                    : [];
+                $list[] = [
+                    'subject_id'   => $subjectId,
+                    'subject_name' => $data['subject_name'],
+                    'total_students' => count($students),
+                    'top'          => $top,
+                    'bottom'       => $bottom,
+                ];
+            }
+            usort($list, fn($a, $b) => strcmp($a['subject_name'], $b['subject_name']));
+            $result[$hemisId] = $list;
+        }
+
+        return $result;
+    }
+
+    private function persistSnapshots(array $gradingData, array $tutorData, array $workloadData, array $studentsData, $generatedAt): void
+    {
+        DB::transaction(function () use ($gradingData, $tutorData, $workloadData, $studentsData, $generatedAt) {
             TeacherDashboardSnapshot::query()->delete();
 
             TeacherDashboardSnapshot::create([
@@ -252,14 +426,18 @@ class BuildTeacherDashboardSnapshots extends Command
 
             $hemisIds = array_unique(array_merge(
                 array_keys($gradingData['per_teacher']),
-                array_keys($tutorData)
+                array_keys($tutorData),
+                array_keys($workloadData),
+                array_keys($studentsData)
             ));
 
             $rows = [];
             foreach ($hemisIds as $hemisId) {
                 $payload = [
-                    'grading' => $gradingData['per_teacher'][$hemisId] ?? null,
-                    'tutor'   => $tutorData[$hemisId] ?? null,
+                    'grading'  => $gradingData['per_teacher'][$hemisId] ?? null,
+                    'tutor'    => $tutorData[$hemisId] ?? null,
+                    'workload' => $workloadData[$hemisId] ?? null,
+                    'subjects' => $studentsData[$hemisId] ?? null,
                 ];
                 $rows[] = [
                     'scope' => TeacherDashboardSnapshot::SCOPE_TEACHER,

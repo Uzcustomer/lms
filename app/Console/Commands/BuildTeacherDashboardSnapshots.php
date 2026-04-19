@@ -87,12 +87,14 @@ class BuildTeacherDashboardSnapshots extends Command
         $caseWorkHours   = "SUM(CASE WHEN {$gradeTsExpr} > {$pairEndExpr} AND {$gradeTsExpr} <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
         $caseAfterHours  = "SUM(CASE WHEN {$gradeTsExpr} > {$dayLimitExpr} THEN 1 ELSE 0 END)";
 
-        // Faqat joriy baholar (JN) — training_type_code = 100.
-        // status = 'recorded' bo'lgan asl baholargina hisobga olinadi (otrabotka/yo'qlama placeholder'lari tashlanadi).
+        // Joriy baholar: config'dagi excluded kodlardan tashqari hamma training turlar (OSKI, test,
+        // ON, mustaqil — excluded, JN — joriy). status='recorded' asl yozuvlar (retake/closed emas).
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
         $query = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('semester_code', $semesterCodes)
-            ->where('training_type_code', 100)
+            ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->where('status', 'recorded')
             ->whereNotNull('lesson_date')
             ->whereNotNull('lesson_pair_end_time')
@@ -349,11 +351,13 @@ class BuildTeacherDashboardSnapshots extends Command
      */
     private function buildSubjectTopStudents(array $semesterCodes, ?string $dateFrom, ?string $dateTo): array
     {
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
         $query = DB::table('student_grades as sg')
             ->leftJoin('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('sg.semester_code', $semesterCodes)
-            ->where('sg.training_type_code', 100)
+            ->whereNotIn('sg.training_type_code', $excludedTrainingCodes)
             ->where('sg.status', 'recorded')
             ->whereNotNull('sg.grade');
 

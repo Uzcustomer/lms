@@ -79,9 +79,13 @@ class BuildTeacherDashboardSnapshots extends Command
             $dayLimitExpr = "CONCAT(DATE(lesson_date), ' 18:00:00')";
         }
 
-        $caseDuringClass = "SUM(CASE WHEN created_at_api <= {$pairEndExpr} THEN 1 ELSE 0 END)";
-        $caseWorkHours   = "SUM(CASE WHEN created_at_api > {$pairEndExpr} AND created_at_api <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
-        $caseAfterHours  = "SUM(CASE WHEN created_at_api > {$dayLimitExpr} THEN 1 ELSE 0 END)";
+        // Baho qo'yilgan vaqt: HEMIS import qilgan bo'lsa created_at_api, aks holda created_at.
+        // LMS'da qo'lda qo'yilgan baholarda created_at_api null bo'lishi mumkin.
+        $gradeTsExpr = "COALESCE(created_at_api, created_at)";
+
+        $caseDuringClass = "SUM(CASE WHEN {$gradeTsExpr} <= {$pairEndExpr} THEN 1 ELSE 0 END)";
+        $caseWorkHours   = "SUM(CASE WHEN {$gradeTsExpr} > {$pairEndExpr} AND {$gradeTsExpr} <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
+        $caseAfterHours  = "SUM(CASE WHEN {$gradeTsExpr} > {$dayLimitExpr} THEN 1 ELSE 0 END)";
 
         // Faqat joriy baholar (JN) — training_type_code = 100.
         // status = 'recorded' bo'lgan asl baholargina hisobga olinadi (otrabotka/yo'qlama placeholder'lari tashlanadi).
@@ -90,7 +94,6 @@ class BuildTeacherDashboardSnapshots extends Command
             ->whereIn('semester_code', $semesterCodes)
             ->where('training_type_code', 100)
             ->where('status', 'recorded')
-            ->whereNotNull('created_at_api')
             ->whereNotNull('lesson_date')
             ->whereNotNull('lesson_pair_end_time')
             ->where('lesson_pair_end_time', '!=', '');

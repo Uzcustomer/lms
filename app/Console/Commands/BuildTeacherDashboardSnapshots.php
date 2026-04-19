@@ -75,13 +75,12 @@ class BuildTeacherDashboardSnapshots extends Command
         $caseWorkHours   = "SUM(CASE WHEN created_at_api > {$pairEndExpr} AND created_at_api <= {$dayLimitExpr} THEN 1 ELSE 0 END)";
         $caseAfterHours  = "SUM(CASE WHEN created_at_api > {$dayLimitExpr} THEN 1 ELSE 0 END)";
 
-        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
-
+        // Faqat joriy baholar (JN) — training_type_code = 100.
+        // status = 'recorded' bo'lgan asl baholargina hisobga olinadi (otrabotka/yo'qlama placeholder'lari tashlanadi).
         $query = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('semester_code', $semesterCodes)
             ->where('training_type_code', 100)
-            ->whereNotIn('training_type_code', $excludedTrainingCodes)
             ->where('status', 'recorded')
             ->whereNotNull('created_at_api')
             ->whereNotNull('lesson_date')

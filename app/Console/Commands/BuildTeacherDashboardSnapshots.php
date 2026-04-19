@@ -46,14 +46,18 @@ class BuildTeacherDashboardSnapshots extends Command
         $tutorData = $this->buildTutorStats();
         $this->info('Tutor stats hisoblandi: ' . count($tutorData) . ' ta tyutor.');
 
+        $workloadData = $this->buildWorkloadAndLoadErrors($semesterCodes, $dateFrom, $dateTo);
+        $this->info('Yuklama va load xatoliklari hisoblandi: ' . count($workloadData) . ' ta o\'qituvchi.');
+
         $now = now();
-        $this->persistSnapshots($gradingData, $tutorData, $now);
+        $this->persistSnapshots($gradingData, $tutorData, $workloadData, $now);
 
         $elapsed = round(microtime(true) - $startedAt, 2);
         $this->info("Snapshot tayyor. Vaqt: {$elapsed}s");
         Log::info('teachers:build-dashboard-snapshots yakunlandi', [
             'teachers' => count($gradingData['per_teacher']),
             'tutors' => count($tutorData),
+            'workload' => count($workloadData),
             'elapsed_seconds' => $elapsed,
         ]);
 
@@ -237,9 +241,94 @@ class BuildTeacherDashboardSnapshots extends Command
         return $result;
     }
 
-    private function persistSnapshots(array $gradingData, array $tutorData, $generatedAt): void
+    /**
+     * Attendance_controls asosida har o'qituvchining joriy semestrdagi:
+     *  - umumiy akademik soat yuklamasi (SUM(load))
+     *  - "load" va juftlik davomidan hisoblangan soat orasidagi nomuvofiqlik (xatolik)
+     * ro'yxatini tayyorlaydi.
+     *
+     * Juftlik akademik soati: max(1, round(minutes / 40))  — 40 daq = 1, 80 daq = 2.
+     */
+    private function buildWorkloadAndLoadErrors(array $semesterCodes, ?string $dateFrom, ?string $dateTo): array
     {
-        DB::transaction(function () use ($gradingData, $tutorData, $generatedAt) {
+        $query = DB::table('attendance_controls')
+            ->whereIn('semester_code', $semesterCodes)
+            ->whereNull('deleted_at');
+
+        if ($dateFrom && $dateTo) {
+            $query->whereBetween('lesson_date', [$dateFrom, $dateTo]);
+        }
+
+        $rows = $query->select(
+                'employee_id', 'subject_id', 'subject_name',
+                'group_id', 'group_name',
+                'lesson_date', 'lesson_pair_name',
+                'lesson_pair_start_time', 'lesson_pair_end_time',
+                'load'
+            )
+            ->orderBy('employee_id')
+            ->orderBy('lesson_date')
+            ->get();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $hemisId = (string) $row->employee_id;
+            if ($hemisId === '') continue;
+
+            $pairHours = $this->computePairHours($row->lesson_pair_start_time, $row->lesson_pair_end_time);
+            $loadHours = (int) $row->load;
+
+            if (!isset($result[$hemisId])) {
+                $result[$hemisId] = [
+                    'workload_hours'     => 0,
+                    'total_checked'      => 0,
+                    'errors_count'       => 0,
+                    'errors'             => [],
+                ];
+            }
+
+            $result[$hemisId]['workload_hours'] += $loadHours;
+            $result[$hemisId]['total_checked'] += 1;
+
+            if ($pairHours > 0 && $pairHours !== $loadHours) {
+                $result[$hemisId]['errors_count'] += 1;
+                $result[$hemisId]['errors'][] = [
+                    'subject_name' => $row->subject_name ?? '-',
+                    'group_name'   => $row->group_name ?? '-',
+                    'lesson_date'  => $row->lesson_date,
+                    'pair_name'    => $row->lesson_pair_name ?? '-',
+                    'pair_start'   => $row->lesson_pair_start_time,
+                    'pair_end'     => $row->lesson_pair_end_time,
+                    'pair_hours'   => $pairHours,
+                    'load_hours'   => $loadHours,
+                    'diff'         => $pairHours - $loadHours,
+                ];
+            }
+        }
+
+        foreach ($result as &$entry) {
+            $entry['error_rate_percent'] = $entry['total_checked'] > 0
+                ? round($entry['errors_count'] / $entry['total_checked'] * 100, 1)
+                : 0;
+        }
+        unset($entry);
+
+        return $result;
+    }
+
+    private function computePairHours(?string $start, ?string $end): int
+    {
+        if (!$start || !$end) return 0;
+        $startTs = strtotime((string) $start);
+        $endTs   = strtotime((string) $end);
+        if (!$startTs || !$endTs || $endTs <= $startTs) return 0;
+        $minutes = ($endTs - $startTs) / 60;
+        return (int) max(1, round($minutes / 40));
+    }
+
+    private function persistSnapshots(array $gradingData, array $tutorData, array $workloadData, $generatedAt): void
+    {
+        DB::transaction(function () use ($gradingData, $tutorData, $workloadData, $generatedAt) {
             TeacherDashboardSnapshot::query()->delete();
 
             TeacherDashboardSnapshot::create([
@@ -251,14 +340,16 @@ class BuildTeacherDashboardSnapshots extends Command
 
             $hemisIds = array_unique(array_merge(
                 array_keys($gradingData['per_teacher']),
-                array_keys($tutorData)
+                array_keys($tutorData),
+                array_keys($workloadData)
             ));
 
             $rows = [];
             foreach ($hemisIds as $hemisId) {
                 $payload = [
-                    'grading' => $gradingData['per_teacher'][$hemisId] ?? null,
-                    'tutor'   => $tutorData[$hemisId] ?? null,
+                    'grading'  => $gradingData['per_teacher'][$hemisId] ?? null,
+                    'tutor'    => $tutorData[$hemisId] ?? null,
+                    'workload' => $workloadData[$hemisId] ?? null,
                 ];
                 $rows[] = [
                     'scope' => TeacherDashboardSnapshot::SCOPE_TEACHER,

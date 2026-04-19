@@ -13,6 +13,81 @@
                 </div>
             @endif
 
+            @if(isset($workloadStats) && $workloadStats && $workloadStats['total_checked'] > 0)
+                {{-- O'quv soati yuklamasi va yuklama belgilashdagi xatoliklar --}}
+                <div style="margin-bottom: 20px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: #1e293b; margin: 0 0 10px;">
+                        O'quv soati yuklamasi
+                        <span style="font-size: 11px; font-weight: 500; color: #64748b; margin-left: 6px;">(joriy semestr, attendance_controls asosida)</span>
+                    </h3>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <div class="stat-card" style="background: linear-gradient(135deg, #0e7490, #06b6d4);">
+                            <div class="stat-number">{{ $workloadStats['workload_hours'] }}</div>
+                            <div class="stat-label">Jami akademik soat</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #3730a3, #6366f1);">
+                            <div class="stat-number">{{ $workloadStats['total_checked'] }}</div>
+                            <div class="stat-label">Tekshirilgan yozuvlar</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, {{ $workloadStats['errors_count'] > 0 ? '#b91c1c, #ef4444' : '#166534, #22c55e' }});">
+                            <div class="stat-number">
+                                @if($workloadStats['errors_count'] > 0)
+                                    <button type="button" onclick="document.getElementById('load-errors-modal').style.display='flex'"
+                                            style="background:none; border:none; color:#fff; font: inherit; cursor: pointer; padding:0;">
+                                        {{ $workloadStats['errors_count'] }}
+                                    </button>
+                                @else
+                                    {{ $workloadStats['errors_count'] }}
+                                @endif
+                            </div>
+                            <div class="stat-label">Yuklama xatoligi ({{ $workloadStats['error_rate_percent'] }}%)</div>
+                        </div>
+                    </div>
+                </div>
+
+                @if(!empty($workloadStats['errors']))
+                    <div id="load-errors-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.6); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+                        <div style="background:#fff; border-radius:12px; max-width:900px; width:100%; max-height:80vh; overflow:auto; padding:20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                <h4 style="margin:0; font-size:15px; font-weight:700; color:#1e293b;">
+                                    Yuklama xatoliklari ({{ count($workloadStats['errors']) }} ta)
+                                </h4>
+                                <button type="button" onclick="document.getElementById('load-errors-modal').style.display='none'"
+                                        style="background:#f1f5f9; border:none; border-radius:8px; padding:6px 12px; cursor:pointer; font-weight:600;">Yopish</button>
+                            </div>
+                            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#f8fafc; color:#475569;">
+                                        <th style="padding:8px; text-align:left;">Sana</th>
+                                        <th style="padding:8px; text-align:left;">Fan</th>
+                                        <th style="padding:8px; text-align:left;">Guruh</th>
+                                        <th style="padding:8px; text-align:left;">Juftlik</th>
+                                        <th style="padding:8px; text-align:center;">Vaqt</th>
+                                        <th style="padding:8px; text-align:center;">Kutilgan soat</th>
+                                        <th style="padding:8px; text-align:center;">Belgilangan soat</th>
+                                        <th style="padding:8px; text-align:center;">Farq</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($workloadStats['errors'] as $err)
+                                        <tr style="border-top:1px solid #f1f5f9;">
+                                            <td style="padding:8px;">{{ $err['lesson_date'] ? \Carbon\Carbon::parse($err['lesson_date'])->format('d.m.Y') : '-' }}</td>
+                                            <td style="padding:8px;">{{ $err['subject_name'] }}</td>
+                                            <td style="padding:8px;">{{ $err['group_name'] }}</td>
+                                            <td style="padding:8px;">{{ $err['pair_name'] }}</td>
+                                            <td style="padding:8px; text-align:center;">{{ substr($err['pair_start'] ?? '', 0, 5) }}–{{ substr($err['pair_end'] ?? '', 0, 5) }}</td>
+                                            <td style="padding:8px; text-align:center; font-weight:600; color:#065f46;">{{ $err['pair_hours'] }}</td>
+                                            <td style="padding:8px; text-align:center; font-weight:600; color:#991b1b;">{{ $err['load_hours'] }}</td>
+                                            <td style="padding:8px; text-align:center; font-weight:700; color:{{ $err['diff'] > 0 ? '#b91c1c' : '#1d4ed8' }};">{{ $err['diff'] > 0 ? '+' : '' }}{{ $err['diff'] }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @endif
+            @endif
+
             @if(isset($gradingTimeStats) && $gradingTimeStats && $gradingTimeStats['total'] > 0)
                 {{-- Baho qo'yish vaqti statistikasi (joriy semestr) --}}
                 <div style="margin-bottom: 20px;">

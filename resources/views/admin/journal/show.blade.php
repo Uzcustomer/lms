@@ -11,6 +11,27 @@
             background: #bfdbfe;
         }
 
+        /* Sababli ariza asosida otrabotka qilingan baho — 12-qo'shimcha shaklga tushadi */
+        .sababli-retake-cell {
+            background: #ede9fe !important;
+            border: 1.5px solid #7c3aed !important;
+            color: #5b21b6;
+            font-weight: 700;
+            position: relative;
+        }
+        .sababli-retake-cell::after {
+            content: "★";
+            position: absolute;
+            top: -2px;
+            right: 1px;
+            font-size: 8px;
+            color: #7c3aed;
+            line-height: 1;
+        }
+        .sababli-retake-cell:hover {
+            background: #ddd6fe !important;
+        }
+
         .tab-content {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -1123,7 +1144,7 @@
                                                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
                                             }
 
-                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
+                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null, 'on_sababli' => false, 'oski_sababli' => false, 'test_sababli' => false];
 
                                             // Calculate attendance percentage with 2 decimal places
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
@@ -1183,16 +1204,16 @@
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['oski_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
                                                 @if($canAdminEditExam && $oskiRounded !== null)
                                                     <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
                                                 @else
                                                     {{ $oskiRounded !== null ? $oskiRounded : '' }}
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['test_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
                                                 @if($canAdminEditExam && $testRounded !== null)
                                                     <span class="font-bold text-blue-600">{{ $testRounded }}</span>
                                                 @else
@@ -1323,7 +1344,7 @@
                                                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
                                             }
 
-                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
+                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null, 'on_sababli' => false, 'oski_sababli' => false, 'test_sababli' => false];
 
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
@@ -1420,8 +1441,9 @@
                                                             @php
                                                                 $origVal = round($gradeData['original_grade'], 0);
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
+                                                                $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                             @endphp
-                                                            <div class="split-cell" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1436,8 +1458,9 @@
                                                                 $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
                                                                 $isSababli = $lmsSababli || $hemisSababli;
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                                $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                             @endphp
-                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>
@@ -1511,8 +1534,9 @@
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php
                                                                 $retakeVal = round($absenceData['retake_grade'], 0);
+                                                                $retakeSababli = !empty($absenceData['retake_was_sababli']);
                                                             @endphp
-                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1553,16 +1577,16 @@
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['oski_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
                                                 @if($canAdminEditExam && $oskiRounded !== null)
                                                     <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
                                                 @else
                                                     {{ $oskiRounded !== null ? $oskiRounded : '' }}
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['test_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
                                                 @if($canAdminEditExam && $testRounded !== null)
                                                     <span class="font-bold text-blue-600">{{ $testRounded }}</span>
                                                 @else
@@ -1747,14 +1771,45 @@
                                 </button>
                             @endif
 
+                            @php
+                                // Sababli retake qilgan talabalar soni — 12-qo'shimcha shaklga tushadiganlar
+                                $sababliStudentsCount = 0;
+                                foreach ($students as $__stu) {
+                                    $__h = $__stu->hemis_id;
+                                    $__hasSababli = false;
+                                    foreach (($jbGrades[$__h] ?? []) as $__dateGrades) {
+                                        foreach ($__dateGrades as $__g) {
+                                            if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                                        }
+                                    }
+                                    if (!$__hasSababli) {
+                                        foreach (($mtGrades[$__h] ?? []) as $__dateGrades) {
+                                            foreach ($__dateGrades as $__g) {
+                                                if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                                            }
+                                        }
+                                    }
+                                    if (!$__hasSababli) {
+                                        $__o = $otherGrades[$__h] ?? [];
+                                        if (!empty($__o['on_sababli']) || !empty($__o['oski_sababli']) || !empty($__o['test_sababli'])) {
+                                            $__hasSababli = true;
+                                        }
+                                    }
+                                    if ($__hasSababli) $sababliStudentsCount++;
+                                }
+                            @endphp
+
                             <button type="button" id="btn-export-yn-qaydnoma"
-                                class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
+                                class="relative px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
                                 onclick="openYnWeightsModal()"
-                                title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish">
+                                title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish{{ $sababliStudentsCount > 0 ? ' — ' . $sababliStudentsCount . ' ta talaba uchun 12-qo\'shimcha shakl ham chiqadi' : '' }}">
                                 <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
                                 YN qaydnoma yaratish
+                                @if($sababliStudentsCount > 0)
+                                    <span class="absolute -top-2 -right-2 bg-violet-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md" title="12-qo'shimcha shaklga {{ $sababliStudentsCount }} ta talaba tushadi">{{ $sababliStudentsCount }}</span>
+                                @endif
                             </button>
                         </div>
                     </div>
@@ -1769,6 +1824,17 @@
                             <div class="px-6 py-4 border-b border-gray-200">
                                 <h3 class="text-lg font-bold text-gray-800">Vaznlarni taqsimlang</h3>
                                 <p class="text-sm text-gray-500 mt-1">Jami 100 bo'lishi kerak</p>
+                                @if($sababliStudentsCount > 0)
+                                    <div class="mt-3 px-3 py-2 rounded-lg bg-violet-50 border border-violet-200 flex items-start gap-2">
+                                        <svg class="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        <p class="text-xs text-violet-800">
+                                            Bu guruhda <strong>{{ $sababliStudentsCount }} ta</strong> talaba sababli ariza asosida qayta topshirgan —
+                                            ular uchun <strong>12-qo'shimcha shakl</strong> avtomatik ikkinchi sheet sifatida Excel'ga qo'shiladi.
+                                        </p>
+                                    </div>
+                                @endif
                             </div>
                             <div class="px-6 py-4 space-y-3">
                                 <div class="flex items-center justify-between">
@@ -2315,8 +2381,9 @@
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
+                                                    @php $retakeSababli = !empty($gradeData['retake_was_sababli']); @endphp
                                                     @if($grade !== null)
-                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} {{ $retakeSababli ? 'sababli-retake-cell' : '' }} font-medium" @if($retakeSababli) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>{{ round($grade, 0) }}</span>
                                                     @elseif($isAbsent)
                                                         <span class="text-red-600 font-medium">NB</span>
                                                     @else

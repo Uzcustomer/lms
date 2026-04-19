@@ -485,7 +485,7 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at')
+            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason', 'is_final', 'deadline', 'created_at')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -629,6 +629,7 @@ class JournalController extends Controller
                     'hemis_id' => $g->hemis_id,
                     'status' => $g->status,
                     'retake_grade' => $g->retake_grade,
+                    'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'reason' => $g->reason,
                     'original_grade' => $g->grade,
                     'is_final' => $g->is_final,
@@ -645,6 +646,7 @@ class JournalController extends Controller
                     'id' => $g->id,
                     'status' => $g->status,
                     'retake_grade' => $g->retake_grade,
+                    'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'reason' => $g->reason,
                     'original_grade' => $g->grade,
                     'is_final' => $g->is_final,
@@ -662,6 +664,7 @@ class JournalController extends Controller
                 $jbAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
                     'id' => $g->id,
                     'retake_grade' => $g->retake_grade,
+                    'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'deadline' => $g->deadline,
                 ];
             }
@@ -673,6 +676,7 @@ class JournalController extends Controller
                 $mtAbsences[$g->student_hemis_id][$g->lesson_date][$g->lesson_pair_code] = [
                     'id' => $g->id,
                     'retake_grade' => $g->retake_grade,
+                    'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'deadline' => $g->deadline,
                 ];
             }
@@ -868,10 +872,11 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
+            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason', 'quiz_result_id')
             ->get();
 
         $otherGrades = [];
+        $otherGradesSababli = [];
         foreach ($otherGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
@@ -888,19 +893,28 @@ class JournalController extends Controller
                     }
                 }
                 $otherGrades[$g->student_hemis_id][$typeCode][] = $effectiveGrade['grade'];
+                if (!empty($g->retake_was_sababli)) {
+                    $otherGradesSababli[$g->student_hemis_id][$typeCode] = true;
+                }
             }
         }
         // Calculate averages
         foreach ($otherGrades as $studentId => $types) {
-            $result = ['on' => null, 'oski' => null, 'test' => null];
+            $result = [
+                'on' => null, 'oski' => null, 'test' => null,
+                'on_sababli' => false, 'oski_sababli' => false, 'test_sababli' => false,
+            ];
             if (isset($types[100]) && count($types[100]) > 0) {
                 $result['on'] = array_sum($types[100]) / count($types[100]);
+                $result['on_sababli'] = !empty($otherGradesSababli[$studentId][100]);
             }
             if (isset($types[101]) && count($types[101]) > 0) {
                 $result['oski'] = array_sum($types[101]) / count($types[101]);
+                $result['oski_sababli'] = !empty($otherGradesSababli[$studentId][101]);
             }
             if (isset($types[102]) && count($types[102]) > 0) {
                 $result['test'] = array_sum($types[102]) / count($types[102]);
+                $result['test_sababli'] = !empty($otherGradesSababli[$studentId][102]);
             }
             $otherGrades[$studentId] = $result;
         }
@@ -5147,6 +5161,7 @@ class JournalController extends Controller
                 ->update([
                     'retake_grade' => $request->grade,
                     'retake_comment' => $request->comment,
+                    'retake_was_sababli' => true,
                     'status' => 'closed',
                     'updated_at' => now(),
                 ]);
@@ -6257,40 +6272,62 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason')
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $getEffectiveGrade = function ($row) {
+        // Ikki holatdagi samarali bahoni hisoblovchi funksiya:
+        // $includeSababli=false → sababli ariza asosidagi retake'larni hisobga OLMAYDI (asl 12-shakl holati)
+        // $includeSababli=true  → sababli retake'lar qo'llaniladi (12-qo'shimcha shakli)
+        $getEffectiveGrade = function ($row, bool $includeSababli = true) {
+            $retakeGrade = $row->retake_grade;
+            if (!$includeSababli && !empty($row->retake_was_sababli)) {
+                $retakeGrade = null;
+            }
             if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
                 return $row->grade;
             }
             if ($row->status === 'pending') return null;
             if ($row->reason === 'absent' && $row->grade === null) {
-                return $row->retake_grade !== null ? $row->retake_grade : null;
+                return $retakeGrade !== null ? $retakeGrade : null;
             }
-            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $retakeGrade === null) {
                 return null;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
-            if ($row->retake_grade !== null) return $row->retake_grade;
+            if ($retakeGrade !== null) return $retakeGrade;
             return null;
         };
 
-        $jbGrades = [];
-        $mtGradesMap = [];
+        // Ikki versiyada JB/MT baholar xaritasini qurib olamiz
+        $jbGradesV1 = [];
+        $jbGradesV2 = [];
+        $mtGradesMapV1 = [];
+        $mtGradesMapV2 = [];
         foreach ($allGradesRaw as $g) {
-            $effectiveGrade = $getEffectiveGrade($g);
-            if ($effectiveGrade === null) continue;
             $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
             $key = $normalizedDate . '_' . $g->lesson_pair_code;
+
+            $effV1 = $getEffectiveGrade($g, false);
+            $effV2 = $getEffectiveGrade($g, true);
+
             if (isset($jbDatePairSet[$key])) {
-                $jbGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+                if ($effV1 !== null) {
+                    $jbGradesV1[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV1;
+                }
+                if ($effV2 !== null) {
+                    $jbGradesV2[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV2;
+                }
             }
             if (isset($mtDatePairSet[$key])) {
-                $mtGradesMap[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+                if ($effV1 !== null) {
+                    $mtGradesMapV1[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV1;
+                }
+                if ($effV2 !== null) {
+                    $mtGradesMapV2[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV2;
+                }
             }
         }
 
@@ -6307,41 +6344,50 @@ class JournalController extends Controller
             ->get()
             ->keyBy('student_hemis_id');
 
-        // Har bir talaba uchun JN va MT hisoblash (jurnal logikasi bilan bir xil)
-        $calculatedJnGrades = [];
-        $calculatedMtGrades = [];
-        foreach ($studentHemisIds as $hemisId) {
-            $dailySum = 0;
-            $studentDayGrades = $jbGrades[$hemisId] ?? [];
-            foreach ($jbLessonDates as $date) {
-                $dayGrades = $studentDayGrades[$date] ?? [];
-                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
-                $gradeSum = array_sum($dayGrades);
-                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                if (isset($jbLessonDatesForAverageLookup[$date])) {
-                    $dailySum += $dayAverage;
+        // Har bir talaba uchun JN va MT hisoblash (ikki versiyada — v1=asl, v2=sababli bilan)
+        $computeJnMt = function (array $jbGradesMap, array $mtGradesMapLocal) use (
+            $studentHemisIds, $jbLessonDates, $jbPairsPerDay, $jbLessonDatesForAverageLookup,
+            $totalJbDaysForAverage, $mtLessonDates, $mtPairsPerDay, $totalMtDays, $manualMtGrades
+        ) {
+            $jn = [];
+            $mt = [];
+            foreach ($studentHemisIds as $hemisId) {
+                $dailySum = 0;
+                $studentDayGrades = $jbGradesMap[$hemisId] ?? [];
+                foreach ($jbLessonDates as $date) {
+                    $dayGrades = $studentDayGrades[$date] ?? [];
+                    $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                    $gradeSum = array_sum($dayGrades);
+                    $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                    if (isset($jbLessonDatesForAverageLookup[$date])) {
+                        $dailySum += $dayAverage;
+                    }
+                }
+                $jn[$hemisId] = $totalJbDaysForAverage > 0
+                    ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                    : 0;
+
+                $mtDailySum = 0;
+                $studentMtGrades = $mtGradesMapLocal[$hemisId] ?? [];
+                foreach ($mtLessonDates as $date) {
+                    $dayGrades = $studentMtGrades[$date] ?? [];
+                    $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                    $gradeSum = array_sum($dayGrades);
+                    $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                }
+                $mt[$hemisId] = $totalMtDays > 0
+                    ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                    : 0;
+
+                if (isset($manualMtGrades[$hemisId])) {
+                    $mt[$hemisId] = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
                 }
             }
-            $calculatedJnGrades[$hemisId] = $totalJbDaysForAverage > 0
-                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
-                : 0;
+            return [$jn, $mt];
+        };
 
-            $mtDailySum = 0;
-            $studentMtGrades = $mtGradesMap[$hemisId] ?? [];
-            foreach ($mtLessonDates as $date) {
-                $dayGrades = $studentMtGrades[$date] ?? [];
-                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                $gradeSum = array_sum($dayGrades);
-                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-            }
-            $calculatedMtGrades[$hemisId] = $totalMtDays > 0
-                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
-                : 0;
-
-            if (isset($manualMtGrades[$hemisId])) {
-                $calculatedMtGrades[$hemisId] = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
-            }
-        }
+        [$calculatedJnGradesV1, $calculatedMtGradesV1] = $computeJnMt($jbGradesV1, $mtGradesMapV1);
+        [$calculatedJnGradesV2, $calculatedMtGradesV2] = $computeJnMt($jbGradesV2, $mtGradesMapV2);
 
         // ON (100), OSKI (101), Test (102), Quiz (103) baholarni olish
         // Show metodi bilan bir xil logika: getEffectiveGrade + o'rtacha
@@ -6359,39 +6405,40 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
+            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason', 'quiz_result_id')
             ->get();
 
-        $otherGradesGrouped = [];
-        foreach ($otherGradesRaw as $g) {
-            $effectiveGrade = $getEffectiveGrade($g);
-            if ($effectiveGrade === null) continue;
-            $typeCode = $g->training_type_code;
-            if ($typeCode == 103 && $g->quiz_result_id) {
-                $quizType = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
-                $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-                $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
-                if (in_array($quizType, $oskiTypes)) {
-                    $typeCode = 101;
-                } elseif (in_array($quizType, $testTypes)) {
-                    $typeCode = 102;
+        $buildOtherGrades = function (bool $includeSababli) use ($otherGradesRaw, $getEffectiveGrade) {
+            $grouped = [];
+            foreach ($otherGradesRaw as $g) {
+                $effectiveGrade = $getEffectiveGrade($g, $includeSababli);
+                if ($effectiveGrade === null) continue;
+                $typeCode = $g->training_type_code;
+                if ($typeCode == 103 && $g->quiz_result_id) {
+                    $quizType = DB::table('hemis_quiz_results')->where('id', $g->quiz_result_id)->value('quiz_type');
+                    $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+                    $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+                    if (in_array($quizType, $oskiTypes)) {
+                        $typeCode = 101;
+                    } elseif (in_array($quizType, $testTypes)) {
+                        $typeCode = 102;
+                    }
+                }
+                $grouped[$g->student_hemis_id][$typeCode][] = $effectiveGrade;
+            }
+            $byType = [100 => [], 101 => [], 102 => []];
+            foreach ($grouped as $studentId => $types) {
+                foreach ([100, 101, 102] as $tc) {
+                    if (isset($types[$tc]) && count($types[$tc]) > 0) {
+                        $byType[$tc][$studentId] = array_sum($types[$tc]) / count($types[$tc]);
+                    }
                 }
             }
-            $otherGradesGrouped[$g->student_hemis_id][$typeCode][] = $effectiveGrade;
-        }
+            return $byType;
+        };
 
-        $gradesByType = [100 => [], 101 => [], 102 => []];
-        foreach ($otherGradesGrouped as $studentId => $types) {
-            if (isset($types[100]) && count($types[100]) > 0) {
-                $gradesByType[100][$studentId] = array_sum($types[100]) / count($types[100]);
-            }
-            if (isset($types[101]) && count($types[101]) > 0) {
-                $gradesByType[101][$studentId] = array_sum($types[101]) / count($types[101]);
-            }
-            if (isset($types[102]) && count($types[102]) > 0) {
-                $gradesByType[102][$studentId] = array_sum($types[102]) / count($types[102]);
-            }
-        }
+        $gradesByTypeV1 = $buildOtherGrades(false);
+        $gradesByTypeV2 = $buildOtherGrades(true);
 
         // O'qituvchilar (jadvaldan tur bo'yicha ajratilgan)
         $teacherData = $this->getTeachersByType($groupHemisId, $subjectId, $semesterCode);
@@ -6432,27 +6479,13 @@ class JournalController extends Controller
             }
         }
 
-        // Shablon yuklash
-        $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
-        if (!file_exists($templatePath)) {
-            return back()->with('error', 'Shablon fayli topilmadi');
-        }
-
-        $spreadsheet = SpreadsheetIOFactory::load($templatePath);
-        $sheet = $spreadsheet->getActiveSheet();
-
-$sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet'), 0, 31);
-        $sheet->setTitle($sheetName);
-
         // Kurs va semestr raqamlarini hisoblash
-        // level_name = "5-kurs" -> 5, yoki level_code dan raqam ajratish
         $levelName = $semester->level_name ?? '';
         if (preg_match('/(\d+)/', $levelName, $m)) {
             $kurs = $m[1];
         } else {
             $kurs = preg_replace('/\D/', '', $semester->level_code ?? '');
         }
-        // Semestr raqamini name'dan olish (masalan "10-semestr" → 10)
         $semesterInYear = 1;
         if (preg_match('/(\d+)/', $semester->name ?? '', $m)) {
             $semesterInYear = (int) $m[1];
@@ -6466,22 +6499,9 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
             $semesterInYear = $semesterPos !== false ? $semesterPos + 1 : 1;
         }
 
-        // Header
         $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $faculty->name ?? '');
-        $sheet->setCellValue('A4', $facultyName . ' FAKULTETI');
-        $sheet->setCellValue('C8', '         ' . ($specialty->name ?? ''));
-        $sheet->setCellValue('N8', $kurs);
-        $sheet->setCellValue('Q8', $semesterInYear);
-        $sheet->setCellValue('W8', $group->name ?? '');
-        $sheet->setCellValue('Y1', $shaklName);
-        $sheet->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
-        $sheet->setCellValue('U10', implode(', ', $abbreviatedPracticeTeachers));
-        $sheet->setCellValue('A11', "Ma'ruzachi:");
-        $sheet->setCellValue('C11', '         ' . $abbreviatedMaruza);
-        $sheet->setCellValue('D13', $subject->total_acload ?? 0);
-        $sheet->setCellValue('G13', $subject->credit ?? 0);
 
-        // Dekan (E60) — fakultetga biriktirilgan, lavozimi 'Dekan' bo'lgan xodim
+        // Dekan
         $dekanForExcel = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $faculty?->department_hemis_id ?? ''))
             ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
             ->where('is_active', true)
@@ -6501,7 +6521,6 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 $dekanExcelName = $dekanForExcel->full_name;
             }
         }
-        $sheet->setCellValue('E60', $dekanExcelName);
 
         // Kafedra mudiri
         $kafedra = Department::where('department_hemis_id', $subject->department_id)->first();
@@ -6524,7 +6543,6 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                     ->first();
             }
             if ($mudiri) {
-                // I.O.Familya formati: "SHAMSUTDINOVA MAKSUDA ILYASOVNA" → "M.I.Shamsutdinova"
                 $nameParts = preg_split('/\s+/', trim($mudiri->full_name));
                 if (count($nameParts) >= 3) {
                     $surname = mb_strtoupper(mb_substr($nameParts[0], 0, 1)) . mb_strtolower(mb_substr($nameParts[0], 1));
@@ -6538,15 +6556,6 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 }
             }
         }
-        $sheet->setCellValue('U60', $kafedraMudiriName);
-
-        // Vaznlar haqida ma'lumot
-        $sheet->setCellValue('V18', 'Yakuniy ball');
-        $sheet->setCellValue('D19', $weightJn);
-        $sheet->setCellValue('G19', $weightMt);
-        $sheet->setCellValue('J19', $weightOn);
-        $sheet->setCellValue('P19', $weightOski);
-        $sheet->setCellValue('S19', $weightTest);
 
         // Davomat (auditoriya soatlariga nisbatan absent_off foizi)
         $excludedAttendanceCodes = [99, 100, 101, 102];
@@ -6582,185 +6591,248 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
                 : 0.0;
         }
 
-        // Ma'lumotlarni joylashtirish
-        $startRow = 20;
-        $maxRow = 49;
-
-        foreach ($students as $index => $student) {
-            $row = $startRow + $index;
-            if ($row > $maxRow) break;
-
-            $hemisId = $student->hemis_id;
-            $davomatPct = (float) ($davomatByStudent[$hemisId] ?? 0);
-            $davomatFailed = $davomatPct >= 25;
-
-            // Davomat ≥25% bo'lsa FIO'ga haqiqiy foiz qo'shamiz
-            $fioLabel = $student->full_name;
-            if ($davomatFailed) {
-                $davStr = rtrim(rtrim(number_format($davomatPct, 1, '.', ''), '0'), '.');
-                $fioLabel .= " ({$davStr}% davomat)";
+        // Sababli retake bo'yicha farq qilgan talabalarni aniqlash
+        // (V1 va V2 baholari bir xil bo'lmasa — demak sababli retake ta'sir qilgan)
+        $sababliHemisIds = [];
+        foreach ($students as $stu) {
+            $h = $stu->hemis_id;
+            $differs = (($calculatedJnGradesV1[$h] ?? 0) !== ($calculatedJnGradesV2[$h] ?? 0))
+                || (($calculatedMtGradesV1[$h] ?? 0) !== ($calculatedMtGradesV2[$h] ?? 0))
+                || (($gradesByTypeV1[100][$h] ?? null) !== ($gradesByTypeV2[100][$h] ?? null))
+                || (($gradesByTypeV1[101][$h] ?? null) !== ($gradesByTypeV2[101][$h] ?? null))
+                || (($gradesByTypeV1[102][$h] ?? null) !== ($gradesByTypeV2[102][$h] ?? null));
+            if ($differs) {
+                $sababliHemisIds[] = $h;
             }
-            $sheet->setCellValue('B' . $row, $fioLabel);
-            $sheet->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+        }
+        $sababliStudents = $students->filter(fn($s) => in_array($s->hemis_id, $sababliHemisIds, true))->values();
+        $hasSababli = $sababliStudents->isNotEmpty();
 
-            $jnVal = (int) ($calculatedJnGrades[$hemisId] ?? 0);
-            $mtVal = (int) ($calculatedMtGrades[$hemisId] ?? 0);
-            $onRaw = $gradesByType[100][$hemisId] ?? null;
-            $oskiRaw = $gradesByType[101][$hemisId] ?? null;
-            $testRaw = $gradesByType[102][$hemisId] ?? null;
+        // Shablon yuklash
+        $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
+        if (!file_exists($templatePath)) {
+            return back()->with('error', 'Shablon fayli topilmadi');
+        }
 
-            $onVal = $onRaw !== null ? (int) round((float) $onRaw) : 0;
-            $oskiVal = $oskiRaw !== null ? (int) round((float) $oskiRaw) : 0;
-            $testVal = $testRaw !== null ? (int) round((float) $testRaw) : 0;
+        $spreadsheet = SpreadsheetIOFactory::load($templatePath);
+        $sheet = $spreadsheet->getActiveSheet();
 
-            $sheet->setCellValue('D' . $row, $jnVal);
-            $sheet->setCellValue('G' . $row, $mtVal);
-            if ($onRaw !== null) {
-                $sheet->setCellValue('J' . $row, $onVal);
-            }
-            if ($oskiRaw !== null) {
-                $sheet->setCellValue('P' . $row, $oskiVal);
-            }
-            if ($testRaw !== null) {
-                $sheet->setCellValue('S' . $row, $testVal);
-            }
+        // Agar sababli retakelar bor bo'lsa — 2-sheet uchun shablonni qayta yuklab,
+        // asosiy spreadsheet'ga qo'shamiz (barcha stillar saqlanadi)
+        $sheet2 = null;
+        if ($hasSababli) {
+            $tpl2 = SpreadsheetIOFactory::load($templatePath);
+            $sheet2 = $spreadsheet->addExternalSheet($tpl2->getActiveSheet());
+        }
 
-            // --- Ball, V (O'zlashtirish), W (ECTS), Y (Baho) ni PHP da hisoblash ---
-            // Shablondagi V20 formulasi murakkab nested IF/AND/OR bo'lib,
-            // PhpSpreadsheet uni to'g'ri evaluate qilmaydi (masalan Test < 60
-            // bo'lganda ham V=80 chiqadi). Mantiqni PHPda takrorlab,
-            // hujayralarga to'g'ridan-to'g'ri yozamiz.
+        $levelCodeForRounding = (string) ($semester?->level_code ?? '');
 
-            // 4-5 kurs talabalari uchun JN/MT/ON ball butun songacha half-up,
-            // qolgan kurslarda 1 kasr xonasigacha. Semestr level_code:
-            // 11=1-kurs ... 14=4-kurs, 15=5-kurs.
-            $levelCode = (string) ($semester?->level_code ?? '');
-            $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
+        // Bitta sheet'ni to'ldiruvchi closure — 12-shakl va 12-qo'shimcha
+        // shakl uchun bir xil shablondan foydalanadi, ma'lumotlarni parametr
+        // sifatida oladi.
+        $fillSheet = function ($s, $studentsList, array $jnMap, array $mtMap, array $otherMap, string $sheetTitle, string $shaklLabel)
+            use ($facultyName, $specialty, $kurs, $semesterInYear, $group, $subject,
+                 $abbreviatedPracticeTeachers, $abbreviatedMaruza, $dekanExcelName, $kafedraMudiriName,
+                 $weightJn, $weightMt, $weightOn, $weightOski, $weightTest,
+                 $davomatByStudent, $levelCodeForRounding)
+        {
+            $s->setTitle($sheetTitle);
 
-            if ($roundJnMtToInt) {
-                $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
-                $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
-                $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
-            } else {
-                $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
-                $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
-                $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
-            }
+            // Header
+            $s->setCellValue('A4', $facultyName . ' FAKULTETI');
+            $s->setCellValue('C8', '         ' . ($specialty->name ?? ''));
+            $s->setCellValue('N8', $kurs);
+            $s->setCellValue('Q8', $semesterInYear);
+            $s->setCellValue('W8', $group->name ?? '');
+            $s->setCellValue('Y1', $shaklLabel);
+            $s->setCellValue('C10', '  ' . ($subject->subject_name ?? ''));
+            $s->setCellValue('U10', implode(', ', $abbreviatedPracticeTeachers));
+            $s->setCellValue('A11', "Ma'ruzachi:");
+            $s->setCellValue('C11', '         ' . $abbreviatedMaruza);
+            $s->setCellValue('D13', $subject->total_acload ?? 0);
+            $s->setCellValue('G13', $subject->credit ?? 0);
+            $s->setCellValue('E60', $dekanExcelName);
+            $s->setCellValue('U60', $kafedraMudiriName);
 
-            // OSKI/Test ball — vazn sxemasiga qarab raw yoki butun son
-            if ($weightOski > 0 && $weightTest > 0) {
-                $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
-                $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
-            } elseif ($weightOski > 0) {
-                $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
-                $tBall = 0;
-            } elseif ($weightTest > 0) {
-                $qBall = 0;
-                $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
-            } else {
-                $qBall = 0;
-                $tBall = 0;
-            }
+            // Vaznlar
+            $s->setCellValue('V18', 'Yakuniy ball');
+            $s->setCellValue('D19', $weightJn);
+            $s->setCellValue('G19', $weightMt);
+            $s->setCellValue('J19', $weightOn);
+            $s->setCellValue('P19', $weightOski);
+            $s->setCellValue('S19', $weightTest);
 
-            // JB+MT+ON ball va N% — V branchlari uchun
-            $maxJbMtOn = $weightJn + $weightMt + $weightOn;
-            $mSum = (($jnVal < 60) || ($mtVal < 60))
-                ? 0
-                : round($eBall + $hBall + $kBall, 1);
-            $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+            $startRow = 20;
+            $maxRow = 49;
 
-            // V (O'zlashtirish ko'rsatkichi)
-            if ($jnVal === 0 && $mtVal === 0) {
-                $v = '';
-            } elseif ($davomatFailed) {
-                $v = -3; // Davomat ≥25%
-            } elseif ($nPct < 0.6) {
-                $v = -2; // qo'yilmadi
-            } elseif (($weightOski > 0 && $oskiVal == 0)
-                   || ($weightTest > 0 && $testVal == 0)) {
-                $v = -1; // kelmadi
-            } elseif (($weightJn   > 0 && $jnVal   < 60)
-                   || ($weightMt   > 0 && $mtVal   < 60)
-                   || ($weightOn   > 0 && $onVal   < 60)
-                   || ($weightOski > 0 && $oskiVal < 60)
-                   || ($weightTest > 0 && $testVal < 60)) {
-                $v = 0;
-            } else {
-                $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
-                if ($weightOski > 0 && $weightTest > 0) {
-                    $examSum = round($qBall + $tBall, 1);
-                } elseif ($weightOski > 0) {
-                    $examSum = round($qBall, 1);
-                } elseif ($weightTest > 0) {
-                    $examSum = round($tBall, 1);
-                } else {
-                    $examSum = 0;
+            foreach ($studentsList as $index => $student) {
+                $row = $startRow + $index;
+                if ($row > $maxRow) break;
+
+                $hemisId = $student->hemis_id;
+                $davomatPct = (float) ($davomatByStudent[$hemisId] ?? 0);
+                $davomatFailed = $davomatPct >= 25;
+
+                $fioLabel = $student->full_name;
+                if ($davomatFailed) {
+                    $davStr = rtrim(rtrim(number_format($davomatPct, 1, '.', ''), '0'), '.');
+                    $fioLabel .= " ({$davStr}% davomat)";
                 }
-                $v = $jbMtOnSum + $examSum;
-            }
+                $s->setCellValue('B' . $row, $fioLabel);
+                $s->setCellValueExplicit('C' . $row, $student->student_id_number, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
-            // Yakuniy V ni butun songacha half-up yaxlitlaymiz (vedomost
-            // tekshirish bilan bir xil). Maxsus qiymatlar ('', -2, -1, 0)
-            // o'zgartirilmaydi.
-            if (is_numeric($v) && $v > 0) {
-                $v = (int) floor((float) $v + 0.5);
-            }
+                $jnVal = (int) ($jnMap[$hemisId] ?? 0);
+                $mtVal = (int) ($mtMap[$hemisId] ?? 0);
+                $onRaw = $otherMap[100][$hemisId] ?? null;
+                $oskiRaw = $otherMap[101][$hemisId] ?? null;
+                $testRaw = $otherMap[102][$hemisId] ?? null;
 
-            // W (ECTS) — shablon mantig'i
-            $w = '';
-            if (is_numeric($v)) {
-                if ($v >= 90 && $v <= 100)      $w = 'A';
-                elseif ($v >= 85)               $w = 'B+';
-                elseif ($v >= 70)               $w = 'B';
-                elseif ($v >= 60)               $w = 'C';
-                elseif ($v >= 0 && $v <= 60)    $w = 'F';
-                elseif ($v == -1)               $w = '';
-                elseif ($v == -3)               $w = '';
-                else                            $w = 'FX';
-            }
+                $onVal = $onRaw !== null ? (int) round((float) $onRaw) : 0;
+                $oskiVal = $oskiRaw !== null ? (int) round((float) $oskiRaw) : 0;
+                $testVal = $testRaw !== null ? (int) round((float) $testRaw) : 0;
 
-            // Y (Baho)
-            $y = '';
-            if (is_numeric($v)) {
-                if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
-                elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
-                elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
-                elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
-                elseif ($v == -1)                 $y = 'kelmadi';
-                elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
-                elseif ($v == -3)                 $y = "davomat \u{2265}25%";
-            }
+                $s->setCellValue('D' . $row, $jnVal);
+                $s->setCellValue('G' . $row, $mtVal);
+                if ($onRaw !== null) {
+                    $s->setCellValue('J' . $row, $onVal);
+                }
+                if ($oskiRaw !== null) {
+                    $s->setCellValue('P' . $row, $oskiVal);
+                }
+                if ($testRaw !== null) {
+                    $s->setCellValue('S' . $row, $testVal);
+                }
 
-            // Ball va natijalarni shablon formulasi ustiga yozamiz
-            $sheet->setCellValue('E' . $row, $eBall);
-            if (!$roundJnMtToInt) {
-                $sheet->getStyle('E' . $row)->getNumberFormat()->setFormatCode('0.0');
-            }
-            $sheet->setCellValue('H' . $row, $hBall);
-            if (!$roundJnMtToInt) {
-                $sheet->getStyle('H' . $row)->getNumberFormat()->setFormatCode('0.0');
-            }
-            $sheet->setCellValue('K' . $row, $kBall);
-            if ($weightOn > 0 && !$roundJnMtToInt) {
-                $sheet->getStyle('K' . $row)->getNumberFormat()->setFormatCode('0.0');
-            }
-            $sheet->setCellValue('Q' . $row, $qBall);
-            if ($weightOski > 0 && $weightTest > 0) {
-                $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('0.0');
-            }
-            $sheet->setCellValue('T' . $row, $tBall);
-            if ($weightOski > 0 && $weightTest > 0) {
-                $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode('0.0');
-            }
-            $sheet->setCellValue('V' . $row, $v);
-            $sheet->setCellValue('W' . $row, $w);
-            $sheet->setCellValue('Y' . $row, $y);
+                $roundJnMtToInt = in_array($levelCodeForRounding, ['14', '15'], true);
 
-            // Davomat ≥25% bo'lgan qatorda kursiv qizil shrift
-            if ($davomatFailed) {
-                $sheet->getStyle('A' . $row . ':Y' . $row)
-                    ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+                if ($roundJnMtToInt) {
+                    $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+                    $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+                    $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+                } else {
+                    $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
+                    $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
+                    $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+                }
+
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
+                    $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+                } elseif ($weightOski > 0) {
+                    $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+                    $tBall = 0;
+                } elseif ($weightTest > 0) {
+                    $qBall = 0;
+                    $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+                } else {
+                    $qBall = 0;
+                    $tBall = 0;
+                }
+
+                $maxJbMtOn = $weightJn + $weightMt + $weightOn;
+                $mSum = (($jnVal < 60) || ($mtVal < 60))
+                    ? 0
+                    : round($eBall + $hBall + $kBall, 1);
+                $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+                if ($jnVal === 0 && $mtVal === 0) {
+                    $v = '';
+                } elseif ($davomatFailed) {
+                    $v = -3;
+                } elseif ($nPct < 0.6) {
+                    $v = -2;
+                } elseif (($weightOski > 0 && $oskiVal == 0)
+                       || ($weightTest > 0 && $testVal == 0)) {
+                    $v = -1;
+                } elseif (($weightJn   > 0 && $jnVal   < 60)
+                       || ($weightMt   > 0 && $mtVal   < 60)
+                       || ($weightOn   > 0 && $onVal   < 60)
+                       || ($weightOski > 0 && $oskiVal < 60)
+                       || ($weightTest > 0 && $testVal < 60)) {
+                    $v = 0;
+                } else {
+                    $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                    if ($weightOski > 0 && $weightTest > 0) {
+                        $examSum = round($qBall + $tBall, 1);
+                    } elseif ($weightOski > 0) {
+                        $examSum = round($qBall, 1);
+                    } elseif ($weightTest > 0) {
+                        $examSum = round($tBall, 1);
+                    } else {
+                        $examSum = 0;
+                    }
+                    $v = $jbMtOnSum + $examSum;
+                }
+
+                if (is_numeric($v) && $v > 0) {
+                    $v = (int) floor((float) $v + 0.5);
+                }
+
+                $w = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)      $w = 'A';
+                    elseif ($v >= 85)               $w = 'B+';
+                    elseif ($v >= 70)               $w = 'B';
+                    elseif ($v >= 60)               $w = 'C';
+                    elseif ($v >= 0 && $v <= 60)    $w = 'F';
+                    elseif ($v == -1)               $w = '';
+                    elseif ($v == -3)               $w = '';
+                    else                            $w = 'FX';
+                }
+
+                $y = '';
+                if (is_numeric($v)) {
+                    if ($v >= 90 && $v <= 100)        $y = "a\u{02BC}lo";
+                    elseif ($v >= 70 && $v <= 89.9)   $y = 'yaxshi';
+                    elseif ($v >= 60 && $v <= 69.9)   $y = "o\u{02BB}rta";
+                    elseif ($v >= 0 && $v <= 59.9)    $y = 'qon-siz';
+                    elseif ($v == -1)                 $y = 'kelmadi';
+                    elseif ($v == -2)                 $y = "qo\u{02BB}yilmadi";
+                    elseif ($v == -3)                 $y = "davomat \u{2265}25%";
+                }
+
+                $s->setCellValue('E' . $row, $eBall);
+                if (!$roundJnMtToInt) {
+                    $s->getStyle('E' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $s->setCellValue('H' . $row, $hBall);
+                if (!$roundJnMtToInt) {
+                    $s->getStyle('H' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $s->setCellValue('K' . $row, $kBall);
+                if ($weightOn > 0 && !$roundJnMtToInt) {
+                    $s->getStyle('K' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $s->setCellValue('Q' . $row, $qBall);
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $s->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $s->setCellValue('T' . $row, $tBall);
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $s->getStyle('T' . $row)->getNumberFormat()->setFormatCode('0.0');
+                }
+                $s->setCellValue('V' . $row, $v);
+                $s->setCellValue('W' . $row, $w);
+                $s->setCellValue('Y' . $row, $y);
+
+                if ($davomatFailed) {
+                    $s->getStyle('A' . $row . ':Y' . $row)
+                        ->getFont()->setItalic(true)->getColor()->setARGB('FFFF0000');
+                }
             }
+        };
+
+        $cleanGroupName = str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet');
+        $mainSheetTitle = mb_substr($cleanGroupName, 0, 31);
+        $suppSheetTitle = mb_substr($cleanGroupName . ' (qo\'sh)', 0, 31);
+        $suppShaklLabel = $shaklName . ' qo\'shimchasi';
+
+        // 12-shakl — barcha talabalar, asl holatdagi baholar (sababli retakesiz)
+        $fillSheet($sheet, $students, $calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1, $mainSheetTitle, $shaklName);
+
+        // 12-qo'shimcha shakl — faqat sababli retake qilgan talabalar, yangilangan baholar
+        if ($sheet2 !== null) {
+            $fillSheet($sheet2, $sababliStudents, $calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByTypeV2, $suppSheetTitle, $suppShaklLabel);
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

@@ -254,6 +254,66 @@
                 </div>
             @endif
 
+            @if(!empty($subjectStudents))
+                {{-- Har fan bo'yicha eng yaxshi 5 va eng yomon 5 talaba --}}
+                <div style="margin-bottom: 20px;">
+                    <h3 style="font-size: 15px; font-weight: 700; color: #1e293b; margin: 0 0 10px;">
+                        Fan bo'yicha talabalar reytingi
+                        <span style="font-size: 11px; font-weight: 500; color: #64748b; margin-left: 6px;">(joriy semestr, JN o'rtacha bahosi bo'yicha)</span>
+                    </h3>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 14px;">
+                        @foreach($subjectStudents as $subj)
+                            <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                    <div style="font-weight:700; color:#1e293b; font-size:14px;">{{ $subj['subject_name'] }}</div>
+                                    <div style="font-size:11px; color:#64748b;">Jami talaba: <strong style="color:#1e293b;">{{ $subj['total_students'] }}</strong></div>
+                                </div>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                                    <div>
+                                        <div style="font-size:11px; font-weight:700; color:#065f46; margin-bottom:6px;">Eng yaxshi 5 ta</div>
+                                        <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                                            <tbody>
+                                                @foreach($subj['top'] as $idx => $st)
+                                                    <tr style="border-top:1px solid #f1f5f9;">
+                                                        <td style="padding:4px 6px; width:20px; color:#94a3b8;">{{ $idx + 1 }}.</td>
+                                                        <td style="padding:4px 6px; color:#1e293b;">{{ $st['full_name'] }}</td>
+                                                        <td style="padding:4px 6px; color:#64748b; font-size:11px;">{{ $st['group_name'] }}</td>
+                                                        <td style="padding:4px 6px; text-align:right; font-weight:700; color:#065f46;">{{ $st['avg_grade'] }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:11px; font-weight:700; color:#991b1b; margin-bottom:6px;">
+                                            @if(!empty($subj['bottom']))
+                                                Eng yomon 5 ta
+                                            @else
+                                                <span style="color:#94a3b8;">(Eng yomon ro'yxati talaba soni 10 dan kam bo'lganda ko'rsatilmaydi)</span>
+                                            @endif
+                                        </div>
+                                        @if(!empty($subj['bottom']))
+                                            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                                                <tbody>
+                                                    @foreach($subj['bottom'] as $idx => $st)
+                                                        <tr style="border-top:1px solid #f1f5f9;">
+                                                            <td style="padding:4px 6px; width:20px; color:#94a3b8;">{{ $idx + 1 }}.</td>
+                                                            <td style="padding:4px 6px; color:#1e293b;">{{ $st['full_name'] }}</td>
+                                                            <td style="padding:4px 6px; color:#64748b; font-size:11px;">{{ $st['group_name'] }}</td>
+                                                            <td style="padding:4px 6px; text-align:right; font-weight:700; color:#991b1b;">{{ $st['avg_grade'] }}</td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             @if(isset($tutorStats) && $tutorStats)
                 {{-- Umumiy kartalar --}}
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">

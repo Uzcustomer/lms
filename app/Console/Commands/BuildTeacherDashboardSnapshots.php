@@ -49,8 +49,11 @@ class BuildTeacherDashboardSnapshots extends Command
         $workloadData = $this->buildWorkloadAndLoadErrors($semesterCodes, $dateFrom, $dateTo);
         $this->info('Yuklama va load xatoliklari hisoblandi: ' . count($workloadData) . ' ta o\'qituvchi.');
 
+        $studentsData = $this->buildSubjectTopStudents($semesterCodes, $dateFrom, $dateTo);
+        $this->info('Eng yaxshi/eng yomon talabalar ro\'yxati hisoblandi: ' . count($studentsData) . ' ta o\'qituvchi.');
+
         $now = now();
-        $this->persistSnapshots($gradingData, $tutorData, $workloadData, $now);
+        $this->persistSnapshots($gradingData, $tutorData, $workloadData, $studentsData, $now);
 
         $elapsed = round(microtime(true) - $startedAt, 2);
         $this->info("Snapshot tayyor. Vaqt: {$elapsed}s");
@@ -58,6 +61,7 @@ class BuildTeacherDashboardSnapshots extends Command
             'teachers' => count($gradingData['per_teacher']),
             'tutors' => count($tutorData),
             'workload' => count($workloadData),
+            'students' => count($studentsData),
             'elapsed_seconds' => $elapsed,
         ]);
 
@@ -326,9 +330,91 @@ class BuildTeacherDashboardSnapshots extends Command
         return (int) max(1, round($minutes / 40));
     }
 
-    private function persistSnapshots(array $gradingData, array $tutorData, array $workloadData, $generatedAt): void
+    /**
+     * Har o'qituvchining har fani bo'yicha joriy semestrdagi eng yaxshi 5
+     * va eng yomon 5 talabani (o'rtacha JN bahosi bo'yicha) tayyorlaydi.
+     *
+     * Natija: [
+     *   hemis_id => [
+     *     [
+     *       'subject_id' => ..., 'subject_name' => ...,
+     *       'top'    => [['student_hemis_id','full_name','group_name','avg_grade','grades_count'], ...],
+     *       'bottom' => [...],
+     *     ],
+     *   ],
+     * ]
+     */
+    private function buildSubjectTopStudents(array $semesterCodes, ?string $dateFrom, ?string $dateTo): array
     {
-        DB::transaction(function () use ($gradingData, $tutorData, $workloadData, $generatedAt) {
+        $query = DB::table('student_grades as sg')
+            ->leftJoin('students as s', 's.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereNull('sg.deleted_at')
+            ->whereIn('sg.semester_code', $semesterCodes)
+            ->where('sg.training_type_code', 100)
+            ->where('sg.status', 'recorded')
+            ->whereNotNull('sg.grade');
+
+        if ($dateFrom && $dateTo) {
+            $query->whereBetween('sg.lesson_date', [$dateFrom, $dateTo]);
+        }
+
+        $rows = $query->selectRaw('
+                sg.employee_id,
+                sg.subject_id,
+                MAX(sg.subject_name) as subject_name,
+                sg.student_hemis_id,
+                MAX(s.full_name)  as full_name,
+                MAX(s.group_name) as group_name,
+                AVG(sg.grade)     as avg_grade,
+                COUNT(*)          as grades_count
+            ')
+            ->groupBy('sg.employee_id', 'sg.subject_id', 'sg.student_hemis_id')
+            ->get();
+
+        $bySubject = [];
+        foreach ($rows as $r) {
+            $hemisId = (string) $r->employee_id;
+            $subjectId = (string) $r->subject_id;
+            if ($hemisId === '' || $subjectId === '') continue;
+
+            $bySubject[$hemisId][$subjectId]['subject_name'] = $r->subject_name ?: '-';
+            $bySubject[$hemisId][$subjectId]['students'][] = [
+                'student_hemis_id' => $r->student_hemis_id,
+                'full_name'        => $r->full_name ?: '-',
+                'group_name'       => $r->group_name ?: '-',
+                'avg_grade'        => round((float) $r->avg_grade, 1),
+                'grades_count'     => (int) $r->grades_count,
+            ];
+        }
+
+        $result = [];
+        foreach ($bySubject as $hemisId => $subjects) {
+            $list = [];
+            foreach ($subjects as $subjectId => $data) {
+                $students = $data['students'];
+                usort($students, fn($a, $b) => $b['avg_grade'] <=> $a['avg_grade']);
+                $top = array_slice($students, 0, 5);
+                $bottom = count($students) >= 10
+                    ? array_reverse(array_slice($students, -5))
+                    : [];
+                $list[] = [
+                    'subject_id'   => $subjectId,
+                    'subject_name' => $data['subject_name'],
+                    'total_students' => count($students),
+                    'top'          => $top,
+                    'bottom'       => $bottom,
+                ];
+            }
+            usort($list, fn($a, $b) => strcmp($a['subject_name'], $b['subject_name']));
+            $result[$hemisId] = $list;
+        }
+
+        return $result;
+    }
+
+    private function persistSnapshots(array $gradingData, array $tutorData, array $workloadData, array $studentsData, $generatedAt): void
+    {
+        DB::transaction(function () use ($gradingData, $tutorData, $workloadData, $studentsData, $generatedAt) {
             TeacherDashboardSnapshot::query()->delete();
 
             TeacherDashboardSnapshot::create([
@@ -341,7 +427,8 @@ class BuildTeacherDashboardSnapshots extends Command
             $hemisIds = array_unique(array_merge(
                 array_keys($gradingData['per_teacher']),
                 array_keys($tutorData),
-                array_keys($workloadData)
+                array_keys($workloadData),
+                array_keys($studentsData)
             ));
 
             $rows = [];
@@ -350,6 +437,7 @@ class BuildTeacherDashboardSnapshots extends Command
                     'grading'  => $gradingData['per_teacher'][$hemisId] ?? null,
                     'tutor'    => $tutorData[$hemisId] ?? null,
                     'workload' => $workloadData[$hemisId] ?? null,
+                    'subjects' => $studentsData[$hemisId] ?? null,
                 ];
                 $rows[] = [
                     'scope' => TeacherDashboardSnapshot::SCOPE_TEACHER,

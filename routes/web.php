@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\GradeHistoryController;
 use App\Http\Controllers\Admin\IndependentController;
 use App\Http\Controllers\Admin\JournalController;
 use App\Http\Controllers\Admin\OraliqNazoratController;
@@ -621,6 +622,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('activity-log')->name('activity-log.')->group(function () {
             Route::get('/', [ActivityLogController::class, 'index'])->name('index');
             Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
+        });
+
+        Route::prefix('grade-history')->name('grade-history.')->group(function () {
+            Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
         });
 
         // Diagnostika sahifasi (yangi dizayn)

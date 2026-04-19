@@ -14,6 +14,7 @@ use App\Services\DocumentTemplateService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -101,7 +102,30 @@ class AbsenceExcuseController extends Controller
             $d->addDay();
         }
 
-        return view('admin.absence-excuses.show', compact('excuse', 'daysCount'));
+        // Ariza sana oralig'ida talaba haqiqatan baho olgan kunlar —
+        // ma'lumotnoma soxta bo'lishi mumkinligini ko'rsatuvchi konfliktlar.
+        // Faqat haqiqiy baholar (grade != null va reason='absent' emas) inobatga olinadi.
+        $gradeConflicts = [];
+        if ($excuse->isPending()) {
+            $subjectIds = $excuse->makeups->pluck('subject_id')->filter()->unique()->values();
+            if ($subjectIds->isNotEmpty()) {
+                $gradeConflicts = DB::table('student_grades')
+                    ->where('student_hemis_id', $excuse->student_hemis_id)
+                    ->whereIn('subject_id', $subjectIds)
+                    ->whereDate('lesson_date', '>=', $excuse->start_date)
+                    ->whereDate('lesson_date', '<=', $excuse->end_date)
+                    ->whereNotNull('grade')
+                    ->where(function ($q) {
+                        $q->whereNull('reason')->orWhere('reason', '!=', 'absent');
+                    })
+                    ->whereNull('deleted_at')
+                    ->orderBy('lesson_date')
+                    ->get(['lesson_date', 'subject_name', 'grade', 'lesson_pair_name'])
+                    ->toArray();
+            }
+        }
+
+        return view('admin.absence-excuses.show', compact('excuse', 'daysCount', 'gradeConflicts'));
     }
 
     public function approve($id)

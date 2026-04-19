@@ -4524,12 +4524,29 @@ class JournalController extends Controller
         $gradeValue = (float) $request->grade;
         $now = now();
 
+        // Sababli ariza bo'yicha kirish — kurs darajasi rol sozlamasini tekshirish
+        if ($isExcuseOpening && !$isAdmin) {
+            $roleCheck = $this->checkExcuseGradeRole($request->semester_code, $isTeacher);
+            if ($roleCheck !== true) {
+                return response()->json(['success' => false, 'message' => $roleCheck], 403);
+            }
+        }
+
         if ($existing && !$isExcuseOpening) {
             return response()->json(['success' => false, 'message' => 'Bu katak uchun baho allaqachon mavjud.'], 409);
         }
 
-        // Sababli ariza bo'yicha: mavjud bahoni yangilash
+        // Sababli ariza bo'yicha: faqat NB (reason=absent va grade=null) katakni yangilash mumkin.
+        // Agar talaba bu kuni haqiqiy baho olgan bo'lsa (grade != null), demak darsda bo'lgan —
+        // ma'lumotnoma soxta hisoblanadi va sababli ariza orqali qayta yozish taqiqlanadi.
         if ($existing && $isExcuseOpening) {
+            if ($existing->reason !== 'absent' || $existing->grade !== null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bu kuni talaba darsda bo\'lgan va baho olgan. Sababli ariza asosida qayta yozish mumkin emas.',
+                ], 403);
+            }
+
             DB::table('student_grades')
                 ->where('id', $existing->id)
                 ->update([
@@ -5109,11 +5126,20 @@ class JournalController extends Controller
                 ], 404);
             }
 
-            if ($studentGrade->reason !== 'absent') {
+            if ($studentGrade->reason !== 'absent' || $studentGrade->grade !== null) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Bu baho NB (absent) emas. Reason: ' . ($studentGrade->reason ?? 'null'),
+                    'message' => 'Bu kuni talaba darsda bo\'lgan va baho olgan. Sababli ariza asosida qayta yozish mumkin emas.',
                 ], 400);
+            }
+
+            // Kurs darajasi bo'yicha rol tekshiruvi (o'qituvchi/test markazi sozlamasi)
+            if (!$isAdminRole) {
+                $isTeacherRole = is_active_oqituvchi();
+                $roleCheck = $this->checkExcuseGradeRole($studentGrade->semester_code, $isTeacherRole);
+                if ($roleCheck !== true) {
+                    return response()->json(['success' => false, 'message' => $roleCheck], 403);
+                }
             }
 
             DB::table('student_grades')
@@ -6928,5 +6954,37 @@ $sheetName = mb_substr(str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $g
         return response()->download($tempFile, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Sababli ariza bo'yicha baho kirituvchi rolni kurs darajasi sozlamalari bilan tekshirish.
+     * Deadline.retake_by_oqituvchi=true → o'qituvchi jurnal orqali kirita oladi
+     * Deadline.retake_by_test_markazi=true → faqat test markazi upload orqali — jurnaldan 403
+     * Return: true (ruxsat) yoki xato xabari (string)
+     */
+    private function checkExcuseGradeRole(?string $semesterCode, bool $isTeacher)
+    {
+        if (!$semesterCode) {
+            return true;
+        }
+
+        $levelCode = DB::table('semesters')->where('code', $semesterCode)->value('level_code');
+        if (!$levelCode) {
+            return true;
+        }
+
+        $deadline = Deadline::where('level_code', $levelCode)->first();
+        if (!$deadline) {
+            return true;
+        }
+
+        if ($isTeacher && !$deadline->retake_by_oqituvchi) {
+            if ($deadline->retake_by_test_markazi) {
+                return 'Bu kurs darajasida otrabotka bahosini faqat test markazi qo\'yishi mumkin (upload orqali).';
+            }
+            return 'Bu kurs darajasida o\'qituvchiga sababli baho qo\'yish ruxsati yo\'q.';
+        }
+
+        return true;
     }
 }

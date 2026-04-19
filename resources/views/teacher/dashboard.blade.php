@@ -6,6 +6,13 @@
     <div style="padding: 16px 0;">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
 
+            @if(!empty($snapshotGeneratedAt))
+                <div style="margin-bottom: 12px; font-size: 11px; color: #64748b; text-align: right;">
+                    Hisobot yangilangan: <strong style="color: #334155;">{{ \Carbon\Carbon::parse($snapshotGeneratedAt)->format('d.m.Y H:i') }}</strong>
+                    <span style="opacity: 0.8;">(har kuni 05:00 da yangilanadi)</span>
+                </div>
+            @endif
+
             @if(isset($gradingTimeStats) && $gradingTimeStats && $gradingTimeStats['total'] > 0)
                 {{-- Baho qo'yish vaqti statistikasi (joriy semestr) --}}
                 <div style="margin-bottom: 20px;">

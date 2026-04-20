@@ -101,16 +101,16 @@
                                  || (filter === 'pending' && {{ $clubPending }} > 0)
                                  || (filter === 'approved' && {{ $clubApproved }} > 0)
                                  || (filter === 'rejected' && {{ $clubRejected }} > 0)">
-                            <div class="flex items-center justify-between px-5 cursor-pointer select-none" style="padding-top: 14px; padding-bottom: 14px;" @click="open = !open">
+                            <div class="flex items-center justify-between cursor-pointer select-none" style="padding: 18px 20px 18px 12px;" @click="open = !open">
                                 <div class="flex items-center gap-3 min-w-0">
                                     <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">{{ $loop->iteration }}</div>
                                     <div class="min-w-0">
-                                        <div class="font-bold text-gray-800 text-sm truncate">{{ $clubName }}</div>
-                                        <div class="text-xs text-gray-400">{{ $kafedra }}@if($schedule) &middot; {{ $schedule }}@endif</div>
+                                        <div class="font-bold text-gray-800 truncate" style="font-size: 15px;">{{ $clubName }}</div>
+                                        <div class="text-gray-400" style="font-size: 13px;">{{ $kafedra }}@if($schedule) &middot; {{ $schedule }}@endif</div>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2.5 flex-shrink-0">
-                                    <div class="flex items-center gap-1.5 text-[11px]">
+                                    <div class="flex items-center gap-1.5" style="font-size: 12px;">
                                         @if($clubPending > 0)
                                             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold" style="background: #fef3c7; color: #92400e;">{{ $clubPending }} kutilmoqda</span>
                                         @endif

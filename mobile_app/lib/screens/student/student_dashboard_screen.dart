@@ -1011,11 +1011,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final lesson = _getCurrentOrNextLesson();
     if (lesson == null) return const SizedBox.shrink();
 
-    final isActive = lesson['_is_active'] as bool;
-    final subjectName = lesson['subject_name'] as String? ?? '';
-    final startTime = lesson['lesson_pair_start_time'] as String? ?? '';
-    final endTime = lesson['lesson_pair_end_time'] as String? ?? '';
-    final room = lesson['auditorium_name'] as String? ?? '';
+    final isActive = lesson['_is_active'] == true;
+    final subjectName = lesson['subject_name']?.toString() ?? '';
+    final startTime = lesson['lesson_pair_start_time']?.toString() ?? '';
+    final endTime = lesson['lesson_pair_end_time']?.toString() ?? '';
+    final room = lesson['auditorium_name']?.toString() ?? '';
     final start = lesson['_start'] as DateTime;
     final end = lesson['_end'] as DateTime;
 
@@ -1170,6 +1170,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final recentGrades = data?['recent_grades'] as List<dynamic>? ?? [];
 
     final sparkPoints = recentGrades
+        .where((g) => g is Map<String, dynamic>)
         .map((g) => _toDouble((g as Map<String, dynamic>)['grade']))
         .toList()
         .reversed

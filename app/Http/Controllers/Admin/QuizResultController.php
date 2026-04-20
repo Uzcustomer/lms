@@ -2160,6 +2160,26 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Quiz natija bahosini tahrirlash (hemis_quiz_results da grade yangilash).
+     */
+    public function updateGrade(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:hemis_quiz_results,id',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        DB::table('hemis_quiz_results')
+            ->where('id', $request->id)
+            ->update([
+                'grade' => $request->grade,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
     public function triggerCron()

@@ -1373,11 +1373,10 @@
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                                        $isSuperadmin = auth()->user()?->hasRole('superadmin') ?? false;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRateAdmin = !$isDekan && $isAdminRole && (!$isYnSubmitted || $isSuperadmin);
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && (!$isYnSubmitted || $isSuperadmin);
+                                                        $canRateAdmin = !$isDekan && $isAdminRole && !$isYnSubmitted;
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted;
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;
@@ -1471,13 +1470,7 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            @if($isSuperadmin && $gradeData)
-                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="superadminEditGrade(this, {{ $gradeData['id'] }})" title="Superadmin: bosib baho o'zgartiring">
-                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                            </div>
-                                                            @else
                                                             <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                            @endif
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -1724,19 +1717,6 @@
 
                 {{-- YN yuborilgandan keyin ogohlantirish xabari --}}
                 @if(isset($ynSubmission) && $ynSubmission)
-                @if(auth()->user()?->hasRole('superadmin'))
-                <div class="mt-3 p-4 bg-blue-50 border border-blue-300 rounded-lg">
-                    <div class="flex items-start">
-                        <svg class="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <div class="text-sm text-blue-800">
-                            <p class="font-semibold">Superadmin rejimi — baholarni tahrirlash mumkin</p>
-                            <p class="mt-1">YN ga yuborilgan, lekin superadmin sifatida barcha baholarni o'zgartirish imkoniyati ochiq.</p>
-                        </div>
-                    </div>
-                </div>
-                @else
                 <div class="mt-3 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
                     <div class="flex items-start">
                         <svg class="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -1748,7 +1728,6 @@
                         </div>
                     </div>
                 </div>
-                @endif
                 @endif
                 @endif
 
@@ -2052,7 +2031,6 @@
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                            $isSuperadminMt = auth()->user()?->hasRole('superadmin') ?? false;
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
 
                                             // Sababli ariza orqali MT bahosi: talaba uchun tasdiqlangan
@@ -2080,12 +2058,12 @@
                                                 && (!$mtSababliDeadlinePassed || $isAdminMt);
 
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? ($isSuperadminMt ? false : !$mtSababliCanGrade)
+                                                ? !$mtSababliCanGrade
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
-                                            // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari (superadmin bundan mustasno)
-                                            if ($isYnSubmittedMt && !$mtSababliCanGrade && !$isSuperadminMt) {
+                                            // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
+                                            if ($isYnSubmittedMt && !$mtSababliCanGrade) {
                                                 $canRegrade = false;
                                             }
 
@@ -3708,77 +3686,6 @@
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
                 cellDiv.innerHTML = originalContent;
                 currentEditingCell = null;
-            });
-        }
-
-        function superadminEditGrade(cellDiv, gradeId) {
-            if (currentEditingCell) return;
-            currentEditingCell = cellDiv;
-            const originalContent = cellDiv.innerHTML;
-            const currentVal = cellDiv.querySelector('span')?.textContent?.trim() || '';
-
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.min = 0;
-            input.max = 100;
-            input.value = currentVal;
-            input.className = 'w-full text-center font-medium border-2 border-blue-400 rounded';
-            input.style.cssText = 'width:50px; padding:2px; font-size:13px; outline:none;';
-
-            cellDiv.innerHTML = '';
-            cellDiv.appendChild(input);
-            input.focus();
-            input.select();
-
-            function save() {
-                const val = parseFloat(input.value);
-                if (isNaN(val) || val < 0 || val > 100) {
-                    cellDiv.innerHTML = originalContent;
-                    currentEditingCell = null;
-                    return;
-                }
-                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
-                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ grade_id: gradeId, grade: val, action: 'update' })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const g = Math.round(data.grade);
-                        const cls = g < {{ $minimumLimit ?? 60 }} ? 'text-red-600' : 'text-gray-900';
-                        cellDiv.innerHTML = `<span class="${cls} font-medium">${g}</span>`;
-                        const n = document.createElement('div');
-                        n.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
-                        n.textContent = 'Saqlandi: ' + g;
-                        document.body.appendChild(n);
-                        setTimeout(() => n.remove(), 2000);
-                    } else {
-                        alert(data.message || 'Xatolik');
-                        cellDiv.innerHTML = originalContent;
-                    }
-                    currentEditingCell = null;
-                })
-                .catch(() => {
-                    alert('Xatolik yuz berdi');
-                    cellDiv.innerHTML = originalContent;
-                    currentEditingCell = null;
-                });
-            }
-
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); save(); }
-                if (e.key === 'Escape') { cellDiv.innerHTML = originalContent; currentEditingCell = null; }
-            });
-            input.addEventListener('blur', function() {
-                setTimeout(() => {
-                    if (currentEditingCell === cellDiv) { save(); }
-                }, 150);
             });
         }
 

@@ -874,7 +874,7 @@
             });
 
             // BAHO TAHRIRLASH
-            function editGrade(el, id) {
+            window.editGrade = function(el, id) {
                 var currentGrade = el.textContent.trim();
                 var td = el.parentNode;
                 var input = document.createElement('input');
@@ -923,7 +923,7 @@
                         td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + currentGrade + '</span>';
                     }
                 });
-            }
+            };
 
             // SISTEMAGA YUKLASH
             $('#btn-upload').on('click', function() {

@@ -88,7 +88,7 @@
                                 <button type="button" onclick="switchProfileTab('tashkiliy')" id="ptab-tashkiliy" class="sp-tab">Tashkiliy</button>
                                 <button type="button" onclick="switchProfileTab('manzil')" id="ptab-manzil" class="sp-tab">Manzil</button>
                                 <button type="button" onclick="switchProfileTab('fayllar')" id="ptab-fayllar" class="sp-tab">Fayllar</button>
-                                @if($canUploadFiles)<button type="button" onclick="switchProfileTab('qabul')" id="ptab-qabul" class="sp-tab">Qabul</button>@endif
+                                @if($canUploadFiles)<button type="button" onclick="switchProfileTab('qabul')" id="ptab-qabul" class="sp-tab">Umumiy ma'lumotlar</button>@endif
                             </div>
 
                             {{-- TAB 1: SHAXSIY --}}
@@ -370,255 +370,696 @@
                             {{-- TAB 6: QABUL --}}
                             @if($canUploadFiles)
                             <div id="ptab-content-qabul" class="sp-content" style="display:none;">
-                                <div class="bg-white rounded-xl">
+                                @if(session('success'))
+                                <div class="mb-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold">{{ session('success') }}</div>
+                                @endif
+                                @if(session('error'))
+                                <div class="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-semibold">{{ session('error') }}</div>
+                                @endif
+                                <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="qabul-form" enctype="multipart/form-data" id="qabul-main-form" novalidate>
+                                    @csrf
 
-                                    {{-- Ma'lumotlar formasi --}}
-                                    <form action="{{ route('admin.students.admission-data.save', $student) }}" method="POST" class="p-5 space-y-5">
-                                        @csrf
+                                <div class="flex gap-5" style="min-height:400px;">
+                                    {{-- Vertical stepper navigation --}}
+                                    <div class="qstep-nav flex-shrink-0" style="width:200px;">
+                                        <button type="button" class="qstep-btn qstep-active" onclick="goStep(0)"><span class="qstep-num">1</span><span class="qstep-label">Shaxsiy</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(1)"><span class="qstep-num">2</span><span class="qstep-label">Manzil</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(2)"><span class="qstep-num">3</span><span class="qstep-label">Ta'lim</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(3)"><span class="qstep-num">4</span><span class="qstep-label">Sertifikatlar</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(4)"><span class="qstep-num">5</span><span class="qstep-label">Ota-ona</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(5)"><span class="qstep-num">6</span><span class="qstep-label">Yakun</span></button>
+                                    </div>
 
-                                        {{-- Shaxsiy ma'lumotlar --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-indigo-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Shaxsiy ma'lumotlar</h5>
-                                            </div>
+                                    {{-- Step content panels --}}
+                                    <div class="flex-1 min-w-0">
+
+                                    {{-- STEP 1: Shaxsiy --}}
+                                    <div class="qstep-panel" data-step="0">
+
+                                    {{-- 1. Shaxsiy ma'lumotlar --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#6366f1;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Shaxsiy ma'lumotlar</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
                                             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                @foreach([['familya','Familya'],['ism','Ism'],['otasining_ismi',"Otasining ismi"],['tugilgan_sana',"Tug'ilgan sana",'date'],['jshshir','JSHSHIR'],['jinsi','Jinsi'],['tel1','Tel 1'],['tel2','Tel 2'],['email','Email'],['millat','Millat']] as $f)
+                                                @foreach([['familya','Familya',$student->second_name],['ism','Ism',$student->first_name],['otasining_ismi',"Otasining ismi",$student->third_name],['email','Email',''],['millat','Millat','']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                    <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
-                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                           placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}"
+                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ?? $f[2] ?? '') }}"
+                                                           class="qabul-input" placeholder="{{ $f[1] }}">
                                                 </div>
                                                 @endforeach
-                                            </div>
-                                        </div>
-
-                                        {{-- Tug'ilgan joy + Manzil (yonma-yon) --}}
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-sky-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Tug'ilgan joy</h5>
-                                                </div>
-                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    @foreach([['tugilgan_davlat','Davlat'],['tugilgan_viloyat','Viloyat'],['tugulgan_tuman','Tuman']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-sky-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Manzil</h5>
-                                                </div>
-                                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                    @foreach([['doimiy_manzil','Doimiy manzil'],['yashash_davlat','Yashash davlat'],['yashash_viloyat','Yashash viloyat'],['yashash_tuman','Yashash tuman'],['yashash_manzil','Yashash manzil']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {{-- Pasport --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-amber-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Pasport</h5>
-                                            </div>
-                                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                                @foreach([['passport_seriya','Seriya'],['passport_raqam','Raqam'],['passport_sana','Berilgan sana','date'],['passport_joy','Berilgan joy']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                    <input type="{{ $f[2] ?? 'text' }}" name="{{ $f[0] }}"
-                                                           value="{{ old($f[0], $admissionData?->{$f[0]} ? (($f[2] ?? '') === 'date' ? \Carbon\Carbon::parse($admissionData->{$f[0]})->format('Y-m-d') : $admissionData->{$f[0]}) : '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                           placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">JSHSHIR</label>
+                                                    <input type="text" name="jshshir" inputmode="numeric" pattern="[0-9]*" maxlength="14"
+                                                           value="{{ old('jshshir', $admissionData?->jshshir ?? '') }}"
+                                                           class="qabul-input" placeholder="14 xonali raqam"
+                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                                                 </div>
-                                                @endforeach
-                                            </div>
-                                        </div>
-
-                                        {{-- Ta'lim ma'lumotlari --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-emerald-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ta'lim ma'lumotlari</h5>
-                                            </div>
-                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                                                @foreach([['oliy_malumot',"Oliy ma'lumot"],['otm_nomi','OTM nomi'],['talim_turi',"Ta'lim turi"],['talim_shakli',"Ta'lim shakli"],['mutaxassislik','Mutaxassislik'],['toplagan_ball','Toplagan ball'],['tolov_shakli',"To'lov shakli"],['muassasa_nomi','Muassasa nomi'],['hujjat_seriya','Hujjat seriya'],['ortalacha_ball','Ortalacha ball']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                           placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">Tug'ilgan sana</label>
+                                                    <input type="date" name="tugilgan_sana"
+                                                           value="{{ old('tugilgan_sana', $admissionData?->tugilgan_sana ? \Carbon\Carbon::parse($admissionData->tugilgan_sana)->format('Y-m-d') : '') }}"
+                                                           class="qabul-input">
                                                 </div>
-                                                @endforeach
-                                            </div>
-                                        </div>
-
-                                        {{-- Til sertifikatlari --}}
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-3">
-                                                <span class="w-1 h-4 rounded-full bg-violet-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Til sertifikatlari</h5>
-                                            </div>
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                @foreach([['sertifikat_turi','Sertifikat turi'],['sertifikat_ball','Sertifikat ball'],['milliy_sertifikat','Milliy sertifikat']] as $f)
                                                 <div>
-                                                    <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                           placeholder="{{ $f[1] }}">
+                                                    <label class="qabul-label">Jinsi</label>
+                                                    <select name="jinsi" class="qabul-input">
+                                                        <option value="">Tanlang</option>
+                                                        <option value="Erkak" {{ old('jinsi', $admissionData?->jinsi) === 'Erkak' ? 'selected' : '' }}>Erkak</option>
+                                                        <option value="Ayol" {{ old('jinsi', $admissionData?->jinsi) === 'Ayol' ? 'selected' : '' }}>Ayol</option>
+                                                    </select>
                                                 </div>
-                                                @endforeach
-                                            </div>
-                                        </div>
-
-                                        {{-- Ota-ona (yonma-yon) --}}
-                                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-blue-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ota ma'lumotlari</h5>
+                                                <div>
+                                                    <label class="qabul-label">Telefon raqam</label>
+                                                    <input type="text" name="tel1"
+                                                           value="{{ old('tel1', $admissionData?->tel1 ?? '') }}"
+                                                           class="qabul-input qabul-phone" placeholder="+998 __ ___ __ __">
                                                 </div>
-                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                    @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Tel'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
+                                                <div>
+                                                    <label class="qabul-label">Qo'shimcha telefon raqam</label>
+                                                    <input type="text" name="tel2"
+                                                           value="{{ old('tel2', $admissionData?->tel2 ?? '') }}"
+                                                           class="qabul-input qabul-phone" placeholder="+998 __ ___ __ __">
                                                 </div>
                                             </div>
-                                            <div>
-                                                <div class="flex items-center gap-2 mb-3">
-                                                    <span class="w-1 h-4 rounded-full bg-pink-500"></span>
-                                                    <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Ona ma'lumotlari</h5>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Oliy ma'lumot mavjudligi</label>
+                                                    <select name="oliy_malumot" id="qabul_oliy_malumot" class="qabul-input" onchange="toggleOtmNomi()">
+                                                        <option value="Yo'q" {{ old('oliy_malumot', $admissionData?->oliy_malumot) === "Yo'q" || !old('oliy_malumot', $admissionData?->oliy_malumot) ? 'selected' : '' }}>Yo'q</option>
+                                                        <option value="Ha" {{ old('oliy_malumot', $admissionData?->oliy_malumot) === 'Ha' ? 'selected' : '' }}>Ha</option>
+                                                    </select>
                                                 </div>
-                                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                    @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Tel'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
-                                                    <div>
-                                                        <label class="block text-xs font-bold text-slate-600 mb-1.5">{{ $f[1] }}</label>
-                                                        <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
-                                                               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition shadow-sm placeholder:text-slate-400"
-                                                               placeholder="{{ $f[1] }}">
-                                                    </div>
-                                                    @endforeach
+                                                <div id="qabul_otm_nomi_wrap" style="{{ old('oliy_malumot', $admissionData?->oliy_malumot) === 'Ha' ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Avval tugatgan OTM nomi</label>
+                                                    <input type="text" name="otm_nomi"
+                                                           value="{{ old('otm_nomi', $admissionData?->otm_nomi ?? '') }}"
+                                                           class="qabul-input" placeholder="OTM nomini kiriting">
                                                 </div>
-                                            </div>
-                                        </div>
-
-                                        {{-- Saqlash tugmasi --}}
-                                        <div class="flex items-center gap-3 pt-2">
-                                            <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-slate-800 to-slate-600 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-sm">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-                                                Saqlash
-                                            </button>
-                                            @if($admissionData)
-                                            <span class="text-[11px] text-slate-400">Oxirgi yangilangan: {{ $admissionData->updated_at->format('d.m.Y H:i') }}</span>
-                                            @endif
-                                        </div>
-                                    </form>
-
-                                    {{-- Hujjatlar bo'limi --}}
-                                    <div class="px-5 pb-5">
-                                        <div class="border-t border-slate-200 pt-5">
-                                            <div class="flex items-center gap-2 mb-4">
-                                                <span class="w-1 h-4 rounded-full bg-teal-500"></span>
-                                                <h5 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Hujjatlar (PDF / Rasm)</h5>
-                                                <span class="text-[10px] text-slate-400 font-medium ml-1">max 1MB</span>
-                                            </div>
-
-                                            @php
-                                                $docTypes = [
-                                                    ['short' => 'Pasport', 'full' => 'Pasport (PDF)'],
-                                                    ['short' => 'Propiska', 'full' => 'Propiska (PDF)'],
-                                                    ['short' => 'Attestat', 'full' => 'Attestat (PDF)'],
-                                                    ['short' => 'Ruxsatnoma', 'full' => 'Ruxsatnoma (PDF)'],
-                                                    ['short' => 'DTM varaqa', 'full' => 'DTM varaqa (PDF)'],
-                                                    ['short' => 'Ota pasporti', 'full' => 'Ota pasporti (PDF)'],
-                                                    ['short' => 'Ona pasporti', 'full' => 'Ona pasporti (PDF)'],
-                                                    ['short' => 'Obyektivka', 'full' => 'Obyektivka'],
-                                                    ['short' => 'Boshqa', 'full' => 'Boshqa'],
-                                                ];
-                                                $uploadedByName = $studentFiles->filter(fn($f) => in_array($f->name, array_column($docTypes, 'full')))->keyBy('name');
-                                            @endphp
-
-                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                @foreach($docTypes as $doc)
-                                                @php $uploaded = $uploadedByName->get($doc['full']); @endphp
-                                                <div class="rounded-lg border p-3 transition-all {{ $uploaded ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30 hover:border-slate-300' }}">
-                                                    {{-- Hujjat nomi va holati --}}
-                                                    <div class="flex items-center gap-2 mb-2.5">
-                                                        @if($uploaded)
-                                                        <span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                                                            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
-                                                        </span>
-                                                        @else
-                                                        <span class="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                                                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
-                                                        </span>
-                                                        @endif
-                                                        <div class="min-w-0">
-                                                            <span class="text-xs font-bold block {{ $uploaded ? 'text-emerald-700' : 'text-slate-600' }}">{{ $doc['short'] }}</span>
-                                                            @if($uploaded)
-                                                            <span class="text-[10px] text-slate-400">{{ number_format($uploaded->size / 1024, 1) }} KB &middot; {{ $uploaded->created_at->format('d.m.Y') }}</span>
-                                                            @endif
-                                                        </div>
-                                                    </div>
-
-                                                    @if($uploaded)
-                                                    {{-- Yuklangan fayl uchun amallar --}}
-                                                    <div class="flex items-center gap-1.5">
-                                                        <a href="{{ route('admin.students.files.download', [$student, $uploaded]) }}"
-                                                           class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition">
-                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-                                                            Yuklab olish
-                                                        </a>
-                                                        <form action="{{ route('admin.students.admission-files.delete', [$student, $uploaded]) }}" method="POST"
-                                                              onsubmit="return confirm('{{ addslashes($doc['full']) }} faylini o\'chirmoqchimisiz?')">
-                                                            @csrf @method('DELETE')
-                                                            <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-red-500 bg-red-50 rounded-md hover:bg-red-100 transition">
-                                                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
-                                                                O'chirish
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                    @else
-                                                    {{-- Fayl yuklash input --}}
-                                                    <form action="{{ route('admin.students.admission-files.upload', $student) }}" method="POST" enctype="multipart/form-data">
-                                                        @csrf
-                                                        <input type="hidden" name="admission_file_name" value="{{ $doc['full'] }}">
-                                                        <div class="flex items-center gap-2">
-                                                            <input type="file" name="admission_file" accept=".pdf,.jpg,.jpeg,.png" required
-                                                                   class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-slate-100 file:text-slate-600 hover:file:bg-slate-200 file:cursor-pointer file:transition">
-                                                            <button type="submit" class="flex-shrink-0 p-1.5 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition" title="Yuklash">
-                                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
-                                                            </button>
-                                                        </div>
-                                                    </form>
-                                                    @endif
-                                                </div>
-                                                @endforeach
                                             </div>
                                         </div>
                                     </div>
 
-                                </div>
+                                    {{-- 1b. Pasport ma'lumotlari + fayllar --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#f59e0b;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Pasport ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">Seriya</label>
+                                                    <input type="text" name="passport_seriya" value="{{ old('passport_seriya', $admissionData?->passport_seriya ?? '') }}" class="qabul-input" placeholder="AA" maxlength="2">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Raqam</label>
+                                                    <input type="text" name="passport_raqam" value="{{ old('passport_raqam', $admissionData?->passport_raqam ?? '') }}" class="qabul-input" placeholder="1234567" maxlength="7" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Berilgan sana</label>
+                                                    <input type="date" name="passport_sana" value="{{ old('passport_sana', $admissionData?->passport_sana ? \Carbon\Carbon::parse($admissionData->passport_sana)->format('Y-m-d') : '') }}" class="qabul-input">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Berilgan joy</label>
+                                                    <input type="text" name="passport_joy" value="{{ old('passport_joy', $admissionData?->passport_joy ?? '') }}" class="qabul-input" placeholder="Berilgan joy">
+                                                </div>
+                                            </div>
+                                            @php $passportFile = $studentFiles->firstWhere('name', 'Pasport nusxasi (PDF)'); $photoFile = $studentFiles->firstWhere('name', '3x4 rasm'); @endphp
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div class="rounded-lg border p-3 {{ $passportFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}" id="qf-pasport-nusxa">
+                                                    <div class="flex items-center gap-2 mb-2">
+                                                        <span class="w-5 h-5 rounded-full {{ $passportFile ? 'bg-emerald-100' : 'bg-slate-100' }} flex items-center justify-center">@if($passportFile)<svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>@else<svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>@endif</span>
+                                                        <span class="text-xs font-bold {{ $passportFile ? 'text-emerald-700' : 'text-slate-600' }}">Pasport nusxasi (ikala tomoni bitta PDF)</span>
+                                                    </div>
+                                                    @if($passportFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($passportFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $passportFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $passportFile->id }},'Pasport nusxasi')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" name="files[Pasport nusxasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                                <div class="rounded-lg border p-3 {{ $photoFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}" id="qf-3x4-rasm">
+                                                    <div class="flex items-center gap-2 mb-2">
+                                                        <span class="w-5 h-5 rounded-full {{ $photoFile ? 'bg-emerald-100' : 'bg-slate-100' }} flex items-center justify-center">@if($photoFile)<svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>@else<svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg>@endif</span>
+                                                        <span class="text-xs font-bold {{ $photoFile ? 'text-emerald-700' : 'text-slate-600' }}">3x4 rasm</span>
+                                                    </div>
+                                                    @if($photoFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($photoFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $photoFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $photoFile->id }},'3x4 rasm')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" name="files[3x4 rasm]" accept=".jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end mt-3"><button type="button" class="qstep-next-btn" onclick="goStep(1)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 1 --}}
+
+                                    {{-- STEP 2: Manzil --}}
+                                    <div class="qstep-panel" data-step="1" style="display:none;">
+
+                                    {{-- 2. Tug'ilgan joy --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#0ea5e9;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Tug'ilgan joy</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">Davlat</label>
+                                                    @php $tdVal = old('tugilgan_davlat', $admissionData?->tugilgan_davlat ?? "O'zbekiston Respublikasi"); @endphp
+                                                    <select name="tugilgan_davlat" class="qabul-input qabul-davlat-select" data-group="tugilgan">
+                                                        <option value="O'zbekiston Respublikasi" {{ $tdVal === "O'zbekiston Respublikasi" ? 'selected' : '' }}>O'zbekiston Respublikasi</option>
+                                                        <option value="Boshqa" {{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'selected' : '' }}>Boshqa</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Viloyat</label>
+                                                    @php $tvVal = old('tugilgan_viloyat', $admissionData?->tugilgan_viloyat ?? ''); @endphp
+                                                    <select name="tugilgan_viloyat" class="qabul-input qabul-viloyat-select" data-group="tugilgan" {{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'disabled' : '' }} style="{{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="tugilgan_viloyat" class="qabul-input qabul-viloyat-text" data-group="tugilgan" value="{{ $tvVal }}" placeholder="Viloyat" {{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'disabled' : '' }} style="{{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Tuman</label>
+                                                    @php $ttVal = old('tugulgan_tuman', $admissionData?->tugulgan_tuman ?? ''); @endphp
+                                                    <select name="tugulgan_tuman" class="qabul-input qabul-tuman-select" data-group="tugilgan" {{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'disabled' : '' }} style="{{ $tdVal !== "O'zbekiston Respublikasi" && $tdVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="tugulgan_tuman" class="qabul-input qabul-tuman-text" data-group="tugilgan" value="{{ $ttVal }}" placeholder="Tuman" {{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'disabled' : '' }} style="{{ $tdVal === "O'zbekiston Respublikasi" || !$tdVal ? 'display:none' : '' }}">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- 3. Doimiy yashash manzili --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#14b8a6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Doimiy yashash manzilingiz</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">Yashayotgan davlat</label>
+                                                    @php $ydVal = old('yashash_davlat', $admissionData?->yashash_davlat ?? "O'zbekiston Respublikasi"); @endphp
+                                                    <select name="yashash_davlat" class="qabul-input qabul-davlat-select" data-group="yashash">
+                                                        <option value="O'zbekiston Respublikasi" {{ $ydVal === "O'zbekiston Respublikasi" ? 'selected' : '' }}>O'zbekiston Respublikasi</option>
+                                                        <option value="Boshqa" {{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'selected' : '' }}>Boshqa</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Yashayotgan viloyat</label>
+                                                    @php $yvVal = old('yashash_viloyat', $admissionData?->yashash_viloyat ?? ''); @endphp
+                                                    <select name="yashash_viloyat" class="qabul-input qabul-viloyat-select" data-group="yashash" {{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'disabled' : '' }} style="{{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="yashash_viloyat" class="qabul-input qabul-viloyat-text" data-group="yashash" value="{{ $yvVal }}" placeholder="Viloyat" {{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'disabled' : '' }} style="{{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Yashayotgan tuman</label>
+                                                    @php $ytVal = old('yashash_tuman', $admissionData?->yashash_tuman ?? ''); @endphp
+                                                    <select name="yashash_tuman" class="qabul-input qabul-tuman-select" data-group="yashash" {{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'disabled' : '' }} style="{{ $ydVal !== "O'zbekiston Respublikasi" && $ydVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="yashash_tuman" class="qabul-input qabul-tuman-text" data-group="yashash" value="{{ $ytVal }}" placeholder="Tuman" {{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'disabled' : '' }} style="{{ $ydVal === "O'zbekiston Respublikasi" || !$ydVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Yashayotgan manzil (ko'cha, uy)</label>
+                                                    <input type="text" name="yashash_manzil" value="{{ old('yashash_manzil', $admissionData?->yashash_manzil ?? '') }}" class="qabul-input" placeholder="Ko'cha, uy raqami">
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <label class="qabul-label">Hozirgi vaqtinchalik yashash manzilingiz</label>
+                                                <input type="text" name="vaqtinchalik_manzil"
+                                                       value="{{ old('vaqtinchalik_manzil', $admissionData?->vaqtinchalik_manzil ?? '') }}"
+                                                       class="qabul-input" placeholder="Masalan: Termiz sh., Talabalar turar joyi, 3-bino, 215-xona">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(0)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(2)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 2 --}}
+
+                                    {{-- STEP 3: Ta'lim --}}
+                                    <div class="qstep-panel" data-step="2" style="display:none;">
+
+                                    {{-- 4. Avvalgi ta'lim ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#10b981;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Avvalgi ta'lim ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">Davlat</label>
+                                                    @php $tldVal = old('talim_davlat', $admissionData?->talim_davlat ?? "O'zbekiston Respublikasi"); @endphp
+                                                    <select name="talim_davlat" class="qabul-input qabul-davlat-select" data-group="talim">
+                                                        <option value="O'zbekiston Respublikasi" {{ $tldVal === "O'zbekiston Respublikasi" ? 'selected' : '' }}>O'zbekiston Respublikasi</option>
+                                                        <option value="Boshqa" {{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'selected' : '' }}>Boshqa</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim olgan viloyati</label>
+                                                    @php $tlvVal = old('talim_viloyat', $admissionData?->talim_viloyat ?? ''); @endphp
+                                                    <select name="talim_viloyat" class="qabul-input qabul-viloyat-select" data-group="talim" {{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'disabled' : '' }} style="{{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="talim_viloyat" class="qabul-input qabul-viloyat-text" data-group="talim" value="{{ $tlvVal }}" placeholder="Viloyat" {{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'disabled' : '' }} style="{{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim olgan tumani</label>
+                                                    @php $tltVal = old('talim_tuman', $admissionData?->talim_tuman ?? ''); @endphp
+                                                    <select name="talim_tuman" class="qabul-input qabul-tuman-select" data-group="talim" {{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'disabled' : '' }} style="{{ $tldVal !== "O'zbekiston Respublikasi" && $tldVal ? 'display:none' : '' }}">
+                                                        <option value="">Tanlang...</option>
+                                                    </select>
+                                                    <input type="text" name="talim_tuman" class="qabul-input qabul-tuman-text" data-group="talim" value="{{ $tltVal }}" placeholder="Tuman" {{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'disabled' : '' }} style="{{ $tldVal === "O'zbekiston Respublikasi" || !$tldVal ? 'display:none' : '' }}">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim muassasasi turi</label>
+                                                    <select name="talim_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(["Umumiy o'rta","O'rta maxsus","Akademik litsey","Kasb-hunar kolleji","Oliy ta'lim"] as $tt)
+                                                        <option value="{{ $tt }}" {{ old('talim_turi', $admissionData?->talim_turi) === $tt ? 'selected' : '' }}>{{ $tt }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim muassasasi nomi</label>
+                                                    <input type="text" name="muassasa_nomi" value="{{ old('muassasa_nomi', $admissionData?->muassasa_nomi ?? '') }}"
+                                                           class="qabul-input" placeholder="Muassasa nomini kiriting">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">O'qigan yillari (boshi)</label>
+                                                    <input type="text" name="oqigan_yili_boshi" value="{{ old('oqigan_yili_boshi', $admissionData?->oqigan_yili_boshi ?? '') }}"
+                                                           class="qabul-input" placeholder="2018" maxlength="4" inputmode="numeric"
+                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">O'qigan yillari (tugashi)</label>
+                                                    <input type="text" name="oqigan_yili_tugashi" value="{{ old('oqigan_yili_tugashi', $admissionData?->oqigan_yili_tugashi ?? '') }}"
+                                                           class="qabul-input" placeholder="2020" maxlength="4" inputmode="numeric"
+                                                           oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Hujjat seriyasi va raqami</label>
+                                                    <input type="text" name="hujjat_seriya" value="{{ old('hujjat_seriya', $admissionData?->hujjat_seriya ?? '') }}"
+                                                           class="qabul-input" placeholder="KT777111">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">O'rtacha attestat/diplom bali</label>
+                                                    <input type="text" name="ortalacha_ball" value="{{ old('ortalacha_ball', $admissionData?->ortalacha_ball ?? '') }}"
+                                                           class="qabul-input" placeholder="4.5">
+                                                </div>
+                                            </div>
+                                            @php $attestatFile = $studentFiles->firstWhere('name', 'Attestat/Diplom (PDF)'); @endphp
+                                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                                <label class="qabul-label">Attestat yoki diplomini ilovasi bilan skaner qilib yuklash (PDF)</label>
+                                                <div class="rounded-lg border p-3 {{ $attestatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                    @if($attestatFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($attestatFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $attestatFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $attestatFile->id }},'Attestat')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" name="files[Attestat/Diplom (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {{-- 4b. Hozirgi Oliy ta'lim muassasasi ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#0369a1;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Hozirgi Oliy ta'lim muassasasi ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">OTM nomi</label>
+                                                    <input type="text" value="Toshkent davlat tibbiyot universiteti Termiz filiali" class="qabul-input" style="background:#f0fdf4; border-color:#86efac; color:#166534;" readonly>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim turi</label>
+                                                    <select name="hozirgi_talim_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['Bakalavr','Magistr'] as $ht)
+                                                        <option value="{{ $ht }}" {{ old('hozirgi_talim_turi', $admissionData?->hozirgi_talim_turi) === $ht ? 'selected' : '' }}>{{ $ht }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim shakli</label>
+                                                    <select name="talim_shakli" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['Kunduzgi','Kechki','Sirtqi','Onlayn'] as $ts)
+                                                        <option value="{{ $ts }}" {{ old('talim_shakli', $admissionData?->talim_shakli) === $ts ? 'selected' : '' }}>{{ $ts }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Mutaxassislik</label>
+                                                    <select name="mutaxassislik" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @php
+                                                        $mutaxassisliklar = [
+                                                            'Davolash ishi','Farmatsiya','Fundamental tibbiyot','Pediatriya ishi','Stomatologiya','Tibbiy profilaktika ishi',
+                                                            'Davolash ishi (Termiz tumani)','Davolash ishi (Termiz shahri)','Davolash ishi (Angor tumani)','Davolash ishi (Bandixon tumani)','Davolash ishi (Boysun tumani)','Davolash ishi (Denov tumani)','Davolash ishi (Jarqo\'rg\'on tumani)','Davolash ishi (Oltinsoy tumani)','Davolash ishi (Qiziriq tumani)','Davolash ishi (Sherobod tumani)','Davolash ishi (Qumqo\'rg\'on tumani)','Davolash ishi (Sho\'rchi tumani)','Davolash ishi (Uzun tumani)','Davolash ishi (Sariosiyo tumani)','Davolash ishi (Muzrabod tumani)','Davolash ishi (Chiroqchi tumani)','Davolash ishi (Qarshi tumani)','Davolash ishi (Qarshi shahri)','Davolash ishi (Dehqonobod tumani)','Davolash ishi (G\'uzor tumani)','Davolash ishi (Kasbi tumani)','Davolash ishi (Kitob tumani)','Davolash ishi (Ko\'kdala tumani)','Davolash ishi (Koson tumani)','Davolash ishi (Mirishkor tumani)','Davolash ishi (Muborak tumani)','Davolash ishi (Nishon tumani)','Davolash ishi (Qamashi tumani)','Davolash ishi (Shahrisabz tumani)','Davolash ishi (Yakkabog\' tumani)',
+                                                            'Pediatriya ishi (Angor tumani)','Pediatriya ishi (Bandixon tumani)','Pediatriya ishi (Boysun tumani)','Pediatriya ishi (Denov tumani)','Pediatriya ishi (Denov tumani)','Pediatriya ishi (Jarqo\'rg\'on tumani)','Pediatriya ishi (Muzrabod tumani)','Pediatriya ishi (Oltinsoy tumani)','Pediatriya ishi (Qiziriq tumani)','Pediatriya ishi (Qumqo\'rg\'on tumani)','Pediatriya ishi (Sariosiyo tumani)','Pediatriya ishi (Sherobod tumani)','Pediatriya ishi (Sho\'rchi tumani)','Pediatriya ishi (Termiz shahri)','Pediatriya ishi (Termiz tumani)','Pediatriya ishi (Uzun tumani)',
+                                                        ];
+                                                        @endphp
+                                                        @foreach($mutaxassisliklar as $mx)
+                                                        <option value="{{ $mx }}" {{ old('mutaxassislik', $admissionData?->mutaxassislik) === $mx ? 'selected' : '' }}>{{ $mx }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- 4c. Qabul ma'lumotlari --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#7c3aed;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Qabul ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">Abituriyent ID raqami</label>
+                                                    <input type="text" name="abituriyent_id" value="{{ old('abituriyent_id', $admissionData?->abituriyent_id ?? '') }}"
+                                                           class="qabul-input" placeholder="342234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Javoblar varaqasi raqami</label>
+                                                    <input type="text" name="javoblar_varaqasi" value="{{ old('javoblar_varaqasi', $admissionData?->javoblar_varaqasi ?? '') }}"
+                                                           class="qabul-input" placeholder="1234234" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Ta'lim tili</label>
+                                                    <select name="talim_tili" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(["O'zbekcha","Ruscha","Inglizcha"] as $tl)
+                                                        <option value="{{ $tl }}" {{ old('talim_tili', $admissionData?->talim_tili) === $tl ? 'selected' : '' }}>{{ $tl }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Imtihon alifbosi</label>
+                                                    <select name="imtihon_alifbosi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['Lotin','Kiril'] as $ia)
+                                                        <option value="{{ $ia }}" {{ old('imtihon_alifbosi', $admissionData?->imtihon_alifbosi) === $ia ? 'selected' : '' }}>{{ $ia }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">To'plagan ball</label>
+                                                    <input type="text" name="toplagan_ball" value="{{ old('toplagan_ball', $admissionData?->toplagan_ball ?? '') }}"
+                                                           class="qabul-input" placeholder="Ball" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Tavsiya turi</label>
+                                                    <select name="tavsiya_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @php
+                                                        $tavsiyalar = [
+                                                            "To'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Davlat grantlari asosida qo'shimcha qabul (Kambag'al oila reyestriga kiritilgan oilalarning farzandlari)",
+                                                            "Nogironligi bo'lgan shaxslarni uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Mutaxassisligi bo'yicha kamida besh yil mehnat stajiga ega bo'lgan xotin-qizlar tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha to'lov-kontrakti asosida talabalikka tavsiya etildi",
+                                                            "Xotin-qizlarni qo'llab-quvvatlash maqsadida berilgan tavsiyanoma bilan oliy ta'lim muassasalariga ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi ichki ishlar organlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi Qurolli Kuchlari xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Muddatli harbiy xizmatni o'tab harbiy qism qo'mondonligi tavsiyanomasiga ega abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "O'zbekiston Respublikasi Bojxona xodimlari farzandlari uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "\"Mehribonlik uyi\" va Bolalar shaharchasining bitiruvchilari bo'lgan chin yetim abituriyentlar uchun ajratilgan qo'shimcha davlat granti asosida talabalikka tavsiya etildi",
+                                                            "Tabaqalashtirilgan to'lov kontrakt asosida",
+                                                        ];
+                                                        @endphp
+                                                        @foreach($tavsiyalar as $tv)
+                                                        <option value="{{ $tv }}" {{ old('tavsiya_turi', $admissionData?->tavsiya_turi) === $tv ? 'selected' : '' }}>{{ $tv }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            @php $ruxsatFile = $studentFiles->firstWhere('name', 'Abituriyent ruxsatnomasi (PDF)'); $dtmFile = $studentFiles->firstWhere('name', 'DTM javob varaqasi (PDF)'); @endphp
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Abituriyent ruxsatnomasi (PDF)</label>
+                                                    <div class="rounded-lg border p-3 {{ $ruxsatFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($ruxsatFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($ruxsatFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $ruxsatFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $ruxsatFile->id }},'Ruxsatnoma')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[Abituriyent ruxsatnomasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">DTM javob varaqasi (PDF)</label>
+                                                    <div class="rounded-lg border p-3 {{ $dtmFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($dtmFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($dtmFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $dtmFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $dtmFile->id }},'DTM javob varaqasi')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[DTM javob varaqasi (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(1)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(3)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 3 --}}
+
+                                    {{-- STEP 4: Sertifikatlar --}}
+                                    <div class="qstep-panel" data-step="3" style="display:none;">
+
+                                    {{-- 5. Til sertifikatlari --}}
+                                    @php $milliySertFile = $studentFiles->firstWhere('name', 'Milliy sertifikat'); $chetSertFile = $studentFiles->firstWhere('name', 'Chet tili sertifikati'); @endphp
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#8b5cf6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Til sertifikatlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                {{-- Milliy sertifikat --}}
+                                                <div>
+                                                    <label class="qabul-label">Milliy sertifikat mavjudmi?</label>
+                                                    <select name="sertifikat_turi" class="qabul-input" id="qabul_sert_select" onchange="toggleSertUpload()">
+                                                        <option value="Yo'q" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi) !== 'Ha' ? 'selected' : '' }}>Yo'q</option>
+                                                        <option value="Ha" {{ old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $milliySertFile ? 'selected' : '' }}>Ha</option>
+                                                    </select>
+                                                </div>
+                                                <div id="qabul_sert_upload" style="{{ (old('sertifikat_turi', $admissionData?->sertifikat_turi) === 'Ha' || $milliySertFile) ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Milliy sertifikat faylini yuklang</label>
+                                                    <div class="rounded-lg border p-3 {{ $milliySertFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($milliySertFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($milliySertFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $milliySertFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $milliySertFile->id }},'Milliy sertifikat')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[Milliy sertifikat]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {{-- Chet tili sertifikati --}}
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Chet tili sertifikati</label>
+                                                    @php $chetTilVal = old('chet_til_sertifikat', $admissionData?->chet_til_sertifikat ?? 'Mavjud emas'); @endphp
+                                                    <select name="chet_til_sertifikat" class="qabul-input" id="qabul_chet_sert" onchange="toggleChetSert()">
+                                                        @foreach(['Mavjud emas','Milliy sertifikat','IELTS','TOEFL','DELF','DALF','Goethe-sertifikat','TOPIK','TORFL','JLPT','CEFR'] as $cs)
+                                                        <option value="{{ $cs }}" {{ $chetTilVal === $cs ? 'selected' : '' }}>{{ $cs }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div id="qabul_chet_ball_wrap" style="{{ $chetTilVal !== 'Mavjud emas' ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Ball</label>
+                                                    <input type="text" name="chet_til_ball" value="{{ old('chet_til_ball', $admissionData?->chet_til_ball ?? '') }}"
+                                                           class="qabul-input" placeholder="Ball" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9.]/g,'')">
+                                                </div>
+                                                <div id="qabul_chet_file_wrap" style="{{ $chetTilVal !== 'Mavjud emas' ? '' : 'display:none;' }}">
+                                                    <label class="qabul-label">Sertifikat fayli</label>
+                                                    <div class="rounded-lg border p-3 {{ $chetSertFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                        @if($chetSertFile)
+                                                        <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($chetSertFile->size / 1024, 1) }} KB</span>
+                                                            <a href="{{ route('admin.students.files.download', [$student, $chetSertFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                            <button type="button" onclick="qabulDelete({{ $chetSertFile->id }},'Chet tili sertifikati')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                        </div>
+                                                        @else
+                                                        <input type="file" name="files[Chet tili sertifikati]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 file:cursor-pointer">
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(2)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(4)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 4 --}}
+
+                                    {{-- STEP 5: Ota-ona --}}
+                                    <div class="qstep-panel" data-step="4" style="display:none;">
+
+                                    {{-- 7. Ota ma'lumotlari --}}
+                                    @php $otaPasport = $studentFiles->firstWhere('name', 'Ota pasporti (PDF)'); @endphp
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#3b82f6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Ota ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                                @foreach([['ota_familiya','Familya'],['ota_ismi','Ismi'],['ota_sharifi','Sharifi'],['ota_tel','Telefon raqami','phone'],['ota_ish_joyi','Ish joyi'],['ota_lavozimi','Lavozimi']] as $f)
+                                                <div>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           class="qabul-input {{ ($f[2] ?? '') === 'phone' ? 'qabul-phone' : '' }}" placeholder="{{ ($f[2] ?? '') === 'phone' ? '+998 __ ___ __ __' : $f[1] }}">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                                <label class="qabul-label">Ota pasporti (PDF)</label>
+                                                <div class="rounded-lg border p-3 {{ $otaPasport ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                    @if($otaPasport)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($otaPasport->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $otaPasport]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $otaPasport->id }},'Ota pasporti')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" name="files[Ota pasporti (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- 8. Ona ma'lumotlari --}}
+                                    @php $onaPasport = $studentFiles->firstWhere('name', 'Ona pasporti (PDF)'); @endphp
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#ec4899;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Ona ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                                                @foreach([['ona_familiya','Familya'],['ona_ismi','Ismi'],['ona_sharifi','Sharifi'],['ona_tel','Telefon raqami','phone'],['ona_ish_joyi','Ish joyi'],['ona_lavozimi','Lavozimi']] as $f)
+                                                <div>
+                                                    <label class="qabul-label">{{ $f[1] }}</label>
+                                                    <input type="text" name="{{ $f[0] }}" value="{{ old($f[0], $admissionData?->{$f[0]} ?? '') }}"
+                                                           class="qabul-input {{ ($f[2] ?? '') === 'phone' ? 'qabul-phone' : '' }}" placeholder="{{ ($f[2] ?? '') === 'phone' ? '+998 __ ___ __ __' : $f[1] }}">
+                                                </div>
+                                                @endforeach
+                                            </div>
+                                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                                <label class="qabul-label">Ona pasporti (PDF)</label>
+                                                <div class="rounded-lg border p-3 {{ $onaPasport ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                    @if($onaPasport)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($onaPasport->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $onaPasport]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $onaPasport->id }},'Ona pasporti')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" name="files[Ona pasporti (PDF)]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(3)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(5)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 5 --}}
+
+                                    {{-- STEP 6: Yakun --}}
+                                    <div class="qstep-panel" data-step="5" style="display:none;">
+
+                                    {{-- Boshqa hujjatlar --}}
+                                    @php $obyektivkaFile = $studentFiles->firstWhere('name', 'Obyektivka'); @endphp
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#14b8a6;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Boshqa hujjatlar</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div>
+                                                <label class="qabul-label">Obyektivka</label>
+                                                <div class="rounded-lg border p-3 {{ $obyektivkaFile ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/30' }}">
+                                                    @if($obyektivkaFile)
+                                                    <div class="flex items-center gap-1.5"><span class="text-[10px] text-slate-400">{{ number_format($obyektivkaFile->size / 1024, 1) }} KB</span>
+                                                        <a href="{{ route('admin.students.files.download', [$student, $obyektivkaFile]) }}" class="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded hover:bg-blue-100 transition">Yuklab olish</a>
+                                                        <button type="button" onclick="qabulDelete({{ $obyektivkaFile->id }},'Obyektivka')" class="text-[11px] font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded hover:bg-red-100 transition">O'chirish</button>
+                                                    </div>
+                                                    @else
+                                                    <input type="file" name="files[Obyektivka]" accept=".pdf,.jpg,.jpeg,.png" class="block w-full text-[11px] text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-[11px] file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 file:cursor-pointer">
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between mt-3">
+                                        <button type="button" class="qstep-prev-btn" onclick="goStep(4)">&larr; Oldingi</button>
+                                        <div class="flex items-center gap-3">
+                                            <button type="submit" style="background:#059669;" class="inline-flex items-center gap-2 px-6 py-2.5 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                                                Ma'lumotlarni saqlash
+                                            </button>
+                                            @if($admissionData)
+                                            <span class="text-[11px] text-slate-500">Oxirgi yangilangan: <strong>{{ $admissionData->updated_at->format('d.m.Y H:i') }}</strong></span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    </div>{{-- /STEP 6 --}}
+
+                                    </div>{{-- /flex-1 step content --}}
+                                </div>{{-- /flex gap-5 container --}}
+                                </form>
+
+                                @if($admissionData || $studentFiles->count() > 0)
+                                <form action="{{ route('admin.students.admission-data.clear', $student) }}" method="POST"
+                                      onsubmit="return confirm('DIQQAT! Barcha qabul ma\'lumotlari va yuklangan hujjatlar butunlay o\'chiriladi. Davom etasizmi?')">
+                                    @csrf @method('DELETE')
+                                    <div class="qabul-card" style="border-color:#fecaca;">
+                                        <div class="flex items-center justify-between flex-wrap gap-3 p-4">
+                                            <div>
+                                                <p class="text-sm font-bold text-red-700">Barcha ma'lumotlarni tozalash</p>
+                                                <p class="text-[11px] text-red-400 mt-0.5">Form ma'lumotlari, yuklangan hujjatlar — hammasi o'chiriladi</p>
+                                            </div>
+                                            <button type="submit" style="background:#dc2626;" class="inline-flex items-center gap-2 px-5 py-2 text-white text-sm font-bold rounded-lg hover:opacity-90 transition shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                                                Tozalash
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                                @endif
+
                             </div>{{-- /qabul tab --}}
                             @endif
 
@@ -642,6 +1083,44 @@
     .sp-table td:last-child { padding:6px 8px; color:#0f172a; }
     .sp-table tr:nth-child(even) { background:#f0f4f8; }
     .sp-table tr:hover { background:#e8edf5; }
+
+    /* Qabul form cards */
+    .qabul-form { display:flex; flex-direction:column; gap:10px; }
+    #ptab-content-qabul { display:flex; flex-direction:column; gap:10px; }
+    .qstep-panel { display:flex; flex-direction:column; gap:10px; }
+    .qabul-card { background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 2px 8px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04); overflow:hidden; }
+    .qabul-card-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(90deg, color-mix(in srgb, var(--accent,#1a3268) 8%, #ffffff), #ffffff); border-bottom:1px solid #e2e8f0; border-left:4px solid var(--accent,#1a3268); }
+    .qabul-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#1a3268); flex-shrink:0; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent,#1a3268) 20%, transparent); }
+    .qabul-card-title { font-size:12.5px; font-weight:800; color:#1e293b; letter-spacing:.04em; text-transform:uppercase; margin:0; }
+    .qabul-card-body { padding:16px; }
+    .qabul-label { display:block; font-size:13px; font-weight:700; color:#475569; margin-bottom:6px; letter-spacing:.01em; }
+    .qabul-input { width:100%; padding:9px 12px; font-size:14px; color:#0f172a; background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; transition:all .15s; box-shadow:0 1px 2px rgba(15,23,42,.03); text-transform:uppercase; }
+    .qabul-input::placeholder { color:#94a3b8; font-size:13px; }
+    .qabul-input:hover { border-color:#94a3b8; }
+    .qabul-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.15); }
+    .qabul-save-card { background:linear-gradient(135deg,#f8fafc,#eef2f7); border-color:#cbd5e1; padding:14px 16px; }
+    .qabul-input.qabul-error, input[type="file"].qabul-error { border-color:#ef4444 !important; box-shadow:0 0 0 3px rgba(239,68,68,.15) !important; }
+    input[type="file"].qabul-error { border:2px solid #ef4444; border-radius:8px; padding:4px; }
+    .qabul-error-msg { color:#ef4444; font-size:10.5px; font-weight:600; margin-top:3px; }
+
+    /* Vertical stepper */
+    .qstep-nav { display:flex; flex-direction:column; gap:0; position:relative; }
+    .qstep-nav::before { content:''; position:absolute; left:18px; top:28px; bottom:28px; width:2px; background:#e2e8f0; z-index:0; }
+    .qstep-btn { display:flex; align-items:center; gap:10px; padding:12px 8px; background:none; border:none; cursor:pointer; position:relative; z-index:1; text-align:left; transition:all .15s; border-radius:8px; }
+    .qstep-btn:hover { background:#f1f5f9; }
+    .qstep-num { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; background:#e2e8f0; color:#64748b; flex-shrink:0; transition:all .2s; }
+    .qstep-label { font-size:13px; font-weight:600; color:#64748b; transition:color .15s; }
+    .qstep-active .qstep-num { background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; box-shadow:0 2px 8px rgba(37,99,235,.35); }
+    .qstep-active .qstep-label { color:#1e293b; }
+    .qstep-done .qstep-num { background:#059669; color:#fff; }
+    .qstep-done .qstep-label { color:#059669; }
+    .qstep-next-btn,.qstep-prev-btn { padding:8px 20px; font-size:13px; font-weight:700; border:none; border-radius:8px; cursor:pointer; transition:all .15s; }
+    .qstep-next-btn { background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff; }
+    .qstep-next-btn:hover { opacity:.9; }
+    .qstep-prev-btn { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+    .qstep-prev-btn:hover { background:#e2e8f0; }
+    @media(max-width:768px) { .qstep-nav { width:100% !important; flex-direction:row; overflow-x:auto; gap:0; } .qstep-nav::before { display:none; } .qstep-label { display:none; } .qstep-btn { padding:8px 6px; } }
+    select.qabul-input { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; cursor:pointer; }
     </style>
 
     <script>
@@ -685,5 +1164,254 @@
             }
         }
     });
+
+    // Vertical stepper
+    var currentStep = 0;
+    var totalSteps = 6;
+    function goStep(n, skipValidation) {
+        if (n > currentStep && !skipValidation) {
+            var panel = document.querySelector('.qstep-panel[data-step="'+currentStep+'"]');
+            if (panel) {
+                var hasError = false;
+                panel.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
+                panel.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
+                panel.querySelectorAll('input.qabul-input, select.qabul-input, input[type="file"][name^="files["]').forEach(function(el) {
+                    if (el.disabled || el.readOnly) return;
+                    if (el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
+                    if (el.type === 'file') {
+                        if (!el.files || !el.files.length) {
+                            el.classList.add('qabul-error');
+                            var msg = document.createElement('p'); msg.className = 'qabul-error-msg'; msg.textContent = 'Fayl yuklash majburiy';
+                            el.parentNode.appendChild(msg); hasError = true;
+                        }
+                        return;
+                    }
+                    var val = (el.value || '').trim();
+                    if (!val || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
+                        el.classList.add('qabul-error');
+                        var msg = document.createElement('p');
+                        msg.className = 'qabul-error-msg';
+                        msg.textContent = 'Bu maydon majburiy';
+                        el.parentNode.appendChild(msg);
+                        hasError = true;
+                    }
+                });
+                if (hasError) {
+                    var firstErr = panel.querySelector('.qabul-error');
+                    if (firstErr) { firstErr.scrollIntoView({behavior:'smooth',block:'center'}); firstErr.focus(); }
+                    return;
+                }
+            }
+        }
+        currentStep = n;
+        document.querySelectorAll('.qstep-panel').forEach(function(p) { p.style.display = 'none'; });
+        var target = document.querySelector('.qstep-panel[data-step="'+n+'"]');
+        if (target) target.style.display = '';
+        document.querySelectorAll('.qstep-btn').forEach(function(b, i) {
+            b.classList.remove('qstep-active','qstep-done');
+            if (i === n) b.classList.add('qstep-active');
+            else if (i < n) b.classList.add('qstep-done');
+        });
+        var contentArea = document.getElementById('ptab-content-qabul');
+        if (contentArea) contentArea.scrollTop = 0;
+    }
+
+    // AJAX fayl yuklash va o'chirish
+    var qabulStudentId = {{ $student->id }};
+    var qabulCsrf = '{{ csrf_token() }}';
+
+    function qabulDelete(fileId, label) {
+        if (!confirm(label + " faylini o'chirmoqchimisiz?")) return;
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = '/admin/students/' + qabulStudentId + '/admission-files/' + fileId;
+        f.innerHTML = '<input type="hidden" name="_token" value="'+qabulCsrf+'"><input type="hidden" name="_method" value="DELETE">';
+        document.body.appendChild(f);
+        f.submit();
+    }
+
+    // Milliy sertifikat toggle
+    function toggleSertUpload() {
+        var sel = document.getElementById('qabul_sert_select');
+        var wrap = document.getElementById('qabul_sert_upload');
+        if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
+    }
+    // Chet tili sertifikati toggle
+    function toggleChetSert() {
+        var sel = document.getElementById('qabul_chet_sert');
+        var ballWrap = document.getElementById('qabul_chet_ball_wrap');
+        var fileWrap = document.getElementById('qabul_chet_file_wrap');
+        var show = sel && sel.value !== 'Mavjud emas';
+        if (ballWrap) ballWrap.style.display = show ? '' : 'none';
+        if (fileWrap) fileWrap.style.display = show ? '' : 'none';
+    }
+
+    // Oliy ma'lumot toggle
+    function toggleOtmNomi() {
+        var sel = document.getElementById('qabul_oliy_malumot');
+        var wrap = document.getElementById('qabul_otm_nomi_wrap');
+        if (sel && wrap) wrap.style.display = sel.value === 'Ha' ? '' : 'none';
+    }
+
+    // +998 telefon mask
+    document.querySelectorAll('.qabul-phone').forEach(function(el) {
+        el.addEventListener('input', function(e) {
+            var raw = e.target.value.replace(/\D/g, '');
+            if (raw.startsWith('998')) raw = raw.slice(3);
+            if (raw.length > 9) raw = raw.slice(0, 9);
+            var formatted = '+998';
+            if (raw.length > 0) formatted += ' ' + raw.slice(0, 2);
+            if (raw.length > 2) formatted += ' ' + raw.slice(2, 5);
+            if (raw.length > 5) formatted += ' ' + raw.slice(5, 7);
+            if (raw.length > 7) formatted += ' ' + raw.slice(7, 9);
+            e.target.value = formatted;
+        });
+        el.addEventListener('focus', function(e) {
+            if (!e.target.value) e.target.value = '+998 ';
+        });
+    });
+    // Viloyat va tuman ma'lumotlari
+    var uzRegions = {
+        "Toshkent shahri":["Bektemir tumani","Chilonzor tumani","Mirobod tumani","Mirzo Ulug'bek tumani","Olmazor tumani","Sergeli tumani","Shayxontohur tumani","Uchtepa tumani","Yakkasaroy tumani","Yashnobod tumani","Yunusobod tumani"],
+        "Toshkent viloyati":["Bekobod tumani","Bo'ka tumani","Bo'stonliq tumani","Chinoz tumani","Ohangaron tumani","Oqqo'rg'on tumani","O'rtachirchiq tumani","Parkent tumani","Piskent tumani","Qibray tumani","Toshkent tumani","Yangiyo'l tumani","Yuqorichirchiq tumani","Zangiota tumani"],
+        "Andijon viloyati":["Andijon tumani","Asaka tumani","Baliqchi tumani","Bo'ston tumani","Buloqboshi tumani","Izboskan tumani","Jalaquduq tumani","Marhamat tumani","Oltinko'l tumani","Paxtaobod tumani","Qo'rg'ontepa tumani","Shahrixon tumani","Ulug'nor tumani","Xo'jaobod tumani"],
+        "Buxoro viloyati":["Buxoro tumani","G'ijduvon tumani","Jondor tumani","Kogon tumani","Olot tumani","Peshku tumani","Qorako'l tumani","Qorovulbozor tumani","Romitan tumani","Shofirkon tumani","Vobkent tumani"],
+        "Farg'ona viloyati":["Beshariq tumani","Bog'dod tumani","Buvayda tumani","Dang'ara tumani","Farg'ona tumani","Furqat tumani","Oltiariq tumani","O'zbekiston tumani","Qo'shtepa tumani","Quva tumani","Rishton tumani","So'x tumani","Toshloq tumani","Uchko'prik tumani","Yozyovon tumani"],
+        "Jizzax viloyati":["Arnasoy tumani","Baxmal tumani","Do'stlik tumani","Forish tumani","G'allaorol tumani","Mirzacho'l tumani","Paxtakor tumani","Sharof Rashidov tumani","Yangiobod tumani","Zafarobod tumani","Zarbdor tumani","Zomin tumani"],
+        "Xorazm viloyati":["Bog'ot tumani","Gurlan tumani","Hazorasp tumani","Qo'shko'pir tumani","Shovot tumani","Tuproqqal'a tumani","Urganch tumani","Xiva tumani","Xonqa tumani","Yangiariq tumani","Yangibozor tumani"],
+        "Namangan viloyati":["Chortoq tumani","Chust tumani","Kosonsoy tumani","Mingbuloq tumani","Namangan tumani","Norin tumani","Pop tumani","To'raqo'rg'on tumani","Uchqo'rg'on tumani","Uychi tumani","Yangiqo'rg'on tumani"],
+        "Navoiy viloyati":["Karmana tumani","Konimex tumani","Navbahor tumani","Nurota tumani","Qiziltepa tumani","Tomdi tumani","Uchquduq tumani","Xatirchi tumani"],
+        "Qashqadaryo viloyati":["Chiroqchi tumani","Dehqonobod tumani","G'uzor tumani","Kamashi tumani","Kasbi tumani","Kitob tumani","Koson tumani","Mirishkor tumani","Muborak tumani","Nishon tumani","Qarshi tumani","Shahrisabz tumani","Yakkabog' tumani"],
+        "Samarqand viloyati":["Bulung'ur tumani","Ishtixon tumani","Jomboy tumani","Kattaqo'rg'on tumani","Narpay tumani","Nurobod tumani","Oqdaryo tumani","Pastdarg'om tumani","Payariq tumani","Samarqand tumani","Toyloq tumani","Urgut tumani"],
+        "Sirdaryo viloyati":["Boyovut tumani","Guliston tumani","Mirzaobod tumani","Oqoltin tumani","Sardoba tumani","Sayxunobod tumani","Sirdaryo tumani","Xovos tumani"],
+        "Surxondaryo viloyati":["Angor tumani","Bandixon tumani","Boysun tumani","Denov tumani","Jarqo'rg'on tumani","Muzrabod tumani","Oltinsoy tumani","Qiziriq tumani","Qumqo'rg'on tumani","Sariosiyo tumani","Sherobod tumani","Sho'rchi tumani","Termiz tumani","Uzun tumani"],
+        "Qoraqalpog'iston Respublikasi":["Amudaryo tumani","Beruniy tumani","Bo'zatov tumani","Chimboy tumani","Ellikqal'a tumani","Kegeyli tumani","Mo'ynoq tumani","Nukus tumani","Qanliko'l tumani","Qo'ng'irot tumani","Qorao'zak tumani","Shumanay tumani","Taxtako'pir tumani","To'rtko'l tumani","Xo'jayli tumani"]
+    };
+    var uzViloyatlar = Object.keys(uzRegions);
+
+    function initLocationGroup(group) {
+        var davlatSel = document.querySelector('.qabul-davlat-select[data-group="'+group+'"]');
+        var vilSel = document.querySelector('.qabul-viloyat-select[data-group="'+group+'"]');
+        var vilTxt = document.querySelector('.qabul-viloyat-text[data-group="'+group+'"]');
+        var tumSel = document.querySelector('.qabul-tuman-select[data-group="'+group+'"]');
+        var tumTxt = document.querySelector('.qabul-tuman-text[data-group="'+group+'"]');
+        if (!davlatSel) return;
+
+        var savedVil = vilTxt ? vilTxt.value || vilSel.getAttribute('data-saved') : '';
+        var savedTum = tumTxt ? tumTxt.value || tumSel.getAttribute('data-saved') : '';
+
+        function populateViloyat() {
+            vilSel.innerHTML = '<option value="">Tanlang...</option>';
+            uzViloyatlar.forEach(function(v) {
+                var o = document.createElement('option');
+                o.value = v; o.textContent = v;
+                if (v === savedVil) o.selected = true;
+                vilSel.appendChild(o);
+            });
+        }
+
+        function populateTuman(vil) {
+            tumSel.innerHTML = '<option value="">Tanlang...</option>';
+            var list = uzRegions[vil] || [];
+            list.forEach(function(t) {
+                var o = document.createElement('option');
+                o.value = t; o.textContent = t;
+                if (t === savedTum) o.selected = true;
+                tumSel.appendChild(o);
+            });
+        }
+
+        function switchMode(isUzb) {
+            if (isUzb) {
+                vilSel.style.display=''; vilSel.disabled=false; vilTxt.style.display='none'; vilTxt.disabled=true;
+                tumSel.style.display=''; tumSel.disabled=false; tumTxt.style.display='none'; tumTxt.disabled=true;
+                populateViloyat();
+                populateTuman(vilSel.value);
+            } else {
+                vilSel.style.display='none'; vilSel.disabled=true; vilTxt.style.display=''; vilTxt.disabled=false;
+                tumSel.style.display='none'; tumSel.disabled=true; tumTxt.style.display=''; tumTxt.disabled=false;
+            }
+        }
+
+        davlatSel.addEventListener('change', function() {
+            savedVil = ''; savedTum = '';
+            vilTxt.value = ''; tumTxt.value = '';
+            switchMode(this.value === "O'zbekiston Respublikasi");
+        });
+
+        vilSel.addEventListener('change', function() {
+            savedTum = '';
+            populateTuman(this.value);
+        });
+
+        switchMode(davlatSel.value === "O'zbekiston Respublikasi");
+    }
+
+    // Saved values uchun data-saved atributlarni set qilish
+    @if($admissionData)
+    (function(){
+        var pairs = {
+            'tugilgan': ['{{ addslashes($admissionData->tugilgan_viloyat ?? '') }}', '{{ addslashes($admissionData->tugulgan_tuman ?? '') }}'],
+            'yashash': ['{{ addslashes($admissionData->yashash_viloyat ?? '') }}', '{{ addslashes($admissionData->yashash_tuman ?? '') }}'],
+            'talim': ['{{ addslashes($admissionData->talim_viloyat ?? '') }}', '{{ addslashes($admissionData->talim_tuman ?? '') }}']
+        };
+        Object.keys(pairs).forEach(function(g) {
+            var vs = document.querySelector('.qabul-viloyat-select[data-group="'+g+'"]');
+            var ts = document.querySelector('.qabul-tuman-select[data-group="'+g+'"]');
+            if (vs) vs.setAttribute('data-saved', pairs[g][0]);
+            if (ts) ts.setAttribute('data-saved', pairs[g][1]);
+        });
+    })();
+    @endif
+
+    ['tugilgan','yashash','talim'].forEach(initLocationGroup);
+
+    @if(session('active_tab'))
+    switchProfileTab('{{ session('active_tab') }}');
+    @if(session('active_tab') === 'qabul')
+    setTimeout(function(){ goStep(5, true); }, 100);
+    @endif
+    @endif
+
+    // Form submit — validate last step
+    var qabulForm = document.getElementById('qabul-main-form');
+    if (qabulForm) {
+        qabulForm.addEventListener('submit', function(e) {
+            var panel = document.querySelector('.qstep-panel[data-step="'+currentStep+'"]');
+            if (!panel) return;
+            panel.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
+            panel.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
+            var errors = [];
+            panel.querySelectorAll('input.qabul-input, select.qabul-input, input[type="file"][name^="files["]').forEach(function(el) {
+                if (el.disabled || el.readOnly) return;
+                if (el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
+                if (el.type === 'file') {
+                    if (!el.files || !el.files.length) {
+                        el.classList.add('qabul-error');
+                        var msg = document.createElement('p'); msg.className = 'qabul-error-msg'; msg.textContent = 'Fayl yuklash majburiy';
+                        el.parentNode.appendChild(msg); errors.push(el);
+                    }
+                    return;
+                }
+                var val = (el.value || '').trim();
+                if (!val || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
+                    el.classList.add('qabul-error');
+                    var msg = document.createElement('p'); msg.className = 'qabul-error-msg'; msg.textContent = 'Bu maydon majburiy';
+                    el.parentNode.appendChild(msg); errors.push(el);
+                }
+            });
+            if (errors.length > 0) { e.preventDefault(); errors[0].scrollIntoView({behavior:'smooth',block:'center'}); errors[0].focus(); }
+        });
+        qabulForm.addEventListener('input', function(e) {
+            if (e.target.classList.contains('qabul-error')) { e.target.classList.remove('qabul-error'); var m=e.target.parentNode.querySelector('.qabul-error-msg'); if(m) m.remove(); }
+        });
+        qabulForm.addEventListener('change', function(e) {
+            if (e.target.classList.contains('qabul-error')) {
+                e.target.classList.remove('qabul-error');
+                var m = e.target.parentNode.querySelector('.qabul-error-msg');
+                if (m) m.remove();
+            }
+        });
+    }
     </script>
 </x-app-layout>

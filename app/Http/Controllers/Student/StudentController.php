@@ -1457,7 +1457,11 @@ class StudentController extends Controller
             'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (5-32 belgi)',
         ]);
 
+        $isNewPhone = empty($student->phone) && !empty($request->phone);
         $student->phone = $request->phone;
+        if ($isNewPhone && !$student->phone_added_at) {
+            $student->phone_added_at = now();
+        }
 
         // Telegram username o'zgarganda — yangi verification code generatsiya qilish
         $newTelegram = $request->telegram_username;

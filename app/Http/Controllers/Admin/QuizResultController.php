@@ -1956,12 +1956,13 @@ class QuizResultController extends Controller
 
                 $label = $isSababli ? 'sababli ×1.0' : 'sababsiz ×0.8';
                 $updates = [
-                    'retake_grade'   => $retakeValue,
-                    'retake_comment' => "Moodle mavzu {$result->shakl}: {$moodleGrade} {$label} = {$retakeValue} (quiz_result#{$result->id})",
-                    'reason'         => 'absent',
-                    'status'         => 'closed',
-                    'quiz_result_id' => $result->id,
-                    'updated_at'     => now(),
+                    'retake_grade'         => $retakeValue,
+                    'retake_comment'       => "Moodle mavzu {$result->shakl}: {$moodleGrade} {$label} = {$retakeValue} (quiz_result#{$result->id})",
+                    'retake_was_sababli'   => $isSababli,
+                    'reason'               => 'absent',
+                    'status'               => 'closed',
+                    'quiz_result_id'       => $result->id,
+                    'updated_at'           => now(),
                 ];
             } else {
                 // NB emas — oddiy baho bor. Faqat baho 60 dan past bo'lsa retake qabul qilinadi,
@@ -1994,12 +1995,13 @@ class QuizResultController extends Controller
                 }
 
                 $updates = [
-                    'retake_grade'   => $retakeValue,
-                    'retake_comment' => "Moodle mavzu {$result->shakl}: {$moodleGrade} ×0.8 = {$retakeValue} (quiz_result#{$result->id})",
-                    'reason'         => $sg->reason ?? 'low_grade',
-                    'status'         => 'closed',
-                    'quiz_result_id' => $result->id,
-                    'updated_at'     => now(),
+                    'retake_grade'         => $retakeValue,
+                    'retake_comment'       => "Moodle mavzu {$result->shakl}: {$moodleGrade} ×0.8 = {$retakeValue} (quiz_result#{$result->id})",
+                    'retake_was_sababli'   => false,
+                    'reason'               => $sg->reason ?? 'low_grade',
+                    'status'               => 'closed',
+                    'quiz_result_id'       => $result->id,
+                    'updated_at'           => now(),
                 ];
             }
 
@@ -2052,11 +2054,12 @@ class QuizResultController extends Controller
                     $revertReason = null;
                 }
                 DB::table('student_grades')->where('id', $sg->id)->update([
-                    'retake_grade'   => null,
-                    'retake_comment' => null,
-                    'quiz_result_id' => null,
-                    'reason'         => $revertReason,
-                    'updated_at'     => now(),
+                    'retake_grade'         => null,
+                    'retake_comment'       => null,
+                    'retake_was_sababli'   => null,
+                    'quiz_result_id'       => null,
+                    'reason'               => $revertReason,
+                    'updated_at'           => now(),
                 ]);
             }
         }
@@ -2160,6 +2163,26 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Quiz natija bahosini tahrirlash (hemis_quiz_results da grade yangilash).
+     */
+    public function updateGrade(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:hemis_quiz_results,id',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        DB::table('hemis_quiz_results')
+            ->where('id', $request->id)
+            ->update([
+                'grade' => $request->grade,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
     public function triggerCron()
@@ -2244,10 +2267,11 @@ class QuizResultController extends Controller
             $revertedMavzu = 0;
             foreach ($mavzuRows as $sg) {
                 DB::table('student_grades')->where('id', $sg->id)->update([
-                    'retake_grade'   => null,
-                    'retake_comment' => null,
-                    'quiz_result_id' => null,
-                    'updated_at'     => now(),
+                    'retake_grade'         => null,
+                    'retake_comment'       => null,
+                    'retake_was_sababli'   => null,
+                    'quiz_result_id'       => null,
+                    'updated_at'           => now(),
                 ]);
                 $revertedMavzu++;
             }

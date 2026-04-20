@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../services/student_service.dart';
 import '../services/api_service.dart';
@@ -152,6 +153,69 @@ class StudentProvider extends ChangeNotifier {
     return response;
   }
 
+  // Absence excuse methods
+  List<dynamic>? _excuses;
+  List<dynamic>? _excuseReasons;
+
+  List<dynamic>? get excuses => _excuses;
+  List<dynamic>? get excuseReasons => _excuseReasons;
+
+  Future<void> loadExcuseReasons() async {
+    try {
+      final response = await _service.getExcuseReasons();
+      _excuseReasons = response['data'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    }
+    notifyListeners();
+  }
+
+  Future<void> loadExcuses() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _service.getExcuses();
+      _excuses = response['data'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> getExcuseDetail(int id) async {
+    return await _service.getExcuseDetail(id);
+  }
+
+  Future<Map<String, dynamic>> getMissedAssessments(String startDate, String endDate) async {
+    return await _service.getMissedAssessments(startDate, endDate);
+  }
+
+  Future<Map<String, dynamic>> submitExcuse({
+    required String reason,
+    required String docNumber,
+    required String startDate,
+    required String endDate,
+    String? description,
+    required Uint8List fileBytes,
+    required String fileName,
+    List<Map<String, dynamic>>? makeupDates,
+  }) async {
+    return await _service.submitExcuse(
+      reason: reason,
+      docNumber: docNumber,
+      startDate: startDate,
+      endDate: endDate,
+      description: description,
+      fileBytes: fileBytes,
+      fileName: fileName,
+      makeupDates: makeupDates,
+    );
+  }
+
   void clearData() {
     _dashboard = null;
     _profile = null;
@@ -161,6 +225,8 @@ class StudentProvider extends ChangeNotifier {
     _pendingLessons = null;
     _contract = null;
     _contractList = null;
+    _excuses = null;
+    _excuseReasons = null;
     notifyListeners();
   }
 }

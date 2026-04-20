@@ -157,6 +157,44 @@ class AppLocalizations {
   String get contractList => get('contract_list');
   String get statusPaid => get('status_paid');
   String get statusUnpaid => get('status_unpaid');
+  String get absenceExcuse => get('absence_excuse');
+  String get absenceExcuseDesc => get('absence_excuse_desc');
+  String get comingSoon => get('coming_soon');
+  String get comingSoonDesc => get('coming_soon_desc');
+  String get newExcuse => get('new_excuse');
+  String get submitExcuse => get('submit_excuse');
+  String get selectReason => get('select_reason');
+  String get docNumber => get('doc_number');
+  String get startDate => get('start_date');
+  String get endDate => get('end_date');
+  String get selectFile => get('select_file');
+  String get description => get('description');
+  String get excuseSubmitted => get('excuse_submitted');
+  String get statusApproved => get('status_approved');
+  String get statusRejected => get('status_rejected');
+  String get statusPending => get('status_pending');
+  String get downloadPdf => get('download_pdf');
+  String get rejectionReason => get('rejection_reason');
+  String get reviewedBy => get('reviewed_by');
+  String get missedAssessments => get('missed_assessments');
+  String get noExcuses => get('no_excuses');
+  String get requiredDocument => get('required_document');
+  String get maxDays => get('max_days');
+  String get loadingAssessments => get('loading_assessments');
+  String get noMissedAssessments => get('no_missed_assessments');
+  String get originalDate => get('original_date');
+  String get subjectName => get('subject_name');
+  String get submitted => get('submitted');
+  String get retake => get('retake');
+  String get selectDateRange => get('select_date_range');
+  String get selectDate => get('select_date');
+  String get selected => get('selected');
+  String get selectMakeupDates => get('select_makeup_dates');
+  String get from => get('from');
+  String get to => get('to');
+  String get onTime => get('on_time');
+  String get clear => get('clear');
+  String get allDatesRequired => get('all_dates_required');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -219,6 +257,44 @@ class AppLocalizations {
       'mt_deadline': 'Muddat',
       'mt_remaining': 'Qolgan urinish',
       'services': 'Xizmatlar',
+      'absence_excuse': 'Sababli ariza',
+      'absence_excuse_desc': 'Darsga kelmaganlik uchun sababli ariza yuborish',
+      'coming_soon': 'Tez kunda',
+      'coming_soon_desc': 'Bu xizmat hozircha ishlab chiqilmoqda',
+      'new_excuse': 'Yangi ariza',
+      'submit_excuse': 'Ariza yuborish',
+      'select_reason': 'Sababni tanlang',
+      'doc_number': 'Hujjat raqami',
+      'start_date': 'Boshlanish sanasi',
+      'end_date': 'Tugash sanasi',
+      'select_file': 'Fayl tanlash (PDF, JPG)',
+      'description': 'Izoh (ixtiyoriy)',
+      'excuse_submitted': 'Arizangiz muvaffaqiyatli yuborildi!',
+      'status_approved': 'Tasdiqlangan',
+      'status_rejected': 'Rad etilgan',
+      'status_pending': 'Kutilmoqda',
+      'download_pdf': 'PDF yuklab olish',
+      'rejection_reason': 'Rad etilish sababi',
+      'reviewed_by': 'Tekshirgan',
+      'missed_assessments': 'O\'tkazib yuborilgan nazoratlar',
+      'no_excuses': 'Arizalar topilmadi',
+      'required_document': 'Kerakli hujjat',
+      'max_days': 'Maksimum kun',
+      'loading_assessments': 'Nazoratlar tekshirilmoqda...',
+      'no_missed_assessments': 'Bu oraliqda o\'tkazib yuborilgan nazoratlar topilmadi',
+      'original_date': 'Asl sanasi',
+      'subject_name': 'Fan nomi',
+      'submitted': 'Topshirilgan',
+      'retake': 'Qayta topshiraman',
+      'select_date_range': 'Sana oralig\'ini tanlang',
+      'select_date': 'Sanani tanlang',
+      'selected': 'tanlangan',
+      'select_makeup_dates': 'Har bir nazorat uchun qayta topshirish sanasini tanlang',
+      'from': 'dan',
+      'to': 'gacha',
+      'on_time': 'O\'z vaqtida',
+      'clear': 'Tozalash',
+      'all_dates_required': 'Barcha nazoratlar uchun sanani tanlang',
       'tuition_fee': 'Shartnoma turi',
       'payment_form': 'To\'lov shakli',
       'paid': 'To\'langan',
@@ -357,6 +433,44 @@ class AppLocalizations {
       'mt_deadline': 'Срок',
       'mt_remaining': 'Осталось попыток',
       'services': 'Услуги',
+      'absence_excuse': 'Заявление об отсутствии',
+      'absence_excuse_desc': 'Подать заявление об уважительной причине отсутствия',
+      'coming_soon': 'Скоро',
+      'coming_soon_desc': 'Этот сервис находится в разработке',
+      'new_excuse': 'Новое заявление',
+      'submit_excuse': 'Отправить заявление',
+      'select_reason': 'Выберите причину',
+      'doc_number': 'Номер документа',
+      'start_date': 'Дата начала',
+      'end_date': 'Дата окончания',
+      'select_file': 'Выбрать файл (PDF, JPG)',
+      'description': 'Комментарий (необязательно)',
+      'excuse_submitted': 'Заявление успешно отправлено!',
+      'status_approved': 'Одобрено',
+      'status_rejected': 'Отклонено',
+      'status_pending': 'На рассмотрении',
+      'download_pdf': 'Скачать PDF',
+      'rejection_reason': 'Причина отказа',
+      'reviewed_by': 'Проверил',
+      'missed_assessments': 'Пропущенные контрольные',
+      'no_excuses': 'Заявления не найдены',
+      'required_document': 'Необходимый документ',
+      'max_days': 'Максимум дней',
+      'loading_assessments': 'Проверка контрольных...',
+      'no_missed_assessments': 'За этот период пропущенных контрольных не найдено',
+      'original_date': 'Дата проведения',
+      'subject_name': 'Предмет',
+      'submitted': 'Сдано',
+      'retake': 'Пересдам',
+      'select_date_range': 'Выберите диапазон дат',
+      'select_date': 'Выберите дату',
+      'selected': 'выбрано',
+      'select_makeup_dates': 'Выберите дату пересдачи для каждого контроля',
+      'from': 'с',
+      'to': 'по',
+      'on_time': 'Вовремя',
+      'clear': 'Очистить',
+      'all_dates_required': 'Выберите даты для всех контрольных',
       'tuition_fee': 'Тип договора',
       'payment_form': 'Форма оплаты',
       'paid': 'Оплачено',
@@ -495,6 +609,44 @@ class AppLocalizations {
       'mt_deadline': 'Deadline',
       'mt_remaining': 'Remaining attempts',
       'services': 'Services',
+      'absence_excuse': 'Absence Excuse',
+      'absence_excuse_desc': 'Submit an excuse for class absence',
+      'coming_soon': 'Coming Soon',
+      'coming_soon_desc': 'This service is under development',
+      'new_excuse': 'New Excuse',
+      'submit_excuse': 'Submit Excuse',
+      'select_reason': 'Select reason',
+      'doc_number': 'Document number',
+      'start_date': 'Start date',
+      'end_date': 'End date',
+      'select_file': 'Select file (PDF, JPG)',
+      'description': 'Description (optional)',
+      'excuse_submitted': 'Excuse submitted successfully!',
+      'status_approved': 'Approved',
+      'status_rejected': 'Rejected',
+      'status_pending': 'Pending',
+      'download_pdf': 'Download PDF',
+      'rejection_reason': 'Rejection reason',
+      'reviewed_by': 'Reviewed by',
+      'missed_assessments': 'Missed assessments',
+      'no_excuses': 'No excuses found',
+      'required_document': 'Required document',
+      'max_days': 'Max days',
+      'loading_assessments': 'Checking assessments...',
+      'no_missed_assessments': 'No missed assessments found for this period',
+      'original_date': 'Original date',
+      'subject_name': 'Subject',
+      'submitted': 'Submitted',
+      'retake': 'Retake',
+      'select_date_range': 'Select date range',
+      'select_date': 'Select date',
+      'selected': 'selected',
+      'select_makeup_dates': 'Select retake date for each assessment',
+      'from': 'from',
+      'to': 'to',
+      'on_time': 'On time',
+      'clear': 'Clear',
+      'all_dates_required': 'Select dates for all assessments',
       'tuition_fee': 'Contract Type',
       'payment_form': 'Payment form',
       'paid': 'Paid',

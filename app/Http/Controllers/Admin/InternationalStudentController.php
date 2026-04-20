@@ -541,6 +541,7 @@ class InternationalStudentController extends Controller
         $word = new PhpWord();
         $word->setDefaultFontName('Times New Roman');
         $word->setDefaultFontSize(12);
+        $word->setDefaultParagraphStyle(['spaceAfter' => 0, 'spaceBefore' => 0, 'lineHeight' => 1.0]);
 
         foreach ($students as $student) {
             $v = $student->visaInfo;
@@ -557,11 +558,8 @@ class InternationalStudentController extends Controller
             $c2->addText("boshlig'i podpolkovnik", ['size' => 11], ['alignment' => Jc::END]);
             $c2->addText('S. S. Kabilovga', ['size' => 11], ['alignment' => Jc::END]);
 
-            $section->addTextBreak(1);
             $section->addText('TALABNOMA', ['bold' => true, 'size' => 14], ['alignment' => Jc::CENTER]);
-            $section->addTextBreak(1);
             $section->addText("Toshkent davlat tibbiyot universiteti Termiz filiali Sizdan quyidagi chet el fuqarosi yoki fuqaroligi bo'lmagan shaxsni vaqtincha ro'yxatga olishni (vaqtincha ro'yxat muddatini uzaytirishni) so'raydi:", $n, ['alignment' => Jc::BOTH]);
-            $section->addText('');
 
             $bp = ($v?->birth_city ?? '___') . ', ' . ($v?->birth_region ?? '');
             $entries = $v?->visa_entries_count ? $this->entriesText($v->visa_entries_count) : '___';
@@ -577,7 +575,7 @@ class InternationalStudentController extends Controller
             $this->addField($section, '6. Ish joyi va lavozimi: ', 'Toshkent davlat tibbiyot universiteti Termiz filiali talaba');
             $this->addField($section, '7. Passport/harakatlanish hujjati: ', $v?->passport_number ?? '___');
             $this->addField($section, '8. Viza turi: ', $vizaStr);
-            $this->addField($section, '9. Viza kim tomonidan rasmiylashtirlib berilgan va uning muddati: ', $vizaGiven);
+            $this->addField($section, '9. Viza kim tomonidan rasmiylashtirib berilgan va uning muddati: ', $vizaGiven);
             $this->addField($section, "10. So'ralayotgan vaqtincha ro'yxat muddati (kunlarda): ", $regMonths . ' oy');
             $this->addField($section, "11. O'zbekistonga kirib kelgan sanasi (nazorat o'tish punkti): ", $v?->entry_date?->format('d.m.Y') ?? '________');
             $this->addField($section, "12. Vaqtincha yashash manzili: ", "Termiz shahar I.Karimov ko'chasi 64-uy");
@@ -588,11 +586,11 @@ class InternationalStudentController extends Controller
             $section->addText('      Passport harakatlanish hujjat seriyasi va raqami:  AC 2275461', $n);
             $section->addText('      Xizmat tel raqami_______________ uyali tel. raqami +998995721774', $n);
 
-            $section->addTextBreak(2);
+            $section->addTextBreak(1);
             $st = $section->addTable(); $st->addRow();
             $st->addCell(4500)->addText('Direktor', ['bold' => true, 'size' => 13]);
             $st->addCell(4500)->addText('F.A.Otamuradov', ['bold' => true, 'size' => 13], ['alignment' => Jc::END]);
-            $section->addTextBreak(2);
+            $section->addTextBreak(1);
             $section->addText('Ijrochi:Sh.Temirov', ['size' => 10]);
             $section->addText('Tel:+998995721774', ['size' => 10]);
         }
@@ -616,6 +614,7 @@ class InternationalStudentController extends Controller
         $word = new PhpWord();
         $word->setDefaultFontName('Times New Roman');
         $word->setDefaultFontSize(12);
+        $word->setDefaultParagraphStyle(['spaceAfter' => 0, 'spaceBefore' => 0, 'lineHeight' => 1.0]);
 
         foreach ($students as $student) {
             $v = $student->visaInfo;
@@ -670,12 +669,12 @@ class InternationalStudentController extends Controller
     }
 
     /**
-     * Word talabnoma uchun yordamchi: qalin sarlavha + oddiy qiymat.
+     * Word talabnoma uchun yordamchi: sarlavha + qiymat.
      */
     private function addField($section, string $label, string $value): void
     {
         $run = $section->addTextRun();
-        $run->addText($label, ['bold' => true, 'size' => 11]);
+        $run->addText($label, ['size' => 11]);
         $run->addText($value, ['size' => 11]);
     }
 

@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import 'dart:async';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
@@ -18,15 +21,81 @@ class StudentDashboardScreen extends StatefulWidget {
 }
 
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  Timer? _clockTimer;
+  List<dynamic> _todayLessons = [];
+  DateTime _now = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<StudentProvider>();
       provider.loadDashboard();
       provider.loadProfile();
       provider.loadContract();
+      _loadTodaySchedule();
     });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadTodaySchedule() async {
+    try {
+      final provider = context.read<StudentProvider>();
+      await provider.loadSchedule();
+      if (!mounted) return;
+      final schedule = provider.schedule;
+      if (schedule == null) return;
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final scheduleList = schedule['schedule'] as List<dynamic>? ?? [];
+      for (final day in scheduleList) {
+        final d = day as Map<String, dynamic>;
+        if (d['date'] == today) {
+          setState(() => _todayLessons = d['lessons'] as List<dynamic>? ?? []);
+          return;
+        }
+      }
+      setState(() => _todayLessons = []);
+    } catch (_) {}
+  }
+
+  Map<String, dynamic>? _getCurrentOrNextLesson() {
+    if (_todayLessons.isEmpty) return null;
+    final now = _now;
+    Map<String, dynamic>? nextLesson;
+
+    for (final lesson in _todayLessons) {
+      final l = lesson as Map<String, dynamic>;
+      final startStr = l['lesson_pair_start_time'] as String? ?? '';
+      final endStr = l['lesson_pair_end_time'] as String? ?? '';
+      if (startStr.isEmpty || endStr.isEmpty) continue;
+
+      final startParts = startStr.split(':');
+      final endParts = endStr.split(':');
+      if (startParts.length < 2 || endParts.length < 2) continue;
+
+      final start = DateTime(now.year, now.month, now.day,
+          int.parse(startParts[0]), int.parse(startParts[1]));
+      final end = DateTime(now.year, now.month, now.day,
+          int.parse(endParts[0]), int.parse(endParts[1]));
+
+      if (now.isAfter(start.subtract(const Duration(minutes: 1))) && now.isBefore(end)) {
+        return {...l, '_is_active': true, '_end': end, '_start': start};
+      }
+      if (now.isBefore(start)) {
+        if (nextLesson == null) {
+          nextLesson = {...l, '_is_active': false, '_start': start, '_end': end};
+        }
+      }
+    }
+    return nextLesson;
   }
 
   String? _buildImageUrl(String? imagePath) {
@@ -90,6 +159,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 provider.loadProfile(),
                 provider.loadContract(),
               ]);
+              _loadTodaySchedule();
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -102,27 +172,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: StatCard(
-                                title: l.gpa,
-                                value: (data?['gpa'] ?? profile?['avg_gpa'] ?? 0).toString(),
-                                icon: Icons.trending_up,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: StatCard(
-                                title: l.avgGrade,
-                                value: (data?['avg_grade'] ?? profile?['avg_grade'] ?? 0).toString(),
-                                icon: Icons.star_outline,
-                                color: AppTheme.accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
+                        _buildLiveClassCard(),
+                        _buildGpaRow(data, profile, l),
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -946,6 +997,152 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
+  Widget _buildLiveClassCard() {
+    final lesson = _getCurrentOrNextLesson();
+    if (lesson == null) return const SizedBox.shrink();
+
+    final isActive = lesson['_is_active'] as bool;
+    final subjectName = lesson['subject_name'] as String? ?? '';
+    final startTime = lesson['lesson_pair_start_time'] as String? ?? '';
+    final endTime = lesson['lesson_pair_end_time'] as String? ?? '';
+    final room = lesson['auditorium_name'] as String? ?? '';
+    final start = lesson['_start'] as DateTime;
+    final end = lesson['_end'] as DateTime;
+
+    final Duration remaining;
+    final String statusText;
+    final Color bgColor;
+
+    if (isActive) {
+      remaining = end.difference(_now);
+      statusText = 'HOZIR DAVOM ETMOQDA';
+      bgColor = const Color(0xFF4CAF50);
+    } else {
+      remaining = start.difference(_now);
+      statusText = 'KEYINGI DARS';
+      bgColor = const Color(0xFFFFA726);
+    }
+
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes % 60;
+    String timeLeft;
+    if (hours > 0) {
+      timeLeft = '$hours soat $minutes daqiqa qoldi';
+    } else {
+      timeLeft = '${minutes > 0 ? minutes : 1} daqiqa qoldi';
+    }
+
+    final progress = isActive
+        ? 1.0 - (remaining.inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isActive
+                ? [const Color(0xFF43A047), const Color(0xFF66BB6A)]
+                : [const Color(0xFFF57C00), const Color(0xFFFFA726)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: bgColor.withAlpha(60),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withAlpha(220),
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subjectName,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.white.withAlpha(200)),
+                const SizedBox(width: 4),
+                Text(
+                  '$startTime–$endTime',
+                  style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500),
+                ),
+                if (room.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 6),
+                  Text(room, style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (isActive) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 4,
+                  backgroundColor: Colors.white.withAlpha(50),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Text(
+              timeLeft,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withAlpha(200),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _toDouble(dynamic val) {
+    if (val == null) return 0;
+    if (val is num) return val.toDouble();
+    return double.tryParse(val.toString()) ?? 0;
+  }
+
   Color _gradeColor(dynamic grade) {
     if (grade == null) return AppTheme.textSecondary;
     final g = grade is num ? grade.toDouble() : double.tryParse(grade.toString()) ?? 0;
@@ -953,5 +1150,183 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (g >= 71) return AppTheme.primaryColor;
     if (g >= 56) return AppTheme.warningColor;
     return AppTheme.errorColor;
+  }
+
+  Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
+    final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
+    final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
+    final currentSemAvg = _toDouble(data?['current_semester_avg']);
+    final prevSemAvg = _toDouble(data?['prev_semester_avg']);
+    final recentGrades = data?['recent_grades'] as List<dynamic>? ?? [];
+
+    final sparkPoints = recentGrades
+        .map((g) => _toDouble((g as Map<String, dynamic>)['grade']))
+        .toList()
+        .reversed
+        .toList();
+
+    final gradeDiff = (prevSemAvg > 0) ? currentSemAvg - prevSemAvg : null;
+    final gpaDiff = (prevSemAvg > 0) ? (currentSemAvg - prevSemAvg) * 4.0 / 100.0 : null;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _buildSparkCard(
+            icon: Icons.trending_up,
+            value: gpa.toStringAsFixed(2),
+            subtitle: 'GPA · 4.00+',
+            diff: gpaDiff,
+            sparkData: sparkPoints.map((g) => g * 4.0 / 100.0).toList(),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildSparkCard(
+            icon: Icons.star_outline,
+            value: avgGrade.toStringAsFixed(1),
+            subtitle: l.avgGrade,
+            diff: gradeDiff,
+            sparkData: sparkPoints,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSparkCard({
+    required IconData icon,
+    required String value,
+    required String subtitle,
+    required List<double> sparkData,
+    double? diff,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isUp = diff != null && diff >= 0;
+    final trendColor = (diff == null) ? AppTheme.accentColor : (isUp ? const Color(0xFF4CAF50) : const Color(0xFFE53935));
+    final bgColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white.withAlpha(120) : AppTheme.textSecondary;
+
+    final spots = <FlSpot>[];
+    if (sparkData.length >= 2) {
+      for (int i = 0; i < sparkData.length; i++) {
+        spots.add(FlSpot(i.toDouble(), sparkData[i]));
+      }
+    } else {
+      spots.addAll([
+        const FlSpot(0, 0.3), const FlSpot(1, 0.5), const FlSpot(2, 0.4),
+        const FlSpot(3, 0.7), const FlSpot(4, 0.6), const FlSpot(5, 0.8),
+      ]);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: isDark ? null : [
+          BoxShadow(
+            color: Colors.black.withAlpha(12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: trendColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: trendColor, size: 20),
+              ),
+              const Spacer(),
+              if (diff != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: trendColor.withAlpha(20),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isUp ? Icons.arrow_upward : Icons.arrow_downward,
+                        size: 12,
+                        color: trendColor,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${isUp ? "+" : ""}${diff.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: trendColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 12, color: subTextColor),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 32,
+            child: LineChart(
+              LineChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                borderData: FlBorderData(show: false),
+                lineTouchData: const LineTouchData(enabled: false),
+                clipData: const FlClipData.all(),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.3,
+                    color: trendColor,
+                    barWidth: 2,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          trendColor.withAlpha(60),
+                          trendColor.withAlpha(5),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -41,6 +41,7 @@ class Student extends Authenticatable
         'is_five_candidate',
         'other',
         'phone',
+        'phone_added_at',
         'telegram_username',
         'telegram_chat_id',
         'telegram_verification_code',
@@ -62,6 +63,7 @@ class Student extends Authenticatable
         'must_change_password' => 'boolean',
         'is_five_candidate' => 'boolean',
         'telegram_verified_at' => 'datetime',
+        'phone_added_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
         'face_id_enabled'       => 'boolean',
     ];
@@ -349,7 +351,8 @@ class Student extends Authenticatable
             return $days;
         }
 
-        $deadline = $this->updated_at->copy()->addDays($days);
+        $start = $this->phone_added_at ?? $this->updated_at;
+        $deadline = $start->copy()->addDays($days);
         $daysLeft = (int) now()->diffInDays($deadline, false);
 
         return max($daysLeft, 0);

@@ -3469,44 +3469,6 @@ class JournalController extends Controller
     {
         $query = Group::where('department_active', true)->where('active', true);
 
-        // Tanlangan guruhni ko'rsatish uchun (page load vaqtida select2 option uchun)
-        if ($request->filled('group_id')) {
-            return Group::where('id', $request->group_id)
-                ->select('id', 'name')
-                ->get()
-                ->pluck('name', 'id');
-        }
-
-        // Universal qidiruv: guruh nomi bo'yicha qidirish (22 deb yozilsa, nomida 22 bo'lgan hammasi chiqsin)
-        // Agar qidiruv termi bo'lsa, kaskad filtrlar (kurs/kafedra/fan) INOBATGA OLINMAYDI
-        $searchTerm = trim((string) $request->get('search', ''));
-        if ($searchTerm !== '') {
-            $isOqituvchi = is_active_oqituvchi();
-            $teacherHemisId = $isOqituvchi ? get_teacher_hemis_id() : null;
-
-            $normalized = str_replace(['/', '-'], '', $searchTerm);
-            $query->where(function ($q) use ($searchTerm, $normalized) {
-                $q->where('name', 'like', '%' . $searchTerm . '%')
-                  ->orWhereRaw("REPLACE(REPLACE(name, '/', ''), '-', '') LIKE ?", ['%' . $normalized . '%']);
-            });
-
-            if ($isOqituvchi && $teacherHemisId) {
-                $query->whereIn('group_hemis_id', function ($sub) use ($teacherHemisId) {
-                    $sub->select('group_id')
-                        ->from('schedules')
-                        ->where('employee_id', $teacherHemisId)
-                        ->where('education_year_current', true)
-                        ->whereNull('deleted_at');
-                });
-            }
-
-            return $query->select('id', 'name')
-                ->orderBy('name')
-                ->limit(100)
-                ->get()
-                ->pluck('name', 'id');
-        }
-
         // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan guruhlar
         $isOqituvchi = is_active_oqituvchi();
         $teacherHemisId = null;

@@ -54,16 +54,22 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final schedule = provider.schedule;
       if (schedule == null) return;
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final scheduleList = schedule['schedule'] as List<dynamic>? ?? [];
+      final scheduleList = schedule['schedule'];
+      if (scheduleList == null || scheduleList is! List) return;
       for (final day in scheduleList) {
-        final d = day as Map<String, dynamic>;
-        if (d['date'] == today) {
-          setState(() => _todayLessons = d['lessons'] as List<dynamic>? ?? []);
+        if (day is! Map<String, dynamic>) continue;
+        if (day['date']?.toString() == today) {
+          final lessons = day['lessons'];
+          if (lessons is List) {
+            setState(() => _todayLessons = lessons);
+          }
           return;
         }
       }
       setState(() => _todayLessons = []);
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _todayLessons = []);
+    }
   }
 
   Map<String, dynamic>? _getCurrentOrNextLesson() {
@@ -72,26 +78,30 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     Map<String, dynamic>? nextLesson;
 
     for (final lesson in _todayLessons) {
-      final l = lesson as Map<String, dynamic>;
-      final startStr = l['lesson_pair_start_time'] as String? ?? '';
-      final endStr = l['lesson_pair_end_time'] as String? ?? '';
+      if (lesson is! Map<String, dynamic>) continue;
+      final startStr = lesson['lesson_pair_start_time']?.toString() ?? '';
+      final endStr = lesson['lesson_pair_end_time']?.toString() ?? '';
       if (startStr.isEmpty || endStr.isEmpty) continue;
 
       final startParts = startStr.split(':');
       final endParts = endStr.split(':');
       if (startParts.length < 2 || endParts.length < 2) continue;
 
-      final start = DateTime(now.year, now.month, now.day,
-          int.parse(startParts[0]), int.parse(startParts[1]));
-      final end = DateTime(now.year, now.month, now.day,
-          int.parse(endParts[0]), int.parse(endParts[1]));
+      final startH = int.tryParse(startParts[0]);
+      final startM = int.tryParse(startParts[1]);
+      final endH = int.tryParse(endParts[0]);
+      final endM = int.tryParse(endParts[1]);
+      if (startH == null || startM == null || endH == null || endM == null) continue;
+
+      final start = DateTime(now.year, now.month, now.day, startH, startM);
+      final end = DateTime(now.year, now.month, now.day, endH, endM);
 
       if (now.isAfter(start.subtract(const Duration(minutes: 1))) && now.isBefore(end)) {
-        return {...l, '_is_active': true, '_end': end, '_start': start};
+        return {...lesson, '_is_active': true, '_end': end, '_start': start};
       }
       if (now.isBefore(start)) {
         if (nextLesson == null) {
-          nextLesson = {...l, '_is_active': false, '_start': start, '_end': end};
+          nextLesson = {...lesson, '_is_active': false, '_start': start, '_end': end};
         }
       }
     }

@@ -108,22 +108,30 @@ class StudentApiController extends Controller
                 'employee_name' => $g->employee_name,
             ]);
 
-        $debtBySemester = $debtRecords->groupBy('semester_name')->map(function ($records, $semesterName) {
-            return $records->map(fn($r) => [
-                'subject_name' => $r->subject_name,
-                'credit' => $r->credit,
-                'total_acload' => $r->total_acload,
-                'total_point' => $r->total_point,
-                'grade' => $r->grade,
-                'retraining_status' => $r->retraining_status,
-            ]);
-        });
+        // Semester-level averages for comparison
+        $semesterAvgs = StudentGrade::where('student_id', $student->id)
+            ->where('status', 'recorded')
+            ->select('semester_code', DB::raw('AVG(CAST(grade AS DECIMAL(10,2))) as semester_avg'))
+            ->groupBy('semester_code')
+            ->orderBy('semester_code')
+            ->pluck('semester_avg', 'semester_code');
+
+        $currentSemesterCode = $student->semester_code;
+        $semesterKeys = $semesterAvgs->keys()->toArray();
+        $currentIndex = array_search($currentSemesterCode, $semesterKeys);
+
+        $currentSemesterAvg = $semesterAvgs[$currentSemesterCode] ?? null;
+        $prevSemesterAvg = ($currentIndex !== false && $currentIndex > 0)
+            ? $semesterAvgs[$semesterKeys[$currentIndex - 1]]
+            : null;
 
         return response()->json([
             'data' => [
                 'student_name' => $student->full_name,
                 'gpa' => (float) $avgGpa,
                 'avg_grade' => $student->avg_grade ?? 0,
+                'current_semester_avg' => $currentSemesterAvg ? round((float) $currentSemesterAvg, 2) : null,
+                'prev_semester_avg' => $prevSemesterAvg ? round((float) $prevSemesterAvg, 2) : null,
                 'debt_subjects' => $debtSubjectsCount,
                 'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,

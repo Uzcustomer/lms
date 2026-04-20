@@ -282,7 +282,9 @@ class JournalController extends Controller
     public function show(Request $request, $groupId, $subjectId, $semesterCode)
     {
         try {
-            return $this->showJournal($request, $groupId, $subjectId, $semesterCode);
+            $response = $this->showJournal($request, $groupId, $subjectId, $semesterCode);
+            $response->render();
+            return $response;
         } catch (\Throwable $e) {
             Log::error("Journal show error [group={$groupId}, subject={$subjectId}, semester={$semesterCode}]: {$e->getMessage()}", [
                 'file' => $e->getFile() . ':' . $e->getLine(),

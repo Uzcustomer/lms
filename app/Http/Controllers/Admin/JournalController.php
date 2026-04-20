@@ -2265,7 +2265,7 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked && !auth()->user()->hasRole('superadmin')) {
+        if ($ynLocked) {
             // Sababli ariza orqali MT bahosi: tasdiqlangan sababli + MT makeup turi
             // mavjud bo'lsa va deadline ichida (yoki admin) bo'lsa — ruxsat
             $sababliMtAllowed = false;
@@ -2726,7 +2726,7 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Submission topilmadi'], 404);
         }
 
-        // YN qulflangan bo'lsa — fayl o'chirishga ruxsat berilmaydi (superadmin bundan mustasno)
+        // YN qulflangan bo'lsa — fayl o'chirishga ruxsat berilmaydi
         $ynLocked = DB::table('student_grades')
             ->where('student_hemis_id', $submission->student_hemis_id)
             ->where('subject_id', $submission->subject_id)
@@ -2734,7 +2734,7 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked && !auth()->user()->hasRole('superadmin')) {
+        if ($ynLocked) {
             return response()->json([
                 'success' => false,
                 'message' => 'YN ga yuborilgan. Fayllarni o\'chirish mumkin emas.',
@@ -2886,8 +2886,8 @@ class JournalController extends Controller
                 }
             }
 
-            // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
-            if ($studentGrade->is_yn_locked && !auth()->user()->hasRole('superadmin')) {
+            // YN ga yuborilganligini tekshirish
+            if ($studentGrade->is_yn_locked) {
                 return response()->json([
                     'success' => false,
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -4368,7 +4368,7 @@ class JournalController extends Controller
             'group_hemis_id' => 'required',
         ]);
 
-        // YN ga yuborilganligini tekshirish (superadmin bundan mustasno)
+        // YN ga yuborilganligini tekshirish
         $ynLocked = DB::table('student_grades')
             ->where('student_hemis_id', $request->student_hemis_id)
             ->where('subject_id', $request->subject_id)
@@ -4376,7 +4376,7 @@ class JournalController extends Controller
             ->where('is_yn_locked', true)
             ->exists();
 
-        if ($ynLocked && !auth()->user()->hasRole('superadmin')) {
+        if ($ynLocked) {
             return response()->json([
                 'success' => false,
                 'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',

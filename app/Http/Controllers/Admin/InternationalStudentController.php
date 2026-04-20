@@ -577,7 +577,7 @@ class InternationalStudentController extends Controller
             $this->addField($section, '6. Ish joyi va lavozimi: ', 'Toshkent davlat tibbiyot universiteti Termiz filiali talaba');
             $this->addField($section, '7. Passport/harakatlanish hujjati: ', $v?->passport_number ?? '___');
             $this->addField($section, '8. Viza turi: ', $vizaStr);
-            $this->addField($section, '9. Viza kim tomonidan rasmiylashtirlib berilgan va uning muddati: ', $vizaGiven);
+            $this->addField($section, '9. Viza kim tomonidan rasmiylashtirib berilgan va uning muddati: ', $vizaGiven);
             $this->addField($section, "10. So'ralayotgan vaqtincha ro'yxat muddati (kunlarda): ", $regMonths . ' oy');
             $this->addField($section, "11. O'zbekistonga kirib kelgan sanasi (nazorat o'tish punkti): ", $v?->entry_date?->format('d.m.Y') ?? '________');
             $this->addField($section, "12. Vaqtincha yashash manzili: ", "Termiz shahar I.Karimov ko'chasi 64-uy");

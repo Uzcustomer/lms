@@ -2822,6 +2822,33 @@ class JournalController extends Controller
     /**
      * Save retake grade for a student from journal
      */
+    public function superadminEditGrade(Request $request)
+    {
+        if (!auth()->user()?->hasRole('superadmin')) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        }
+
+        $request->validate([
+            'grade_id' => 'required|integer',
+            'grade' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $record = DB::table('student_grades')->where('id', $request->grade_id)->first();
+        if (!$record) {
+            return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
+        }
+
+        DB::table('student_grades')->where('id', $request->grade_id)->update([
+            'grade' => $request->grade,
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'grade' => $request->grade,
+        ]);
+    }
+
     public function saveRetakeGrade(Request $request)
     {
         // Check admin or teacher role

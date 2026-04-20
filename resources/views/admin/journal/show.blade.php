@@ -834,6 +834,7 @@
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
+        $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
         $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
@@ -1470,7 +1471,13 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @if($isSuperAdmin && $gradeData)
+                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="superadminEdit(this, {{ $gradeData['id'] }})" title="Superadmin: bahoni o'zgartirish">
+                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                                </div>
+                                                            @else
+                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @endif
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -3430,6 +3437,66 @@
                 switchView('detailed');
             }
         })();
+
+        // Superadmin: istalgan bahoni to'g'ridan-to'g'ri o'zgartirish
+        function superadminEdit(cellDiv, gradeId) {
+            if (currentEditingCell) return;
+            currentEditingCell = cellDiv;
+            const originalContent = cellDiv.innerHTML;
+            let saving = false;
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = '100';
+            input.value = cellDiv.querySelector('span')?.textContent?.trim() || '';
+            input.className = 'w-full text-center border border-purple-500 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-purple-300';
+            input.style.cssText = 'width:50px;height:28px;';
+
+            cellDiv.innerHTML = '';
+            cellDiv.appendChild(input);
+            input.focus();
+            input.select();
+
+            function save() {
+                if (saving) return;
+                saving = true;
+                input.removeEventListener('blur', blurHandler);
+                const val = parseFloat(input.value);
+                if (isNaN(val) || val < 0 || val > 100) {
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                    return;
+                }
+                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+                fetch('{{ route("admin.journal.superadmin-edit-grade") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+                    body: JSON.stringify({ grade_id: gradeId, grade: val })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const rounded = Math.round(data.grade);
+                        const color = rounded < {{ $minimumLimit ?? 60 }} ? 'color:#dc2626' : 'color:#111827';
+                        cellDiv.innerHTML = `<span class="font-medium" style="${color}">${rounded}</span>`;
+                        cellDiv.onclick = function() { superadminEdit(this, gradeId); };
+                    } else {
+                        alert(data.message || 'Xatolik');
+                        cellDiv.innerHTML = originalContent;
+                    }
+                    currentEditingCell = null;
+                })
+                .catch(() => { cellDiv.innerHTML = originalContent; currentEditingCell = null; });
+            }
+
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); save(); }
+                else if (e.key === 'Escape') { saving = true; cellDiv.innerHTML = originalContent; currentEditingCell = null; }
+            });
+            function blurHandler() { if (!saving) save(); }
+            input.addEventListener('blur', blurHandler);
+        }
 
         // Retake grade functionality - Excel-like inline editing
         let currentEditingCell = null;

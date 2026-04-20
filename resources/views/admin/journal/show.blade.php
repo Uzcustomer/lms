@@ -3458,13 +3458,21 @@
             if (currentEditingCell) return;
             currentEditingCell = cellDiv;
             const originalContent = cellDiv.innerHTML;
+            const hasSplit = cellDiv.querySelector('.split-cell') !== null;
+            const splitTop = cellDiv.querySelector('.split-top');
+            const splitTopHTML = splitTop ? splitTop.outerHTML : '';
             let saving = false;
+
+            // split-bottom dagi qiymatni olish, aks holda span dagi
+            const bottomSpan = cellDiv.querySelector('.split-bottom');
+            const plainSpan = cellDiv.querySelector('span');
+            const currentVal = bottomSpan ? bottomSpan.textContent.trim() : (plainSpan ? plainSpan.textContent.trim() : '');
 
             const input = document.createElement('input');
             input.type = 'number';
             input.min = '0';
             input.max = '100';
-            input.value = cellDiv.querySelector('span')?.textContent?.trim() || '';
+            input.value = currentVal;
             input.className = 'w-full text-center border border-purple-500 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-purple-300';
             input.style.cssText = 'width:50px;height:28px;';
 
@@ -3493,8 +3501,12 @@
                 .then(data => {
                     if (data.success) {
                         const rounded = Math.round(data.grade);
-                        const color = rounded < {{ $minimumLimit ?? 60 }} ? 'color:#dc2626' : 'color:#111827';
-                        cellDiv.innerHTML = `<span class="font-medium" style="${color}">${rounded}</span>`;
+                        if (hasSplit) {
+                            cellDiv.innerHTML = `<div class="split-cell"><svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>${splitTopHTML}<span class="split-bottom">${rounded}</span></div>`;
+                        } else {
+                            const color = rounded < {{ $minimumLimit ?? 60 }} ? 'color:#dc2626' : 'color:#111827';
+                            cellDiv.innerHTML = `<span class="font-medium" style="${color}">${rounded}</span>`;
+                        }
                         cellDiv.onclick = function() { superadminEdit(this, gradeId); };
                     } else {
                         alert(data.message || 'Xatolik');

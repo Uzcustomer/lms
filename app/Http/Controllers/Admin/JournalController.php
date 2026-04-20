@@ -2839,10 +2839,51 @@ class JournalController extends Controller
         }
 
         $isRetake = $record->retake_grade !== null;
-        $field = $isRetake ? 'retake_grade' : 'grade';
+
+        if ($isRetake) {
+            // Koeffitsient: sababsiz NB = 0.8, sababli NB = 1.0, low_grade = 0.8
+            $isExcused = false;
+            if ($record->reason === 'absent') {
+                $isExcused = DB::table('absence_excuses as ae')
+                    ->join('absence_excuse_makeups as aem', 'aem.absence_excuse_id', '=', 'ae.id')
+                    ->where('ae.student_hemis_id', $record->student_hemis_id)
+                    ->where('ae.status', 'approved')
+                    ->whereDate('ae.start_date', '<=', $record->lesson_date)
+                    ->whereDate('ae.end_date', '>=', $record->lesson_date)
+                    ->where('aem.subject_id', $record->subject_id)
+                    ->exists();
+                if (!$isExcused) {
+                    $isExcused = DB::table('attendances')
+                        ->where('student_hemis_id', $record->student_hemis_id)
+                        ->where('subject_id', $record->subject_id)
+                        ->whereDate('lesson_date', $record->lesson_date)
+                        ->where('lesson_pair_code', $record->lesson_pair_code)
+                        ->where('absent_on', '>', 0)
+                        ->exists();
+                }
+                $percentage = $isExcused ? 1.0 : 0.8;
+            } elseif ($record->reason === 'low_grade') {
+                $percentage = 0.8;
+            } else {
+                $percentage = 1.0;
+            }
+
+            $finalGrade = round($request->grade * $percentage, 2);
+            DB::table('student_grades')->where('id', $request->grade_id)->update([
+                'retake_grade' => $finalGrade,
+                'updated_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'grade' => $finalGrade,
+                'entered' => $request->grade,
+                'percentage' => $percentage,
+            ]);
+        }
 
         DB::table('student_grades')->where('id', $request->grade_id)->update([
-            $field => $request->grade,
+            'grade' => $request->grade,
             'updated_at' => now(),
         ]);
 

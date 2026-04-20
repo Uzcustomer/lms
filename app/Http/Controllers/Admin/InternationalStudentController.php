@@ -545,14 +545,14 @@ class InternationalStudentController extends Controller
         foreach ($students as $student) {
             $v = $student->visaInfo;
             $n = ['size' => 11];
-            $section = $word->addSection(['marginTop' => 600, 'marginBottom' => 600, 'marginLeft' => 800, 'marginRight' => 600]);
+            $section = $word->addSection(['marginTop' => 600, 'marginBottom' => 600, 'marginLeft' => 800, 'marginRight' => 4000]);
 
             $table = $section->addTable();
             $table->addRow();
-            $c1 = $table->addCell(4500);
+            $c1 = $table->addCell(3550);
             $c1->addText('Hurmatli S.Eshqobilov', ['italic' => true, 'size' => 11]);
             $c1->addText('qonuniy xal qiling', ['italic' => true, 'size' => 11]);
-            $c2 = $table->addCell(4500);
+            $c2 = $table->addCell(3550);
             $c2->addText('Termiz Shahar IIB M va FRB', ['size' => 11], ['alignment' => Jc::END]);
             $c2->addText("boshlig'i podpolkovnik", ['size' => 11], ['alignment' => Jc::END]);
             $c2->addText('S. S. Kabilovga', ['size' => 11], ['alignment' => Jc::END]);
@@ -577,7 +577,7 @@ class InternationalStudentController extends Controller
             $this->addField($section, '6. Ish joyi va lavozimi: ', 'Toshkent davlat tibbiyot universiteti Termiz filiali talaba');
             $this->addField($section, '7. Passport/harakatlanish hujjati: ', $v?->passport_number ?? '___');
             $this->addField($section, '8. Viza turi: ', $vizaStr);
-            $this->addField($section, '9. Viza kim tomonidan rasmiylashtirlib berilgan va uning muddati: ', $vizaGiven);
+            $this->addField($section, '9. Viza kim tomonidan rasmiylashtirib berilgan va uning muddati: ', $vizaGiven);
             $this->addField($section, "10. So'ralayotgan vaqtincha ro'yxat muddati (kunlarda): ", $regMonths . ' oy');
             $this->addField($section, "11. O'zbekistonga kirib kelgan sanasi (nazorat o'tish punkti): ", $v?->entry_date?->format('d.m.Y') ?? '________');
             $this->addField($section, "12. Vaqtincha yashash manzili: ", "Termiz shahar I.Karimov ko'chasi 64-uy");
@@ -590,8 +590,8 @@ class InternationalStudentController extends Controller
 
             $section->addTextBreak(2);
             $st = $section->addTable(); $st->addRow();
-            $st->addCell(4500)->addText('Direktor', ['bold' => true, 'size' => 13]);
-            $st->addCell(4500)->addText('F.A.Otamuradov', ['bold' => true, 'size' => 13], ['alignment' => Jc::END]);
+            $st->addCell(3550)->addText('Direktor', ['bold' => true, 'size' => 13]);
+            $st->addCell(3550)->addText('F.A.Otamuradov', ['bold' => true, 'size' => 13], ['alignment' => Jc::END]);
             $section->addTextBreak(2);
             $section->addText('Ijrochi:Sh.Temirov', ['size' => 10]);
             $section->addText('Tel:+998995721774', ['size' => 10]);

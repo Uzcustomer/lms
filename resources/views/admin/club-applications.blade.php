@@ -92,9 +92,20 @@
                             $clubPending = $clubApps->where('status', 'pending')->count();
                             $clubApproved = $clubApps->where('status', 'approved')->count();
                             $clubRejected = $clubApps->where('status', 'rejected')->count();
-                            $kafedra = $clubApps->first()->kafedra_name ?? '—';
+                            $kafedraRaw = $clubApps->first()->kafedra_name ?? '';
                             $schedule = trim(($clubApps->first()->club_day ?? '') . ' ' . ($clubApps->first()->club_time ?? ''));
+
+                            // "...kafedrasi" gacha kesib kafedra nomini ajratish
+                            $kafedra = $kafedraRaw;
+                            if (preg_match('/^(.+?kafedrasi)\b/iu', $kafedraRaw, $m)) {
+                                $kafedra = $m[1];
+                            }
+
+                            // Kafedra mudirini topish
                             $deptHemisId = $clubApps->first()->department_hemis_id;
+                            if (!$deptHemisId && $kafedra) {
+                                $deptHemisId = \App\Models\Department::whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower($kafedra) . '%'])->value('department_hemis_id');
+                            }
                             $masul = $deptHemisId
                                 ? \App\Models\Teacher::where('department_hemis_id', $deptHemisId)
                                     ->whereHas('roles', fn($q) => $q->where('name', 'kafedra_mudiri'))

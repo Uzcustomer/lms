@@ -270,7 +270,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/show/{groupId}/{subjectId}/{semesterCode}', [JournalController::class, 'show'])->name('show');
             Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade');
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
-            Route::post('/admin-edit-grade', [JournalController::class, 'adminEditGrade'])->name('admin-edit-grade');
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
             Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade');

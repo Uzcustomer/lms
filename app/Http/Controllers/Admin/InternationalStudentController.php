@@ -669,12 +669,12 @@ class InternationalStudentController extends Controller
     }
 
     /**
-     * Word talabnoma uchun yordamchi: qalin sarlavha + oddiy qiymat.
+     * Word talabnoma uchun yordamchi: sarlavha + qiymat.
      */
     private function addField($section, string $label, string $value): void
     {
         $run = $section->addTextRun();
-        $run->addText($label, ['bold' => true, 'size' => 11]);
+        $run->addText($label, ['size' => 11]);
         $run->addText($value, ['size' => 11]);
     }
 

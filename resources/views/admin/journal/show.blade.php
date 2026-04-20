@@ -834,7 +834,7 @@
     @php
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
-        $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
+        $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
         $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">

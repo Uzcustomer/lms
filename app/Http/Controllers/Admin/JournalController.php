@@ -2828,6 +2828,10 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
         }
 
+        if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya hozirda o\'chirilgan'], 403);
+        }
+
         $request->validate([
             'grade_id' => 'required|integer',
             'grade' => 'required|numeric|min:0|max:100',

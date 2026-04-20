@@ -1638,8 +1638,6 @@
                         </div>
                         <div>
                             @php
-                                // Sababli retake qilgan talabalar soni — 12-qo'shimcha shaklga tushadiganlar
-                                // (modal $endif tashqarida bo'lgani uchun har doim e'lon qilinishi shart)
                                 $sababliStudentsCount = 0;
                                 foreach (($students ?? []) as $__stu) {
                                     $__h = $__stu->hemis_id;

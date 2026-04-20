@@ -281,6 +281,19 @@ class JournalController extends Controller
 
     public function show(Request $request, $groupId, $subjectId, $semesterCode)
     {
+        try {
+            return $this->showJournal($request, $groupId, $subjectId, $semesterCode);
+        } catch (\Throwable $e) {
+            Log::error("Journal show error [group={$groupId}, subject={$subjectId}, semester={$semesterCode}]: {$e->getMessage()}", [
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return redirect()->back()->with('journal_error', $e->getMessage());
+        }
+    }
+
+    private function showJournal(Request $request, $groupId, $subjectId, $semesterCode)
+    {
         $group = Group::find($groupId);
         if (!$group) {
             abort(404, "Guruh topilmadi (ID: {$groupId})");

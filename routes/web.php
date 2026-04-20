@@ -542,6 +542,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/transfer', [KafedraController::class, 'transfer'])->name('transfer');
         });
 
+        // Feature toggles (superadmin only)
+        Route::prefix('feature-toggles')->name('feature-toggles.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\FeatureToggleController::class, 'index'])->name('index');
+            Route::post('/update', [\App\Http\Controllers\Admin\FeatureToggleController::class, 'update'])->name('update');
+        });
+
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
         Route::get('/reports/jn/data', [ReportController::class, 'jnReportData'])->name('reports.jn.data');
 

@@ -5493,8 +5493,8 @@ class JournalController extends Controller
     }
 
     /**
-     * YN o'tkazish sanasi o'tgandan keyin OSKI va Test natijalarini avtomatik tortish.
-     * hemis_quiz_results dan student_grades ga yuklanmagan natijalarni topib, student_grades ga saqlaydi.
+     * YN o'tkazish sanasi o'tgandan keyin OSKI va Test natijalarini tekshirish.
+     * Faqat mavjudligini ko'rsatadi — yuklash diagnostika orqali amalga oshiriladi.
      */
     public function fetchYnResults(Request $request)
     {
@@ -5508,36 +5508,6 @@ class JournalController extends Controller
         $semesterCode = $request->semester_code;
         $groupHemisId = $request->group_hemis_id;
 
-        // YN yuborilganligini tekshirish
-        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('group_hemis_id', $groupHemisId)
-            ->first();
-
-        if (!$ynSubmission) {
-            return response()->json([
-                'success' => false,
-                'message' => 'YN hali yuborilmagan.',
-            ], 400);
-        }
-
-        // exam_schedules dan OSKI/Test sanalarini tekshirish
-        $examSchedule = ExamSchedule::where('group_hemis_id', $groupHemisId)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->first();
-
-        $oskiDatePassed = $examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->isPast();
-        $testDatePassed = $examSchedule && $examSchedule->test_date && $examSchedule->test_date->isPast();
-
-        if (!$oskiDatePassed && !$testDatePassed) {
-            return response()->json([
-                'success' => false,
-                'message' => 'OSKI yoki Test o\'tkazish sanasi hali kelmagan.',
-            ], 400);
-        }
-
-        // Guruh talabalarini olish
         $students = Student::where('group_id', $groupHemisId)->get();
         if ($students->isEmpty()) {
             return response()->json([
@@ -5547,155 +5517,39 @@ class JournalController extends Controller
         }
 
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
-        $studentIdNumbers = $students->pluck('student_id_number')->filter()->toArray();
 
-        // hemis_quiz_results dan natijalarni olish (OSKI va Test turlari)
-        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->whereIn('training_type_code', [101, 102])
+            ->where('reason', 'quiz_result')
+            ->count();
 
-        $quizResults = HemisQuizResult::where('is_active', 1)
+        $pendingCount = HemisQuizResult::where('is_active', 1)
             ->where('fan_id', $subjectId)
-            ->where(function ($q) use ($studentHemisIds, $studentIdNumbers) {
-                $q->whereIn('student_id', $studentHemisIds);
-                if (!empty($studentIdNumbers)) {
-                    $q->orWhereIn('student_id', $studentIdNumbers);
-                }
-            })
-            ->whereIn('quiz_type', array_merge($oskiTypes, $testTypes))
+            ->whereIn('student_id', array_merge($studentHemisIds, $students->pluck('student_id_number')->filter()->toArray()))
+            ->whereIn('quiz_type', ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)', 'YN test (eng)', 'YN test (rus)', 'YN test (uzb)'])
             ->whereNotExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('student_grades')
                     ->whereColumn('student_grades.quiz_result_id', 'hemis_quiz_results.id')
                     ->where('student_grades.reason', 'quiz_result');
             })
-            ->get();
+            ->count();
 
-        if ($quizResults->isEmpty()) {
-            // Natijalar yo'q — ammo allaqachon yuklanganlarni tekshirish
-            // Avval aniq semester_code bilan, keyin semester_code siz (diagnostika boshqa semester bilan saqlagan bo'lishi mumkin)
-            $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                ->where('subject_id', $subjectId)
-                ->where('semester_code', $semesterCode)
-                ->whereIn('training_type_code', [101, 102])
-                ->where('reason', 'quiz_result')
-                ->count();
-
-            if ($existingCount === 0) {
-                // semester_code mos kelmagan bo'lishi mumkin — semester_code siz tekshirish
-                $existingCount = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subjectId)
-                    ->whereIn('training_type_code', [101, 102])
-                    ->where('reason', 'quiz_result')
-                    ->count();
-            }
-
-            if ($existingCount > 0) {
-                $ynSubmission->update(['results_fetched' => true]);
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Natijalar avval yuklangan. Jami: ' . $existingCount . ' ta.',
-                    'fetched_count' => 0,
-                    'existing_count' => $existingCount,
-                ]);
-            }
-
+        if ($existingCount > 0 || $pendingCount > 0) {
             return response()->json([
-                'success' => false,
-                'message' => 'OSKI va Test natijalari topilmadi. Natijalar hali tizimga yuklanmagan bo\'lishi mumkin.',
-            ], 404);
-        }
-
-        // Student lookup
-        $studentLookup = [];
-        foreach ($students as $student) {
-            $studentLookup[$student->hemis_id] = $student;
-            if ($student->student_id_number) {
-                $studentLookup[$student->student_id_number] = $student;
-            }
-        }
-
-        $group = Group::where('group_hemis_id', $groupHemisId)->first();
-        $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
-            ->where('code', $semesterCode)
-            ->first();
-
-        $subject = CurriculumSubject::where('subject_id', $subjectId)
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $semesterCode)
-            ->first();
-
-        $successCount = 0;
-        $errors = [];
-        $duplicateTracker = [];
-
-        foreach ($quizResults as $result) {
-            $student = $studentLookup[$result->student_id] ?? null;
-            if (!$student) {
-                continue;
-            }
-
-            // Dublikat tekshirish
-            $key = $result->student_id . '_' . $result->fan_id;
-            $ynTuri = in_array($result->quiz_type, $oskiTypes) ? 'oski' : 'test';
-            $dupKey = $key . '_' . $ynTuri;
-            if (isset($duplicateTracker[$dupKey])) {
-                continue;
-            }
-            $duplicateTracker[$dupKey] = $result->id;
-
-            // training_type_code aniqlash
-            if (in_array($result->quiz_type, $oskiTypes)) {
-                $trainingTypeCode = 101;
-                $trainingTypeName = 'Oski';
-            } elseif (in_array($result->quiz_type, $testTypes)) {
-                $trainingTypeCode = 102;
-                $trainingTypeName = 'Yakuniy test';
-            } else {
-                continue;
-            }
-
-            StudentGrade::create([
-                'student_id' => $student->id,
-                'student_hemis_id' => $student->hemis_id,
-                'hemis_id' => 999999999,
-                'semester_code' => $semester->code ?? $student->semester_code,
-                'semester_name' => $semester->name ?? $student->semester_name,
-                'subject_schedule_id' => 0,
-                'subject_id' => $subject->subject_id ?? $subjectId,
-                'subject_name' => $subject->subject_name ?? '',
-                'subject_code' => $subject->subject_code ?? '',
-                'training_type_code' => $trainingTypeCode,
-                'training_type_name' => $trainingTypeName,
-                'employee_id' => 0,
-                'employee_name' => auth()->user()->name ?? 'Avtomatik yuklash',
-                'lesson_pair_name' => '',
-                'lesson_pair_code' => '',
-                'lesson_pair_start_time' => '',
-                'lesson_pair_end_time' => '',
-                'lesson_date' => $result->date_finish ?? now(),
-                'created_at_api' => $result->created_at ?? now(),
-                'reason' => 'quiz_result',
-                'status' => 'recorded',
-                'grade' => round($result->grade),
-                'deadline' => now(),
-                'quiz_result_id' => $result->id,
-                'is_final' => true,
-                'is_yn_locked' => true,
+                'success' => true,
+                'message' => 'Yuklangan: ' . $existingCount . ' ta. Kutilmoqda: ' . $pendingCount . ' ta. Yuklash uchun Diagnostika sahifasidan foydalaning.',
+                'fetched_count' => 0,
+                'existing_count' => $existingCount,
+                'pending_count' => $pendingCount,
             ]);
-
-            $successCount++;
-        }
-
-        if ($successCount > 0) {
-            $ynSubmission->update(['results_fetched' => true]);
         }
 
         return response()->json([
-            'success' => true,
-            'message' => $successCount . ' ta natija muvaffaqiyatli yuklandi.',
-            'fetched_count' => $successCount,
-            'error_count' => count($errors),
-        ]);
+            'success' => false,
+            'message' => 'OSKI va Test natijalari topilmadi.',
+        ], 404);
     }
 
     /**

@@ -34,6 +34,8 @@
                 $approved = $applications->where('status', 'approved');
                 $rejected = $applications->where('status', 'rejected');
                 $byClub = $applications->groupBy('club_name');
+                $activeRole = session('active_role', '');
+                $isKafedraMudiri = $activeRole === 'kafedra_mudiri';
             @endphp
 
             <div x-data="{ filter: 'all' }">
@@ -153,11 +155,14 @@
                                                 <th class="text-left">Masul shaxs</th>
                                                 <th class="text-left">Ariza sanasi</th>
                                                 <th class="text-center">Holati</th>
+                                                @if($isKafedraMudiri)
+                                                    <th class="text-center">Amal</th>
+                                                @endif
                                             </tr>
                                         </thead>
                                         <tbody>
                                             @foreach($clubApps->sortByDesc('created_at')->values() as $i => $app)
-                                                <tr x-show="filter === 'all' || filter === '{{ $app->status }}'">
+                                                <tr x-show="filter === 'all' || filter === '{{ $app->status }}'" x-data="{ rejectOpen: false }">
                                                     <td class="text-center text-gray-400 font-medium">{{ $i + 1 }}</td>
                                                     <td class="font-semibold text-gray-800">{{ $app->student_name }}</td>
                                                     <td class="text-gray-600">{{ $app->group_name ?? '—' }}</td>
@@ -173,6 +178,30 @@
                                                             <span class="inline-flex px-2.5 py-1 rounded-md text-[11px] font-semibold" style="background: #fee2e2; color: #991b1b;">Rad etilgan</span>
                                                         @endif
                                                     </td>
+                                                    @if($isKafedraMudiri)
+                                                        <td class="text-center" style="min-width: 200px;">
+                                                            @if($app->status === 'pending')
+                                                                <div class="flex items-center justify-center gap-2">
+                                                                    <form method="POST" action="{{ route('admin.club-applications.approve', $app) }}">
+                                                                        @csrf
+                                                                        <button type="submit" class="px-3 py-1.5 text-[11px] font-semibold rounded-md text-white transition" style="background: linear-gradient(135deg, #059669, #10b981);">Biriktirish</button>
+                                                                    </form>
+                                                                    <button type="button" @click="rejectOpen = !rejectOpen" class="px-3 py-1.5 text-[11px] font-semibold rounded-md text-white transition" style="background: linear-gradient(135deg, #dc2626, #ef4444);">Rad etish</button>
+                                                                </div>
+                                                                <div x-show="rejectOpen" x-cloak class="mt-2">
+                                                                    <form method="POST" action="{{ route('admin.club-applications.reject', $app) }}" class="flex gap-1">
+                                                                        @csrf
+                                                                        <input type="text" name="reject_reason" placeholder="Sabab..." class="flex-1 text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-1 focus:ring-red-300 focus:border-red-400">
+                                                                        <button type="submit" class="px-2.5 py-1.5 text-[11px] font-semibold rounded-md text-white" style="background: #991b1b;">OK</button>
+                                                                    </form>
+                                                                </div>
+                                                            @elseif($app->status === 'rejected' && $app->reject_reason)
+                                                                <span class="text-xs text-red-500 italic">{{ $app->reject_reason }}</span>
+                                                            @else
+                                                                <span class="text-gray-300">—</span>
+                                                            @endif
+                                                        </td>
+                                                    @endif
                                                 </tr>
                                             @endforeach
                                         </tbody>

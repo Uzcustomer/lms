@@ -945,6 +945,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
     final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
     final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
+    final currentSemAvg = _toDouble(data?['current_semester_avg']);
+    final prevSemAvg = _toDouble(data?['prev_semester_avg']);
     final recentGrades = data?['recent_grades'] as List<dynamic>? ?? [];
 
     final sparkPoints = recentGrades
@@ -953,6 +955,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         .reversed
         .toList();
 
+    final gradeDiff = (prevSemAvg > 0) ? currentSemAvg - prevSemAvg : null;
+    final gpaDiff = (prevSemAvg > 0) ? (currentSemAvg - prevSemAvg) * 4.0 / 100.0 : null;
+
     return Row(
       children: [
         Expanded(
@@ -960,7 +965,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             icon: Icons.trending_up,
             value: gpa.toStringAsFixed(2),
             subtitle: 'GPA · 4.00+',
-            accentColor: const Color(0xFF4CAF50),
+            diff: gpaDiff,
             sparkData: sparkPoints.map((g) => g * 4.0 / 100.0).toList(),
           ),
         ),
@@ -970,7 +975,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             icon: Icons.star_outline,
             value: avgGrade.toStringAsFixed(1),
             subtitle: l.avgGrade,
-            accentColor: const Color(0xFF4CAF50),
+            diff: gradeDiff,
             sparkData: sparkPoints,
           ),
         ),
@@ -982,9 +987,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     required IconData icon,
     required String value,
     required String subtitle,
-    required Color accentColor,
     required List<double> sparkData,
+    double? diff,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isUp = diff != null && diff >= 0;
+    final trendColor = (diff == null) ? AppTheme.accentColor : (isUp ? const Color(0xFF4CAF50) : const Color(0xFFE53935));
+    final bgColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white.withAlpha(120) : AppTheme.textSecondary;
+
     final spots = <FlSpot>[];
     if (sparkData.length >= 2) {
       for (int i = 0; i < sparkData.length; i++) {
@@ -1000,8 +1012,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: bgColor,
         borderRadius: BorderRadius.circular(18),
+        boxShadow: isDark ? null : [
+          BoxShadow(
+            color: Colors.black.withAlpha(12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1012,29 +1031,54 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: accentColor.withAlpha(30),
+                  color: trendColor.withAlpha(25),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: accentColor, size: 20),
+                child: Icon(icon, color: trendColor, size: 20),
               ),
+              const Spacer(),
+              if (diff != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: trendColor.withAlpha(20),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isUp ? Icons.arrow_upward : Icons.arrow_downward,
+                        size: 12,
+                        color: trendColor,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${isUp ? "+" : ""}${diff.toStringAsFixed(1)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: trendColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 14),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w800,
-              color: Colors.white,
+              color: textColor,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.white.withAlpha(120),
-            ),
+            style: TextStyle(fontSize: 12, color: subTextColor),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -1051,7 +1095,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     spots: spots,
                     isCurved: true,
                     curveSmoothness: 0.3,
-                    color: accentColor,
+                    color: trendColor,
                     barWidth: 2,
                     isStrokeCapRound: true,
                     dotData: const FlDotData(show: false),
@@ -1061,8 +1105,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          accentColor.withAlpha(60),
-                          accentColor.withAlpha(5),
+                          trendColor.withAlpha(60),
+                          trendColor.withAlpha(5),
                         ],
                       ),
                     ),

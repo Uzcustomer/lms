@@ -927,6 +927,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
+  double _toDouble(dynamic val) {
+    if (val == null) return 0;
+    if (val is num) return val.toDouble();
+    return double.tryParse(val.toString()) ?? 0;
+  }
+
   Color _gradeColor(dynamic grade) {
     if (grade == null) return AppTheme.textSecondary;
     final g = grade is num ? grade.toDouble() : double.tryParse(grade.toString()) ?? 0;
@@ -937,12 +943,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
-    final gpa = ((data?['gpa'] ?? profile?['avg_gpa'] ?? 0) as num).toDouble();
-    final avgGrade = ((data?['avg_grade'] ?? profile?['avg_grade'] ?? 0) as num).toDouble();
+    final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
+    final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
     final recentGrades = data?['recent_grades'] as List<dynamic>? ?? [];
 
     final sparkPoints = recentGrades
-        .map((g) => ((g as Map<String, dynamic>)['grade'] as num?)?.toDouble() ?? 0)
+        .map((g) => _toDouble((g as Map<String, dynamic>)['grade']))
         .toList()
         .reversed
         .toList();

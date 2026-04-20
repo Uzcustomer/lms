@@ -1373,10 +1373,11 @@
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                                        $isSuperadmin = auth()->user()?->hasRole('superadmin') ?? false;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRateAdmin = !$isDekan && $isAdminRole && !$isYnSubmitted;
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted;
+                                                        $canRateAdmin = !$isDekan && $isAdminRole && (!$isYnSubmitted || $isSuperadmin);
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && (!$isYnSubmitted || $isSuperadmin);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;
@@ -1717,6 +1718,19 @@
 
                 {{-- YN yuborilgandan keyin ogohlantirish xabari --}}
                 @if(isset($ynSubmission) && $ynSubmission)
+                @if(auth()->user()?->hasRole('superadmin'))
+                <div class="mt-3 p-4 bg-blue-50 border border-blue-300 rounded-lg">
+                    <div class="flex items-start">
+                        <svg class="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div class="text-sm text-blue-800">
+                            <p class="font-semibold">Superadmin rejimi — baholarni tahrirlash mumkin</p>
+                            <p class="mt-1">YN ga yuborilgan, lekin superadmin sifatida barcha baholarni o'zgartirish imkoniyati ochiq.</p>
+                        </div>
+                    </div>
+                </div>
+                @else
                 <div class="mt-3 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
                     <div class="flex items-start">
                         <svg class="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -1728,6 +1742,7 @@
                         </div>
                     </div>
                 </div>
+                @endif
                 @endif
                 @endif
 
@@ -2031,6 +2046,7 @@
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
                                             $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                            $isSuperadminMt = auth()->user()?->hasRole('superadmin') ?? false;
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
 
                                             // Sababli ariza orqali MT bahosi: talaba uchun tasdiqlangan
@@ -2058,12 +2074,12 @@
                                                 && (!$mtSababliDeadlinePassed || $isAdminMt);
 
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? !$mtSababliCanGrade
+                                                ? ($isSuperadminMt ? false : !$mtSababliCanGrade)
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
-                                            // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
-                                            if ($isYnSubmittedMt && !$mtSababliCanGrade) {
+                                            // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari (superadmin bundan mustasno)
+                                            if ($isYnSubmittedMt && !$mtSababliCanGrade && !$isSuperadminMt) {
                                                 $canRegrade = false;
                                             }
 

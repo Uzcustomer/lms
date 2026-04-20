@@ -176,7 +176,12 @@
                             @endif
                             @if($excuse->isApproved() && $excuse->approved_pdf_path)
                                 <div class="mt-3">
-                                    <a href="{{ route('admin.absence-excuses.download-pdf', $excuse->id) }}" target="_blank"
+                                    @php
+                                        $pdfUrl = Str::startsWith($excuse->approved_pdf_path, ['http://', 'https://'])
+                                            ? $excuse->approved_pdf_path
+                                            : route('admin.absence-excuses.download-pdf', $excuse->id);
+                                    @endphp
+                                    <a href="{{ $pdfUrl }}" target="_blank"
                                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
                                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                         Tasdiqlangan PDF
@@ -234,11 +239,14 @@
                     @php
                         $ext = strtolower(pathinfo($excuse->file_original_name, PATHINFO_EXTENSION));
                         $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp']);
+                        $isExternalFile = Str::startsWith($excuse->file_path, ['http://', 'https://']);
+                        $fileViewUrl = $isExternalFile ? $excuse->file_path : route('admin.absence-excuses.download', $excuse->id);
+                        $fileImgSrc = $isExternalFile ? $excuse->file_path : asset('storage/' . $excuse->file_path);
                     @endphp
                     <div class="p-4">
                         @if($isImage)
                             <div class="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 mb-3">
-                                <img src="{{ asset('storage/' . $excuse->file_path) }}" alt="Asos hujjat"
+                                <img src="{{ $fileImgSrc }}" alt="Asos hujjat"
                                      class="w-full h-auto object-contain" style="max-height: 180px;">
                             </div>
                         @else
@@ -253,12 +261,12 @@
                             </div>
                         @endif
                         <div class="flex gap-3">
-                            <a href="{{ route('admin.absence-excuses.download', $excuse->id) }}" target="_blank"
+                            <a href="{{ $fileViewUrl }}" target="_blank"
                                class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                                 Ko'rish
                             </a>
-                            <a href="{{ route('admin.absence-excuses.download', $excuse->id) }}" download
+                            <a href="{{ $fileViewUrl }}" {{ $isExternalFile ? '' : 'download' }}
                                class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                 Yuklab olish
@@ -286,6 +294,7 @@
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Fan nomi</th>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Nazorat turi</th>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Qayta topshirish sanasi</th>
+                                    <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Tasdiqlagan</th>
                                     <th class="px-6 py-4 text-left text-sm font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">Holat</th>
                                 </tr>
                             </thead>
@@ -322,6 +331,16 @@
                                                 <span class="text-gray-400 italic">Belgilanmagan</span>
                                             @endif
                                         </td>
+                                        <td class="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                            @if($excuse->reviewed_by_name)
+                                                <span class="font-semibold">{{ $excuse->reviewed_by_name }}</span>
+                                                @if($excuse->reviewed_at)
+                                                    <div class="text-xs text-gray-400 mt-0.5">{{ $excuse->reviewed_at->format('d.m.Y H:i') }}</div>
+                                                @endif
+                                            @else
+                                                <span class="text-gray-400 italic">—</span>
+                                            @endif
+                                        </td>
                                         <td class="px-6 py-4">
                                             <span class="inline-flex px-3 py-1 text-sm font-bold rounded-full
                                                 @if($makeup->status === 'completed') bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
@@ -338,13 +357,63 @@
                 </div>
             @endif
 
+            {{-- ═══════ Baho konflikti ogohlantiruvi ═══════ --}}
+            @if($excuse->isPending() && !empty($gradeConflicts))
+                <div class="mb-6 rounded-lg border-2 border-red-400 bg-red-50 dark:bg-red-900/20 dark:border-red-600 p-4">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div class="flex-1">
+                            <h4 class="text-base font-bold text-red-800 dark:text-red-300 mb-1">
+                                Diqqat! Ma'lumotnoma soxta bo'lishi mumkin
+                            </h4>
+                            <p class="text-sm text-red-700 dark:text-red-300 mb-3">
+                                Talaba ariza sana oralig'idagi quyidagi kun(lar)da darsda bo'lgan va baho olgan.
+                                Demak, o'sha kun(lar)ga sababli ma'lumotnoma haqiqiy bo'lishi mumkin emas.
+                            </p>
+                            <div class="overflow-x-auto rounded-lg border border-red-200 dark:border-red-700">
+                                <table class="min-w-full text-sm">
+                                    <thead class="bg-red-100 dark:bg-red-900/40">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left font-semibold text-red-900 dark:text-red-200">Sana</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-red-900 dark:text-red-200">Fan</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-red-900 dark:text-red-200">Juft</th>
+                                            <th class="px-3 py-2 text-right font-semibold text-red-900 dark:text-red-200">Baho</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-red-100 dark:divide-red-800">
+                                        @foreach($gradeConflicts as $conflict)
+                                            <tr>
+                                                <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ \Carbon\Carbon::parse($conflict->lesson_date)->format('d.m.Y') }}</td>
+                                                <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ $conflict->subject_name }}</td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $conflict->lesson_pair_name ?? '—' }}</td>
+                                                <td class="px-3 py-2 text-right font-bold text-red-700 dark:text-red-300">{{ rtrim(rtrim(number_format((float)$conflict->grade, 2, '.', ''), '0'), '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-xs text-red-600 dark:text-red-400 mt-2">
+                                Tasdiqlashdan oldin hujjatni diqqat bilan tekshiring.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             {{-- ═══════ Tasdiqlash / Rad etish ═══════ --}}
             @if($excuse->isPending())
                 <div class="flex justify-end mb-6" x-data="{ showReject: false }">
                     <div class="flex flex-col items-end gap-3">
                         <div class="flex gap-3">
+                            @php
+                                $confirmMsg = !empty($gradeConflicts)
+                                    ? "DIQQAT! Talaba ariza kunlarida baho olgan — ma'lumotnoma soxta bo'lishi mumkin. Baribir tasdiqlaysizmi?"
+                                    : 'Arizani tasdiqlashni xohlaysizmi? PDF hujjat yaratiladi.';
+                            @endphp
                             <form method="POST" action="{{ route('admin.absence-excuses.approve', $excuse->id) }}"
-                                  onsubmit="return confirm('Arizani tasdiqlashni xohlaysizmi? PDF hujjat yaratiladi.')">
+                                  onsubmit="return confirm({{ Js::from($confirmMsg) }})">
                                 @csrf
                                 <button type="submit"
                                         class="inline-flex items-center px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
@@ -352,14 +421,14 @@
                                     Tasdiqlash
                                 </button>
                             </form>
-                            <button @click="showReject = !showReject"
+                            <button @click="if (showReject) { $refs.rejectForm.requestSubmit() } else { showReject = true }"
                                     class="inline-flex items-center px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 Rad etish
                             </button>
                         </div>
                         <div x-show="showReject" x-transition class="w-full max-w-md">
-                            <form method="POST" action="{{ route('admin.absence-excuses.reject', $excuse->id) }}"
+                            <form method="POST" action="{{ route('admin.absence-excuses.reject', $excuse->id) }}" x-ref="rejectForm"
                                   class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                                 @csrf
                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>

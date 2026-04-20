@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Xabarnomalar
+            {{ __('Xabarnomalar') }}
         </h2>
     </x-slot>
 
@@ -13,7 +13,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
                     </svg>
                 </div>
-                <p class="text-gray-500 text-sm">Hozircha xabarnomalar yo'q</p>
+                <p class="text-gray-500 text-sm">{{ __('Hozircha xabarnomalar yo\'q') }}</p>
             </div>
         @else
             {{-- Select all bar — faqat selectionMode da ko'rinadi --}}
@@ -21,11 +21,11 @@
                 <label class="flex items-center gap-2 cursor-pointer select-none">
                     <input type="checkbox" x-model="selectAll" @change="toggleAll()"
                            class="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
-                    <span class="text-xs font-medium text-indigo-700">Barchasini belgilash</span>
+                    <span class="text-xs font-medium text-indigo-700">{{ __('Barchasini belgilash') }}</span>
                 </label>
                 <div class="flex items-center gap-2">
                     <span x-show="selectedIds.length > 0" class="text-xs text-indigo-600 font-semibold" x-text="selectedIds.length + ' ta'"></span>
-                    <button @click="cancelSelection()" class="text-xs text-gray-500 hover:text-gray-700 font-medium">Bekor</button>
+                    <button @click="cancelSelection()" class="text-xs text-gray-500 hover:text-gray-700 font-medium">{{ __('Bekor') }}</button>
                 </div>
             </div>
 
@@ -52,21 +52,37 @@
                             if ($isApproved) {
                                 $headerColor = 'text-emerald-700 bg-emerald-50 border-emerald-300';
                                 $headerDot = 'bg-emerald-400';
-                                $statusBadge = ['text' => 'Tasdiqlandi', 'class' => 'bg-emerald-100 text-emerald-700'];
+                                $statusBadge = ['text' => __('Tasdiqlandi'), 'class' => 'bg-emerald-100 text-emerald-700'];
                             } else {
                                 $headerColor = 'text-red-700 bg-red-50 border-red-300';
                                 $headerDot = 'bg-red-400';
-                                $statusBadge = ['text' => 'Rad etildi', 'class' => 'bg-red-100 text-red-700'];
+                                $statusBadge = ['text' => __('Rad etildi'), 'class' => 'bg-red-100 text-red-700'];
+                            }
+                        } elseif ($notification->type === 'appeal') {
+                            $appealData = $notification->data ?? [];
+                            $appealStatus = $appealData['status'] ?? 'pending';
+                            if ($appealStatus === 'approved') {
+                                $headerColor = 'text-emerald-700 bg-emerald-50 border-emerald-300';
+                                $headerDot = 'bg-emerald-400';
+                                $statusBadge = ['text' => __('Qabul qilindi'), 'class' => 'bg-emerald-100 text-emerald-700'];
+                            } elseif ($appealStatus === 'rejected') {
+                                $headerColor = 'text-red-700 bg-red-50 border-red-300';
+                                $headerDot = 'bg-red-400';
+                                $statusBadge = ['text' => __('Rad etildi'), 'class' => 'bg-red-100 text-red-700'];
+                            } else {
+                                $headerColor = 'text-yellow-700 bg-yellow-50 border-yellow-300';
+                                $headerDot = 'bg-yellow-400';
+                                $statusBadge = ['text' => __('Kutilmoqda'), 'class' => 'bg-yellow-100 text-yellow-700'];
                             }
                         } elseif ($notification->type === 'sms') {
                             $headerColor = 'text-blue-700 bg-blue-50 border-blue-200';
                             $headerDot = 'bg-blue-400';
                         }
 
-                        $linkText = 'Batafsil';
+                        $linkText = __('Batafsil');
                         $linkUrl = $notification->link;
                         if ($notification->type === 'exam_reminder') {
-                            $linkText = 'Imtihon jadvalini ko\'rish';
+                            $linkText = __('Imtihon jadvalini ko\'rish');
                             $linkUrl = $notification->link ?? route('student.exam-schedule');
                         }
                     @endphp
@@ -147,7 +163,7 @@
                             <div class="px-4 py-3">
                                 <p class="text-xs text-gray-600 whitespace-pre-line">{{ $notification->message }}</p>
                                 @if($notification->type === 'absence_excuse' && !($isApproved ?? true) && !empty($excuseData['rejection_reason'] ?? null))
-                                    <p class="text-xs text-red-600 mt-1 font-medium">Sabab: {{ $excuseData['rejection_reason'] }}</p>
+                                    <p class="text-xs text-red-600 mt-1 font-medium">{{ __('Sabab:') }} {{ $excuseData['rejection_reason'] }}</p>
                                 @endif
                             </div>
                         @endif
@@ -161,7 +177,7 @@
                                 @if(!$notification->isRead())
                                     <form method="POST" action="{{ route('student.notifications.mark-read', $notification->id) }}">
                                         @csrf
-                                        <button type="submit" class="text-[11px] text-indigo-500 hover:text-indigo-700">O'qilgan</button>
+                                        <button type="submit" class="text-[11px] text-indigo-500 hover:text-indigo-700">{{ __('O\'qilgan') }}</button>
                                     </form>
                                 @endif
                             </div>
@@ -188,7 +204,7 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
                         </svg>
-                        <span>O'chirish (<span x-text="selectedIds.length"></span>)</span>
+                        <span>{{ __('O\'chirish') }} (<span x-text="selectedIds.length"></span>)</span>
                     </button>
 
                     {{-- O'qilgan deb belgilash --}}
@@ -198,7 +214,7 @@
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                         </svg>
-                        <span>O'qilgan</span>
+                        <span>{{ __('O\'qilgan') }}</span>
                     </button>
                 </div>
             </div>

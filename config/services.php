@@ -37,6 +37,9 @@ return [
     'hemis' => [
         'base_url' => env('HEMIS_API_BASE_URL', 'https://student.ttatf.uz/rest/v1/'),
         'token' => env('HEMIS_API_TOKEN'),
+        'web_url' => env('HEMIS_WEB_BASE_URL', 'https://hemis.ttatf.uz'),
+        'web_login' => env('HEMIS_WEB_LOGIN'),
+        'web_password' => env('HEMIS_WEB_PASSWORD'),
     ],
 
     'hemis_oauth' => [
@@ -52,6 +55,7 @@ return [
         'chat_id' => env('TELEGRAM_CHAT_ID'),
         'attendance_group_id' => env('TELEGRAM_ATTENDANCE_GROUP_ID'),
         'five_candidate_group_id' => env('TELEGRAM_FIVE_CANDIDATE_GROUP_ID'),
+        'registrar_group_id' => env('TELEGRAM_REGISTRAR_GROUP_ID'),
     ],
 
     'moodle' => [

@@ -61,7 +61,14 @@
                         @endif
                         <div class="profile-name-section">
                             <h1 class="profile-name">{{ $teacher->full_name }}</h1>
-                            <p class="profile-position">{{ $teacher->staff_position ?? '-' }}</p>
+                            <p class="profile-position">
+                                @if($teacher->lavozim)
+                                    {{ $teacher->lavozim }}
+                                    <span style="color: #94a3b8; font-size: 11px; margin-left: 4px;">(HEMIS: {{ $teacher->staff_position ?? '-' }})</span>
+                                @else
+                                    {{ $teacher->staff_position ?? '-' }}
+                                @endif
+                            </p>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
                                 <span class="badge {{ $teacher->status ? 'badge-green' : 'badge-red' }}">
                                     {{ $teacher->status ? 'Faol' : 'Nofaol' }}
@@ -398,6 +405,24 @@
                                 @endforeach
                             </div>
 
+                            {{-- Lavozim (barcha xodimlar uchun, Dekanat roli tanlanganda yorqinroq) --}}
+                            <div style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                <label style="font-size: 11px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Lavozim (tizimga kiruvchi lavozim, HEMIS dan alohida):</label>
+                                <input type="text" name="lavozim" value="{{ old('lavozim', $teacher->lavozim) }}"
+                                       list="lavozim-options"
+                                       placeholder="Masalan: Dekan, O'quv ishlari bo'yicha dekan o'rinbosari..."
+                                       style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none;">
+                                <datalist id="lavozim-options">
+                                    <option value="Dekan">
+                                    <option value="O'quv ishlari bo'yicha dekan o'rinbosari">
+                                    <option value="Yoshlar ishlari bo'yicha dekan o'rinbosari">
+                                    <option value="Kafedra mudiri">
+                                    <option value="Katta o'qituvchi">
+                                    <option value="Dotsent">
+                                    <option value="Professor">
+                                </datalist>
+                            </div>
+
                             @php
                                 $oldDeanFaculties = old('dean_faculties', $teacher->deanFaculties->pluck('department_hemis_id')->toArray());
                                 $isDekanChecked = in_array('dekan', $oldRoles);
@@ -464,6 +489,30 @@
                                 </div>
                             </div>
 
+                            {{-- Javobgar firma bo'limi --}}
+                            @php
+                                $isFirmChecked = in_array('javobgar_firma', $oldRoles);
+                                $firmOptions = \App\Models\StudentVisaInfo::FIRM_OPTIONS;
+                            @endphp
+                            <div id="firm-section" style="display: {{ $isFirmChecked ? 'block' : 'none' }}; margin-top: 10px;">
+                                <div style="padding: 10px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe;">
+                                    <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 6px;">Javobgar firma tanlang:</label>
+                                    <select name="assigned_firm" style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none;">
+                                        <option value="">Tanlang</option>
+                                        @foreach($firmOptions as $key => $label)
+                                            <option value="{{ $key }}" {{ old('assigned_firm', $teacher->assigned_firm) === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                        <option value="other" {{ old('assigned_firm', $teacher->assigned_firm) === 'other' ? 'selected' : '' }}>Boshqa</option>
+                                    </select>
+                                    <div style="margin-top: 8px;">
+                                        <label style="font-size: 11px; font-weight: 600; color: #1e40af; display: block; margin-bottom: 4px;">Yangi firma nomi (ro'yxatda yo'q bo'lsa):</label>
+                                        <input type="text" name="firm_custom_name" value="{{ old('firm_custom_name') }}"
+                                               placeholder="Yangi firma nomini kiriting"
+                                               style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none;">
+                                    </div>
+                                </div>
+                            </div>
+
                             <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
                                 <button type="submit" class="btn btn-amber">
                                     <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -477,6 +526,90 @@
                 </div>
 
             </div>
+
+            {{-- TYUTOR GURUHLARI VA TALABALAR --}}
+            @if($tutorGroups->count() > 0)
+                <div style="margin-top: 16px;">
+                    <div class="card" style="border: none; box-shadow: none; background: transparent;">
+                        <div class="card-header" style="background: linear-gradient(135deg, #ecfdf5, #f0fdf4); color: #065f46; border-bottom: 2px solid #a7f3d0; border-radius: 12px 12px 0 0;">
+                            <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                            Tyutor guruhlari ({{ $tutorGroups->count() }})
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        @foreach($tutorGroups as $group)
+                            <div class="card" style="border-color: #d1fae5;">
+                                <div style="padding: 12px 16px; background: #f0fdf4; border-bottom: 1px solid #d1fae5; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="toggleTutorGroup({{ $group->id }})">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #059669, #10b981); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">
+                                            {{ $group->students->count() }}
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 14px; color: #1e293b;">{{ $group->name }}</div>
+                                            <div style="font-size: 11px; color: #64748b;">{{ $group->department_name ?? '' }}</div>
+                                        </div>
+                                    </div>
+                                    <svg id="tutor-group-arrow-{{ $group->id }}" style="width: 16px; height: 16px; color: #64748b; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </div>
+                                <div id="tutor-group-{{ $group->id }}" style="display: none;">
+                                    @if($group->students->count() > 0)
+                                        <div style="overflow-x: auto;">
+                                            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                                <thead>
+                                                    <tr style="background: #f8fafc;">
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">#</th>
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">F.I.O</th>
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">ID raqam</th>
+                                                        <th style="padding: 8px 12px; text-align: center; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">GPA</th>
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">Holati</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($group->students as $index => $student)
+                                                        <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='transparent'">
+                                                            <td style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">{{ $index + 1 }}</td>
+                                                            <td style="padding: 8px 12px;">
+                                                                <a href="{{ route('admin.students.show', $student->id) }}" style="color: #1e293b; font-weight: 600; text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='#059669'" onmouseout="this.style.color='#1e293b'">
+                                                                    {{ $student->full_name }}
+                                                                </a>
+                                                            </td>
+                                                            <td style="padding: 8px 12px; color: #64748b; font-family: monospace; font-size: 11px;">{{ $student->student_id_number }}</td>
+                                                            <td style="padding: 8px 12px; text-align: center;">
+                                                                @if($student->avg_gpa)
+                                                                    <span style="padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; {{ $student->avg_gpa >= 3.5 ? 'background: #dcfce7; color: #166534;' : ($student->avg_gpa >= 2.5 ? 'background: #fef9c3; color: #854d0e;' : 'background: #fee2e2; color: #991b1b;') }}">
+                                                                        {{ number_format($student->avg_gpa, 2) }}
+                                                                    </span>
+                                                                @else
+                                                                    <span style="color: #94a3b8;">-</span>
+                                                                @endif
+                                                            </td>
+                                                            <td style="padding: 8px 12px;">
+                                                                <span class="badge {{ $student->student_status_name == 'Faol' || $student->student_status_code == '11' ? 'badge-green' : 'badge-yellow' }}" style="font-size: 10px;">
+                                                                    {{ $student->student_status_name ?? '-' }}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    @else
+                                        <div style="padding: 20px; text-align: center; color: #94a3b8; font-size: 13px;">
+                                            Talabalar topilmadi
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
         </div>
     </div>
 
@@ -611,6 +744,16 @@
                 }
             } catch (e) {
                 console.error('toggleRole subject error:', e);
+            }
+
+            try {
+                var firmCheckbox = document.querySelector('input[value="javobgar_firma"]');
+                var firmSection = document.getElementById('firm-section');
+                if (firmSection && firmCheckbox) {
+                    firmSection.style.display = firmCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole firm error:', e);
             }
         }
 
@@ -950,6 +1093,18 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') closeSubjectModal();
         });
+
+        function toggleTutorGroup(groupId) {
+            var content = document.getElementById('tutor-group-' + groupId);
+            var arrow = document.getElementById('tutor-group-arrow-' + groupId);
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                content.style.display = 'none';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
     </script>
 
     <style>

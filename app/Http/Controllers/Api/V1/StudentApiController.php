@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicRecord;
 use App\Models\Attendance;
 use App\Models\Curriculum;
 use App\Services\HemisService;
 use App\Models\CurriculumSubject;
+use App\Models\StudentSubject;
 use App\Models\CurriculumWeek;
 use App\Models\Independent;
 use App\Models\IndependentGradeHistory;
@@ -39,10 +41,57 @@ class StudentApiController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
-            ->whereIn('status', ['pending'])
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->count();
+        $currentSemesterId = $student->semester_id;
+
+        // Talabaga biriktirilgan fanlar asosida qarzdorlikni hisoblash.
+        // student_subjects jadvali bo'sh bo'lsa (import qilinmagan), academic_records ga fallback qilinadi.
+        $hasStudentSubjects = StudentSubject::where('student_hemis_id', $student->hemis_id)->exists();
+
+        if ($hasStudentSubjects) {
+            // Biriktirilgan fanlar asosida: academic_records da yozuv yo'q YOKI baho past
+            $debtRecords = StudentSubject::from('student_subjects as ss')
+                ->select([
+                    'ss.subject_name',
+                    'ss.semester_id',
+                    \DB::raw('COALESCE(ar.semester_name, sem.name) as semester_name'),
+                    'ar.credit',
+                    'ar.total_acload',
+                    'ar.total_point',
+                    'ar.grade',
+                    'ar.retraining_status',
+                ])
+                ->leftJoin('academic_records as ar', function ($join) use ($student) {
+                    $join->on('ar.student_id', '=', \DB::raw((int) $student->hemis_id))
+                         ->on('ar.subject_id', '=', 'ss.subject_id')
+                         ->on('ar.semester_id', '=', 'ss.semester_id');
+                })
+                ->leftJoin('semesters as sem', 'sem.code', '=', 'ss.semester_id')
+                ->where('ss.student_hemis_id', $student->hemis_id)
+                ->when($currentSemesterId, fn($q) => $q->where('ss.semester_id', '!=', $currentSemesterId))
+                ->where(function ($q) {
+                    $q->whereNull('ar.id')                        // academic record umuman yo'q
+                      ->orWhereNull('ar.grade')                   // baho kiritilmagan
+                      ->orWhereIn('ar.grade', ['2', '0'])         // past baho
+                      ->orWhere('ar.retraining_status', true);    // qayta o'qish
+                })
+                ->orderBy('ss.semester_id')
+                ->orderBy('ss.subject_name')
+                ->get();
+        } else {
+            // Fallback: faqat academic_records dan (eski mantiq)
+            $debtRecords = AcademicRecord::where('student_id', $student->hemis_id)
+                ->where(function ($q) {
+                    $q->whereNull('grade')
+                      ->orWhereIn('grade', ['2', '0'])
+                      ->orWhere('retraining_status', true);
+                })
+                ->when($currentSemesterId, fn($q) => $q->where('semester_id', '!=', $currentSemesterId))
+                ->orderBy('semester_name')
+                ->orderBy('subject_name')
+                ->get();
+        }
+
+        $debtSubjectsCount = $debtRecords->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->where('status', 'recorded')
@@ -84,6 +133,7 @@ class StudentApiController extends Controller
                 'current_semester_avg' => $currentSemesterAvg ? round((float) $currentSemesterAvg, 2) : null,
                 'prev_semester_avg' => $prevSemesterAvg ? round((float) $prevSemesterAvg, 2) : null,
                 'debt_subjects' => $debtSubjectsCount,
+                'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,
                 'recent_grades' => $recentGrades,
             ],
@@ -146,6 +196,7 @@ class StudentApiController extends Controller
                 'total_credit' => $student->total_credit ?? null,
                 'payment_form_code' => $student->payment_form_code,
                 'payment_form_name' => $student->payment_form_name,
+                'is_graduate' => $student->is_graduate,
             ],
         ]);
     }
@@ -1003,7 +1054,11 @@ class StudentApiController extends Controller
         ]);
 
         $student = $request->user();
+        $isNewPhone = empty($student->phone);
         $student->phone = $request->phone;
+        if ($isNewPhone || !$student->phone_added_at) {
+            $student->phone_added_at = now();
+        }
         $student->save();
 
         $days = (int) Setting::get('telegram_deadline_days', 19);
@@ -1029,7 +1084,7 @@ class StudentApiController extends Controller
         $student = $request->user();
         $student->telegram_username = $request->telegram_username;
 
-        $code = strtoupper(\Illuminate\Support\Str::random(6));
+        $code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
         $student->telegram_verification_code = $code;
         $student->telegram_verified_at = null;
         $student->telegram_chat_id = null;

@@ -46,15 +46,15 @@
                 <svg class="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
                 </svg>
-                <h2 class="text-lg font-bold text-gray-900">Profilni to'ldiring</h2>
+                <h2 class="text-lg font-bold text-gray-900">{{ __('Profilni to\'ldiring') }}</h2>
             </div>
             <p class="text-sm text-gray-500">
                 @if(!$student->phone)
-                    Davom etish uchun telefon raqamingizni kiriting.
+                    {{ __('Davom etish uchun telefon raqamingizni kiriting.') }}
                 @else
-                    Telegram hisobingizni tasdiqlang.
+                    {{ __('Telegram hisobingizni tasdiqlang.') }}
                     @if(!$student->isTelegramVerified())
-                        <span class="font-medium text-orange-600">({{ $student->telegramDaysLeft() }} kun muhlat)</span>
+                        <span class="font-medium text-orange-600">({{ $student->telegramDaysLeft() }} {{ __('kun muhlat') }})</span>
                     @endif
                 @endif
             </p>
@@ -65,7 +65,7 @@
                 <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                 </svg>
-                Chiqish
+                {{ __('Chiqish') }}
             </button>
         </form>
     </div>
@@ -102,7 +102,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
                 </svg>
             @endif
-            Telefon
+            {{ __('Telefon') }}
         </div>
 
         {{-- Tab 2: Telegram --}}
@@ -115,7 +115,7 @@
                     <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
                 </svg>
             @endif
-            Telegram
+            {{ __('Telegram') }}
         </div>
     </div>
 
@@ -126,7 +126,7 @@
                 <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
                 </svg>
-                Telefon raqami
+                {{ __('Telefon raqami') }}
             </h3>
             @if($student->phone)
                 <span class="text-xs text-green-600 font-medium">{{ $student->phone }}</span>
@@ -140,7 +140,7 @@
                 <div class="mb-3 space-y-2">
                     {{-- Mamlakat tanlash --}}
                     <div class="relative">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Mamlakat kodi</label>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">{{ __('Mamlakat kodi') }}</label>
                         <button type="button" @click="open = !open"
                                 class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white hover:bg-gray-50 transition text-left">
                             <span class="flex items-center gap-2">
@@ -169,7 +169,7 @@
                                     </svg>
                                     <input type="text" x-model="search" x-ref="searchInput"
                                            @keydown.escape="open = false"
-                                           placeholder="Mamlakat qidirish..."
+                                           placeholder="{{ __('Mamlakat qidirish...') }}"
                                            style="padding-right:30px;"
                                            class="w-full text-sm rounded-md border-gray-300 py-1.5 focus:border-blue-500 focus:ring-blue-500">
                                 </div>
@@ -187,7 +187,7 @@
                                     </button>
                                 </template>
                                 <div x-show="filteredCountries.length === 0" class="px-3 py-4 text-xs text-gray-400 text-center">
-                                    Hech narsa topilmadi
+                                    {{ __('Hech narsa topilmadi') }}
                                 </div>
                             </div>
                         </div>
@@ -195,7 +195,7 @@
 
                     {{-- Telefon raqam --}}
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Telefon raqami</label>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">{{ __('Telefon raqami') }}</label>
                         <div class="flex">
                             <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 border border-r-0 border-gray-300 rounded-l-lg select-none"
                                   x-text="'+' + selectedCode"></span>
@@ -211,11 +211,11 @@
                 <button type="submit"
                         style="width:100%; padding:12px 16px; font-size:16px; font-weight:600; color:#fff; background-color:#2563eb; border:none; border-radius:8px; cursor:pointer; transition:background-color 0.15s;"
                         onmouseover="this.style.backgroundColor='#1d4ed8'" onmouseout="this.style.backgroundColor='#2563eb'">
-                    Saqlash va davom etish
+                    {{ __('Saqlash va davom etish') }}
                 </button>
             </form>
         @else
-            <p class="text-xs text-green-600">Telefon raqami saqlangan.</p>
+            <p class="text-xs text-green-600">{{ __('Telefon raqami saqlangan.') }}</p>
         @endif
     </div>
 
@@ -226,7 +226,7 @@
                 <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
                 </svg>
-                Telegram tasdiqlash
+                {{ __('Telegram tasdiqlash') }}
             </h3>
             @if($student->telegram_verified_at)
                 <span class="text-xs text-green-600 font-medium">{{ $student->telegram_username }}</span>
@@ -234,16 +234,16 @@
         </div>
 
         @if(!$student->phone)
-            <p class="text-xs text-gray-400">Avval telefon raqamini kiriting.</p>
+            <p class="text-xs text-gray-400">{{ __('Avval telefon raqamini kiriting.') }}</p>
         @elseif($student->telegram_verified_at)
-            <p class="text-xs text-green-600">Telegram hisobingiz tasdiqlangan.</p>
+            <p class="text-xs text-green-600">{{ __('Telegram hisobingiz tasdiqlangan.') }}</p>
         @else
             {{-- Telegram username formasi --}}
             @if(!$student->telegram_verification_code)
                 <form method="POST" action="{{ route('student.complete-profile.telegram') }}">
                     @csrf
                     <div class="mb-3">
-                        <label for="telegram_username" class="block text-xs font-medium text-gray-600 mb-1">Telegram username</label>
+                        <label for="telegram_username" class="block text-xs font-medium text-gray-600 mb-1">{{ __('Telegram username') }}</label>
                         <input type="text" name="telegram_username" id="telegram_username"
                                value="{{ old('telegram_username', $student->telegram_username ?? '@') }}"
                                placeholder="@username"
@@ -251,26 +251,26 @@
                     </div>
                     <button type="submit"
                             class="w-full inline-flex justify-center items-center px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
-                        Davom etish
+                        {{ __('Davom etish') }}
                     </button>
                 </form>
             @else
                 {{-- Tasdiqlash kodi ko'rsatish --}}
                 <div class="space-y-3">
                     <div class="p-3 bg-white rounded-lg border border-blue-100">
-                        <p class="text-xs text-gray-500 mb-2">Telegram username: <strong>{{ $student->telegram_username }}</strong></p>
-                        <p class="text-xs text-gray-600 mb-1">Tasdiqlash kodingiz:</p>
+                        <p class="text-xs text-gray-500 mb-2">{{ __('Telegram username:') }} <strong>{{ $student->telegram_username }}</strong></p>
+                        <p class="text-xs text-gray-600 mb-1">{{ __('Tasdiqlash kodingiz:') }}</p>
                         <div class="flex items-center justify-center py-2 px-4 bg-gray-50 rounded-md border border-dashed border-gray-300">
                             <span class="text-2xl font-mono font-bold tracking-widest text-blue-700" id="verification-code">{{ $verificationCode }}</span>
                         </div>
                     </div>
 
                     <div class="text-xs text-gray-600">
-                        <p class="font-medium mb-1">Tasdiqlash uchun:</p>
+                        <p class="font-medium mb-1">{{ __('Tasdiqlash uchun:') }}</p>
                         <ol class="list-decimal list-inside space-y-1 text-gray-500">
-                            <li>Quyidagi tugmani bosing yoki botga o'ting</li>
-                            <li>Botga tasdiqlash kodini yuboring: <strong>{{ $verificationCode }}</strong></li>
-                            <li>Sahifa avtomatik yangilanadi</li>
+                            <li>{{ __('Quyidagi tugmani bosing yoki botga o\'ting') }}</li>
+                            <li>{{ __('Botga tasdiqlash kodini yuboring:') }} <strong>{{ $verificationCode }}</strong></li>
+                            <li>{{ __('Sahifa avtomatik yangilanadi') }}</li>
                         </ol>
                     </div>
 
@@ -281,7 +281,7 @@
                             <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
                             </svg>
-                            Telegram botni ochish
+                            {{ __('Telegram botni ochish') }}
                         </a>
                     @endif
 
@@ -294,7 +294,7 @@
                                    class="flex-1 text-xs rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                             <button type="submit"
                                     class="px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-                                O'zgartirish
+                                {{ __('O\'zgartirish') }}
                             </button>
                         </div>
                     </form>
@@ -302,7 +302,7 @@
 
                 {{-- Auto-refresh polling --}}
                 <div id="verification-status" class="hidden mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-medium text-center">
-                    Telegram tasdiqlandi! Sahifa yangilanmoqda...
+                    {{ __('Telegram tasdiqlandi! Sahifa yangilanmoqda...') }}
                 </div>
             @endif
         @endif
@@ -313,7 +313,7 @@
         <div class="mt-4 text-center">
             <a href="{{ route('student.dashboard') }}"
                class="text-sm text-gray-500 hover:text-gray-700 underline">
-                Keyinroq tasdiqlash ({{ $student->telegramDaysLeft() }} kun qoldi)
+                {{ __('Keyinroq tasdiqlash') }} ({{ $student->telegramDaysLeft() }} {{ __('kun qoldi') }})
             </a>
         </div>
     @endif

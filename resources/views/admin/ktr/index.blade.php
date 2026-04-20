@@ -54,7 +54,7 @@
 
                             <div class="filter-item" style="min-width: 160px;">
                                 <label class="filter-label">&nbsp;</label>
-                                @php $csDefault = ($isFanMasuli ?? false) ? '0' : '1'; @endphp
+                                @php $csDefault = '1'; @endphp
                                 <input type="hidden" name="current_semester" id="current_semester_input" value="{{ request('current_semester', $csDefault) }}">
                                 <div class="toggle-switch {{ request('current_semester', $csDefault) == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="toggleCurrentSemester()">
                                     <div class="toggle-track">
@@ -102,6 +102,7 @@
                                     <option value="">Barchasi</option>
                                     <option value="created" {{ request('ktr_status') == 'created' ? 'selected' : '' }}>Yaratildi</option>
                                     <option value="not_created" {{ request('ktr_status') == 'not_created' ? 'selected' : '' }}>Yaratilmadi</option>
+                                    <option value="pending" {{ request('ktr_status') == 'pending' ? 'selected' : '' }}>Tasdiqlanmoqda</option>
                                 </select>
                             </div>
 
@@ -205,6 +206,8 @@
                                     @foreach($trainingTypes as $code => $name)
                                         <th class="ktr-type-th">{{ $name }}</th>
                                     @endforeach
+                                    <th style="min-width: 140px;">Tuzuvchi</th>
+                                    <th style="min-width: 110px; text-align: center;">Yaratilgan sana</th>
                                     <th style="min-width: 90px; text-align: center;">Holat</th>
                                 </tr>
                             </thead>
@@ -244,11 +247,29 @@
                                                 @endif
                                             </td>
                                         @endforeach
-                                        <td style="text-align: center;">
-                                            @if($item->has_ktr ?? false)
-                                                <span class="badge" style="background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratildi</span>
+                                        <td>
+                                            @if($item->ktr_creator_name ?? '')
+                                                <span class="text-cell" style="font-size: 12px;">{{ $item->ktr_creator_name }}</span>
                                             @else
-                                                <span class="badge" style="background:#fef2f2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:6px;">Yaratilmadi</span>
+                                                <span style="color: #cbd5e1;">-</span>
+                                            @endif
+                                        </td>
+                                        <td style="text-align: center;">
+                                            @if($item->ktr_created_at ?? false)
+                                                <span style="font-size: 11px; color: #64748b;">{{ \Carbon\Carbon::parse($item->ktr_created_at)->format('d.m.Y H:i') }}</span>
+                                            @else
+                                                <span style="color: #cbd5e1;">-</span>
+                                            @endif
+                                        </td>
+                                        <td style="text-align: center;">
+                                            @if(intval($item->has_ktr ?? 0))
+                                                @if(($item->pending_change_status ?? null) === 'pending')
+                                                    <span class="badge" style="background:#fef3c7;color:#92400e;font-size:11px;padding:2px 8px;border-radius:6px;" title="KTR #{{ $item->ktr_plan_id }} — o'zgartirish kutilmoqda (cs.id={{ $item->id }})">Tasdiqlanmoqda</span>
+                                                @else
+                                                    <span class="badge" style="background:#dcfce7;color:#16a34a;font-size:11px;padding:2px 8px;border-radius:6px;" title="KTR #{{ $item->ktr_plan_id }} (cs.id={{ $item->id }})">Yaratildi</span>
+                                                @endif
+                                            @else
+                                                <span class="badge" style="background:#fef2f2;color:#dc2626;font-size:11px;padding:2px 8px;border-radius:6px;" title="cs.id={{ $item->id }}">Yaratilmadi</span>
                                             @endif
                                         </td>
                                     </tr>
@@ -282,12 +303,17 @@
                 <!-- Hafta tanlash -->
                 <div class="ktr-week-selector" id="ktr-week-selector">
                     <label class="filter-label fl-blue" style="margin-bottom: 8px;">
-                        <span class="fl-dot" style="background:#3b82f6;"></span> Fan davomiyligi (hafta)
+                        <span class="fl-dot" style="background:#3b82f6;"></span> Fan davomiyligi (hafta yoki kun)
                     </label>
                     <div class="ktr-week-buttons" id="ktr-week-buttons">
                         @for($w = 1; $w <= 18; $w++)
                             <button type="button" class="ktr-week-btn" data-week="{{ $w }}" onclick="selectWeekCount({{ $w }})">{{ $w }}</button>
                         @endfor
+                        <button type="button" class="ktr-week-btn ktr-week-btn-plus" id="ktr-week-plus-btn" onclick="showCustomWeekInput()" title="Boshqa qiymat kiritish">+</button>
+                        <div id="ktr-custom-week-wrap" style="display:none; margin-left:4px;">
+                            <input type="number" id="ktr-custom-week-input" min="1" max="100" placeholder="Kiriting..." class="ktr-custom-week-input" onkeydown="if(event.key==='Enter'){applyCustomWeek();}">
+                            <button type="button" class="ktr-week-btn ktr-week-btn-apply" onclick="applyCustomWeek()">OK</button>
+                        </div>
                     </div>
                 </div>
 
@@ -913,10 +939,32 @@
             });
         }
 
+        function showCustomWeekInput() {
+            $('#ktr-custom-week-wrap').show();
+            $('#ktr-custom-week-input').val('').focus();
+        }
+
+        function applyCustomWeek() {
+            var val = parseInt($('#ktr-custom-week-input').val());
+            if (!val || val < 1 || val > 100) {
+                alert('Iltimos, 1 dan 100 gacha son kiriting.');
+                return;
+            }
+            $('#ktr-custom-week-wrap').hide();
+            selectWeekCount(val);
+        }
+
         function selectWeekCount(count, fromLoad) {
             ktrState.weekCount = count;
             $('.ktr-week-btn').removeClass('active');
-            $('.ktr-week-btn[data-week="' + count + '"]').addClass('active');
+            $('#ktr-week-plus-btn').text('+'); // Reset plus button text
+            var $existing = $('.ktr-week-btn[data-week="' + count + '"]:not(.ktr-week-btn-plus)');
+            if ($existing.length) {
+                $existing.addClass('active');
+            } else {
+                // Custom qiymat - plus tugmasini active qilish va qiymatni ko'rsatish
+                $('#ktr-week-plus-btn').addClass('active').text(count);
+            }
             buildPlanTable(count, fromLoad);
             $('#ktr-plan-table-wrap').slideDown(200);
         }
@@ -1677,6 +1725,42 @@
             border-color: #3b82f6;
             background: #3b82f6;
             color: #fff;
+        }
+        .ktr-week-btn-plus {
+            background: #f0fdf4 !important;
+            border-color: #86efac !important;
+            color: #16a34a !important;
+            font-size: 18px !important;
+            font-weight: 700 !important;
+        }
+        .ktr-week-btn-plus:hover {
+            background: #dcfce7 !important;
+            border-color: #22c55e !important;
+        }
+        .ktr-week-btn-plus.active {
+            background: #16a34a !important;
+            border-color: #16a34a !important;
+            color: #fff !important;
+            font-size: 14px !important;
+        }
+        .ktr-custom-week-input {
+            width: 80px;
+            height: 36px;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e40af;
+            outline: none;
+        }
+        .ktr-week-btn-apply {
+            background: #3b82f6 !important;
+            color: #fff !important;
+            border-color: #3b82f6 !important;
+            font-size: 12px !important;
+            width: auto !important;
+            padding: 0 12px !important;
         }
 
         /* Plan table */

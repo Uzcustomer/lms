@@ -43,5 +43,9 @@ class ImportAcademicRecords extends Command
         $this->newLine();
         $this->info("Import tugadi! Jami: {$totalImported} ta yozuv, Vaqt: {$duration} daqiqa");
         $telegram->notify("✅ Akademik qaydlar importi tugadi. Jami: {$totalImported} ta, Vaqt: {$duration} daqiqa");
+
+        // Talabaga biriktirilgan fanlarni ham yangilash (debt hisobi uchun)
+        $this->info('Talabalarning biriktirilgan fanlari (student-subjects) import qilinmoqda...');
+        $this->call('import:student-subjects');
     }
 }

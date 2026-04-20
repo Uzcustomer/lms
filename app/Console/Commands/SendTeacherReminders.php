@@ -26,6 +26,8 @@ class SendTeacherReminders extends Command
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        // Fan nomi bo'yicha baho tekshirishdan chiqariladigan fanlar (Tanishuv amaliyoti, O'quv amaliyoti va h.k.)
+        $gradeExcludedSubjectPatterns = config('app.grade_excluded_subject_patterns', []);
 
         $this->info("Bugungi sana: {$today}");
 
@@ -175,8 +177,12 @@ class SendTeacherReminders extends Command
                     $missingAttendance[] = $schedule;
                 }
 
-                // BAHO tekshirish: faqat amaliyot turlari uchun
-                if (!in_array($trainingTypeCode, $gradeExcludedTypes)) {
+                // BAHO tekshirish: faqat amaliyot turlari uchun (training_type va fan nomi bo'yicha chiqarilganlar tashlanadi)
+                $subjectNameLower = mb_strtolower($schedule->subject_name ?? '');
+                $isGradeExcludedSubject = !empty($gradeExcludedSubjectPatterns) && collect($gradeExcludedSubjectPatterns)
+                    ->contains(fn($p) => str_contains($subjectNameLower, mb_strtolower($p)));
+
+                if (!in_array($trainingTypeCode, $gradeExcludedTypes) && !$isGradeExcludedSubject) {
                     $gradeKey = $schedule->employee_id . '|' . $schedule->group_id . '|' . $schedule->subject_id . '|' . $schedule->lesson_date_str
                               . '|' . $schedule->training_type_code . '|' . $schedule->lesson_pair_code;
 

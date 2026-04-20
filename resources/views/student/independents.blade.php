@@ -44,7 +44,7 @@
                         'submission_name' => $item['submission']?->file_original_name,
                         'submission_date' => $item['submission'] ? $item['submission']->submitted_at->format('d.m.Y H:i') : null,
                         'grade_history' => $item['grade_history']->map(fn($h) => ['grade' => $h->grade, 'pass' => $h->grade >= ($minimumLimit ?? 60)])->values()->toArray(),
-                        'status_label' => $item['grade_locked'] ? 'Qabul qilindi' : ($item['submission'] && $item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60) ? 'Qayta topshirish' : ($item['submission'] ? 'Yuklangan' : ($item['is_overdue'] ? 'Muddat tugagan' : 'Kutilmoqda'))),
+                        'status_label' => $item['grade_locked'] ? __('Qabul qilindi') : ($item['submission'] && $item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60) ? __('Qayta topshirish') : ($item['submission'] ? __('Yuklangan') : ($item['is_overdue'] ? __('Muddat tugagan') : __('Kutilmoqda')))),
                         'status_type' => $item['grade_locked'] ? 'success' : ($item['submission'] && $item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60) ? 'warning' : ($item['submission'] ? 'success' : ($item['is_overdue'] ? 'danger' : 'pending'))),
                         'minimum_limit' => $minimumLimit ?? 60,
                     ];
@@ -67,9 +67,10 @@
             document.body.style.overflow = 'hidden';
             this.$nextTick(() => {
                 document.querySelectorAll('[id^=&quot;upload-slot-&quot;]').forEach(slot => {
-                    if (slot.children.length > 0) return;
                     var id = slot.id.replace('upload-slot-', '');
                     var src = document.querySelector('#mt-upload-forms [data-mt-id=&quot;' + id + '&quot;]');
+                    // Har doim yangilash — eski innerHTML ni tozalab, to'g'ri formani inject qilish
+                    slot.innerHTML = '';
                     if (src && src.innerHTML.trim()) {
                         slot.innerHTML = src.innerHTML;
                         window.bindMtCompression(slot);
@@ -105,7 +106,7 @@
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                         </svg>
                     </div>
-                    <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">Fayl siqilmoqda...</p>
+                    <p id="compress-status" style="font-size:14px; color:#1e40af; font-weight:600;">{{ __('Fayl siqilmoqda...') }}</p>
                     <p id="compress-detail" style="font-size:12px; color:#6b7280; margin-top:4px;"></p>
                 </div>
             </div>
@@ -135,7 +136,7 @@
                             <div class="flex-1 min-w-0 py-3 px-3 text-left">
                                 <h3 class="text-sm font-bold truncate" style="color:{{ $color['text'] }};">{{ $subjectName }}</h3>
                                 <div class="flex items-center gap-2 mt-0.5">
-                                    <span class="text-[11px] text-gray-400">{{ $itemCount }} topshiriq</span>
+                                    <span class="text-[11px] text-gray-400">{{ $itemCount }} {{ __('topshiriq') }}</span>
                                     @if($completedCount > 0)
                                         <span class="text-[10px] font-semibold text-green-600 bg-green-100 px-1.5 py-0.5 rounded-full">{{ $completedCount }}/{{ $itemCount }}</span>
                                     @endif
@@ -152,7 +153,7 @@
                 <div class="flex items-center justify-center py-16">
                     <div class="text-center">
                         <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5"/></svg>
-                        <p class="text-sm text-gray-400 font-medium">Mustaqil ta'lim topshiriqlari mavjud emas.</p>
+                        <p class="text-sm text-gray-400 font-medium">{{ __("Mustaqil ta'lim topshiriqlari mavjud emas.") }}</p>
                     </div>
                 </div>
             @endif
@@ -193,7 +194,7 @@
 
                     {{-- Modal body --}}
                     <div class="flex-1 overflow-y-auto p-2">
-                        <template x-for="(item, idx) in modalItems" :key="idx">
+                        <template x-for="(item, idx) in modalItems" :key="item.id">
                             <div class="mb-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-2 border border-gray-100 dark:border-gray-600">
                                 {{-- Status + Baho --}}
                                 <div class="flex items-center justify-between mb-3">
@@ -217,18 +218,18 @@
                                     </div>
                                     <div class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                                         <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
-                                        <span>Berilgan: <span class="font-medium" x-text="item.start_date"></span></span>
+                                        <span>{{ __('Berilgan') }}: <span class="font-medium" x-text="item.start_date"></span></span>
                                     </div>
                                     <div class="flex items-center gap-2 text-xs" :class="item.is_overdue ? 'text-red-500 font-semibold' : 'text-gray-600 dark:text-gray-300'">
                                         <svg class="w-4 h-4 flex-shrink-0" :class="item.is_overdue ? 'text-red-400' : 'text-gray-400'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                        <span>Muddat: <span class="font-medium" x-text="item.deadline"></span> (<span x-text="item.deadline_time"></span>)</span>
+                                        <span>{{ __('Muddat') }}: <span class="font-medium" x-text="item.deadline"></span> (<span x-text="item.deadline_time"></span>)</span>
                                     </div>
                                 </div>
 
                                 {{-- Baho tarixi --}}
                                 <template x-if="item.grade_history && item.grade_history.length > 0">
                                     <div class="mb-3 pt-2 border-t border-gray-200 dark:border-gray-600">
-                                        <span class="text-[11px] text-gray-400 font-medium">Oldingi baholar:</span>
+                                        <span class="text-[11px] text-gray-400 font-medium">{{ __('Oldingi baholar') }}:</span>
                                         <template x-for="(h, hi) in item.grade_history" :key="hi">
                                             <span class="text-xs font-semibold ml-1" :class="h.pass ? 'text-green-500' : 'text-red-400'" x-text="h.grade"></span>
                                         </template>
@@ -241,13 +242,13 @@
                                         <div style="display: flex; gap: 5px; align-items: center;">
                                             <svg class="w-5 h-5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
                                             <div class="min-w-0 flex-1">
-                                                <p class="text-[11px] text-gray-400">Topshiriq fayli</p>
+                                                <p class="text-[11px] text-gray-400">{{ __('Topshiriq fayli') }}</p>
                                                 <p class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate" x-text="item.task_file_name"></p>
                                             </div>
                                         </div>
                                         <a :href="item.task_file_url" download style="margin-top: 10px;" class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-                                            Yuklab olish
+                                            {{ __('Yuklab olish') }}
                                         </a>
                                     </div>
                                 </template>
@@ -258,14 +259,14 @@
                                         <div style="display: flex; gap: 5px; align-items: center;">
                                             <svg class="w-5 h-5 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                             <div class="min-w-0 flex-1">
-                                                <p class="text-[11px] text-gray-400">Topshirilgan fayl</p>
+                                                <p class="text-[11px] text-gray-400">{{ __('Topshirilgan fayl') }}</p>
                                                 <p class="text-xs font-medium text-gray-700 dark:text-gray-200 truncate" x-text="item.submission_name"></p>
                                                 <p class="text-[10px] text-gray-400" x-text="item.submission_date"></p>
                                             </div>
                                         </div>
                                         <a :href="item.submission_file_url" download style="margin-top: 10px;" class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-                                            Yuklab olish
+                                            {{ __('Yuklab olish') }}
                                         </a>
                                     </div>
                                 </template>
@@ -286,53 +287,81 @@
             <div data-mt-id="{{ $item['id'] }}">
                 @if($item['grade_locked'])
                 @elseif($item['yn_locked'])
-                    <p class="text-[11px] text-orange-500 font-medium">YN ga yuborilgan — fayl yuklash mumkin emas</p>
+                    <p class="text-[11px] text-orange-500 font-medium">{{ __('YN ga yuborilgan — fayl yuklash mumkin emas') }}</p>
                 @elseif($item['submission'] && $item['can_resubmit'])
                     <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                         @csrf
                         <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-medium text-white bg-orange-500 hover:bg-orange-600 px-3 py-2 rounded-lg transition">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
-                            Qayta yuklash ({{ $item['remaining_attempts'] }} marta)
+                            {{ __('Qayta yuklash') }} ({{ $item['remaining_attempts'] }} {{ __('marta') }})
                             <input type="file" name="file" class="hidden mt-file-input" accept=".zip,.doc,.docx,.ppt,.pptx,.pdf">
                         </label>
+                        <div class="mt-upload-loader hidden mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+                            <svg class="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span class="text-xs font-medium text-blue-600">{{ __('Yuklanmoqda...') }}</span>
+                        </div>
                     </form>
                 @elseif($item['submission'] && !$item['is_overdue'] && $item['grade'] === null)
                     <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                         @csrf
                         <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-medium text-white bg-orange-500 hover:bg-orange-600 px-3 py-2 rounded-lg transition">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
-                            Qayta yuklash
+                            {{ __('Qayta yuklash') }}
                             <input type="file" name="file" class="hidden mt-file-input" accept=".zip,.doc,.docx,.ppt,.pptx,.pdf">
                         </label>
+                        <div class="mt-upload-loader hidden mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+                            <svg class="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span class="text-xs font-medium text-blue-600">{{ __('Yuklanmoqda...') }}</span>
+                        </div>
                     </form>
                 @elseif($item['submission'] && $item['grade'] !== null && $item['grade'] < ($minimumLimit ?? 60) && $item['remaining_attempts'] <= 0)
-                    <p class="text-[11px] text-red-400 font-medium">Qayta yuklash imkoniyati tugagan</p>
+                    <p class="text-[11px] text-red-400 font-medium">{{ __('Qayta yuklash imkoniyati tugagan') }}</p>
                 @elseif(!$item['submission'] && !$item['is_overdue'])
                     <form method="POST" action="{{ route('student.independents.submit', $item['id']) }}" enctype="multipart/form-data" class="mt-upload-form">
                         @csrf
                         <label class="w-full flex items-center justify-center gap-2 cursor-pointer px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition mt-choose-btn">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
-                            Fayl tanlash
+                            {{ __('Fayl tanlash') }}
                             <input type="file" name="file" required accept=".zip,.doc,.docx,.ppt,.pptx,.pdf" class="hidden mt-file-input">
                         </label>
                         <p class="mt-file-name text-[11px] text-gray-500 mt-1.5 truncate hidden"></p>
                         <p class="text-[10px] text-gray-400 mt-1">Max 10MB (zip, doc, ppt, pdf)</p>
-                        <button type="submit" class="hidden w-full mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition mt-submit-btn">Yuklash</button>
+                        <button type="submit" class="hidden w-full mt-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition mt-submit-btn">{{ __('Yuklash') }}</button>
+                        <div class="mt-upload-loader hidden mt-2 flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+                            <svg class="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            <span class="text-xs font-medium text-blue-600">{{ __('Yuklanmoqda...') }}</span>
+                        </div>
                     </form>
                 @elseif($item['is_overdue'] && !$item['submission'])
-                    <p class="text-[11px] text-red-400 font-medium">Muddat tugagan</p>
+                    <p class="text-[11px] text-red-400 font-medium">{{ __('Muddat tugagan') }}</p>
                 @endif
             </div>
         @endforeach
     </div>
 
     <script>
+    function showFormLoader(form) {
+        var loader = form.querySelector('.mt-upload-loader');
+        if (loader) loader.classList.remove('hidden');
+        var submitBtn = form.querySelector('.mt-submit-btn');
+        if (submitBtn) submitBtn.classList.add('hidden');
+        var chooseBtn = form.querySelector('.mt-choose-btn');
+        if (chooseBtn) chooseBtn.classList.add('hidden');
+        // Qayta yuklash label ni ham yashirish
+        var labels = form.querySelectorAll('label');
+        labels.forEach(function(l) { l.classList.add('hidden'); });
+    }
+
     window.bindMtCompression = function(container) {
         var COMPRESS_THRESHOLD = 2 * 1024 * 1024;
         var MAX_FILE_SIZE = 10 * 1024 * 1024;
         container.querySelectorAll('.mt-upload-form').forEach(function(form) {
             var fileInput = form.querySelector('.mt-file-input');
             if (!fileInput) return;
+
+            // Submit tugmasi bosilganda ham loader ko'rsatish
+            form.addEventListener('submit', function() { showFormLoader(form); });
+
             fileInput.addEventListener('change', function(e) {
                 var file = e.target.files[0];
                 if (!file) return;
@@ -345,13 +374,13 @@
                 if (chooseBtn) { chooseBtn.classList.remove('bg-blue-500','hover:bg-blue-600'); chooseBtn.classList.add('bg-gray-500','hover:bg-gray-600'); }
                 if (file.size <= COMPRESS_THRESHOLD) {
                     // Qayta yuklash formlari uchun avtomatik submit
-                    if (!submitBtn) { form.submit(); }
+                    if (!submitBtn) { showFormLoader(form); form.submit(); }
                     return;
                 }
                 var ext = file.name.split('.').pop().toLowerCase();
                 if (ext === 'zip') {
                     if (file.size > MAX_FILE_SIZE) { alert('Fayl hajmi ' + (file.size/1024/1024).toFixed(1) + 'MB. Max 10MB.'); fileInput.value = ''; if(nameEl) nameEl.classList.add('hidden'); if(submitBtn) submitBtn.classList.add('hidden'); return; }
-                    if (!submitBtn) { form.submit(); }
+                    if (!submitBtn) { showFormLoader(form); form.submit(); }
                     return;
                 }
                 if (typeof JSZip === 'undefined') { alert('Siqish kutubxonasi yuklanmadi.'); fileInput.value = ''; return; }
@@ -374,7 +403,7 @@
                     dt.items.add(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.zip', {type:'application/zip'}));
                     fileInput.files = dt.files;
                     if (submitBtn) { overlay.style.display='none'; return; }
-                    form.submit();
+                    overlay.style.display='none'; showFormLoader(form); form.submit();
                 }).catch(function(err) { overlay.style.display='none'; alert('Xatolik: '+err.message); fileInput.value=''; });
             });
         });

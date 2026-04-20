@@ -12,6 +12,7 @@ use App\Models\KtrChangeApproval;
 use App\Models\KtrChangeRequest;
 use App\Models\KtrPlan;
 use App\Models\Teacher;
+use App\Models\User;
 use App\Models\Notification;
 use App\Models\TeacherNotification;
 use Illuminate\Http\Request;
@@ -100,10 +101,27 @@ class KtrController extends Controller
             's.level_name',
             's.level_code',
         ];
+        $hasGuardColumn = $hasKtrTable && Schema::hasColumn('ktr_plans', 'created_by_guard');
         if ($hasKtrTable) {
+            $selectColumns[] = DB::raw('kp.id as ktr_plan_id');
             $selectColumns[] = DB::raw('(CASE WHEN kp.id IS NOT NULL THEN 1 ELSE 0 END) as has_ktr');
+            $selectColumns[] = 'kp.created_at as ktr_created_at';
+            $selectColumns[] = 'kp.created_by as ktr_created_by';
+            $selectColumns[] = $hasGuardColumn
+                ? 'kp.created_by_guard as ktr_created_by_guard'
+                : DB::raw("'teacher' as ktr_created_by_guard");
         } else {
+            $selectColumns[] = DB::raw('NULL as ktr_plan_id');
             $selectColumns[] = DB::raw('0 as has_ktr');
+            $selectColumns[] = DB::raw('NULL as ktr_created_at');
+            $selectColumns[] = DB::raw('NULL as ktr_created_by');
+            $selectColumns[] = DB::raw("'teacher' as ktr_created_by_guard");
+        }
+        $hasChangeRequests = Schema::hasTable('ktr_change_requests');
+        if ($hasChangeRequests) {
+            $selectColumns[] = DB::raw('(SELECT kcr.status FROM ktr_change_requests kcr WHERE kcr.curriculum_subject_id = cs.id AND kcr.status = \'pending\' ORDER BY kcr.id DESC LIMIT 1) as pending_change_status');
+        } else {
+            $selectColumns[] = DB::raw('NULL as pending_change_status');
         }
         $query = $baseQuery()->select($selectColumns);
 
@@ -151,24 +169,48 @@ class KtrController extends Controller
             $query->where('cs.is_active', false);
         }
 
-        // Joriy semestr (adminlar uchun default ON, fan masuli uchun default OFF)
+        // Agar fanning (a), (b), (c) variantlari mavjud bo'lsa (bir xil semester_code da),
+        // asosiy nomini (harfsiz) yashirish — faqat variantlarini ko'rsatish
+        $query->where(function ($q) {
+            $q->whereRaw("cs.subject_name REGEXP '\\\\([a-z]\\\\)$'")
+              ->orWhereRaw("NOT EXISTS (
+                  SELECT 1 FROM curriculum_subjects cs2
+                  WHERE cs2.semester_code = cs.semester_code
+                  AND cs2.curricula_hemis_id = cs.curricula_hemis_id
+                  AND (
+                      cs2.subject_name = CONCAT(cs.subject_name, ' (a)')
+                      OR cs2.subject_name = CONCAT(cs.subject_name, ' (b)')
+                      OR cs2.subject_name = CONCAT(cs.subject_name, ' (c)')
+                  )
+              )");
+        });
+
+        // Joriy semestr (barcha rollar uchun default ON)
         // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
-        $currentSemesterDefault = $isFanMasuli ? '0' : '1';
+        $currentSemesterDefault = '1';
         if ($request->get('current_semester', $currentSemesterDefault) == '1') {
             $query->whereIn('s.semester_hemis_id', function ($sub) {
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 
-        // KTR holati filtri (yaratildi/yaratilmadi)
+        // KTR holati filtri (yaratildi/yaratilmadi/tasdiqlanmoqda)
         $ktrStatus = $request->get('ktr_status', '');
-        if ($ktrStatus === 'created' && Schema::hasTable('ktr_plans')) {
+        if ($ktrStatus === 'created' && $hasKtrTable) {
             $query->whereNotNull('kp.id');
-        } elseif ($ktrStatus === 'not_created' && Schema::hasTable('ktr_plans')) {
+        } elseif ($ktrStatus === 'not_created' && $hasKtrTable) {
             $query->whereNull('kp.id');
+        } elseif ($ktrStatus === 'pending' && $hasKtrTable && $hasChangeRequests) {
+            $query->whereNotNull('kp.id')
+                ->whereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('ktr_change_requests')
+                        ->whereColumn('ktr_change_requests.curriculum_subject_id', 'cs.id')
+                        ->where('ktr_change_requests.status', 'pending');
+                });
         }
 
         // Sorting
@@ -190,6 +232,42 @@ class KtrController extends Controller
 
         $perPage = $request->get('per_page', 50);
         $subjects = $query->paginate($perPage)->appends($request->query());
+
+        // KTR tuzuvchi (creator) ismlarini olish
+        $teacherIds = [];
+        $userIds = [];
+        foreach ($subjects as $item) {
+            if ($item->ktr_created_by) {
+                if (($item->ktr_created_by_guard ?? 'teacher') === 'teacher') {
+                    $teacherIds[] = $item->ktr_created_by;
+                } else {
+                    $userIds[] = $item->ktr_created_by;
+                }
+            }
+        }
+        $teacherNames = [];
+        $userNames = [];
+        if (!empty($teacherIds)) {
+            $teacherNames = Teacher::whereIn('id', array_unique($teacherIds))
+                ->pluck('full_name', 'id')
+                ->toArray();
+        }
+        if (!empty($userIds)) {
+            $userNames = User::whereIn('id', array_unique($userIds))
+                ->pluck('name', 'id')
+                ->toArray();
+        }
+        foreach ($subjects as $item) {
+            if ($item->ktr_created_by) {
+                if (($item->ktr_created_by_guard ?? 'teacher') === 'teacher') {
+                    $item->ktr_creator_name = $teacherNames[$item->ktr_created_by] ?? '';
+                } else {
+                    $item->ktr_creator_name = $userNames[$item->ktr_created_by] ?? '';
+                }
+            } else {
+                $item->ktr_creator_name = '';
+            }
+        }
 
         // subject_details ni parse qilish va training type columnlarini aniqlash
         $trainingTypes = [];
@@ -266,7 +344,7 @@ class KtrController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 
@@ -359,7 +437,7 @@ class KtrController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 
@@ -434,7 +512,7 @@ class KtrController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
             });
         }
 
@@ -696,21 +774,34 @@ class KtrController extends Controller
         $token = config('services.hemis.token');
 
         try {
-            $response = Http::withoutVerifying()
-                ->withToken($token)
-                ->timeout(15)
-                ->get($baseUrl . '/data/curriculum-subject-topic-list', [
-                    '_curriculum' => $cs->curricula_hemis_id,
-                    '_semester' => $cs->semester_code,
-                    'limit' => 200,
-                    'page' => 1,
-                ]);
+            // Barcha sahifalarni olish (ba'zi fanlar uchun 200 dan ortiq mavzu bo'lishi mumkin)
+            $allItems = [];
+            $page = 1;
+            $maxPages = 10; // Cheksiz loop oldini olish
 
-            if (!$response->successful()) {
-                return [];
-            }
+            do {
+                $response = Http::withoutVerifying()
+                    ->withToken($token)
+                    ->timeout(15)
+                    ->get($baseUrl . '/data/curriculum-subject-topic-list', [
+                        '_curriculum' => $cs->curricula_hemis_id,
+                        '_semester' => $cs->semester_code,
+                        'limit' => 200,
+                        'page' => $page,
+                    ]);
 
-            $items = $response->json('data.items') ?? [];
+                if (!$response->successful()) {
+                    break;
+                }
+
+                $items = $response->json('data.items') ?? [];
+                $allItems = array_merge($allItems, $items);
+
+                $totalCount = (int) ($response->json('data.pagination.totalCount') ?? $response->json('data.totalCount') ?? 0);
+                $page++;
+            } while (count($allItems) < $totalCount && $page <= $maxPages && !empty($items));
+
+            $items = $allItems;
 
             // Fan bo'yicha filtrlash
             $subjectId = (int) $cs->subject_id;
@@ -768,7 +859,7 @@ class KtrController extends Controller
             : null;
 
         $request->validate([
-            'week_count' => 'required|integer|min:1|max:18',
+            'week_count' => 'required|integer|min:1|max:100',
             'plan_data' => 'required|array',
         ]);
 
@@ -814,8 +905,13 @@ class KtrController extends Controller
                 $table->unsignedSmallInteger('week_count');
                 $table->json('plan_data');
                 $table->unsignedBigInteger('created_by')->nullable();
+                $table->string('created_by_guard', 10)->default('teacher');
                 $table->timestamps();
                 $table->unique('curriculum_subject_id');
+            });
+        } elseif (!Schema::hasColumn('ktr_plans', 'created_by_guard')) {
+            Schema::table('ktr_plans', function (\Illuminate\Database\Schema\Blueprint $table) {
+                $table->string('created_by_guard', 10)->default('teacher')->after('created_by');
             });
         }
 
@@ -903,6 +999,7 @@ class KtrController extends Controller
                 'week_count' => $request->week_count,
                 'plan_data' => $request->plan_data,
                 'created_by' => auth()->id(),
+                'created_by_guard' => $user instanceof Teacher ? 'teacher' : 'web',
             ]
         );
 
@@ -1567,7 +1664,6 @@ class KtrController extends Controller
         $weekDates = []; // hafta sanalarini saqlash
 
         if ($curriculum) {
-            $educationYear = $curriculum->education_year_name ?? '';
             $educationTypeName = $curriculum->education_type_name ?? '';
             $educationFormName = $curriculum->education_form_name ?? '';
             $semester = DB::table('semesters')
@@ -1575,6 +1671,14 @@ class KtrController extends Controller
                 ->where('code', $cs->semester_code)
                 ->first();
             if ($semester) {
+                // Semestrning education_year kodi (masalan "2025") orqali to'liq nomni olish ("2025-2026")
+                $semesterYearCode = $semester->education_year ?? '';
+                if ($semesterYearCode) {
+                    $educationYear = DB::table('curricula')
+                        ->where('education_year_code', $semesterYearCode)
+                        ->whereNotNull('education_year_name')
+                        ->value('education_year_name') ?: $semesterYearCode;
+                }
                 $levelName = $semester->level_name ?? '';
                 // Hafta sanalarini curriculum_weeks jadvalidan olish
                 $weeks = CurriculumWeek::where('semester_hemis_id', $semester->semester_hemis_id)
@@ -1585,6 +1689,15 @@ class KtrController extends Controller
                     $start = $week->start_date ? $week->start_date->format('d.m') : '';
                     $end = $week->end_date ? $week->end_date->format('d.m') : '';
                     $weekDates[$weekNum] = $start && $end ? $start . '-' . $end : '';
+                }
+            }
+            // Fakultet nomini curriculum orqali olish (curricula.department_hemis_id -> departments)
+            if ($curriculum->department_hemis_id) {
+                $curriculumFaculty = Department::where('department_hemis_id', $curriculum->department_hemis_id)
+                    ->where('structure_type_code', '11')
+                    ->first();
+                if ($curriculumFaculty) {
+                    $approverInfo['faculty_name'] = $curriculumFaculty->name;
                 }
             }
             $specialty = DB::table('specialties')
@@ -1610,8 +1723,8 @@ class KtrController extends Controller
         $phpWord->setDefaultFontName('Times New Roman');
         $phpWord->setDefaultFontSize(12);
 
-        $user = auth()->user();
-        $teacherName = ($user instanceof Teacher) ? ($user->full_name ?? $user->name) : '';
+        // Tuzuvchi - KTR ni yaratgan xodim (created_by dan olinadi)
+        $teacherName = $plan->creator_name;
 
         // =============== 1-BET: TITUL SAHIFA (A4 Portrait) ===============
         $titleSection = $phpWord->addSection([
@@ -2095,6 +2208,7 @@ class KtrController extends Controller
                     'week_count' => $cr->draft_week_count,
                     'plan_data' => $cr->draft_plan_data,
                     'created_by' => $cr->requested_by,
+                    'created_by_guard' => $cr->requested_by_guard ?? 'teacher',
                 ]
             );
 

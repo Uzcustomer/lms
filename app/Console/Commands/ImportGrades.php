@@ -283,9 +283,9 @@ class ImportGrades extends Command
             }
         });
 
-        // Oxirgi 7 kunni tekshirish (bugundan tashqari)
+        // Oxirgi 15 kunni tekshirish (bugundan tashqari)
         // LIVE importga bog'liq emas — har bir kunni mustaqil tekshiramiz
-        $lookbackStart = Carbon::today()->subDays(7)->startOfDay();
+        $lookbackStart = Carbon::today()->subDays(15)->startOfDay();
         $todayStart = Carbon::today()->startOfDay();
 
         // Barcha 7 kunni ro'yxatga olish
@@ -1495,13 +1495,7 @@ class ImportGrades extends Command
             'lesson_pair_start_time' => $item['lessonPair']['start_time'],
         ])->first();
 
-        if ($existingGrade) {
-            // DIAGNOSTIKA: existing grade topildi — NB yaratish skip qilinadi
-            Log::info("[NB-DIAG] SKIP: student={$student->hemis_id}, date={$lessonDate->toDateString()}, pair={$item['lessonPair']['code']}, existing_reason={$existingGrade->reason}, existing_grade={$existingGrade->grade}, existing_status={$existingGrade->status}, hemis_id={$existingGrade->hemis_id}");
-        }
-
         if (!$existingGrade) {
-            Log::info("[NB-DIAG] CREATE: student={$student->hemis_id}, date={$lessonDate->toDateString()}, pair={$item['lessonPair']['code']}");
             $this->retryOnLockTimeout(function () use ($item, $student, $lessonDate, $isFinal) {
                 StudentGrade::create([
                     'hemis_id' => 111,
@@ -1774,15 +1768,38 @@ class ImportGrades extends Command
         $line .= " ({$elapsed} daq)";
 
         if ($state && !empty($state['message_id'])) {
-            // Mavjud xabarga qo'shish
+            // Mavjud xabarga qo'shish (xabarni tahrirlash)
             $state['lines'][] = $line;
             $msg = $this->buildDailyMessage($today, $state['lines']);
-            $telegram->editMessage($chatId, $state['message_id'], $msg);
+            $edited = $telegram->editMessage($chatId, $state['message_id'], $msg);
+
+            if (!$edited) {
+                // Edit muvaffaqiyatsiz (xabar o'chirilgan yoki topilmadi) — yangi xabar yuborish
+                Log::warning("[LiveImport] editMessage muvaffaqiyatsiz (msg_id={$state['message_id']}), yangi xabar yuborilmoqda.");
+                $msgId = $telegram->sendAndGetId($chatId, $msg);
+                if ($msgId) {
+                    $state['message_id'] = $msgId;
+                } else {
+                    // Yangi xabar ham yuborilmadi — state ni saqlashni o'tkazib yuborish
+                    $this->warn("[LiveImport] Telegram xabar yuborishda xato, state saqlanmaydi.");
+                    return;
+                }
+            }
         } else {
-            // Yangi xabar yuborish
-            $state = ['date' => $today, 'lines' => [$line]];
+            // Yangi xabar yuborish (kunning birinchi importi)
+            $existingLines = $state['lines'] ?? [];
+            $existingLines[] = $line;
+            $state = ['date' => $today, 'lines' => $existingLines];
             $msg = $this->buildDailyMessage($today, $state['lines']);
             $msgId = $telegram->sendAndGetId($chatId, $msg);
+
+            if (!$msgId) {
+                // Xabar yuborilmadi — state saqlanmaydi, keyingi run qayta urinadi
+                Log::warning("[LiveImport] sendAndGetId null qaytardi, state saqlanmaydi.");
+                $this->warn("[LiveImport] Telegram xabar yuborishda xato, state saqlanmaydi.");
+                return;
+            }
+
             $state['message_id'] = $msgId;
         }
 

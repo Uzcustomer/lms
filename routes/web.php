@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\GradeHistoryController;
 use App\Http\Controllers\Admin\IndependentController;
 use App\Http\Controllers\Admin\JournalController;
 use App\Http\Controllers\Admin\OraliqNazoratController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaytnomaController;
 use App\Http\Controllers\AbsenceReportController;
 use App\Http\Controllers\VedomostController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Student\HemisOAuthController;
 use App\Http\Controllers\Student\StudentAuthController;
@@ -23,11 +25,14 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
+use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
+use App\Http\Controllers\Student\FaceIdController;
+use App\Http\Controllers\Admin\FaceIdAdminController;
 use App\Http\Controllers\Admin\ScheduleController;
 use App\Http\Controllers\Admin\LectureScheduleController;
 use App\Http\Controllers\Admin\TimetableViewController;
@@ -36,13 +41,28 @@ use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
+use App\Http\Controllers\Admin\StaffRegistrationController;
+use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
+use App\Http\Controllers\Admin\VedomostTekshirishController;
 use App\Http\Controllers\MoodleImportController;
 use App\Http\Controllers\Admin\NotificationController;
+use App\Http\Controllers\Student\StudentContractController as StudentContractCtrl;
 use App\Http\Controllers\LanguageController;
 
 
 Route::get('/', function () {
+    // Agar foydalanuvchi allaqachon login bo'lgan bo'lsa — o'z dashboardiga yo'naltirish
+    if (Auth::guard('web')->check()) {
+        return redirect()->route('admin.dashboard');
+    }
+    if (Auth::guard('teacher')->check()) {
+        return redirect()->route('teacher.dashboard');
+    }
+    if (Auth::guard('student')->check()) {
+        return redirect()->route('student.dashboard');
+    }
+
     return response()
         ->view('welcome')
         ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -63,6 +83,10 @@ Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceE
 Route::get('/document/verify/{token}', [\App\Http\Controllers\DocumentVerificationController::class, 'verify'])->name('document.verify');
 Route::get('/document/verify/{token}/pdf', [\App\Http\Controllers\DocumentVerificationController::class, 'viewPdf'])->name('document.verify.pdf');
 
+// Xodimni baholash (QR kod orqali, public)
+Route::get('/staff-evaluate/{token}', [\App\Http\Controllers\StaffEvaluateController::class, 'form'])->name('staff-evaluate.form');
+Route::post('/staff-evaluate/{token}', [\App\Http\Controllers\StaffEvaluateController::class, 'submit'])->name('staff-evaluate.submit');
+
 // Til almashtirish (Language switch)
 Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
 
@@ -72,23 +96,25 @@ Route::prefix('admin')->name('admin.')->group(function () {
     });
 
     Route::get('/login', function () {
-        if (auth()->check()) {
+        if (Auth::guard('web')->check() || Auth::guard('teacher')->check()) {
             return redirect()->route('admin.dashboard');
-        } else {
-            return response()
-                ->view('auth.login')
-                ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
-                ->header('Pragma', 'no-cache')
-                ->header('Expires', '0');
         }
+        return response()
+            ->view('auth.login')
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     })->name('login');
 
 
-    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi|javobgar_firma'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('admin.dashboard');
         });
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+        Route::get('/student-ratings', [\App\Http\Controllers\Admin\StudentRatingController::class, 'index'])->name('student-ratings.index');
+        Route::get('/student-ratings/export-excel', [\App\Http\Controllers\Admin\StudentRatingController::class, 'exportExcel'])->name('student-ratings.export-excel');
+        Route::get('/student-ratings/{studentHemisId}/subjects', [\App\Http\Controllers\Admin\StudentRatingController::class, 'subjectDetails'])->name('student-ratings.subjects');
 
         // Role switching
         Route::post('/switch-role', function (\Illuminate\Http\Request $request) {
@@ -101,6 +127,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         })->name('switch-role');
 
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
+        Route::get('/students/export', [AdminStudentController::class, 'exportStudents'])->name('students.export');
         Route::get('/students/filter/departments', [AdminStudentController::class, 'getFilterDepartments'])->name('students.filter.departments');
         Route::get('/students/filter/specialties', [AdminStudentController::class, 'getFilterSpecialties'])->name('students.filter.specialties');
         Route::get('/students/filter/groups', [AdminStudentController::class, 'getFilterGroups'])->name('students.filter.groups');
@@ -110,6 +137,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/students/{student}/reset-local-password', [AdminStudentController::class, 'resetLocalPassword'])->name('students.reset-local-password');
         Route::post('/students/{student}/toggle-five-candidate', [AdminStudentController::class, 'toggleFiveCandidate'])->name('students.toggle-five-candidate');
         Route::post('/students/bulk-reset-password', [AdminStudentController::class, 'bulkResetLocalPassword'])->name('students.bulk-reset-password');
+        Route::post('/students/{student}/files', [AdminStudentController::class, 'uploadFile'])->name('students.files.upload');
+        Route::get('/students/{student}/files/{file}/download', [AdminStudentController::class, 'downloadFile'])->name('students.files.download');
+        Route::delete('/students/{student}/files/{file}', [AdminStudentController::class, 'deleteFile'])->name('students.files.delete');
+        Route::post('/students/{student}/admission-data', [AdminStudentController::class, 'saveAdmissionData'])->name('students.admission-data.save');
+        Route::post('/students/{student}/admission-files', [AdminStudentController::class, 'uploadAdmissionFile'])->name('students.admission-files.upload');
+        Route::delete('/students/{student}/admission-files/{file}', [AdminStudentController::class, 'deleteAdmissionFile'])->name('students.admission-files.delete');
+        Route::delete('/students/{student}/admission-data/clear', [AdminStudentController::class, 'clearAdmissionData'])->name('students.admission-data.clear');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');
@@ -146,6 +180,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'show'])->name('show');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
+            Route::post('/bulk-delete', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'bulkDelete'])->name('bulk-delete');
             Route::delete('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'destroy'])->name('destroy');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
@@ -158,12 +193,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\ExamAppealController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\ExamAppealController::class, 'reject'])->name('reject');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'download'])->name('download');
+            Route::post('/{id}/comment', [\App\Http\Controllers\Admin\ExamAppealController::class, 'addComment'])->name('comment');
+            Route::get('/comment/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
         });
 
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
         Route::prefix('contracts')->name('contracts.')->group(function () {
             Route::get('/', [ContractController::class, 'index'])->name('index');
             Route::get('/data', [ContractController::class, 'data'])->name('data');
+            Route::post('/sync', [ContractController::class, 'sync'])->name('sync');
+            Route::get('/get-groups', [ContractController::class, 'getGroups'])->name('get-groups');
         });
 
         Route::prefix('independent')->name('independent.')->group(function () {
@@ -232,8 +271,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/show/{groupId}/{subjectId}/{semesterCode}', [JournalController::class, 'show'])->name('show');
             Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade');
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
+            Route::post('/superadmin-edit-grade', [JournalController::class, 'superadminEditGrade'])->name('superadmin-edit-grade');
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
+            Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade');
             Route::post('/open-lesson', [JournalController::class, 'openLesson'])->name('open-lesson');
             Route::post('/close-lesson', [JournalController::class, 'closeLesson'])->name('close-lesson');
             Route::get('/download-lesson-file/{lessonOpening}', [JournalController::class, 'downloadLessonFile'])->name('download-lesson-file');
@@ -256,6 +297,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-topics', [JournalController::class, 'getTopics'])->name('get-topics');
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
+            Route::get('/export-student-grades', [JournalController::class, 'exportStudentGrades'])->name('export-student-grades');
+            Route::post('/delete-mt-submission', [JournalController::class, 'deleteMtSubmission'])->name('delete-mt-submission');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
@@ -264,6 +307,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/fetch-yn-results', [JournalController::class, 'fetchYnResults'])->name('fetch-yn-results');
             Route::post('/generate-yakuniy-qaydnoma', [JournalController::class, 'generateYakuniyQaydnoma'])->name('generate-yakuniy-qaydnoma');
             Route::post('/export-yn-qaydnoma', [JournalController::class, 'exportYnQaydnoma'])->name('export-yn-qaydnoma');
+        });
+
+        // Vedomost tekshirish
+        Route::prefix('vedomost-tekshirish')->name('vedomost-tekshirish.')->group(function () {
+            Route::get('/', [VedomostTekshirishController::class, 'index'])->name('index');
+            Route::get('/search', [VedomostTekshirishController::class, 'search'])->name('search');
+            Route::post('/export', [VedomostTekshirishController::class, 'export'])->name('export');
+            Route::post('/sync-hemis', [VedomostTekshirishController::class, 'syncHemis'])->name('sync-hemis');
         });
 
         Route::get('/get-filter-options', [AdminStudentController::class, 'getFilterOptions'])->name('get-filter-options');
@@ -297,6 +348,112 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::post('/teachers/import', [TeacherController::class, 'importTeachers'])->name('teachers.import');
 
+        // Registrator ofisi bo'linmalari
+        Route::prefix('staff-registration')->name('staff-registration.')->group(function () {
+            Route::get('/', [StaffRegistrationController::class, 'index'])->name('index');
+            Route::post('/', [StaffRegistrationController::class, 'store'])->name('store');
+            Route::delete('/{division}', [StaffRegistrationController::class, 'destroy'])->name('destroy');
+            Route::get('/specialties', [StaffRegistrationController::class, 'getSpecialties'])->name('specialties');
+        });
+
+        // Xalqaro talabalar (registrator ofisi)
+        Route::prefix('international-students')->name('international-students.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'index'])->name('index');
+            Route::get('/statistics', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'statistics'])->name('statistics');
+            Route::get('/export', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'export'])->name('export');
+            Route::post('/subscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'subscribe'])->name('subscribe');
+            Route::post('/unsubscribe', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'unsubscribe'])->name('unsubscribe');
+            Route::post('/notify-danger', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'notifyDanger'])->name('notify-danger');
+            Route::post('/toggle-false-show', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'toggleFalseShow'])->name('toggle-false-show');
+            Route::post('/bulk-assign-firm', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'bulkAssignFirm'])->name('bulk-assign-firm');
+            Route::post('/registration-talabnoma', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'registrationTalabnoma'])->name('registration-talabnoma');
+            Route::post('/visa-talabnoma', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'visaTalabnoma'])->name('visa-talabnoma');
+            Route::get('/{student}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'show'])->name('show');
+            Route::post('/{student}/approve', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'approve'])->name('approve');
+            Route::post('/{student}/reject', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'reject'])->name('reject');
+            Route::post('/{student}/store-visa', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'storeVisa'])->name('store-visa');
+            Route::post('/{student}/assign-firm', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'assignFirm'])->name('assign-firm');
+            Route::post('/{student}/accept-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'acceptPassport'])->name('accept-passport');
+            Route::post('/{student}/mark-registering', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'markRegistering'])->name('mark-registering');
+            Route::post('/{student}/return-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'returnPassport'])->name('return-passport');
+            Route::delete('/{student}/visa-info', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'destroyVisaInfo'])->name('destroy-visa-info');
+            Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showFile'])->name('file');
+        });
+
+        // Javobgar firma talabalari (faqat o'qish)
+        Route::prefix('firm-students')->name('firm-students.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'index'])->name('index');
+            Route::get('/{student}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'show'])->name('show');
+            Route::post('/{student}/accept-passport', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'acceptPassport'])->name('accept-passport');
+            Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'showFile'])->name('file');
+        });
+
+        // Bitiruvchi shartnomalar (registrator ofisi)
+        Route::prefix('student-contracts')->name('student-contracts.')->group(function () {
+            Route::get('/', [AdminStudentContractController::class, 'index'])->name('index');
+            Route::get('/{studentContract}', [AdminStudentContractController::class, 'show'])->name('show');
+            Route::get('/{studentContract}/review', [AdminStudentContractController::class, 'review'])->name('review');
+            Route::post('/{studentContract}/approve', [AdminStudentContractController::class, 'approve'])->name('approve');
+            Route::post('/{studentContract}/reject', [AdminStudentContractController::class, 'reject'])->name('reject');
+            Route::get('/{studentContract}/download', [AdminStudentContractController::class, 'download'])->name('download');
+            Route::post('/{studentContract}/regenerate', [AdminStudentContractController::class, 'regenerate'])->name('regenerate');
+        });
+
+        // Bitiruvchilar passport ma'lumotlari
+        Route::get('/graduate-passports', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'index'])->name('graduate-passports.index');
+        Route::get('/graduate-passports/data', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'data'])->name('graduate-passports.data');
+        Route::get('/graduate-passports/{id}/file/{field}', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'showFile'])->name('graduate-passports.file');
+
+        // Ish e'lonlari (Admin/Registrator)
+        Route::get('/job-listings', function () {
+            return view('admin.job-listings');
+        })->name('job-listings.index');
+
+        // DB ma'lumotlar sahifasi va eksport
+        Route::get('/db-export', function () {
+            return view('admin.db-export');
+        })->name('db-export.index');
+        Route::get('/export/curriculum-subjects', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculumSubjectsExport, 'curriculum_subjects.xlsx');
+        })->name('export.curriculum-subjects');
+        Route::get('/export/semesters', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\SemestersExport, 'semesters.xlsx');
+        })->name('export.semesters');
+        Route::get('/export/curricula', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculaExport, 'curricula.xlsx');
+        })->name('export.curricula');
+
+        // Tyutorlar ro'yxati + har bir tyutor guruhlarini Excelga eksport qilish
+        Route::get('/tutors', function () {
+            $search = request('search');
+
+            $tutors = \App\Models\Teacher::query()
+                ->whereHas('groups')
+                ->with(['groups' => function ($q) {
+                    $q->orderBy('name');
+                }])
+                ->when($search, function ($q) use ($search) {
+                    $q->where(function ($sub) use ($search) {
+                        $sub->where('full_name', 'like', "%{$search}%")
+                            ->orWhere('department', 'like', "%{$search}%");
+                    });
+                })
+                ->orderBy('full_name')
+                ->paginate(25);
+
+            return view('admin.tutors.index', compact('tutors'));
+        })->name('tutors.index');
+
+        Route::get('/tutors/{teacher}/export', function (\App\Models\Teacher $teacher) {
+            $safeName = preg_replace('/[^A-Za-z0-9_\-]/u', '_', trim($teacher->full_name ?? 'tyutor'));
+            $fileName = 'tyutor_' . $safeName . '_guruhlari_' . date('Y_m_d') . '.xlsx';
+
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\TutorGroupsExport($teacher),
+                $fileName
+            );
+        })->name('tutors.export');
+
         // Xabarnomalar (Notifications)
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::get('/notifications/create', [NotificationController::class, 'create'])->name('notifications.create');
@@ -307,6 +464,28 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/notifications/{notification}/reply', [NotificationController::class, 'reply'])->name('notifications.reply');
         Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
         Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
+
+        // Face ID boshqaruvi
+        Route::prefix('face-id')->name('face-id.')->group(function () {
+            Route::get('/settings', [FaceIdAdminController::class, 'settings'])->name('settings');
+            Route::post('/settings', [FaceIdAdminController::class, 'updateSettings'])->name('settings.update');
+            Route::get('/logs', [FaceIdAdminController::class, 'logs'])->name('logs');
+            Route::get('/logs/{id}/snapshot', [FaceIdAdminController::class, 'showSnapshot'])->name('logs.snapshot');
+            Route::delete('/logs/{id}', [FaceIdAdminController::class, 'deleteLog'])->name('logs.delete');
+            Route::post('/logs/clear', [FaceIdAdminController::class, 'clearLogs'])->name('logs.clear');
+            Route::get('/students', [FaceIdAdminController::class, 'students'])->name('students');
+            Route::post('/students/{id}/toggle', [FaceIdAdminController::class, 'toggleStudent'])->name('students.toggle');
+            Route::get('/enrollment', [FaceIdAdminController::class, 'enrollment'])->name('enrollment');
+            Route::post('/descriptor', [FaceIdAdminController::class, 'saveDescriptor'])->name('descriptor.save');
+            Route::delete('/descriptor/{studentId}', [FaceIdAdminController::class, 'deleteDescriptor'])->name('descriptor.delete');
+            Route::get('/ping', fn() => response('pong:' . now()))->name('ping');
+            Route::get('/test', [FaceIdAdminController::class, 'testPage'])->name('test');
+            Route::post('/check-teacher', [FaceIdAdminController::class, 'checkTeacher'])->name('check-teacher');
+            Route::get('/teacher-photo/{id}', [FaceIdAdminController::class, 'teacherPhoto'])->name('teacher-photo');
+            Route::get('/all-descriptors', [FaceIdAdminController::class, 'allDescriptors'])->name('all-descriptors');
+            Route::post('/save-teacher-descriptor', [FaceIdAdminController::class, 'saveTeacherDescriptor'])->name('save-teacher-descriptor');
+            Route::get('/teachers-without-descriptor', [FaceIdAdminController::class, 'teachersWithoutDescriptor'])->name('teachers-without-descriptor');
+        });
 
         // Unified settings page
         Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
@@ -349,6 +528,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/plan/{curriculumSubjectId}', [KtrController::class, 'resetPlan'])->name('reset-plan');
         });
 
+        // To'garak arizalari
+        Route::prefix('club-applications')->name('club-applications.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'index'])->name('index');
+            Route::get('/{application}', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'show'])->name('show');
+            Route::post('/{application}/approve', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'approve'])->name('approve');
+            Route::post('/{application}/reject', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'reject'])->name('reject');
+        });
+
         // Kafedra (Fakultet va kafedralar tuzilmasi)
         Route::prefix('kafedra')->name('kafedra.')->group(function () {
             Route::get('/', [KafedraController::class, 'index'])->name('index');
@@ -363,9 +550,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/lesson-assignment/sync-schedules', [ReportController::class, 'syncSchedulesForReport'])->name('reports.lesson-assignment.sync-schedules');
         Route::get('/reports/lesson-assignment/sync-status', [ReportController::class, 'syncSchedulesStatus'])->name('reports.lesson-assignment.sync-status');
         Route::get('/reports/lesson-assignment/diagnostic', [ReportController::class, 'lessonAssignmentDiagnostic'])->name('reports.lesson-assignment.diagnostic');
+        Route::get('/reports/lesson-assignment/export-status', [ReportController::class, 'lessonAssignmentExportStatus'])->name('reports.lesson-assignment.export-status');
+        Route::get('/reports/lesson-assignment/export-download', [ReportController::class, 'lessonAssignmentExportDownload'])->name('reports.lesson-assignment.export-download');
+
+        Route::get('/reports/lesson-hours', [ReportController::class, 'lessonHours'])->name('reports.lesson-hours');
+        Route::get('/reports/lesson-hours/data', [ReportController::class, 'lessonHoursData'])->name('reports.lesson-hours.data');
 
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
         Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');
+        Route::get('/reports/schedule-report/detail/{csId}', [ReportController::class, 'scheduleKtrCompareDetail'])->name('reports.schedule-report.detail');
         Route::get('/reports/schedule-report/get-auditoriums', [ReportController::class, 'getAuditoriums'])->name('reports.schedule-report.get-auditoriums');
         Route::post('/reports/schedule-report/sync-auditoriums', [ReportController::class, 'syncAuditoriums'])->name('reports.schedule-report.sync-auditoriums');
 
@@ -383,13 +576,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
-        Route::get('/reports/expelled-debtors', [ReportController::class, 'expelledDebtorsReport'])->name('reports.expelled-debtors');
-        Route::get('/reports/expelled-debtors/data', [ReportController::class, 'expelledDebtorsReportData'])->name('reports.expelled-debtors.data');
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');
         Route::get('/reports/student-all-records', [ReportController::class, 'studentAllRecords'])->name('reports.student-all-records');
+        Route::get('/reports/debug-student-subjects', [ReportController::class, 'debugStudentSubjects'])->name('reports.debug-student-subjects');
 
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');
+        Route::get('/reports/sababli-check/attendance-detail', [ReportController::class, 'sababliCheckAttendanceDetail'])->name('reports.sababli-check.attendance-detail');
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
         Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
@@ -399,6 +592,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/users-without-ratings/get-employees', [ReportController::class, 'getUsersWithoutRatingsEmployees'])->name('reports.users-without-ratings.get-employees');
         Route::post('/reports/users-without-ratings/send-telegram', [ReportController::class, 'sendUsersWithoutRatingsTelegram'])->name('reports.users-without-ratings.send-telegram');
         Route::post('/reports/users-without-ratings/send-telegram-all', [ReportController::class, 'sendAllUsersWithoutRatingsTelegram'])->name('reports.users-without-ratings.send-telegram-all');
+
+        Route::get('/reports/grading-time-stats', [ReportController::class, 'gradingTimeStats'])->name('reports.grading-time-stats');
+        Route::get('/reports/grading-time-stats/data', [ReportController::class, 'gradingTimeStatsData'])->name('reports.grading-time-stats.data');
+
+        Route::get('/reports/test-markazi-times', [ReportController::class, 'testMarkaziTimes'])->name('reports.test-markazi-times');
+        Route::get('/reports/test-markazi-times/data', [ReportController::class, 'testMarkaziTimesData'])->name('reports.test-markazi-times.data');
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
@@ -426,6 +625,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
         });
 
+        Route::prefix('grade-history')->name('grade-history.')->group(function () {
+            Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
+        });
+
         // Diagnostika sahifasi (yangi dizayn)
         Route::prefix('diagnostika')->name('diagnostika.')->group(function () {
             Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');
@@ -451,7 +654,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
+            Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/reupload-preview', [QuizResultController::class, 'getReuploadPreview'])->name('reupload-preview');
+            Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
+            Route::post('/compare-grades', [QuizResultController::class, 'compareGrades'])->name('compare-grades');
+            Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
+            Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
@@ -500,10 +709,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::post('/clear-date', [AcademicScheduleController::class, 'clearDate'])->name('clear-date');
             Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+            Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
+            Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
+            Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
+            Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
+            Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
         });
 
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
@@ -536,6 +751,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
         Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
     });
+
+    // Faqat superadmin uchun — Xodimlarni baholash
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
+        Route::get('/staff-evaluation', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'index'])->name('staff-evaluation.index');
+        Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
+        Route::delete('/staff-evaluation/delete-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteAllQr'])->name('staff-evaluation.delete-all-qr');
+        Route::get('/staff-evaluation/{teacher}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
+        Route::post('/staff-evaluation/{teacher}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');
+        Route::delete('/staff-evaluation/{teacher}/delete-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteQr'])->name('staff-evaluation.delete-qr');
+        Route::post('/staff-evaluation/{teacher}/regenerate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'regenerateQr'])->name('staff-evaluation.regenerate-qr');
+        Route::get('/staff-evaluation/{teacher}/download-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'downloadQr'])->name('staff-evaluation.download-qr');
+        Route::get('/staff-evaluation/{teacher}/export-excel', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'exportExcel'])->name('staff-evaluation.export-excel');
+    });
 });
 
 // Impersonatsiyani to'xtatish (har qanday guard'dan)
@@ -560,6 +788,15 @@ Route::prefix('student')->name('student.')->group(function () {
     // Login POST — guest:student olib tashlandi, chunki talaba brauzer yopib
     // logout qilmasa, eski sessiya yangi loginni bloklaydi
     Route::post('/login', [StudentAuthController::class, 'login'])->name('login.post');
+
+    // Face ID login (auth kerak emas)
+    Route::prefix('face-id')->name('face-id.')->group(function () {
+        Route::get('/login', [FaceIdController::class, 'showPage'])->name('login');
+        Route::post('/check-student', [FaceIdController::class, 'checkStudent'])->name('check-student');
+        Route::get('/photo/{id}', [FaceIdController::class, 'getPhoto'])->name('photo');
+        Route::post('/verify', [FaceIdController::class, 'verifyAndLogin'])->name('verify');
+        Route::post('/save-descriptor', [FaceIdController::class, 'saveDescriptor'])->name('save-descriptor');
+    });
 
     // Telegram 2FA login tasdiqlash (auth kerak emas)
     Route::get('/verify-login', [StudentAuthController::class, 'showVerifyLogin'])->name('verify-login');
@@ -603,12 +840,23 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/independents/download/{submissionId}', [StudentController::class, 'downloadSubmission'])->name('independents.download');
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
+        Route::post('/profile-my/update-contact', [StudentController::class, 'updateContact'])->name('profile.update-contact');
         Route::get('/exam-schedule', [StudentController::class, 'examSchedule'])->name('exam-schedule');
 
         // Xizmatlar sahifasi
         Route::get('/services', function () {
             return view('student.services');
         })->name('services');
+
+        // Ish e'lonlari
+        Route::get('/job-listings', function () {
+            return view('student.job-listings');
+        })->name('job-listings');
+
+        // To'garaklar
+        Route::get('/clubs', [\App\Http\Controllers\Student\ClubMembershipController::class, 'index'])->name('clubs');
+        Route::get('/my-clubs', [\App\Http\Controllers\Student\ClubMembershipController::class, 'myClubs'])->name('my-clubs');
+        Route::post('/clubs/join', [\App\Http\Controllers\Student\ClubMembershipController::class, 'store'])->name('clubs.join');
 
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
@@ -628,7 +876,34 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/store', [\App\Http\Controllers\Student\ExamAppealController::class, 'store'])->name('store');
             Route::get('/{id}', [\App\Http\Controllers\Student\ExamAppealController::class, 'show'])->name('show');
             Route::get('/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'download'])->name('download');
+            Route::post('/{id}/comment', [\App\Http\Controllers\Student\ExamAppealController::class, 'addComment'])->name('comment');
+            Route::get('/comment/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
         });
+
+        // Bitiruvchi shartnomalar (talaba)
+        Route::prefix('contracts')->name('contracts.')->group(function () {
+            Route::get('/', [StudentContractCtrl::class, 'index'])->name('index');
+            Route::get('/create', [StudentContractCtrl::class, 'create'])->name('create');
+            Route::post('/store', [StudentContractCtrl::class, 'store'])->name('store');
+            Route::post('/generate', [StudentContractCtrl::class, 'generate'])->name('generate');
+            Route::get('/{contract}', [StudentContractCtrl::class, 'show'])->name('show');
+            Route::get('/{contract}/download', [StudentContractCtrl::class, 'download'])->name('download');
+            Route::delete('/{contract}', [StudentContractCtrl::class, 'destroy'])->name('destroy');
+        });
+
+        // Viza ma'lumotlari (xalqaro talabalar)
+        Route::prefix('visa-info')->name('visa-info.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'store'])->name('store');
+            Route::get('/file/{field}', [\App\Http\Controllers\Student\StudentVisaController::class, 'showFile'])->name('file');
+        });
+
+        // Pasport ma'lumotlari
+        Route::get('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'index'])->name('passport.index');
+        Route::post('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'store'])->name('passport.store');
+        Route::get('/passport/file/{field}', [\App\Http\Controllers\Student\StudentPassportController::class, 'showFile'])->name('passport.file');
+        Route::post('/passport/file/{field}/delete', [\App\Http\Controllers\Student\StudentPassportController::class, 'deleteFile'])->name('passport.file.delete');
+        Route::post('/passport/clear', [\App\Http\Controllers\Student\StudentPassportController::class, 'clear'])->name('passport.clear');
 
         // Sababli dars qoldirish arizasi
         Route::prefix('absence-excuses')->name('absence-excuses.')->group(function () {
@@ -666,7 +941,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/verify-telegram/check', [TeacherAuthController::class, 'checkTelegramVerification'])->name('verify-telegram.check');
     });
 
-    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
+    Route::middleware(['auth:teacher', 'force.password.change', \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|inspeksiya|oquv_prorektori|registrator_ofisi|oquv_bolimi|oquv_bolimi_boshligi|buxgalteriya|manaviyat|tyutor|dekan|kafedra_mudiri|fan_masuli|oqituvchi|test_markazi'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('teacher.dashboard');
         });
@@ -691,7 +966,17 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         });
 
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');
+        Route::get('/students/{student}', [TeacherMainController::class, 'showStudent'])->name('students.show');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
+
+        // Tyutor hisobotlari
+        Route::get('/reports/jn', [TutorReportController::class, 'jnReport'])->name('reports.jn');
+        Route::get('/reports/absence-74', [TutorReportController::class, 'absenceReport74'])->name('reports.absence-74');
+        Route::get('/reports/absence-25', [TutorReportController::class, 'absenceReport25'])->name('reports.absence-25');
+        Route::get('/reports/debtors', [TutorReportController::class, 'debtorsReport'])->name('reports.debtors');
+        Route::get('/reports/top-students', [TutorReportController::class, 'topStudentsReport'])->name('reports.top-students');
+        Route::get('/reports/unrated', [TutorReportController::class, 'unratedReport'])->name('reports.unrated');
+        Route::get('/reports/contracts', [TutorReportController::class, 'contractsReport'])->name('reports.contracts');
         Route::put('/student-grades/{gradeId}', [TeacherMainController::class, 'updateGrade'])->name('update.grade');
         Route::get('/student-grades-week/export', [TeacherMainController::class, 'exportStudentGrades'])->name('student-grades-week.export');
         Route::get('/student-grades-week/export-box', [TeacherMainController::class, 'exportStudentGradesBox'])->name('student-grades-week.export-box');
@@ -788,7 +1073,13 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/import', [QuizResultController::class, 'import'])->name('import');
             Route::post('/diagnostika', [QuizResultController::class, 'diagnostika'])->name('diagnostika');
             Route::post('/upload', [QuizResultController::class, 'uploadToGrades'])->name('upload');
+            Route::post('/reupload', [QuizResultController::class, 'reUploadToGrades'])->name('reupload');
+            Route::post('/reupload-preview', [QuizResultController::class, 'getReuploadPreview'])->name('reupload-preview');
+            Route::post('/delete-grades', [QuizResultController::class, 'deleteGrades'])->name('delete-grades');
+            Route::post('/compare-grades', [QuizResultController::class, 'compareGrades'])->name('compare-grades');
+            Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
+            Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
@@ -842,10 +1133,16 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
+            Route::post('/clear-date', [AcademicScheduleController::class, 'clearDate'])->name('clear-date');
             Route::get('/get-filter-options', [AcademicScheduleController::class, 'getFilterOptions'])->name('get-filter-options');
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
+            Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
+            Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
+            Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
+            Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
+            Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
         });
     });
 });

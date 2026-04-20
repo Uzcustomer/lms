@@ -11,6 +11,7 @@ enum ProjectRole: string
     case VICE_RECTOR = 'oquv_prorektori';
     case REGISTRAR_OFFICE = 'registrator_ofisi';
     case ACADEMIC_DEPARTMENT = 'oquv_bolimi';
+    case ACADEMIC_DEPARTMENT_HEAD = 'oquv_bolimi_boshligi';
     case ACCOUNTANT = 'buxgalteriya';
     case SPIRITUAL_AFFAIRS = 'manaviyat';
     case TUTOR = 'tyutor';
@@ -19,6 +20,7 @@ enum ProjectRole: string
     case SUBJECT_RESPONSIBLE = 'fan_masuli';
     case TEACHER = 'oqituvchi';
     case TEST_CENTER = 'test_markazi';
+    case FIRM_RESPONSIBLE = 'javobgar_firma';
     case STUDENT = 'talaba';
 
     public function label(): string
@@ -31,14 +33,16 @@ enum ProjectRole: string
             self::VICE_RECTOR => "O'quv prorektori",
             self::REGISTRAR_OFFICE => 'Registrator ofisi',
             self::ACADEMIC_DEPARTMENT => "O'quv bo'limi",
+            self::ACADEMIC_DEPARTMENT_HEAD => "O'quv bo'limi boshlig'i",
             self::ACCOUNTANT => 'Buxgalteriya',
             self::SPIRITUAL_AFFAIRS => "Ma'naviyat",
             self::TUTOR => 'Tyutor',
-            self::DEAN => 'Dekan',
+            self::DEAN => 'Dekanat',
             self::DEPARTMENT_HEAD => 'Kafedra mudiri',
             self::SUBJECT_RESPONSIBLE => "Fan mas'uli",
             self::TEACHER => "O'qituvchi",
             self::TEST_CENTER => 'Test markazi',
+            self::FIRM_RESPONSIBLE => 'Javobgar firma',
             self::STUDENT => 'Talaba',
         };
     }

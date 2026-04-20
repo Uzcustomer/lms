@@ -9,8 +9,8 @@
             'Saturday'  => ['bg' => 'bg-teal-50 dark:bg-teal-900/30',    'border' => 'border-teal-200 dark:border-teal-700',    'accent' => 'bg-teal-500',    'text' => 'text-teal-700 dark:text-teal-300',    'light' => 'bg-teal-100 dark:bg-teal-800/40',  'dot' => 'bg-teal-400'],
         ];
         $days = [
-            'Monday' => 'Dushanba', 'Tuesday' => 'Seshanba', 'Wednesday' => 'Chorshanba',
-            'Thursday' => 'Payshanba', 'Friday' => 'Juma', 'Saturday' => 'Shanba'
+            'Monday' => __('Dushanba'), 'Tuesday' => __('Seshanba'), 'Wednesday' => __('Chorshanba'),
+            'Thursday' => __('Payshanba'), 'Friday' => __('Juma'), 'Saturday' => __('Shanba')
         ];
     @endphp
 
@@ -25,7 +25,7 @@
             <div class="px-4 py-1.5">
                 {{-- Title + Semester --}}
                 <div class="flex items-center justify-between mb-[10px]">
-                    <h1 class="text-sm font-bold text-gray-800 dark:text-gray-100">Dars jadvali</h1>
+                    <h1 class="text-sm font-bold text-gray-800 dark:text-gray-100">{{ __('Dars jadvali') }}</h1>
                     <div class="relative">
                         <button @click="semesterOpen = !semesterOpen" class="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                             {{ $selectedSemester['name'] ?? '' }}
@@ -71,8 +71,8 @@
                     <div class="flex items-center gap-1.5">
                         {{-- Hafta / Kun toggle --}}
                         <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
-                            <button @click="view = 'week'" :class="view === 'week' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'" class="px-2.5 py-0.5 text-xs font-medium rounded-md transition">Hafta</button>
-                            <button @click="view = 'day'" :class="view === 'day' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'" class="px-2.5 py-0.5 text-xs font-medium rounded-md transition">Kun</button>
+                            <button @click="view = 'week'" :class="view === 'week' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'" class="px-2.5 py-0.5 text-xs font-medium rounded-md transition">{{ __('Hafta') }}</button>
+                            <button @click="view = 'day'" :class="view === 'day' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-800 dark:text-gray-100' : 'text-gray-500 dark:text-gray-400'" class="px-2.5 py-0.5 text-xs font-medium rounded-md transition">{{ __('Kun') }}</button>
                         </div>
                         {{-- Bugun button --}}
                         @php
@@ -83,7 +83,7 @@
                         @if($todayWeek && $todayWeek['id'] != $selectedWeekId)
                             <a href="{{ route('student.schedule', ['semester_id' => $selectedSemester['id'] ?? '', 'week_id' => $todayWeek['id']]) }}"
                                class="px-2 py-0.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50">
-                                Bugun
+                                {{ __('Bugun') }}
                             </a>
                         @endif
                     </div>
@@ -121,7 +121,7 @@
                             @endforeach
                         </h3>
                         @if($dayEn === $todayDayEn)
-                            <span class="text-[9px] font-bold uppercase bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">Bugun</span>
+                            <span class="text-[9px] font-bold uppercase bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">{{ __('Bugun') }}</span>
                         @endif
                     </div>
 
@@ -163,7 +163,7 @@
                         <div class="flex gap-2 items-center">
                             <div class="w-10 flex-shrink-0"></div>
                             <div class="flex-1 border border-dashed border-gray-200 dark:border-gray-700 rounded-[5px] py-4 text-center">
-                                <span class="text-xs text-gray-400 dark:text-gray-500 font-medium">Dars yo'q</span>
+                                <span class="text-xs text-gray-400 dark:text-gray-500 font-medium">{{ __("Dars yo'q") }}</span>
                             </div>
                         </div>
                     @endif
@@ -181,7 +181,7 @@
                         <div class="w-2.5 h-2.5 rounded-full {{ $color['dot'] }}"></div>
                         <h3 class="text-sm font-bold {{ $color['text'] }}">{{ $dayUz }}</h3>
                         @if($dayEn === $todayDayEn)
-                            <span class="text-[9px] font-bold uppercase bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">Bugun</span>
+                            <span class="text-[9px] font-bold uppercase bg-indigo-500 text-white px-1.5 py-0.5 rounded-full">{{ __('Bugun') }}</span>
                         @endif
                     </div>
 
@@ -223,7 +223,7 @@
                         <div class="flex items-center justify-center py-16">
                             <div class="text-center">
                                 <svg class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
-                                <p class="text-sm text-gray-400 dark:text-gray-500 font-medium">Bu kunda dars yo'q</p>
+                                <p class="text-sm text-gray-400 dark:text-gray-500 font-medium">{{ __("Bu kunda dars yo'q") }}</p>
                             </div>
                         </div>
                     @endif

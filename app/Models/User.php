@@ -25,6 +25,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'assigned_firm',
+        'telegram_chat_id',
     ];
 
     /**
@@ -49,4 +51,5 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
 }

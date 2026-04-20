@@ -259,7 +259,18 @@
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
-                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    var errMsg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                    var errDetail = '';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errMsg = xhr.responseJSON.message;
+                        if (xhr.responseJSON.file) errDetail = ' (' + xhr.responseJSON.file + ')';
+                    } else if (xhr.status === 0) {
+                        errMsg = "Serverga ulanib bo'lmadi yoki vaqt tugadi.";
+                    } else if (xhr.status === 504 || xhr.status === 502) {
+                        errMsg = "Server javob bermadi (timeout). Kamroq kun tanlab ko'ring.";
+                    }
+                    $('#empty-state').show().find('p:first').html("<b>" + errMsg + "</b>" + (errDetail ? '<br><span style=\"font-size:11px;color:#94a3b8;\">' + errDetail + '</span>' : ''));
+                    console.error('[loadReport] xhr.status=' + xhr.status, xhr.responseJSON || xhr.responseText);
                     calcReset();
                 }
             });
@@ -381,6 +392,17 @@
             return '<span class="badge badge-status-no">Yo\'q</span>';
         }
 
+        function gradeBadge(val, missingCount) {
+            if (val === null) {
+                return '<span class="badge" style="background:#e2e8f0;color:#64748b;">-</span>';
+            }
+            if (val) {
+                return '<span class="badge badge-status-yes">Ha</span>';
+            }
+            // Baho qo'yilmagan — nechta talabaga qo'yilmaganini ko'rsatish
+            return '<span class="badge badge-status-no">Yo\'q (' + missingCount + ')</span>';
+        }
+
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
@@ -399,7 +421,7 @@
                 html += '<td><span class="badge badge-pair">' + esc(r.lesson_pair_time) + '</span></td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.student_count + '</td>';
                 html += '<td style="text-align:center;">' + statusBadge(r.has_attendance) + '</td>';
-                html += '<td style="text-align:center;">' + statusBadge(r.has_grades) + '</td>';
+                html += '<td style="text-align:center;">' + gradeBadge(r.has_grades, r.missing_grade_count) + '</td>';
                 html += '<td><span class="badge badge-date">' + formatDate(r.lesson_date) + '</span></td>';
                 html += '<td style="text-align:center;"><a href="/admin/journal/show/' + encodeURIComponent(r.group_db_id) + '/' + encodeURIComponent(r.subject_id) + '/' + encodeURIComponent(r.semester_code) + '" target="_blank" class="btn-view-journal" title="Jurnalga o\'tish"><svg style="width:18px;height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></a></td>';
                 html += '</tr>';
@@ -407,11 +429,109 @@
             $('#table-body').html(html);
         }
 
+        var excelExportInterval = null;
+
         function downloadExcel() {
             var params = getFilters();
             params.export = 'excel';
             var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.lesson-assignment.data") }}?' + query;
+
+            // Tugmani disable qilish va yuklanish animatsiyasi
+            var $btn = $('#btn-excel');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" style="width:14px;height:14px;border-width:2px;"></span> <span id="excel-progress-text">Tayyorlanmoqda...</span>');
+
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.data") }}?' + query,
+                method: 'GET',
+                dataType: 'json',
+                success: function(res) {
+                    if (res.export_key) {
+                        // Background export boshlandi — statusni polling qilish
+                        pollExportStatus(res.export_key);
+                    }
+                },
+                error: function(xhr) {
+                    alert('Excel eksport xatosi: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                    resetExcelButton();
+                }
+            });
+        }
+
+        function pollExportStatus(exportKey) {
+            if (excelExportInterval) clearInterval(excelExportInterval);
+
+            excelExportInterval = setInterval(function() {
+                $.ajax({
+                    url: '{{ route("admin.reports.lesson-assignment.export-status") }}',
+                    method: 'GET',
+                    data: { export_key: exportKey },
+                    dataType: 'json',
+                    success: function(res) {
+                        if (res.status === 'done') {
+                            clearInterval(excelExportInterval);
+                            excelExportInterval = null;
+                            $('#excel-progress-text').text('Yuklab olinmoqda...');
+                            // Faylni fetch orqali yuklab olish (sahifadan chiqmasdan)
+                            downloadExcelFile(exportKey);
+                        } else if (res.status === 'failed') {
+                            clearInterval(excelExportInterval);
+                            excelExportInterval = null;
+                            alert('Excel eksport xatosi: ' + (res.message || 'Noma\'lum xato'));
+                            resetExcelButton();
+                        } else {
+                            // Hali ishlanmoqda
+                            var text = res.message || 'Ishlanmoqda...';
+                            if (res.percent > 0) {
+                                text += ' (' + res.percent + '%)';
+                            }
+                            $('#excel-progress-text').text(text);
+                        }
+                    },
+                    error: function() {
+                        clearInterval(excelExportInterval);
+                        excelExportInterval = null;
+                        alert('Eksport statusini tekshirishda xatolik');
+                        resetExcelButton();
+                    }
+                });
+            }, 2000); // Har 2 sekundda tekshirish
+        }
+
+        function downloadExcelFile(exportKey) {
+            var url = '{{ route("admin.reports.lesson-assignment.export-download") }}?export_key=' + encodeURIComponent(exportKey);
+            fetch(url)
+                .then(function(response) {
+                    if (!response.ok) {
+                        return response.json().catch(function() { return { error: 'Server xatosi (status: ' + response.status + ')' }; }).then(function(data) {
+                            throw new Error(data.error || 'Fayl yuklab olinmadi (status: ' + response.status + ')');
+                        });
+                    }
+                    var disposition = response.headers.get('Content-Disposition');
+                    var fileName = 'Dars_belgilash.xlsx';
+                    if (disposition) {
+                        var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                        if (match && match[1]) fileName = match[1].replace(/['"]/g, '');
+                    }
+                    return response.blob().then(function(blob) { return { blob: blob, fileName: fileName }; });
+                })
+                .then(function(result) {
+                    var a = document.createElement('a');
+                    a.href = URL.createObjectURL(result.blob);
+                    a.download = result.fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                    resetExcelButton();
+                })
+                .catch(function(err) {
+                    alert('Excel faylni yuklab olishda xatolik: ' + err.message);
+                    resetExcelButton();
+                });
+        }
+
+        function resetExcelButton() {
+            $('#btn-excel').prop('disabled', false).html('<svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Excel');
         }
 
         function renderPagination(res) {

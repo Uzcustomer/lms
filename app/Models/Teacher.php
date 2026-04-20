@@ -29,6 +29,7 @@ class Teacher extends Authenticatable
         'employment_form',
         'employment_staff',
         'staff_position',
+        'lavozim',
         'employee_status',
         'employee_type',
         'contract_number',
@@ -51,6 +52,8 @@ class Teacher extends Authenticatable
         'telegram_verified_at',
         'login_code',
         'login_code_expires_at',
+        'assigned_firm',
+        'eval_qr_token',
     ];
 
     protected $hidden = [
@@ -155,4 +158,16 @@ class Teacher extends Authenticatable
             ->withTimestamps();
     }
 
+    /**
+     * Registrator ofisi bo'linmalari (front/back ofis biriktirishlari)
+     */
+    public function registrationDivisions()
+    {
+        return $this->hasMany(StaffRegistrationDivision::class);
+    }
+
+    public function staffEvaluations()
+    {
+        return $this->hasMany(StaffEvaluation::class);
+    }
 }

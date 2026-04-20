@@ -84,11 +84,19 @@ class SendLessonOpeningReminders extends Command
 
             // Barcha schedule lar uchun baho bormi
             $allGraded = true;
+            $anyGradeFoundByScheduleId = false;
             foreach ($teacherSchedules as $ts) {
-                if (!isset($gradeByScheduleId[$ts->schedule_hemis_id]) && !$gradeByKey) {
+                if (isset($gradeByScheduleId[$ts->schedule_hemis_id])) {
+                    $anyGradeFoundByScheduleId = true;
+                } else {
                     $allGraded = false;
                     break;
                 }
+            }
+
+            // Agar schedule_hemis_id orqali hech baho topilmasa, fallback sifatida 2-usulni ishlatish
+            if (!$anyGradeFoundByScheduleId) {
+                $allGraded = $gradeByKey;
             }
 
             $employeeIds = $teacherSchedules->pluck('employee_id')->unique();

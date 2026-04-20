@@ -329,7 +329,7 @@
                 </form>
             </div>
 
-            {{-- Jadval --}}
+{{-- Jadval --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
                 @if($excuses->isEmpty())
                     <div class="text-center py-12">
@@ -340,6 +340,7 @@
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                             <thead class="bg-gray-50 dark:bg-gray-700">
                                 <tr>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">#</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Talaba FISH</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fakultet</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Yo'nalish</th>
@@ -349,12 +350,14 @@
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Holat</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Natija hujjati</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tasdiqlagan</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ariza vaqti</th>
                                     <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amallar</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 @foreach($excuses as $excuse)
                                     <tr class="{{ $excuse->isPending() ? 'bg-yellow-50 dark:bg-yellow-900/10' : '' }}">
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-medium">{{ $excuses->firstItem() + $loop->index }}</td>
                                         <td class="px-3 py-3 whitespace-nowrap">
                                             <div class="text-sm font-medium text-gray-900 dark:text-white">{{ $excuse->student_full_name }}</div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400">{{ $excuse->student_hemis_id }}</div>
@@ -365,7 +368,12 @@
                                         <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ $excuse->group_name }}</td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
                                             @if($excuse->file_path)
-                                                <a href="{{ route('admin.absence-excuses.download', $excuse->id) }}" target="_blank"
+                                                @php
+                                                    $docUrl = Str::startsWith($excuse->file_path, ['http://', 'https://'])
+                                                        ? $excuse->file_path
+                                                        : route('admin.absence-excuses.download', $excuse->id);
+                                                @endphp
+                                                <a href="{{ $docUrl }}" target="_blank"
                                                    class="inline-flex items-center text-blue-600 hover:text-blue-800" title="{{ $excuse->file_original_name }}">
                                                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                                     Yuklab olish
@@ -382,7 +390,12 @@
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
                                             @if($excuse->isApproved() && $excuse->approved_pdf_path)
-                                                <a href="{{ route('admin.absence-excuses.download-pdf', $excuse->id) }}" target="_blank"
+                                                @php
+                                                    $pdfUrl = Str::startsWith($excuse->approved_pdf_path, ['http://', 'https://'])
+                                                        ? $excuse->approved_pdf_path
+                                                        : route('admin.absence-excuses.download-pdf', $excuse->id);
+                                                @endphp
+                                                <a href="{{ $pdfUrl }}" target="_blank"
                                                    class="inline-flex items-center text-green-600 hover:text-green-800">
                                                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                                     PDF
@@ -399,22 +412,13 @@
                                                 <span class="text-gray-400">-</span>
                                             @endif
                                         </td>
+                                        <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            <div class="text-xs">{{ $excuse->created_at?->format('d.m.Y') }}</div>
+                                            <div class="text-xs text-gray-400">{{ $excuse->created_at?->format('H:i') }}</div>
+                                        </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
-                                            <div class="flex items-center gap-3">
-                                                <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
-                                                   class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
-
-                                                @if(in_array($excuse->status, ['pending', 'approved']))
-                                                    <form method="POST" action="{{ route('admin.absence-excuses.destroy', $excuse->id) }}"
-                                                          onsubmit="return confirm('Arizani o'chirishni xohlaysizmi?')">
-                                                        @csrf
-                                                        @method('DELETE')
-                                                        <button type="submit" class="text-red-600 hover:text-red-800 font-medium">
-                                                            O'chirish
-                                                        </button>
-                                                    </form>
-                                                @endif
-                                            </div>
+                                            <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
+                                               class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -422,7 +426,7 @@
                         </table>
                     </div>
 
-                    <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                    <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-center">
                         {{ $excuses->links() }}
                     </div>
                 @endif
@@ -430,4 +434,5 @@
 
         </div>
     </div>
+
 </x-app-layout>

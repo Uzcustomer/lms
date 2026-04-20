@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 use App\Models\MarkingSystemScore;
+use App\Models\AcademicRecord;
 use App\Models\ExamSchedule;
 use App\Models\YnConsent;
 use App\Models\YnSubmission;
@@ -62,10 +63,77 @@ class StudentController extends Controller
         $curriculum = Curriculum::where('curricula_hemis_id', $student->curriculum_id)->first();
         $educationYearCode = $curriculum?->education_year_code;
 
-        $debtSubjectsCount = StudentGrade::where('student_id', $student->id)
-            ->whereIn('status', ["pending"])
-            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
-            ->count();
+        // Qarzdor fanlarni curriculum_subjects + academic_records lookup orqali hisoblash
+        // (Admin report bilan bir xil natija berishi uchun)
+        $studentSemesterCode = $student->semester_code ? (string) $student->semester_code : null;
+        $groupName = $student->group_name ?? '';
+
+        $debtSubjects = collect();
+
+        if ($curriculum) {
+            $currSubjects = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $student->curriculum_id)
+                ->where('is_active', true)
+                ->where('subject_code', 'not like', '%/%')
+                ->select('semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+                ->orderBy('semester_code')
+                ->orderBy('subject_name')
+                ->get();
+
+            // Guruh suffiksi bo'yicha filtrlash
+            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
+
+            // Academic records lookup
+            $arRecords = DB::table('academic_records')
+                ->where('student_id', $student->hemis_id)
+                ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
+                ->get();
+
+            $arLookup = [];
+            foreach ($arRecords as $ar) {
+                $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
+            }
+
+            foreach ($currSubjects as $sub) {
+                // Joriy semesterni chiqarib tashlash
+                if ($studentSemesterCode && (string) $sub->semester_code === $studentSemesterCode) continue;
+
+                $ar = $arLookup[$sub->subject_id . '|' . $sub->semester_code] ?? null;
+
+                $totalPoint = $ar->total_point ?? null;
+                $grade = $ar->grade ?? null;
+                $retraining = $ar->retraining_status ?? null;
+
+                $hasPassingGrade = !empty($totalPoint) && floatval($totalPoint) >= 60 && !empty($grade) && !in_array($grade, ['2', '0']);
+                $isMissingGrade = empty($totalPoint) && empty($grade);
+                $isFailedGrade = !empty($grade) && in_array($grade, ['2', '0']);
+                $isRetraining = !empty($retraining);
+
+                if (!$hasPassingGrade && ($isMissingGrade || $isFailedGrade || $isRetraining)) {
+                    $status = 'Qarzdor';
+                    if ($isRetraining) {
+                        $status = 'Qayta o\'qish';
+                    } elseif ($isFailedGrade) {
+                        $status = 'Baho: ' . $grade;
+                    }
+
+                    $debtSubjects->push((object) [
+                        'semester_code' => $sub->semester_code,
+                        'semester_name' => $sub->semester_name,
+                        'subject_name' => $sub->subject_name,
+                        'credit' => $sub->credit,
+                        'total_acload' => $sub->total_acload,
+                        'total_point' => $totalPoint,
+                        'grade' => $grade,
+                        'retraining_status' => $retraining,
+                        'status' => $status,
+                    ]);
+                }
+            }
+        }
+
+        $debtBySemester = $debtSubjects->groupBy('semester_name');
+        $debtSubjectsCount = $debtSubjects->count();
 
         $recentGrades = StudentGrade::where('student_id', $student->id)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
@@ -80,7 +148,7 @@ class StudentController extends Controller
             ->get()
             ->groupBy('subject_name');
 
-        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'recentGrades', 'gradesBySubject'));
+        return view('student.dashboard', compact('avgGpa', 'totalAbsent', 'debtSubjectsCount', 'debtBySemester', 'recentGrades', 'gradesBySubject'));
     }
 
     public function getSchedule(Request $request)
@@ -440,16 +508,14 @@ class StudentController extends Controller
 
         // Helper: effective grade (aynan jurnal mantiqidan)
         $getEffectiveGrade = function ($row) {
-            if ($row->status === 'pending') return null;
             if ($row->reason === 'absent' && $row->grade === null) {
                 return $row->retake_grade !== null ? $row->retake_grade : null;
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
             }
-            if ($row->status === 'recorded') return $row->grade;
-            if ($row->status === 'closed') return $row->grade;
             if ($row->retake_grade !== null) return $row->retake_grade;
+            if ($row->grade !== null) return $row->grade;
             return null;
         };
 
@@ -1359,8 +1425,9 @@ class StudentController extends Controller
             'student_id_number' => $student->student_id_number,
             'image' => $student->image ?? asset('images/default-avatar.png'),
             'birth_date' => $student->birth_date ? $student->birth_date->timestamp : null,
-            'phone' => $student->other['phone'] ?? '',
+            'phone' => $student->phone ?: ($student->other['phone'] ?? ''),
             'email' => $student->other['email'] ?? '',
+            'telegram_username' => $student->telegram_username ?? '',
             'gender' => ['name' => $student->gender_name ?? ''],
             'faculty' => ['name' => $student->department_name ?? ''],
             'specialty' => ['name' => $student->specialty_name ?? ''],
@@ -1370,9 +1437,49 @@ class StudentController extends Controller
             'address' => $student->other['address'] ?? '',
             'province' => ['name' => $student->province_name ?? ''],
             'district' => ['name' => $student->district_name ?? ''],
+            'is_graduate' => $student->is_graduate,
         ];
 
-        return view('student.profile', compact('profileData'));
+        $botUsername = config('services.telegram.bot_username', '');
+
+        return view('student.profile', compact('profileData', 'student', 'botUsername'));
+    }
+
+    public function updateContact(Request $request)
+    {
+        $student = Auth::guard('student')->user();
+
+        $request->validate([
+            'phone' => ['nullable', 'string', 'regex:/^\+\d{7,15}$/'],
+            'telegram_username' => ['nullable', 'string', 'regex:/^@[a-zA-Z0-9_]{5,32}$/'],
+        ], [
+            'phone.regex' => 'Telefon raqam formatida bo\'lishi kerak: +998XXXXXXXXX',
+            'telegram_username.regex' => 'Telegram username @username formatida bo\'lishi kerak (5-32 belgi)',
+        ]);
+
+        $isNewPhone = empty($student->phone) && !empty($request->phone);
+        $student->phone = $request->phone;
+        if ($isNewPhone && !$student->phone_added_at) {
+            $student->phone_added_at = now();
+        }
+
+        // Telegram username o'zgarganda — yangi verification code generatsiya qilish
+        $newTelegram = $request->telegram_username;
+        if ($newTelegram && $newTelegram !== $student->telegram_username) {
+            $student->telegram_username = $newTelegram;
+            $student->telegram_verification_code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
+            $student->telegram_verified_at = null;
+            $student->telegram_chat_id = null;
+        } elseif (!$newTelegram) {
+            $student->telegram_username = null;
+            $student->telegram_verification_code = null;
+            $student->telegram_verified_at = null;
+            $student->telegram_chat_id = null;
+        }
+
+        $student->save();
+
+        return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli saqlandi');
     }
 
     public function examSchedule()
@@ -1394,5 +1501,32 @@ class StudentController extends Controller
             ->get();
 
         return view('student.exam-schedule', compact('examSchedules', 'student'));
+    }
+
+    /**
+     * Guruh suffiksi bo'yicha fanlarni filtrlash
+     */
+    private function filterSubjectsByGroupSuffix($records, $groupName)
+    {
+        if (empty($groupName)) {
+            return $records;
+        }
+
+        $groupSuffix = '';
+        if (preg_match('/(\d+)([a-zA-Z])$/', trim($groupName), $m)) {
+            $groupSuffix = mb_strtolower($m[2]);
+        }
+
+        if (empty($groupSuffix)) {
+            return $records;
+        }
+
+        return $records->filter(function ($record) use ($groupSuffix) {
+            $name = $record->subject_name ?? '';
+            if (preg_match('/\(([a-zA-Zа-яА-Я])\)\s*$/u', $name, $m)) {
+                return mb_strtolower($m[1]) === $groupSuffix;
+            }
+            return true;
+        })->values();
     }
 }

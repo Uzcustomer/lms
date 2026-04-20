@@ -19,7 +19,7 @@ class Student extends Authenticatable
 
     protected $fillable = [
         'hemis_id', 'full_name', 'short_name', 'first_name', 'second_name', 'third_name',
-        'image', 'student_id_number', 'birth_date', 'avg_gpa', 'avg_grade', 'total_credit',
+        'image', 'student_id_number', 'passport_number', 'passport_serial', 'birth_date', 'avg_gpa', 'avg_grade', 'total_credit',
         'university_code', 'university_name', 'gender_code', 'gender_name',
         'department_id', 'department_name', 'department_code',
         'specialty_id', 'specialty_name', 'specialty_code',
@@ -41,12 +41,14 @@ class Student extends Authenticatable
         'is_five_candidate',
         'other',
         'phone',
+        'phone_added_at',
         'telegram_username',
         'telegram_chat_id',
         'telegram_verification_code',
         'telegram_verified_at',
         'login_code',
         'login_code_expires_at',
+        'face_id_enabled',
     ];
 
     protected $casts = [
@@ -61,7 +63,9 @@ class Student extends Authenticatable
         'must_change_password' => 'boolean',
         'is_five_candidate' => 'boolean',
         'telegram_verified_at' => 'datetime',
+        'phone_added_at' => 'datetime',
         'login_code_expires_at' => 'datetime',
+        'face_id_enabled'       => 'boolean',
     ];
 
     protected $hidden = [
@@ -310,6 +314,21 @@ class Student extends Authenticatable
         return $this->hasMany(StudentGrade::class, 'student_hemis_id', 'hemis_id');
     }
 
+    public function visaInfo()
+    {
+        return $this->hasOne(\App\Models\StudentVisaInfo::class);
+    }
+
+    public function faceDescriptor()
+    {
+        return $this->hasOne(\App\Models\FaceIdDescriptor::class);
+    }
+
+    public function files()
+    {
+        return $this->hasMany(\App\Models\StudentFile::class);
+    }
+
     public function isProfileComplete(): bool
     {
         return !empty($this->phone);
@@ -332,7 +351,8 @@ class Student extends Authenticatable
             return $days;
         }
 
-        $deadline = $this->updated_at->copy()->addDays($days);
+        $start = $this->phone_added_at ?? $this->updated_at;
+        $deadline = $start->copy()->addDays($days);
         $daysLeft = (int) now()->diffInDays($deadline, false);
 
         return max($daysLeft, 0);

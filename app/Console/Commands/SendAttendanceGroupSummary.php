@@ -28,6 +28,8 @@ class SendAttendanceGroupSummary extends Command
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
         $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        // Fan nomi bo'yicha baho tekshirishdan chiqariladigan fanlar (Tanishuv amaliyoti, O'quv amaliyoti va h.k.)
+        $gradeExcludedSubjectPatterns = config('app.grade_excluded_subject_patterns', []);
 
         $this->info("Bugungi sana: {$todayStr}");
 
@@ -47,6 +49,7 @@ class SendAttendanceGroupSummary extends Command
             $importService->importBetween(
                 $today->copy()->startOfDay(),
                 $today->copy()->endOfDay(),
+                '',
                 fn(int $page, int $total) => $reporter->updateProgress($page, $total)
             );
             $reporter->completeStep();
@@ -218,30 +221,51 @@ class SendAttendanceGroupSummary extends Command
             ->pluck('ck')
             ->flip();
 
-        // Baho (1-usul): subject_schedule_id orqali to'g'ridan-to'g'ri tekshirish
-        $gradeByScheduleId = DB::table('student_grades')
+        // Baho (1-usul): subject_schedule_id orqali — baho qo'yilgan talabalar soni
+        $gradeCountByScheduleId = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->whereNotNull('grade')
-            ->where('grade', '>', 0)
-            ->pluck('subject_schedule_id')
-            ->unique()
-            ->flip();
+            ->where(function ($q) {
+                $q->where('grade', '>', 0)
+                  ->orWhere('status', 'recorded')
+                  ->orWhere('reason', 'absent');
+            })
+            ->select('subject_schedule_id', DB::raw('COUNT(DISTINCT student_hemis_id) as cnt'))
+            ->groupBy('subject_schedule_id')
+            ->pluck('cnt', 'subject_schedule_id');
 
-        // Baho (2-usul): student → group orqali tekshirish (zaxira)
-        $gradeByKey = DB::table('student_grades as sg')
+        // Baho (2-usul): student → group orqali — baho qo'yilgan talabalar soni (zaxira)
+        $gradeCountByKey = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('sg.employee_id', $employeeIds)
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereRaw('DATE(sg.lesson_date) = ?', [$todayStr])
-            ->whereNotNull('sg.grade')
-            ->where('sg.grade', '>', 0)
-            ->select(DB::raw("DISTINCT CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"))
-            ->pluck('gk')
-            ->flip();
+            ->where(function ($q) {
+                $q->where('sg.grade', '>', 0)
+                  ->orWhere('sg.status', 'recorded')
+                  ->orWhere('sg.reason', 'absent');
+            })
+            ->select(DB::raw("CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(sg.employee_id, '|', st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.training_type_code, '|', sg.lesson_pair_code)"))
+            ->pluck('cnt', 'gk');
 
-        // Talaba sonini guruh bo'yicha hisoblash (faqat faol talabalar)
+        // Fanga biriktirilgan faol talabalar soni (student_subjects jadvalidan)
+        // Joriy semestrga tegishli biriktirishlarni aniqlash
+        $subjectIds = $schedules->pluck('subject_id')->unique()->values()->toArray();
+        $semesterCodes = $schedules->pluck('semester_code')->unique()->values()->toArray();
+
+        $subjectStudentCounts = DB::table('student_subjects as ss')
+            ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+            ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('ss.subject_id', $subjectIds)
+            ->whereIn('ss.semester_id', $semesterCodes)
+            ->where('st.student_status_code', 11)
+            ->select(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id) as gs_key"), DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+            ->groupBy(DB::raw("CONCAT(st.group_id, '|', ss.subject_id, '|', ss.semester_id)"))
+            ->pluck('cnt', 'gs_key');
+
+        // Zaxira: guruh bo'yicha talabalar soni
         $studentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
             ->where('student_status_code', 11)
@@ -271,8 +295,28 @@ class SendAttendanceGroupSummary extends Command
 
             if (!isset($grouped[$key])) {
                 $semCode = max((int) ($sch->semester_code ?? 1), 1);
-                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
-                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+                // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi; shuningdek fan nomi bo'yicha chiqarilganlar
+                $subjectNameLower = mb_strtolower($sch->subject_name ?? '');
+                $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes)
+                    || (!empty($gradeExcludedSubjectPatterns) && collect($gradeExcludedSubjectPatterns)
+                        ->contains(fn($p) => str_contains($subjectNameLower, mb_strtolower($p))));
+
+                // Fanga biriktirilgan talabalar soni (student_subjects), topilmasa guruh soni
+                $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
+                $totalStudents = $subjectStudentCounts[$gsKey] ?? ($studentCounts[$sch->group_id] ?? 0);
+
+                // Baho qo'yilgan talabalar soni
+                $gradedBySchedule = $gradeCountByScheduleId[$sch->schedule_hemis_id] ?? 0;
+                $gradedByComposite = $gradeCountByKey[$gradeKey] ?? 0;
+                $gradedCount = max($gradedBySchedule, $gradedByComposite);
+
+                if ($skipGradeCheck) {
+                    $hasGrade = null;
+                    $missingGradeCount = 0;
+                } else {
+                    $hasGrade = $gradedCount >= $totalStudents;
+                    $missingGradeCount = max(0, $totalStudents - $gradedCount);
+                }
 
                 $grouped[$key] = [
                     'employee_name' => $sch->employee_name,
@@ -285,9 +329,11 @@ class SendAttendanceGroupSummary extends Command
                     'group_name' => $sch->group_name,
                     'training_type' => $sch->training_type_name,
                     'lesson_pair_time' => $pairTime,
-                    'student_count' => $studentCounts[$sch->group_id] ?? 0,
+                    'student_count' => $totalStudents,
                     'has_attendance' => $hasAtt,
-                    'has_grades' => $skipGradeCheck ? null : (isset($gradeByScheduleId[$sch->schedule_hemis_id]) || isset($gradeByKey[$gradeKey])),
+                    'has_grades' => $hasGrade,
+                    'graded_count' => $gradedCount,
+                    'missing_grade_count' => $missingGradeCount,
                     'lesson_date' => $sch->lesson_date_str,
                     'kurs' => $sch->level_code ? ((int) $sch->level_code % 10) : (int) ceil($semCode / 2),
                     'employee_id' => $sch->employee_id,
@@ -408,7 +454,7 @@ class SendAttendanceGroupSummary extends Command
                 $r['lesson_pair_time'],
                 $r['student_count'],
                 $r['has_attendance'],
-                $r['has_grades'],
+                $r['has_grades'] === null ? '-' : ($r['has_grades'] ? true : 'badge:red:Yo\'q (' . $r['missing_grade_count'] . ')'),
                 $now->format('H:i') . ' ' . $r['lesson_date'],
             ];
         }

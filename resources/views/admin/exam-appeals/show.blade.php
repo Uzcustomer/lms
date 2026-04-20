@@ -37,6 +37,13 @@
                 </div>
             @endif
 
+            @if(session('error'))
+                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg mb-5 flex items-center">
+                    <svg class="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    {{ session('error') }}
+                </div>
+            @endif
+
             {{-- ═══════ 1-QATOR: Talaba | Imtihon | Baho ═══════ --}}
             <div style="display: flex; gap: 10px; margin-bottom: 20px;">
 
@@ -261,30 +268,91 @@
                 @endif
             </div>
 
+            {{-- ═══════ Izohlar ═══════ --}}
+            @if($appeal->relationLoaded('comments'))
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-5" style="width: 50%;">
+                <div class="px-4 h-12 flex items-center rounded-t-xl" style="background-color: #1e40af;">
+                    <svg class="w-5 h-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                    <h3 class="text-base font-bold text-white">Izohlar ({{ $appeal->comments->count() }})</h3>
+                </div>
+                <div class="p-4">
+                    @if($appeal->comments->count() > 0)
+                        <div class="space-y-3 mb-4 max-h-96 overflow-y-auto">
+                            @foreach($appeal->comments->sortBy('created_at') as $comment)
+                                <div class="flex gap-3 {{ $comment->user_type === 'admin' ? '' : 'flex-row-reverse' }}">
+                                    <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white {{ $comment->user_type === 'admin' ? 'bg-indigo-600' : 'bg-green-600' }}">
+                                        {{ $comment->user_type === 'admin' ? 'A' : 'T' }}
+                                    </div>
+                                    <div class="max-w-[75%] {{ $comment->user_type === 'admin' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800' : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' }} border rounded-lg p-3">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="text-xs font-bold {{ $comment->user_type === 'admin' ? 'text-indigo-700 dark:text-indigo-300' : 'text-green-700 dark:text-green-300' }}">
+                                                {{ $comment->user_name }}
+                                            </span>
+                                            <span class="text-xs text-gray-400">{{ $comment->created_at->format('d.m.Y H:i') }}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{{ $comment->comment }}</p>
+                                        @if($comment->file_path)
+                                            <a href="{{ route('admin.exam-appeals.comment.download', $comment->id) }}"
+                                               class="inline-flex items-center gap-1 mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                {{ $comment->file_original_name }}
+                                            </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <p class="text-sm text-gray-400 dark:text-gray-500 mb-4">Hali izoh yo'q.</p>
+                    @endif
+
+                    {{-- Izoh yozish formasi --}}
+                    <form method="POST" action="{{ route('admin.exam-appeals.comment', $appeal->id) }}" class="flex gap-2"
+                          onsubmit="var v=document.getElementById('appeal-comment-input').value.trim(); if(v.length<3){alert('Izoh kamida 3 ta belgi bo\'lishi kerak');return false;}">
+                        @csrf
+                        <input type="text" name="comment" id="appeal-comment-input" minlength="3" maxlength="1000"
+                               class="flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                               placeholder="Izoh yozing...">
+                        <button type="submit"
+                                class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition flex-shrink-0">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                            Yuborish
+                        </button>
+                    </form>
+                    @error('comment')
+                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
+            @endif
+
             {{-- ═══════ Tasdiqlash / Rad etish ═══════ --}}
             @if(in_array($appeal->status, ['pending', 'reviewing']))
-                <div class="flex justify-end mb-6" x-data="{ showReject: false }">
+                <div class="flex justify-end mb-6" x-data="{ showReject: {{ $errors->has('review_comment') ? 'true' : 'false' }} }">
                     <div class="flex flex-col items-end gap-3">
                         <div class="flex gap-3">
                             <form method="POST" action="{{ route('admin.exam-appeals.approve', $appeal->id) }}"
-                                  onsubmit="return confirm('Apellyatsiyani qabul qilmoqchimisiz?')">
+                                  onsubmit="var ci=document.getElementById('appeal-comment-input'); if(ci){document.getElementById('approveCommentText').value=ci.value;} return confirm('Apellyatsiyani qabul qilmoqchimisiz?');">
                                 @csrf
+                                <input type="hidden" name="comment_text" id="approveCommentText">
                                 <button type="submit"
                                         class="inline-flex items-center px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                     Qabul qilish
                                 </button>
                             </form>
-                            <button @click="showReject = !showReject"
+                            <button @click="if (showReject) { $refs.rejectForm.requestSubmit() } else { showReject = true }"
                                     class="inline-flex items-center px-5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                 Rad etish
                             </button>
                         </div>
                         <div x-show="showReject" x-transition class="w-full max-w-md">
-                            <form method="POST" action="{{ route('admin.exam-appeals.reject', $appeal->id) }}"
+                            <form method="POST" action="{{ route('admin.exam-appeals.reject', $appeal->id) }}" x-ref="rejectForm"
+                                  onsubmit="var ci=document.getElementById('appeal-comment-input'); if(ci){this.querySelector('[name=comment_text]').value=ci.value;}"
                                   class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
                                 @csrf
+                                <input type="hidden" name="comment_text">
                                 <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Rad etish sababi</label>
                                 <textarea name="review_comment" rows="3" required minlength="5" maxlength="1000"
                                           class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-red-500 focus:ring-red-500 text-sm mb-2"

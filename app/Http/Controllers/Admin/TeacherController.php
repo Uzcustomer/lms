@@ -79,7 +79,20 @@ class TeacherController extends Controller
             ->orderBy('name')
             ->get();
         $roles = ProjectRole::staffRoles();
-        return view('admin.teachers.show', compact('teacher', 'departments', 'roles'));
+
+        // Tyutor guruhlari va talabalar
+        $tutorGroups = $teacher->groups()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($group) {
+                $group->students = \App\Models\Student::where('group_id', $group->group_hemis_id)
+                    ->orderBy('full_name')
+                    ->get();
+                return $group;
+            });
+
+        return view('admin.teachers.show', compact('teacher', 'departments', 'roles', 'tutorGroups'));
     }
 
     public function edit(Teacher $teacher)
@@ -177,10 +190,12 @@ class TeacherController extends Controller
         $roles = $request->input('roles', []);
         $isDean = in_array(ProjectRole::DEAN->value, $roles);
         $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
+        $isFirmResponsible = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $roles);
 
         $request->validate([
             'roles' => 'nullable|array',
             'roles.*' => 'in:' . implode(',', $validRoleValues),
+            'lavozim' => 'nullable|string|max:255',
             'dean_faculties' => [$isDean ? 'required' : 'nullable', 'array'],
             'dean_faculties.*' => 'exists:departments,department_hemis_id',
             'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
@@ -189,6 +204,19 @@ class TeacherController extends Controller
             'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
             'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
         ]);
+
+        $teacher->lavozim = $request->input('lavozim') ?: null;
+        if ($isFirmResponsible) {
+            $firmValue = $request->input('assigned_firm');
+            // Agar "other" tanlangan va yangi firma nomi kiritilgan bo'lsa
+            if ($firmValue === 'other' && $request->filled('firm_custom_name')) {
+                $firmValue = $request->input('firm_custom_name');
+            }
+            $teacher->assigned_firm = $firmValue;
+        } else {
+            $teacher->assigned_firm = null;
+        }
+        $teacher->save();
 
         try {
             foreach ($roles as $roleName) {

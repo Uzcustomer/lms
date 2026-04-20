@@ -90,29 +90,22 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        @unless($isExpelledPage ?? false)
                         <div class="filter-item" style="flex: 1; min-width: 220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
-                            <select id="department" class="select2" style="width: 100%;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.SH</label>
+                            <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." style="height:36px;border-radius:8px;border:1px solid #cbd5e1;font-size:0.8rem;" />
+                        </div>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Talaba toifasi</label>
+                            <select id="student_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($kafedras as $kafedra)
-                                    <option value="{{ $kafedra->department_id }}">{{ $kafedra->department_name }}</option>
+                                @foreach($studentTypes ?? [] as $type)
+                                    <option value="{{ $type->student_type_code }}">{{ $type->student_type_name }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        @else
-                        <div class="filter-item" style="flex: 1; min-width: 220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Talaba F.I.Sh</label>
-                            <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." />
-                        </div>
-                        @endunless
-                        <div class="filter-item" style="flex: 1; min-width: 280px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
-                            <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
-                        </div>
                         <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div class="toggle-switch active" id="current-semester-toggle" onclick="toggleSemester()">
+                            <div class="toggle-switch" id="current-semester-toggle" onclick="toggleSemester()">
                                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
                                 <span class="toggle-label">Joriy semestr</span>
                             </div>
@@ -120,23 +113,10 @@
                         <div class="filter-item" style="min-width: 380px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <div class="excel-dropdown" id="excel-dropdown">
-                                    <button type="button" id="btn-excel" class="btn-excel" onclick="toggleExcelMenu()" disabled>
-                                        <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                        Excel
-                                        <svg style="width:12px;height:12px;margin-left:2px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                    </button>
-                                    <div class="excel-menu" id="excel-menu">
-                                        <button type="button" onclick="downloadExcel('summary')">
-                                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                            Hisobotni yuklash
-                                        </button>
-                                        <button type="button" onclick="downloadExcel('full')">
-                                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V9.41a1 1 0 00-.29-.71l-4.41-4.41a1 1 0 00-.71-.29H7c-2 0-3 1-3 3z"/></svg>
-                                            To'liq yuklash
-                                        </button>
-                                    </div>
-                                </div>
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel('summary')" disabled>
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    Excel
+                                </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
@@ -195,8 +175,9 @@
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;"><a href="#" class="sort-link" data-sort="student_type_name">Toifa <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="debt_count">Qarzdor fanlar <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Qarzlar soni (curriculum da bor, academic records da yo'q)"><a href="#" class="sort-link" data-sort="debt_count">Qarzlar soni <span class="sort-icon active">&#9660;</span></a></th>
                                         @unless($isExpelledPage ?? false)
                                         <th><a href="#" class="sort-link" data-sort="lesson_days">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         @endunless
@@ -227,7 +208,7 @@
 
     <!-- Semester Grades Modal (2-chi modal — semestr baholar, ustiga ochiladi) -->
     <div id="semester-modal" class="modal-overlay" style="display:none;z-index:10001;" onclick="if(event.target===this)closeSemesterModal()">
-        <div class="modal-box" style="max-width:800px;">
+        <div class="modal-box" style="max-width:1100px;">
             <div class="modal-header">
                 <h3 id="semester-modal-title">Semester baholar</h3>
                 <button onclick="closeSemesterModal()" class="modal-close">&times;</button>
@@ -270,12 +251,11 @@
                 level_code: $('#level_code').val() || '',
                 semester_code: $('#semester_code').val() || '',
                 group: $('#group').val() || '',
-                department: $('#department').val() || '',
-                subject: $('#subject').val() || '',
                 student_status: $('#student_status').val() || '',
+                student_type: $('#student_type').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
                 min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
-                student_name: ($('#student_name').length ? ($('#student_name').val() || '') : ''),
+                student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
                 direction: currentDirection,
@@ -358,6 +338,14 @@
                 html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td style="text-align:center;">';
+                if (r.student_type_name) {
+                    var isAcMob = r.student_type_name.toLowerCase().indexOf('mobillik') !== -1 || r.student_type_name.toLowerCase().indexOf('mobil') !== -1;
+                    html += '<span style="background:' + (isAcMob ? '#fef3c7' : '#f1f5f9') + ';color:' + (isAcMob ? '#b45309' : '#475569') + ';border:1px solid ' + (isAcMob ? '#fcd34d' : '#cbd5e1') + ';border-radius:6px;padding:3px 7px;font-size:11px;font-weight:600;white-space:nowrap;">' + esc(r.student_type_name) + '</span>';
+                } else {
+                    html += '<span style="color:#94a3b8;font-size:12px;">—</span>';
+                }
+                html += '</td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-debt">' + r.debt_count + '</span></td>';
                 if (!isExpelledPage) {
@@ -373,7 +361,10 @@
             var r = reportData[idx];
             if (!r) return;
 
-            $('#modal-title').text(r.full_name + ' — Qarzdorliklar (' + r.debt_count + ' ta fan)');
+            // Qarzdorlik fanlarini saqlash (2-chi modal uchun)
+            currentDebtSubjects = r.debts || [];
+
+            $('#modal-title').text(r.full_name + ' — Qarzdorliklar');
 
             // Talaba info qismi
             var info = '<div class="info-grid">';
@@ -393,58 +384,8 @@
             html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Semestrlar</div>';
             html += '<div id="all-records-wrap" style="padding:0 20px 12px;"><div style="padding:20px;text-align:center;color:#94a3b8;"><i>Yuklanmoqda...</i></div></div>';
 
-            // Qarzdorliklar bo'limi
-            if (r.debts && r.debts.length) {
-                html += '<div style="padding:8px 20px 4px;font-weight:700;color:#dc2626;font-size:14px;border-top:2px solid #fee2e2;">Qarzdorliklar (' + r.debt_count + ' ta fan)</div>';
-
-                if (isExpelledPage) {
-                    html += '<table class="detail-table">';
-                    html += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Holat</th></tr></thead>';
-                    html += '<tbody>';
-                    var rowNum = 0;
-                    for (var d = 0; d < r.debts.length; d++) {
-                        var debt = r.debts[d];
-                        rowNum++;
-                        html += '<tr>';
-                        html += '<td>' + rowNum + '</td>';
-                        html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(debt.semester_name) + '</span></td>';
-                        html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(debt.subject_name) + '</td>';
-                        html += '<td>' + esc(debt.credit) + '</td>';
-                        html += '<td>' + esc(debt.total_acload) + '</td>';
-                        html += '<td><span class="reason-badge">Academic record yo\'q</span></td>';
-                        html += '</tr>';
-                    }
-                    html += '</tbody></table>';
-                } else {
-                    html += '<table class="detail-table">';
-                    html += '<thead><tr><th>#</th><th>Fan</th><th>JB</th><th>MT</th><th>ON</th><th>JN%</th><th>OSKI</th><th>Test</th><th>Davomat</th><th>Sabab</th><th>Jurnal</th></tr></thead>';
-                    html += '<tbody>';
-                    for (var d = 0; d < r.debts.length; d++) {
-                        var debt = r.debts[d];
-                        html += '<tr>';
-                        html += '<td>' + (d + 1) + '</td>';
-                        html += '<td style="font-weight:600;color:#0f172a;min-width:160px;">' + esc(debt.subject_name) + '</td>';
-                        var minL = debt.minimum_limit || 60;
-                        html += '<td class="' + (debt.jb < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.jb + '</td>';
-                        html += '<td class="' + (debt.mt < minL ? 'cell-fail' : 'cell-pass') + '">' + debt.mt + '</td>';
-                        html += '<td class="' + (debt.on !== null && debt.on < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.on !== null ? debt.on : '-') + '</td>';
-                        html += '<td class="' + (debt.jn_percent < minL ? 'cell-fail' : 'cell-pass') + '" style="font-weight:700;">' + debt.jn_percent + '</td>';
-                        html += '<td class="' + (debt.oski !== null && debt.oski < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.oski !== null ? debt.oski : '-') + '</td>';
-                        html += '<td class="' + (debt.test !== null && debt.test < minL ? 'cell-fail' : 'cell-pass') + '">' + (debt.test !== null ? debt.test : '-') + '</td>';
-                        html += '<td class="' + (debt.absence_percent > 25 ? 'cell-fail' : 'cell-pass') + '">' + debt.absence_percent + '%</td>';
-                        html += '<td>';
-                        var reasons = debt.reasons || [];
-                        for (var ri = 0; ri < reasons.length; ri++) {
-                            html += '<span class="reason-badge">' + esc(reasons[ri]) + '</span>';
-                        }
-                        html += '</td>';
-                        var jUrl = journalBase + '/' + encodeURIComponent(debt.group_id) + '/' + encodeURIComponent(debt.subject_id) + '/' + encodeURIComponent(debt.semester_code);
-                        html += '<td style="text-align:center;"><a href="' + jUrl + '" target="_blank" class="journal-link-modal">Jurnal</a></td>';
-                        html += '</tr>';
-                    }
-                    html += '</tbody></table>';
-                }
-            }
+            // Qarzdorliklar bo'limi — AJAX orqali yuklanadi
+            html += '<div id="grade-debts-wrap" style="display:none;"></div>';
 
             $('#modal-body').html(html);
             $('#detail-modal').fadeIn(150);
@@ -456,7 +397,7 @@
         function loadAllAcademicRecords(studentId, studentName, groupName) {
             $.ajax({
                 url: '{{ route("admin.reports.student-all-records") }}',
-                data: { student_id: studentId, group_name: groupName },
+                data: { student_id: studentId, group_name: groupName, current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' },
                 success: function(resp) {
                     var semesters = resp.semesters || [];
                     if (!semesters.length) {
@@ -474,6 +415,39 @@
                     }
                     gh += '</div>';
                     $('#all-records-wrap').html(gh);
+
+                    var debtsAll = resp.grade_debts || [];
+
+                    var dh = '<div style="border-top:2px solid #e2e8f0;">';
+                    dh += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
+                    dh += '<span style="font-weight:700;color:#dc2626;font-size:13px;">Qarzlar soni: ' + debtsAll.length + ' ta fan</span>';
+                    dh += '</div>';
+
+                    if (debtsAll.length === 0) {
+                        dh += '<div style="padding:12px 20px;color:#16a34a;font-size:13px;">Qarzdorlik yo\'q</div>';
+                    } else {
+                        dh += '<table class="detail-table">';
+                        dh += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th>';
+                        dh += '</tr></thead><tbody>';
+                        for (var i = 0; i < debtsAll.length; i++) {
+                            var row = debtsAll[i];
+                            dh += '<tr>';
+                            dh += '<td>' + (i+1) + '</td>';
+                            dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(row.semester_name) + '</span></td>';
+                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name) + '</td>';
+                            dh += '<td>' + esc(row.credit) + '</td>';
+                            dh += '<td>' + esc(row.total_acload) + '</td>';
+                            dh += '</tr>';
+                        }
+                        dh += '</tbody></table>';
+                    }
+                    dh += '</div>';
+
+                    var currentTitle = $('#modal-title').text().split(' — ')[0];
+                    $('#modal-title').text(currentTitle + ' — Qarzlar: ' + debtsAll.length + ' ta fan');
+
+                    $('#grade-debts-wrap').html(dh).show();
+                    currentDebtSubjects = debtsAll;
                 },
                 error: function() {
                     $('#all-records-wrap').html('<div style="padding:12px;color:#ef4444;">Xatolik yuz berdi</div>');
@@ -489,6 +463,9 @@
             $('#semester-modal').fadeOut(150);
         }
 
+        // 1-chi modaldagi qarzdorlik fanlari (showDetail dan saqlanadi)
+        var currentDebtSubjects = [];
+
         function openSemGradesModal(headerRow) {
             var $header = $(headerRow);
             var studentId = $header.data('student');
@@ -498,9 +475,15 @@
             var groupName = $header.data('group') || '';
 
             // 2-chi modalni ochish (1-chi modal yopilmaydi)
-            $('#semester-modal-title').text(studentName + ' — ' + semesterName);
+            $('#semester-modal-title').html(esc(studentName) + ' &mdash; <span style="color:#a5b4fc;">' + esc(groupName) + '</span> &mdash; ' + esc(semesterName));
             $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#c7d2fe;"><i>Yuklanmoqda...</i></div>');
             $('#semester-modal').fadeIn(150);
+
+            // 1-chi modaldagi shu semestrga tegishli qarzdorlik fan nomlari
+            var debtNamesForSemester = [];
+            for (var di = 0; di < currentDebtSubjects.length; di++) {
+                debtNamesForSemester.push(currentDebtSubjects[di].subject_name ? currentDebtSubjects[di].subject_name.trim().toLowerCase() : '');
+            }
 
             $.ajax({
                 url: '{{ route("admin.reports.student-semester-grades") }}',
@@ -511,24 +494,42 @@
                         $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
                         return;
                     }
+
+                    // Birinchi modaldagi fanlarni belgilash uchun
+                    var academicSubjectNames = [];
+                    for (var ag = 0; ag < grades.length; ag++) {
+                        academicSubjectNames.push((grades[ag].subject_name || '').trim().toLowerCase());
+                    }
+
                     var gh = '<div style="padding:4px 0;">';
                     gh += '<table class="detail-table" style="margin:0;">';
-                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th></tr></thead><tbody>';
+                    gh += '<thead><tr><th>#</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th><th>Ball</th><th>Baho</th><th>Holat</th></tr></thead><tbody>';
                     for (var g = 0; g < grades.length; g++) {
                         var gr = grades[g];
-                        var point = gr.total_point || '-';
-                        var grade = gr.grade || '-';
-                        var gradeClass = (point !== '-' && parseFloat(point) >= 60) ? 'cell-pass' : 'cell-fail';
-                        gh += '<tr style="background:#fff;">';
+                        var isDebt = gr.is_debt || false;
+                        var point = (!isDebt && gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
+                        var grade = (!isDebt && gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
+                        var gradeClass = isDebt ? 'cell-fail' : 'cell-pass';
+                        var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
+                        gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
                         gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
                         gh += '<td>' + esc(gr.credit) + '</td>';
                         gh += '<td>' + esc(gr.total_acload) + '</td>';
                         gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
-                        gh += '<td><span class="badge badge-indigo">' + esc(grade) + '</span></td>';
+                        gh += '<td>' + (isDebt ? '<span style="color:#94a3b8;">—</span>' : '<span class="badge badge-indigo">' + esc(grade) + '</span>') + '</td>';
+                        gh += '<td>';
+                        if (isDebt) {
+                            gh += '<span class="reason-badge">Qarzdor</span>';
+                        } else {
+                            gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';
+                        }
+                        gh += '</td>';
                         gh += '</tr>';
                     }
-                    gh += '</tbody></table></div>';
+                    gh += '</tbody></table>';
+
+                    gh += '</div>';
                     $('#semester-modal-body').html(gh);
                 },
                 error: function(xhr) {
@@ -541,21 +542,7 @@
             });
         }
 
-        function toggleExcelMenu() {
-            var menu = document.getElementById('excel-menu');
-            menu.classList.toggle('show');
-        }
-
-        // Close excel menu when clicking outside
-        document.addEventListener('click', function(e) {
-            var dropdown = document.getElementById('excel-dropdown');
-            if (dropdown && !dropdown.contains(e.target)) {
-                document.getElementById('excel-menu').classList.remove('show');
-            }
-        });
-
         function downloadExcel(type) {
-            document.getElementById('excel-menu').classList.remove('show');
             var params = getFilters();
             params.export = type;
             var query = $.param(params);
@@ -607,28 +594,24 @@
             });
 
             // Cascading dropdowns
-            function fp() { var df=document.getElementById('dekan_faculty_id'); return { education_type: $('#education_type').val()||'', faculty_id: df ? df.value : ($('#faculty').val()||''), specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
+            function fp() { var df=document.getElementById('dekan_faculty_id'); return { education_type: $('#education_type').val()||'', faculty_id: df ? df.value : ($('#faculty').val()||''), specialty_id: $('#specialty').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
             function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
             function pd(url, p, el, cb) { $.get(url, p, function(d) { $.each(d, function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb) cb(); }); }
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
             function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
-            function rSubj() { rd('#subject'); pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
 
-            $('#education_type').change(function() { rSpec(); rSubj(); rGrp(); });
-            $('#faculty').change(function() { rSpec(); rSubj(); rGrp(); });
-            $('#department').change(function() { rSubj(); rGrp(); });
+            $('#education_type').change(function() { rSpec(); rGrp(); });
+            $('#faculty').change(function() { rSpec(); rGrp(); });
             $('#specialty').change(function() { rGrp(); });
-            $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rSubj(); rGrp(); });
-            $('#semester_code').change(function() { rSubj(); rGrp(); });
-            $('#subject').change(function() { rGrp(); });
+            $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rGrp(); });
+            $('#semester_code').change(function() { rGrp(); });
 
             // Init dropdowns
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
             pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
-            pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject');
             pd('{{ route("admin.journal.get-groups") }}', fp(), '#group');
         });
     </script>

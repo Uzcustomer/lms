@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Apellyatsiya topshirish
+            {{ __('Apellyatsiya topshirish') }}
         </h2>
     </x-slot>
 
@@ -15,8 +15,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                     </svg>
                     <div>
-                        <p class="text-xs text-purple-700 font-medium">Imtihon natijasiga e'tiroz bildirish uchun apellyatsiya topshiring.</p>
-                        <p class="text-[11px] text-purple-500 mt-0.5">Baho qo'yilganidan 24 soat ichida apellyatsiya topshirish mumkin. Muddati o'tgan baholarga apellyatsiya berish imkoni yo'q.</p>
+                        <p class="text-xs text-purple-700 font-medium">{{ __('Imtihon natijasiga e\'tiroz bildirish uchun apellyatsiya topshiring.') }}</p>
+                        <p class="text-[11px] text-purple-500 mt-0.5">{{ __('Baho qo\'yilganidan 24 soat ichida apellyatsiya topshirish mumkin. Muddati o\'tgan baholarga apellyatsiya berish imkoni yo\'q.') }}</p>
                     </div>
                 </div>
             </div>
@@ -37,10 +37,10 @@
                 {{-- Baho turi filter --}}
                 @if(!$grades->isEmpty())
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">Baho turi</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1.5">{{ __('Baho turi') }}</label>
                         <select x-model="typeFilter"
                                 class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                            <option value="">Barcha turlar</option>
+                            <option value="">{{ __('Barcha turlar') }}</option>
                             @foreach($grades->pluck('training_type_name')->filter()->unique()->values() as $typeName)
                                 <option value="{{ $typeName }}">{{ $typeName }}</option>
                             @endforeach
@@ -51,12 +51,12 @@
                 {{-- Baholar ro'yxati --}}
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">
-                        Bahoni tanlang <span class="text-red-500">*</span>
+                        {{ __('Bahoni tanlang') }} <span class="text-red-500">*</span>
                     </label>
 
                     @if($grades->isEmpty())
                         <div class="px-4 py-3 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs">
-                            Hozircha baholar topilmadi.
+                            {{ __('Hozircha baholar topilmadi.') }}
                         </div>
                     @else
                         <div class="space-y-2 max-h-[400px] overflow-y-auto rounded-xl border border-gray-200 p-2">
@@ -105,7 +105,7 @@
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
-                                                Qo'yilgan: {{ $g['graded_at'] }}
+                                                {{ __('Qo\'yilgan:') }} {{ $g['graded_at'] }}
                                             </span>
                                         @endif
                                     </div>
@@ -117,7 +117,7 @@
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
-                                                Apellyatsiya mumkin
+                                                {{ __('Apellyatsiya mumkin') }}
                                             </span>
                                         </div>
                                     @else
@@ -126,7 +126,7 @@
                                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                                 </svg>
-                                                Muddat tugagan (24 soat)
+                                                {{ __('Muddat tugagan (24 soat)') }}
                                             </span>
                                         </div>
                                     @endif
@@ -153,13 +153,13 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                             </div>
-                            <h3 class="text-base font-bold text-gray-800 mb-1">Muddat tugagan</h3>
-                            <p class="text-sm text-gray-500 text-center">Baho qo'yilganidan 24 soat o'tgan. Faqat 24 soat ichida apellyatsiya topshirish mumkin.</p>
+                            <h3 class="text-base font-bold text-gray-800 mb-1">{{ __('Muddat tugagan') }}</h3>
+                            <p class="text-sm text-gray-500 text-center">{{ __('Baho qo\'yilganidan 24 soat o\'tgan. Faqat 24 soat ichida apellyatsiya topshirish mumkin.') }}</p>
                         </div>
                         <div class="px-5 pb-4 pt-1">
                             <button @click="showErrorModal = false"
                                     class="w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition">
-                                Tushundim
+                                {{ __('Tushundim') }}
                             </button>
                         </div>
                     </div>
@@ -168,17 +168,17 @@
                 {{-- 2. Sabab --}}
                 <div x-show="selectedGradeId" x-transition>
                     <label for="reason" class="block text-sm font-semibold text-gray-700 mb-1.5">
-                        Apellyatsiya sababi <span class="text-red-500">*</span>
+                        {{ __('Apellyatsiya sababi') }} <span class="text-red-500">*</span>
                     </label>
                     <textarea name="reason" id="reason" rows="5" required minlength="20" maxlength="2000"
-                              placeholder="Nima uchun bu bahoga e'tiroz bildiryapsiz? Batafsil yozing..."
+                              placeholder="{{ __('Nima uchun bu bahoga e\'tiroz bildiryapsiz? Batafsil yozing...') }}"
                               x-on:input="charCount = $el.value.length"
                               class="w-full rounded-xl border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 @error('reason') border-red-300 @enderror">{{ old('reason') }}</textarea>
                     <div class="flex justify-between mt-1">
                         @error('reason')
                             <p class="text-xs text-red-600">{{ $message }}</p>
                         @else
-                            <p class="text-[11px] text-gray-400">Kamida 20 ta belgi</p>
+                            <p class="text-[11px] text-gray-400">{{ __('Kamida 20 ta belgi') }}</p>
                         @enderror
                         <p class="text-[11px] text-gray-400"><span x-text="charCount"></span>/2000</p>
                     </div>
@@ -187,7 +187,7 @@
                 {{-- 3. Fayl yuklash --}}
                 <div x-show="selectedGradeId" x-transition>
                     <label for="file" class="block text-sm font-semibold text-gray-700 mb-1.5">
-                        Qo'shimcha hujjat <span class="text-gray-400 font-normal">(ixtiyoriy)</span>
+                        {{ __('Qo\'shimcha hujjat') }} <span class="text-gray-400 font-normal">{{ __('(ixtiyoriy)') }}</span>
                     </label>
                     <div class="relative">
                         <input type="file" name="file" id="file" accept=".pdf,.jpg,.jpeg,.png"
@@ -196,7 +196,7 @@
                     @error('file')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                     @else
-                        <p class="mt-1 text-[11px] text-gray-400">PDF, JPG, PNG. Maksimum 5MB.</p>
+                        <p class="mt-1 text-[11px] text-gray-400">{{ __('PDF, JPG, PNG. Maksimum 5MB.') }}</p>
                     @enderror
                 </div>
 
@@ -207,7 +207,7 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
                         </svg>
-                        Apellyatsiya topshirish
+                        {{ __('Apellyatsiya topshirish') }}
                     </button>
                 </div>
             </form>

@@ -114,6 +114,25 @@
                             </button>
                         </div>
                     </div>
+                    <!-- Row 3: OSKI sanasi va Test sanasi filtrlari -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#7c3aed;"></span> OSKI sanasi (dan)</label>
+                            <input type="text" id="oski_date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#7c3aed;"></span> OSKI sanasi (gacha)</label>
+                            <input type="text" id="oski_date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0891b2;"></span> Test sanasi (dan)</label>
+                            <input type="text" id="test_date_from" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                        <div class="filter-item" style="min-width: 145px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0891b2;"></span> Test sanasi (gacha)</label>
+                            <input type="text" id="test_date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Results -->
@@ -154,6 +173,10 @@
                                 @php $rowIndex = 0; @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
+                                        @php
+                                            $oskiSaved = !empty($item['oski_date']) || $item['oski_na'];
+                                            $testSaved = !empty($item['test_date']) || $item['test_na'];
+                                        @endphp
                                         <tr class="data-row">
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
@@ -176,36 +199,118 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
-                                                    <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
-                                                        <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
-                                                               value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}"
-                                                               data-hidden="oski_h_{{ $rowIndex }}"
-                                                               maxlength="10" autocomplete="off" />
-                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $item['oski_date'] }}" />
-                                                    </div>
-                                                    <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
-                                                        <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
-                                                               {{ $item['oski_na'] ? 'checked' : '' }}
-                                                               onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
-                                                        <span class="na-label">N/A</span>
-                                                    </label>
+                                                    @if($oskiSaved && !($canEdit ?? false))
+                                                        {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
+                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
+                                                            <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
+                                                                   value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}"
+                                                                   maxlength="10" autocomplete="off" readonly
+                                                                   title="Saqlangan sana o'zgartirib bo'lmaydi" />
+                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $item['oski_date'] }}" />
+                                                        </div>
+                                                        <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
+                                                                   {{ $item['oski_na'] ? 'checked' : '' }} disabled>
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
+                                                        @if($item['oski_na'])
+                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
+                                                        @endif
+                                                        <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
+                                                        @if($canDelete)
+                                                        <button type="button" class="clear-date-btn" title="OSKI sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'oski')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                        @endif
+                                                    @elseif($oskiSaved && ($canEdit ?? false))
+                                                        {{-- Saqlangan lekin o'zgartirish mumkin (boshlig'i/admin) --}}
+                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
+                                                            <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
+                                                                   class="exam-sc-date" autocomplete="off"
+                                                                   data-initial-value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('Y-m-d') : '' }}" />
+                                                        </div>
+                                                        <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
+                                                                   {{ $item['oski_na'] ? 'checked' : '' }}
+                                                                   onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
+                                                        @if($canDelete)
+                                                        <button type="button" class="clear-date-btn" title="OSKI sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'oski')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                        @endif
+                                                    @else
+                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}">
+                                                            <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
+                                                                   class="exam-sc-date" autocomplete="off" />
+                                                        </div>
+                                                        <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
+                                                                   onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
+                                                    @endif
                                                 </div>
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
-                                                    <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
-                                                        <input type="text" class="date-input-masked" placeholder="kk.oo.yyyy"
-                                                               value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}"
-                                                               data-hidden="test_h_{{ $rowIndex }}"
-                                                               maxlength="10" autocomplete="off" />
-                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $item['test_date'] }}" />
-                                                    </div>
-                                                    <label class="na-toggle" title="Bu fan uchun Test yo'q">
-                                                        <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
-                                                               {{ $item['test_na'] ? 'checked' : '' }}
-                                                               onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
-                                                        <span class="na-label">N/A</span>
-                                                    </label>
+                                                    @if($testSaved && !($canEdit ?? false))
+                                                        {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
+                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
+                                                            <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
+                                                                   value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}"
+                                                                   maxlength="10" autocomplete="off" readonly
+                                                                   title="Saqlangan sana o'zgartirib bo'lmaydi" />
+                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $item['test_date'] }}" />
+                                                        </div>
+                                                        <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
+                                                                   {{ $item['test_na'] ? 'checked' : '' }} disabled>
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
+                                                        @if($item['test_na'])
+                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
+                                                        @endif
+                                                        <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
+                                                        @if($canDelete)
+                                                        <button type="button" class="clear-date-btn" title="Test sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'test')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                        @endif
+                                                    @elseif($testSaved && ($canEdit ?? false))
+                                                        {{-- Saqlangan lekin o'zgartirish mumkin (boshlig'i/admin) --}}
+                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
+                                                            <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
+                                                                   class="exam-sc-date" autocomplete="off"
+                                                                   data-initial-value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('Y-m-d') : '' }}" />
+                                                        </div>
+                                                        <label class="na-toggle" title="Bu fan uchun Test yo'q">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
+                                                                   {{ $item['test_na'] ? 'checked' : '' }}
+                                                                   onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
+                                                        @if($canDelete)
+                                                        <button type="button" class="clear-date-btn" title="Test sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'test')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                        @endif
+                                                    @else
+                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}">
+                                                            <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
+                                                                   class="exam-sc-date" autocomplete="off" />
+                                                        </div>
+                                                        <label class="na-toggle" title="Bu fan uchun Test yo'q">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
+                                                                   onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
+                                                    @endif
                                                 </div>
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
@@ -249,6 +354,15 @@
         </div>
     </div>
 
+    {{-- O'chirish form'i - asosiy store form'idan tashqarida (ichma-ich form HTML da ruxsat etilmaydi) --}}
+    <form id="clear-date-form" method="POST" action="{{ route(($routePrefix ?? 'admin') . '.academic-schedule.clear-date') }}" style="display:none;">
+        @csrf
+        <input type="hidden" name="group_hemis_id" id="clear-group-hemis-id">
+        <input type="hidden" name="subject_id" id="clear-subject-id">
+        <input type="hidden" name="semester_code" id="clear-semester-code">
+        <input type="hidden" name="date_type" id="clear-date-type">
+    </form>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -256,6 +370,16 @@
     <script src="/js/scroll-calendar.js"></script>
 
     <script>
+        function clearExamDate(groupHemisId, subjectId, semesterCode, dateType) {
+            var typeLabel = dateType === 'oski' ? 'OSKI' : 'Test';
+            if (!confirm(typeLabel + ' sanasini o\'chirishni tasdiqlaysizmi?')) return;
+            document.getElementById('clear-group-hemis-id').value = groupHemisId;
+            document.getElementById('clear-subject-id').value = subjectId;
+            document.getElementById('clear-semester-code').value = semesterCode;
+            document.getElementById('clear-date-type').value = dateType;
+            document.getElementById('clear-date-form').submit();
+        }
+
         var isUpdatingFilters = false;
         var filterUrl = '{{ route($routePrefix . ".academic-schedule.get-filter-options") }}';
 
@@ -267,7 +391,8 @@
             level_code: '{{ $selectedLevelCode ?? '' }}',
             semester_code: '{{ $selectedSemester ?? '' }}',
             group_id: '{{ $selectedGroup ?? '' }}',
-            subject_id: '{{ $selectedSubject ?? '' }}'
+            subject_id: '{{ $selectedSubject ?? '' }}',
+            current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0'
         };
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
@@ -282,16 +407,21 @@
         function toggleSemester() {
             var btn = document.getElementById('current-semester-toggle');
             btn.classList.toggle('active');
+            // Toggle o'zgarganda filtrlarni qayta yuklash
+            if (!isUpdatingFilters) loadAllFilters();
         }
 
         function toggleNa(checkbox, wrapId) {
             var wrap = document.getElementById(wrapId);
             if (checkbox.checked) {
                 wrap.style.display = 'none';
-                var txt = wrap.querySelector('.date-input-masked');
-                var hid = wrap.querySelector('input[type="hidden"]');
-                if (txt) { txt.value = ''; txt.classList.remove('date-error'); }
-                if (hid) hid.value = '';
+                // SC input tozalash
+                var scHidden = wrap.querySelector('input[type="hidden"].exam-sc-date');
+                var scDisplay = wrap.querySelector('.sc-wrap .date-input');
+                var scClear = wrap.querySelector('.sc-clear');
+                if (scHidden) scHidden.value = '';
+                if (scDisplay) scDisplay.value = '';
+                if (scClear) scClear.style.display = 'none';
             } else {
                 wrap.style.display = '';
             }
@@ -346,6 +476,15 @@
                 if (day > maxDay) err = month + '-oyda ' + maxDay + ' kun bor';
             }
             if (year < 2020 || year > 2040) err = 'Yil 2020-2040 orasida bo\'lishi kerak';
+            if (!err) {
+                // Cheklov 2: imtihon sanasi kamida ertadan bo'lishi kerak
+                var today = new Date();
+                today.setHours(0, 0, 0, 0);
+                var inputDate = new Date(year, month - 1, day);
+                if (inputDate <= today) {
+                    err = 'Imtihon sanasi kamida ertadan bo\'lishi kerak (bugun qo\'yib bo\'lmaydi)';
+                }
+            }
             if (err) {
                 inp.classList.add('date-error');
                 inp.title = err;
@@ -523,6 +662,10 @@
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
             var dateFrom = $('#date_from').val();
             var dateTo = $('#date_to').val();
+            var oskiDateFrom = $('#oski_date_from').val();
+            var oskiDateTo = $('#oski_date_to').val();
+            var testDateFrom = $('#test_date_from').val();
+            var testDateTo = $('#test_date_to').val();
             if (et) url.searchParams.set('education_type', et);
             if (dept) url.searchParams.set('department_id', dept);
             if (spec) url.searchParams.set('specialty_id', spec);
@@ -533,6 +676,10 @@
             if (status) url.searchParams.set('status', status);
             if (dateFrom) url.searchParams.set('date_from', dateFrom);
             if (dateTo) url.searchParams.set('date_to', dateTo);
+            if (oskiDateFrom) url.searchParams.set('oski_date_from', oskiDateFrom);
+            if (oskiDateTo) url.searchParams.set('oski_date_to', oskiDateTo);
+            if (testDateFrom) url.searchParams.set('test_date_from', testDateFrom);
+            if (testDateTo) url.searchParams.set('test_date_to', testDateTo);
             url.searchParams.set('current_semester', cs);
             window.location.href = url.toString();
         }
@@ -555,15 +702,38 @@
             // Scroll calendar for date filters
             var calFrom = new ScrollCalendar('date_from');
             var calTo = new ScrollCalendar('date_to');
+            var calOskiFrom = new ScrollCalendar('oski_date_from');
+            var calOskiTo = new ScrollCalendar('oski_date_to');
+            var calTestFrom = new ScrollCalendar('test_date_from');
+            var calTestTo = new ScrollCalendar('test_date_to');
             @if(request()->get('date_from'))
                 calFrom.setValue('{{ request()->get("date_from") }}');
             @endif
             @if(request()->get('date_to'))
                 calTo.setValue('{{ request()->get("date_to") }}');
             @endif
+            @if(request()->get('oski_date_from'))
+                calOskiFrom.setValue('{{ request()->get("oski_date_from") }}');
+            @endif
+            @if(request()->get('oski_date_to'))
+                calOskiTo.setValue('{{ request()->get("oski_date_to") }}');
+            @endif
+            @if(request()->get('test_date_from'))
+                calTestFrom.setValue('{{ request()->get("test_date_from") }}');
+            @endif
+            @if(request()->get('test_date_to'))
+                calTestTo.setValue('{{ request()->get("test_date_to") }}');
+            @endif
 
-            // dd.mm.yyyy mask ishga tushirish
-            initDateMask();
+            // Jadval sana inputlari uchun ScrollCalendar ishga tushirish
+            document.querySelectorAll('.exam-sc-date').forEach(function(inp) {
+                var sc = new ScrollCalendar(inp.id);
+                // Agar saqlangan sana mavjud bo'lsa (canEdit rejimida) — qiymatni o'rnatish
+                var initialVal = inp.getAttribute('data-initial-value');
+                if (initialVal) {
+                    sc.setValue(initialVal);
+                }
+            });
 
             // Sort funksiyasi
             initTableSort();
@@ -571,12 +741,13 @@
             // Form submit da validatsiya
             $('form').on('submit', function(e) {
                 var hasError = false;
-                document.querySelectorAll('.date-input-masked').forEach(function(inp) {
+                // Faqat tahrirlash mumkin bo'lgan inputlarni tekshirish (readonly emas)
+                document.querySelectorAll('.date-input-masked:not([readonly])').forEach(function(inp) {
                     if (!validateDateInput(inp)) hasError = true;
                 });
                 if (hasError) {
                     e.preventDefault();
-                    alert('Sana formatida xatolik bor. Iltimos, tekshiring (kk.oo.yyyy).');
+                    alert('Sana xatosi: format noto\'g\'ri yoki imtihon sanasi bugun/o\'tgan kun qo\'yilgan.\nImtihon sanasi kamida ertadan bo\'lishi kerak (kk.oo.yyyy).');
                 }
             });
         });
@@ -642,5 +813,11 @@
         .na-toggle input[type="checkbox"] { width: 14px; height: 14px; accent-color: #ef4444; cursor: pointer; margin: 0; }
         .na-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.03em; }
         .na-toggle input:checked + .na-label { color: #ef4444; }
+        .date-input-locked { background: #f1f5f9 !important; color: #64748b !important; cursor: not-allowed !important; border-color: #e2e8f0 !important; }
+        .date-input-locked:hover { border-color: #e2e8f0 !important; box-shadow: none !important; }
+        .na-toggle-locked { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+        .lock-icon { font-size: 12px; flex-shrink: 0; opacity: 0.6; }
+        .clear-date-btn { background: none; border: none; cursor: pointer; padding: 2px 3px; color: #ef4444; opacity: 0.7; line-height: 1; border-radius: 4px; flex-shrink: 0; }
+        .clear-date-btn:hover { opacity: 1; background: #fee2e2; }
     </style>
 </x-app-layout>

@@ -168,8 +168,9 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="grade">Joriy bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="lesson_date">Dars sanasi <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="grade">JN o'rtacha <span class="sort-icon active">&#9650;</span></a></th>
+                                        <th>Darslar</th>
+                                        <th><a href="#" class="sort-link" data-sort="lesson_date">Oxirgi dars <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;">Jurnal</th>
                                     </tr>
                                 </thead>
@@ -188,8 +189,8 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'lesson_date';
-        let currentDirection = 'desc';
+        let currentSort = 'grade';
+        let currentDirection = 'asc';
         let currentPage = 1;
 
         function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
@@ -304,6 +305,7 @@
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
                 html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
                 html += '<td><span class="badge ' + gradeClass(r.grade, scoreLimit) + '">' + r.grade + '</span></td>';
+                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + (r.days_count || '-') + '</td>';
                 html += '<td style="text-align:center;font-weight:600;color:#475569;">' + esc(r.lesson_date) + '</td>';
                 html += '<td style="text-align:center;"><a href="' + journalUrl + '" target="_blank" class="journal-link">Ko\'rish</a></td>';
                 html += '</tr>';

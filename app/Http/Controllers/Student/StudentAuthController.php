@@ -106,6 +106,15 @@ class StudentAuthController extends Controller
 
         Auth::guard('student')->login($student);
         $request->session()->regenerate();
+
+        // Xalqaro talabalar uchun default ingliz tili
+        if (!$request->session()->has('locale')) {
+            if (str_starts_with(strtolower($student->group_name ?? ''), 'xd') ||
+                str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy')) {
+                $request->session()->put('locale', 'en');
+            }
+        }
+
         ActivityLogService::logLogin('student');
 
         Log::channel('student_auth')->info('[LOGIN SUCCESS] Talaba lokal parol bilan kirdi', [
@@ -235,6 +244,15 @@ class StudentAuthController extends Controller
 
         Auth::guard('student')->login($student);
         $request->session()->regenerate();
+
+        // Xalqaro talabalar uchun default ingliz tili
+        if (!$request->session()->has('locale')) {
+            if (str_starts_with(strtolower($student->group_name ?? ''), 'xd') ||
+                str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy')) {
+                $request->session()->put('locale', 'en');
+            }
+        }
+
         ActivityLogService::logLogin('student');
 
         if ($student->must_change_password) {
@@ -337,7 +355,11 @@ class StudentAuthController extends Controller
         ]);
 
         $student = Auth::guard('student')->user();
+        $isNewPhone = empty($student->phone);
         $student->phone = $request->phone;
+        if ($isNewPhone || !$student->phone_added_at) {
+            $student->phone_added_at = now();
+        }
         $student->save();
 
         $days = Setting::get('telegram_deadline_days', 7);
@@ -357,7 +379,7 @@ class StudentAuthController extends Controller
         $student = Auth::guard('student')->user();
         $student->telegram_username = $request->telegram_username;
 
-        $code = strtoupper(Str::random(6));
+        $code = \App\Http\Controllers\TelegramWebhookController::generateVerificationCode();
         $student->telegram_verification_code = $code;
         $student->telegram_verified_at = null;
         $student->telegram_chat_id = null;

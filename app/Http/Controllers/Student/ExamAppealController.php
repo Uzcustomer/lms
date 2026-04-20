@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\ExamAppeal;
+use App\Models\ExamAppealComment;
 use App\Models\StudentGrade;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -136,11 +137,48 @@ class ExamAppealController extends Controller
     public function show($id)
     {
         $student = Auth::guard('student')->user();
-        $appeal = ExamAppeal::where('id', $id)
+        $eagerLoad = Schema::hasTable('exam_appeal_comments') ? ['comments'] : [];
+        $appeal = ExamAppeal::with($eagerLoad)
+            ->where('id', $id)
             ->where('student_id', $student->id)
             ->firstOrFail();
 
         return view('student.appeals.show', compact('appeal'));
+    }
+
+    public function addComment(Request $request, $id)
+    {
+        $request->validate([
+            'comment' => ['required', 'string', 'min:3', 'max:1000'],
+            'file' => ['nullable', 'file', 'max:2048', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip'],
+        ], [
+            'comment.required' => 'Izoh yozing.',
+            'comment.min' => 'Izoh kamida 3 ta belgidan iborat bo\'lishi kerak.',
+        ]);
+
+        $student = Auth::guard('student')->user();
+        $appeal = ExamAppeal::where('id', $id)
+            ->where('student_id', $student->id)
+            ->firstOrFail();
+
+        $data = [
+            'exam_appeal_id' => $appeal->id,
+            'user_type' => 'student',
+            'user_id' => $student->id,
+            'user_name' => $student->full_name ?? 'Talaba',
+            'comment' => $request->comment,
+        ];
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $data['file_path'] = $file->store('appeal-comments', 'public');
+            $data['file_original_name'] = $file->getClientOriginalName();
+        }
+
+        ExamAppealComment::create($data);
+
+        return redirect()->route('student.appeals.show', $appeal->id)
+            ->with('success', 'Izoh qo\'shildi.');
     }
 
     public function download($id)
@@ -155,5 +193,19 @@ class ExamAppealController extends Controller
         }
 
         return Storage::disk('public')->download($appeal->file_path, $appeal->file_original_name);
+    }
+
+    public function downloadCommentFile($id)
+    {
+        $student = Auth::guard('student')->user();
+        $comment = ExamAppealComment::whereHas('appeal', function ($q) use ($student) {
+            $q->where('student_id', $student->id);
+        })->findOrFail($id);
+
+        if (!$comment->file_path || !Storage::disk('public')->exists($comment->file_path)) {
+            abort(404, 'Fayl topilmadi.');
+        }
+
+        return Storage::disk('public')->download($comment->file_path, $comment->file_original_name);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Exports\StudentGradeBox;
 use App\Exports\StudentGradesExport;
 use App\Exports\StudentGradesExportAdmin;
+use App\Exports\StudentsExport;
 use App\Http\Controllers\Controller;
 use App\Imports\StudentGradeUpdateViaExcel;
 use App\Services\ActivityLogService;
@@ -24,7 +25,10 @@ use App\Models\Semester;
 use App\Models\Specialty;
 use App\Models\StudentGrade;
 use App\Models\Setting;
+use App\Models\StaffRegistrationDivision;
 use App\Models\StudentPerformance;
+use App\Models\Teacher;
+use App\Models\TutorHistory;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
@@ -90,6 +94,10 @@ class StudentController extends Controller
             $query->where('education_type_code', $request->education_type);
         }
 
+        if ($request->filled('country')) {
+            $query->where('country_name', $request->country);
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->paginate($perPage)->appends($request->query());
 
@@ -99,7 +107,13 @@ class StudentController extends Controller
             ->orderBy('education_type_name')
             ->get();
 
-        return view('admin.students.index', compact('students', 'educationTypes'));
+        $countries = Student::whereNotNull('country_name')
+            ->where('country_name', '!=', '')
+            ->distinct()
+            ->orderBy('country_name')
+            ->pluck('country_name');
+
+        return view('admin.students.index', compact('students', 'educationTypes', 'countries'));
     }
 
     public function getFilterDepartments(Request $request)
@@ -216,7 +230,47 @@ class StudentController extends Controller
         }
         $canToggleFive = in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'dekan']);
 
-        return view('admin.students.show', compact('student', 'canToggleFive'));
+        // Registrator ofisi xodimlari (front/back ofis)
+        $frontOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'front_office'
+        );
+        $backOffice = StaffRegistrationDivision::findForStudent(
+            $student->department_id, $student->specialty_id, $student->level_code, 'back_office'
+        );
+
+        // Hozirgi tyutor (group_teacher orqali)
+        $currentTutor = null;
+        if ($student->group_id) {
+            $group = Group::where('group_hemis_id', $student->group_id)->first();
+            if ($group) {
+                $currentTutor = $group->teachers()->first();
+            }
+        }
+
+        // Tyutor tarixi
+        $tutorHistory = collect();
+
+        // Viza ma'lumotlari (firma belgilash uchun)
+        $visaInfo = \App\Models\StudentVisaInfo::where('student_id', $student->id)->first();
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('tutor_history')) {
+            $tutorHistory = TutorHistory::where('student_id', $student->id)
+                ->orderBy('assigned_at', 'desc')
+                ->get();
+        }
+
+        $canUploadFiles = in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin']);
+        $studentFiles = collect();
+        if ($canUploadFiles && \Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+            $studentFiles = $student->files()->latest()->get();
+        }
+
+        $admissionData = null;
+        if ($canUploadFiles && \Illuminate\Support\Facades\Schema::hasTable('student_admission_data')) {
+            $admissionData = \App\Models\StudentAdmissionData::where('student_id', $student->id)->first();
+        }
+
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo', 'canUploadFiles', 'studentFiles', 'admissionData'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)
@@ -310,6 +364,262 @@ class StudentController extends Controller
         }
     }
 
+
+    public function uploadFile(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl yuklash huquqi yo'q.");
+        }
+
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+            return back()->with('error', "student_files jadvali topilmadi. Iltimos, migratsiyani ishga tushiring: php artisan migrate");
+        }
+
+        $request->validate([
+            'file' => 'required|file|max:10240',
+            'file_name' => 'required|string|max:255',
+        ]);
+
+        try {
+            $file = $request->file('file');
+            $path = $file->store('student-files/' . $student->id, 'public');
+
+            \App\Models\StudentFile::create([
+                'student_id' => $student->id,
+                'name' => $request->file_name,
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $user?->id,
+            ]);
+
+            return back()->with('success', "Fayl muvaffaqiyatli yuklandi.");
+        } catch (\Exception $e) {
+            Log::error('Fayl yuklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Fayl yuklashda xatolik yuz berdi: " . $e->getMessage());
+        }
+    }
+
+    public function downloadFile(Student $student, \App\Models\StudentFile $file)
+    {
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        if (!$disk->exists($file->path)) {
+            return back()->with('error', "Fayl topilmadi.");
+        }
+
+        return $disk->download($file->path, $file->original_name);
+    }
+
+    public function deleteFile(Student $student, \App\Models\StudentFile $file)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl o'chirish huquqi yo'q.");
+        }
+
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        \Illuminate\Support\Facades\Storage::disk('public')->delete($file->path);
+        $file->delete();
+
+        return back()->with('success', "Fayl muvaffaqiyatli o'chirildi.");
+    }
+
+    public function saveAdmissionData(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda bu ma'lumotlarni saqlash huquqi yo'q.");
+        }
+
+        $data = $request->only([
+            'familya', 'ism', 'otasining_ismi', 'tugilgan_sana', 'jshshir', 'jinsi',
+            'tel1', 'tel2', 'email', 'millat',
+            'tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman',
+            'yashash_davlat', 'yashash_viloyat', 'yashash_tuman', 'yashash_manzil',
+            'vaqtinchalik_manzil',
+            'passport_seriya', 'passport_raqam', 'passport_sana', 'passport_joy',
+            'abituriyent_id', 'javoblar_varaqasi', 'talim_tili', 'imtihon_alifbosi',
+            'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik', 'hozirgi_talim_turi',
+            'toplagan_ball', 'tavsiya_turi', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',
+            'talim_davlat', 'talim_viloyat', 'talim_tuman', 'oqigan_yili_boshi', 'oqigan_yili_tugashi',
+            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat', 'chet_til_sertifikat', 'chet_til_ball',
+            'ota_familiya', 'ota_ismi', 'ota_sharifi', 'ota_tel', 'ota_ish_joyi', 'ota_lavozimi',
+            'ona_familiya', 'ona_ismi', 'ona_sharifi', 'ona_tel', 'ona_ish_joyi', 'ona_lavozimi',
+        ]);
+
+        foreach (['tugilgan_sana', 'passport_sana'] as $df) {
+            if (empty($data[$df])) {
+                $data[$df] = null;
+            }
+        }
+
+        $skipUpper = ['tugilgan_sana', 'passport_sana', 'email'];
+        foreach ($data as $key => $val) {
+            if (is_string($val) && !in_array($key, $skipUpper)) {
+                $data[$key] = mb_strtoupper($val, 'UTF-8');
+            }
+        }
+
+        $data['otm_nomi'] = 'Toshkent davlat tibbiyot universiteti Termiz filiali';
+        unset($data['doimiy_manzil'], $data['updated_by']);
+
+        try {
+            $columns = \Illuminate\Support\Facades\Schema::getColumnListing('student_admission_data');
+            $data = array_intersect_key($data, array_flip($columns));
+
+            \App\Models\StudentAdmissionData::updateOrCreate(
+                ['student_id' => $student->id],
+                $data
+            );
+        } catch (\Exception $e) {
+            \Log::error('Admission data save error: ' . $e->getMessage());
+            return back()->withInput()->with('error', "Ma'lumotlarni saqlashda xatolik: " . $e->getMessage())->with('active_tab', 'qabul');
+        }
+
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $name => $file) {
+                if (!$file || !$file->isValid()) continue;
+                try {
+                    $oldFile = \App\Models\StudentFile::where('student_id', $student->id)->where('name', $name)->first();
+                    if ($oldFile) {
+                        \Illuminate\Support\Facades\Storage::disk('public')->delete($oldFile->path);
+                    }
+                    $path = $file->store('student-files/' . $student->id, 'public');
+                    \App\Models\StudentFile::updateOrCreate(
+                        ['student_id' => $student->id, 'name' => $name],
+                        [
+                            'original_name' => $file->getClientOriginalName(),
+                            'path' => $path,
+                            'mime_type' => $file->getClientMimeType(),
+                            'size' => $file->getSize(),
+                            'uploaded_by' => $user?->id,
+                        ]
+                    );
+                } catch (\Exception $e) {
+                    \Log::error("File upload error [{$name}]: " . $e->getMessage());
+                }
+            }
+        }
+
+        return back()->with('success', "Qabul ma'lumotlari saqlandi.")->with('active_tab', 'qabul');
+    }
+
+    public function uploadAdmissionFile(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl yuklash huquqi yo'q.");
+        }
+
+        $request->validate([
+            'admission_file' => 'required|file|max:20480|mimes:pdf,jpg,jpeg,png',
+            'admission_file_name' => 'required|string|max:255',
+        ]);
+
+        try {
+            $file = $request->file('admission_file');
+            $path = $file->store('student-files/' . $student->id, 'public');
+
+            \App\Models\StudentFile::create([
+                'student_id' => $student->id,
+                'name' => $request->admission_file_name,
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+                'uploaded_by' => $user?->id,
+            ]);
+
+            return back()->with('success', "Fayl muvaffaqiyatli yuklandi.");
+        } catch (\Exception $e) {
+            Log::error('Qabul fayl yuklashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Fayl yuklashda xatolik: " . $e->getMessage());
+        }
+    }
+
+    public function deleteAdmissionFile(Student $student, \App\Models\StudentFile $file)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl o'chirish huquqi yo'q.");
+        }
+
+        if ($file->student_id !== $student->id) {
+            abort(404);
+        }
+
+        \Illuminate\Support\Facades\Storage::disk('public')->delete($file->path);
+        $file->delete();
+
+        return back()->with('success', "Fayl o'chirildi.")->with('active_tab', 'qabul');
+    }
+
+    public function clearAdmissionData(Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda tozalash huquqi yo'q.");
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+
+        $files = \App\Models\StudentFile::where('student_id', $student->id)->get();
+        foreach ($files as $file) {
+            $disk->delete($file->path);
+            $file->delete();
+        }
+
+        $disk->deleteDirectory('student-files/' . $student->id);
+
+        \App\Models\StudentAdmissionData::where('student_id', $student->id)->delete();
+
+        return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.");
+    }
 
     public function getCurricula(Request $request)
     {
@@ -469,6 +779,29 @@ class StudentController extends Controller
 
     public function studentGradesWeek(Request $request)
     {
+        // Journal uslubidagi filtrlar uchun ma'lumotlar
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $faculties = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        $kafedras = DB::table('curriculum_subjects as cs')
+            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+            ->whereNotNull('cs.department_id')
+            ->whereNotNull('cs.department_name')
+            ->where('g.department_active', true)
+            ->where('g.active', true)
+            ->select('cs.department_id', 'cs.department_name')
+            ->groupBy('cs.department_id', 'cs.department_name')
+            ->orderBy('cs.department_name')
+            ->get();
+
         $departments = Department::where('structure_type_code', 11)->orderBy('id', 'desc')->get();
         $level_codes = collect(['11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs', '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs']);
         $groups = collect();
@@ -482,45 +815,33 @@ class StudentController extends Controller
 
         $viewType = $request->input('viewType', 'week');
 
-        if ($request->filled('department')) {
-            $department = Department::findOrFail($request->department);
-            $groups = $department->groups;
-        }
-        if (isset($request->level_code)) {
-            $level_code = $request->level_code;
-            $group_ids = Student::where('level_code', $level_code)
-                ->where('student_status_code', '11') // faqat "O'qimoqda" statusidagi talabalar
-                ->pluck('group_id')
-                ->unique()
-                ->toArray();
-            if ($groups->isNotEmpty() && count($groups)) {
-                $groups = $groups->whereIn('group_hemis_id', $group_ids);
-            }else{
-                $groups = Group::whereIn('group_hemis_id', $group_ids)->get();
+        if ($request->filled(['group', 'semester_code', 'subject'])) {
+            $group = Group::findOrFail($request->group);
+
+            // semester_code va group orqali semesterni topish
+            $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('code', $request->semester_code)
+                ->firstOrFail();
+
+            // subject = subject_id (hemis), CurriculumSubject ni topish
+            $subject = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('subject_id', $request->subject)
+                ->where('semester_code', $request->semester_code)
+                ->first();
+
+            if (!$subject) {
+                $subject = CurriculumSubject::where('subject_id', $request->subject)
+                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                    ->first();
             }
-        }
 
-        if ($request->filled('group')) {
-            $group = Group::findOrFail($request->group);
-            if ($semesters->isEmpty() && count($semesters)) {
-                $semesters = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)->get();
-            }else{
-                $semesters = $semesters->where('curriculum_hemis_id', $group->curriculum_hemis_id);
+            if (!$subject) {
+                return view('admin.students.week-grades', compact(
+                    'departments', 'educationTypes', 'faculties', 'kafedras',
+                    'level_codes', 'groups', 'semesters', 'subjects', 'students',
+                    'weeks', 'dates', 'subject', 'viewType', 'teacherName'
+                ));
             }
-        }
-
-        if ($request->filled('semester') && $request->filled('group')) {
-            $group = Group::findOrFail($request->group);
-            $semester = Semester::findOrFail($request->semester);
-            $subjects = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
-                ->where('semester_code', $semester->code)
-                ->get();
-        }
-
-        if ($request->filled(['group', 'semester', 'subject'])) {
-            $group = Group::findOrFail($request->group);
-            $semester = Semester::findOrFail($request->semester);
-            $subject = CurriculumSubject::findOrFail($request->subject);
 
             // Education year code aniqlash (jurnal bilan bir xil mantiq)
             $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
@@ -729,6 +1050,9 @@ class StudentController extends Controller
             // dd($averageGradesForSubject);
             return view('admin.students.week-grades', compact(
                 'departments',
+                'educationTypes',
+                'faculties',
+                'kafedras',
                 'level_codes',
                 'groups',
                 'semesters',
@@ -746,6 +1070,9 @@ class StudentController extends Controller
 
         return view('admin.students.week-grades', compact(
             'departments',
+            'educationTypes',
+            'faculties',
+            'kafedras',
             'level_codes',
             'groups',
             'semesters',
@@ -880,7 +1207,7 @@ class StudentController extends Controller
     public function exportStudentGrades(Request $request)
     {
         ActivityLogService::log('export', 'student_grade', 'Talaba baholari eksport qilindi');
-        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject']);
+        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject', 'semester_code']);
         return Excel::download(new StudentGradesExportAdmin($filters), 'student_grades.xlsx');
     }
 
@@ -894,9 +1221,22 @@ class StudentController extends Controller
     public function exportStudentGradesBox(Request $request)
     {
         ActivityLogService::log('export', 'student_grade', 'Talaba baholari (box) eksport qilindi');
-        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject']);
+        $filters = $request->only(['department', 'level_code', 'group', 'semester', 'subject', 'semester_code']);
         $export = new StudentGradeBox($filters);
         return $export->export();
+    }
+
+    public function exportStudents(Request $request)
+    {
+        ini_set('memory_limit', '512M');
+        set_time_limit(300);
+        ActivityLogService::log('export', 'student', 'Talabalar ro\'yxati eksport qilindi');
+        $filters = $request->only([
+            'student_id_number', 'full_name', 'level_code', 'semester_code',
+            'department', 'specialty', 'group', 'education_type',
+        ]);
+        $filename = 'talabalar_' . now()->format('Y-m-d_H-i') . '.xlsx';
+        return Excel::download(new StudentsExport($filters), $filename);
     }
 
 

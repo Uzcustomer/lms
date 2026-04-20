@@ -24,7 +24,8 @@ class ImportSchedulesPartiallyJob implements ShouldQueue, ShouldBeUnique
 
     public function __construct(
         public string $date_from,
-        public string $date_to
+        public string $date_to,
+        public string $user_name = ''
     )
     {
     }
@@ -34,7 +35,7 @@ class ImportSchedulesPartiallyJob implements ShouldQueue, ShouldBeUnique
         $from = Carbon::parse($this->date_from);
         $to = Carbon::parse($this->date_to);
 
-        $service->importBetween($from, $to);
+        $service->importBetween($from, $to, $this->user_name);
     }
 
     public function failed(Throwable $exception): void

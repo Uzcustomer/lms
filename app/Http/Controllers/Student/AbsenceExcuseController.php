@@ -14,6 +14,7 @@ use App\Models\Schedule;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
+use App\Services\SubjectMatcherService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -53,7 +54,69 @@ class AbsenceExcuseController extends Controller
         $endDate = Carbon::parse($request->end_date);
         $groupId = $student->group_id;
 
+        // 1. Sababli kunlar oralig'idagi nazoratlar
         $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+
+        // 1.1. Avvalgi tasdiqlangan arizadagi rejalashtirilgan lekin bajarilmagan
+        //     retake'lar — agar ularning makeup_date i yangi sababli oraliqqa tushsa.
+        //     (Masalan: avval sababli bo'lgan, 6-kunga retake olgan, lekin 6-kuni
+        //      yana sababli bo'lib testni topshirolmagan — shu test yangi arizada
+        //      ham ko'rinishi va qayta retake qilish imkoni berilishi kerak)
+        $previousMakeups = $this->findUncompletedMakeupsInRange($student->id, $startDate, $endDate);
+        $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+
+        foreach ($previousMakeups as $prev) {
+            $key = $prev['subject_name'] . '|' . $prev['assessment_type'] . '|' . $prev['original_date'];
+            if (!in_array($key, $existingKeys)) {
+                $missedAssessments->push($prev);
+                $existingKeys[] = $key;
+            }
+        }
+
+        // Qoldirilgan kunlardagi fanlar ro'yxati (subject_id + subject_name bo'yicha)
+        $scheduledSubjects = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->select('subject_id', 'subject_name')
+            ->distinct()
+            ->get();
+        $missedSubjectIds = array_unique(array_merge(
+            $missedAssessments->pluck('subject_id')->filter()->unique()->toArray(),
+            $scheduledSubjects->pluck('subject_id')->filter()->unique()->toArray()
+        ));
+        $missedSubjectNames = array_unique(array_map('mb_strtolower', array_merge(
+            $missedAssessments->pluck('subject_name')->unique()->toArray(),
+            $scheduledSubjects->pluck('subject_name')->unique()->toArray()
+        )));
+
+        // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan nazoratlar
+        // Faqat qoldirilgan fanlardagi testlar ko'rsatiladi
+        $totalDays = $this->countNonSundays($startDate, $endDate);
+        if ($totalDays > 0) {
+            $makeupEnd = $this->addNonSundayDays(Carbon::today()->copy(), $totalDays);
+
+            // endDate dan keyingi kundan makeupEnd gacha qidirish
+            $searchStart = $endDate->copy()->addDay();
+            if ($searchStart->lte($makeupEnd)) {
+                $makeupAssessments = $this->findMissedAssessments($groupId, $searchStart, $makeupEnd);
+
+                $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
+
+                foreach ($makeupAssessments as $ma) {
+                    $matchById = !empty($ma['subject_id']) && in_array($ma['subject_id'], $missedSubjectIds);
+                    $matchByName = in_array(mb_strtolower($ma['subject_name']), $missedSubjectNames);
+                    if (!$matchById && !$matchByName) {
+                        continue;
+                    }
+                    $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];
+                    if (!in_array($key, $existingKeys)) {
+                        $ma['is_makeup_period'] = true;
+                        $missedAssessments->push($ma);
+                        $existingKeys[] = $key;
+                    }
+                }
+            }
+        }
 
         // Shu muddat ichidagi barcha darslardan unique fanlarni olish (JN uchun)
         $jnSubjects = Schedule::where('group_id', $groupId)
@@ -159,16 +222,21 @@ class AbsenceExcuseController extends Controller
         // Har bir makeup uchun sana mavjudligini tekshirish
         $makeupDates = $request->input('makeup_dates', []);
         foreach ($makeupDates as $i => $makeup) {
+            // Topshirilgan bo'lsa (barcha nazorat turlari uchun), sana talab qilinmaydi
+            if (!empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1') {
+                continue;
+            }
+
             if (($makeup['assessment_type'] ?? '') === 'jn') {
                 if (empty($makeup['makeup_start']) || empty($makeup['makeup_end'])) {
                     return back()->withErrors([
-                        "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang',
+                        "makeup_dates.{$i}.makeup_start" => ($makeup['subject_name'] ?? 'JN') . ' uchun sana oralig\'ini tanlang yoki "Topshirilgan" tugmasini bosing',
                     ])->withInput();
                 }
             } else {
                 if (empty($makeup['makeup_date'])) {
                     return back()->withErrors([
-                        "makeup_dates.{$i}.makeup_date" => ($makeup['subject_name'] ?? 'Nazorat') . ' uchun qayta topshirish sanasini tanlang',
+                        "makeup_dates.{$i}.makeup_date" => ($makeup['subject_name'] ?? 'Nazorat') . ' uchun qayta topshirish sanasini tanlang yoki "Topshirilgan" tugmasini bosing',
                     ])->withInput();
                 }
             }
@@ -197,32 +265,66 @@ class AbsenceExcuseController extends Controller
 
             // Makeup sanalarni saqlash
             foreach ($makeupDates as $makeup) {
-                // JN uchun makeup_start, boshqalar uchun makeup_date
-                $dateToSave = ($makeup['assessment_type'] === 'jn')
-                    ? ($makeup['makeup_start'] ?? $makeup['makeup_date'])
-                    : $makeup['makeup_date'];
+                $isJn = ($makeup['assessment_type'] ?? '') === 'jn';
+                $isSubmitted = !empty($makeup['jn_submitted']) && $makeup['jn_submitted'] === '1';
 
-                $parsedDate = Carbon::parse($dateToSave);
-                if ($parsedDate->isSunday()) {
-                    throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
-                }
-
+                // Topshirilgan bo'lsa, sanasiz saqlaymiz
+                $dateToSave = null;
                 $makeupEndDate = null;
-                if (($makeup['assessment_type'] ?? '') === 'jn' && !empty($makeup['makeup_end'])) {
-                    $makeupEndDate = $makeup['makeup_end'];
+
+                if ($isSubmitted) {
+                    // Topshirilgan — sana kerak emas, original_date ni saqlaymiz
+                    $dateToSave = $makeup['original_date'];
+                } elseif ($isJn) {
+                    $dateToSave = $makeup['makeup_start'] ?? $makeup['makeup_date'];
+                    if (!empty($makeup['makeup_end'])) {
+                        $makeupEndDate = $makeup['makeup_end'];
+                    }
+                } else {
+                    $dateToSave = $makeup['makeup_date'];
                 }
+
+                if (!$isSubmitted) {
+                    $parsedDate = Carbon::parse($dateToSave);
+                    if ($parsedDate->isSunday()) {
+                        throw new \RuntimeException('Yakshanba kunini tanlash mumkin emas.');
+                    }
+                }
+
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $makeup['subject_id'] ?? null;
+                $matchResult = SubjectMatcherService::resolveSubjectId(
+                    $makeup['subject_name'],
+                    $resolvedSubjectId,
+                    $student
+                );
+                if ($matchResult) {
+                    $resolvedSubjectId = $matchResult['subject_id'];
+                }
+
+                // Avvalgi arizadagi shu testga tegishli (scheduled) makeup'ni topib,
+                // 'missed' ga o'zgartirish — yangi makeup uni almashtiradi.
+                // Bu kelajakda dublikat bo'lmasligi va eski makeup'ni "bajarilmagan" deb belgilash uchun.
+                AbsenceExcuseMakeup::where('student_id', $student->id)
+                    ->where('subject_name', $makeup['subject_name'])
+                    ->where('assessment_type', $makeup['assessment_type'])
+                    ->where('original_date', $makeup['original_date'])
+                    ->where('status', 'scheduled')
+                    ->where('jn_submitted', false)
+                    ->update(['status' => 'missed']);
 
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
                     'subject_name' => $makeup['subject_name'],
-                    'subject_id' => $makeup['subject_id'] ?? null,
+                    'subject_id' => $resolvedSubjectId,
                     'assessment_type' => $makeup['assessment_type'],
                     'assessment_type_code' => $makeup['assessment_type_code'],
                     'original_date' => $makeup['original_date'],
                     'makeup_date' => $dateToSave,
                     'makeup_end_date' => $makeupEndDate,
-                    'status' => 'scheduled',
+                    'jn_submitted' => $isSubmitted,
+                    'status' => $isSubmitted ? 'completed' : 'scheduled',
                 ]);
             }
 
@@ -255,11 +357,22 @@ class AbsenceExcuseController extends Controller
 
         if ($existingMakeups->isEmpty() && $missedAssessments->isNotEmpty()) {
             foreach ($missedAssessments as $assessment) {
+                // student_subjects orqali to'g'ri subject_id ni aniqlash
+                $resolvedSubjectId = $assessment['subject_id'];
+                $match = SubjectMatcherService::resolveSubjectId(
+                    $assessment['subject_name'],
+                    $assessment['subject_id'],
+                    $student
+                );
+                if ($match) {
+                    $resolvedSubjectId = $match['subject_id'];
+                }
+
                 AbsenceExcuseMakeup::create([
                     'absence_excuse_id' => $excuse->id,
                     'student_id' => $student->id,
                     'subject_name' => $assessment['subject_name'],
-                    'subject_id' => $assessment['subject_id'],
+                    'subject_id' => $resolvedSubjectId,
                     'assessment_type' => $assessment['assessment_type'],
                     'assessment_type_code' => $assessment['assessment_type_code'],
                     'original_date' => $assessment['original_date'],
@@ -432,6 +545,24 @@ class AbsenceExcuseController extends Controller
     }
 
     /**
+     * Bugundan boshlab N ta yakshanba bo'lmagan kun qo'shish
+     */
+    private function addNonSundayDays(Carbon $start, int $days): Carbon
+    {
+        $count = 0;
+        $d = $start->copy();
+        while ($count < $days) {
+            if ($d->dayOfWeek !== Carbon::SUNDAY) {
+                $count++;
+            }
+            if ($count < $days) {
+                $d->addDay();
+            }
+        }
+        return $d;
+    }
+
+    /**
      * Sana oralig'i bo'yicha o'tkazib yuborilgan nazoratlarni topish
      */
     private function findMissedAssessments($groupId, $startDate, $endDate)
@@ -516,16 +647,19 @@ class AbsenceExcuseController extends Controller
         $examSchedules = ExamSchedule::where('group_hemis_id', $groupId)
             ->where(function ($q) use ($startDate, $endDate) {
                 $q->where(function ($q2) use ($startDate, $endDate) {
-                    $q2->whereDate('oski_date', '>=', $startDate)
+                    $q2->whereNotNull('oski_date')
+                        ->whereDate('oski_date', '>=', $startDate)
                         ->whereDate('oski_date', '<=', $endDate);
                 })->orWhere(function ($q2) use ($startDate, $endDate) {
-                    $q2->whereDate('test_date', '>=', $startDate)
+                    $q2->whereNotNull('test_date')
+                        ->whereDate('test_date', '>=', $startDate)
                         ->whereDate('test_date', '<=', $endDate);
                 });
             })->get();
 
         foreach ($examSchedules as $es) {
-            if ($es->oski_date && $es->oski_date->between($startDate, $endDate)) {
+            // oski_na NULL yoki false bo'lsa — OSKI ko'rsatiladi
+            if (!$es->oski_na && $es->oski_date && $es->oski_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
                     'subject_id' => $es->subject_id,
@@ -534,7 +668,8 @@ class AbsenceExcuseController extends Controller
                     'original_date' => $es->oski_date->format('Y-m-d'),
                 ]);
             }
-            if ($es->test_date && $es->test_date->between($startDate, $endDate)) {
+            // test_na NULL yoki false bo'lsa — Test ko'rsatiladi
+            if (!$es->test_na && $es->test_date && $es->test_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
                     'subject_id' => $es->subject_id,
@@ -549,5 +684,42 @@ class AbsenceExcuseController extends Controller
         return $missedAssessments->unique(function ($item) {
             return $item['subject_name'] . '|' . $item['assessment_type'] . '|' . $item['original_date'];
         })->values();
+    }
+
+    /**
+     * Avvalgi arizalardagi `scheduled` holatdagi (bajarilmagan) retake'larni olish,
+     * agar ularning makeup_date i (yoki makeup oralig'i) berilgan sababli oraliqqa tushsa.
+     * Bu talaba sababli kun tufayli retake sanasida topshirolmagan testlarni
+     * (OSKI, Test, JN) yangi arizada qayta tanlashga imkon beradi.
+     */
+    private function findUncompletedMakeupsInRange($studentId, $startDate, $endDate)
+    {
+        return AbsenceExcuseMakeup::where('student_id', $studentId)
+            ->where('status', 'scheduled')
+            ->where('jn_submitted', false)
+            // Har ikki holatni qo'llab-quvvatlash:
+            //  1) OSKI/Test uchun: makeup_end_date NULL, faqat makeup_date bor (bitta kun)
+            //     → makeup_date sababli oraliqda bo'lishi kerak
+            //  2) JN uchun: makeup_date va makeup_end_date (oraliq) — agar bu oraliq
+            //     sababli oraliq bilan kesishsa, avvalgi retake'ni ko'rsatish
+            ->where(function ($q) use ($startDate, $endDate) {
+                // Overlap formula: range_start <= B AND COALESCE(range_end, range_start) >= A
+                $q->whereDate('makeup_date', '<=', $endDate)
+                  ->whereRaw('DATE(COALESCE(makeup_end_date, makeup_date)) >= ?', [$startDate->toDateString()]);
+            })
+            ->whereHas('absenceExcuse', function ($q) {
+                $q->whereIn('status', ['approved', 'pending']);
+            })
+            ->get()
+            ->map(fn($m) => [
+                'subject_name' => $m->subject_name,
+                'subject_id' => $m->subject_id,
+                'assessment_type' => $m->assessment_type,
+                'assessment_type_code' => $m->assessment_type_code,
+                'original_date' => Carbon::parse($m->original_date)->format('Y-m-d'),
+                'is_previous_makeup' => true,
+                'previous_makeup_date' => Carbon::parse($m->makeup_date)->format('Y-m-d'),
+                'previous_makeup_end_date' => $m->makeup_end_date ? Carbon::parse($m->makeup_end_date)->format('Y-m-d') : null,
+            ]);
     }
 }

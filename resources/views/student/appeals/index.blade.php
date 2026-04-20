@@ -1,7 +1,7 @@
 <x-student-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            Apellyatsiya arizalarim
+            {{ __('Apellyatsiya arizalarim') }}
         </h2>
     </x-slot>
 
@@ -14,7 +14,7 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                Yangi apellyatsiya
+                {{ __('Yangi apellyatsiya') }}
             </a>
         </div>
 
@@ -31,8 +31,8 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zm0 13.036h.008v.008H12v-.008z" />
                     </svg>
                 </div>
-                <p class="text-gray-500 text-sm">Hozircha apellyatsiya arizalari yo'q</p>
-                <p class="text-gray-400 text-xs mt-1">Imtihon natijalariga e'tiroz bildirish uchun yangi ariza topshiring</p>
+                <p class="text-gray-500 text-sm">{{ __('Hozircha apellyatsiya arizalari yo\'q') }}</p>
+                <p class="text-gray-400 text-xs mt-1">{{ __('Imtihon natijalariga e\'tiroz bildirish uchun yangi ariza topshiring') }}</p>
             </div>
         @else
             <div class="space-y-3">
@@ -45,7 +45,7 @@
                                 <p class="text-xs text-gray-500 mt-0.5">{{ $appeal->training_type_name }}</p>
                                 <div class="flex items-center gap-3 mt-2">
                                     <span class="text-xs text-gray-500">
-                                        Baho: <span class="font-bold text-gray-700">{{ $appeal->current_grade }}</span>
+                                        {{ __('Baho:') }} <span class="font-bold text-gray-700">{{ $appeal->current_grade }}</span>
                                     </span>
                                     @if($appeal->exam_date)
                                         <span class="text-xs text-gray-400">{{ $appeal->exam_date->format('d.m.Y') }}</span>

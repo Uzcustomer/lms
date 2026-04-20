@@ -3,7 +3,14 @@
 namespace App\Imports;
 
 use App\Models\AbsenceExcuse;
+use App\Models\AbsenceExcuseMakeup;
+use App\Models\ExamSchedule;
+use App\Models\ExamTest;
+use App\Models\OraliqNazorat;
+use App\Models\Oski;
+use App\Models\Schedule;
 use App\Models\Student;
+use App\Services\SubjectMatcherService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -116,7 +123,11 @@ class AbsenceExcuseImport implements ToCollection, WithHeadingRow, WithValidatio
                 $data['reviewed_at'] = now();
             }
 
-            AbsenceExcuse::create($data);
+            $excuse = AbsenceExcuse::create($data);
+
+            // Avtomatik ravishda o'tkazib yuborilgan nazoratlarni topib, makeup yaratish
+            $this->createMakeups($excuse, $student, $startDate, $endDate);
+
             $this->importedCount++;
         }
     }
@@ -148,6 +159,156 @@ class AbsenceExcuseImport implements ToCollection, WithHeadingRow, WithValidatio
         }
 
         throw new \Exception("Sana formati tanilmadi: {$value}");
+    }
+
+    /**
+     * Import qilingan ariza uchun o'tkazib yuborilgan nazoratlarni topib, makeup yozuvlarini yaratish
+     */
+    private function createMakeups(AbsenceExcuse $excuse, Student $student, Carbon $startDate, Carbon $endDate): void
+    {
+        $groupId = $student->group_id;
+        if (!$groupId) {
+            return;
+        }
+
+        $missedAssessments = $this->findMissedAssessments($groupId, $startDate, $endDate);
+
+        foreach ($missedAssessments as $assessment) {
+            // student_subjects orqali to'g'ri subject_id ni aniqlash
+            $resolvedSubjectId = $assessment['subject_id'];
+            $match = SubjectMatcherService::resolveSubjectId(
+                $assessment['subject_name'],
+                $assessment['subject_id'],
+                $student
+            );
+            if ($match) {
+                $resolvedSubjectId = $match['subject_id'];
+            }
+
+            AbsenceExcuseMakeup::create([
+                'absence_excuse_id' => $excuse->id,
+                'student_id' => $student->id,
+                'subject_name' => $assessment['subject_name'],
+                'subject_id' => $resolvedSubjectId,
+                'assessment_type' => $assessment['assessment_type'],
+                'assessment_type_code' => $assessment['assessment_type_code'],
+                'original_date' => $assessment['original_date'],
+                'status' => 'scheduled',
+            ]);
+        }
+    }
+
+    private function findMissedAssessments($groupId, Carbon $startDate, Carbon $endDate): Collection
+    {
+        $missedAssessments = collect();
+
+        // 1. Schedules jadvalidan (dars jadvali)
+        $schedules = Schedule::where('group_id', $groupId)
+            ->whereDate('lesson_date', '>=', $startDate)
+            ->whereDate('lesson_date', '<=', $endDate)
+            ->whereIn('training_type_code', [99, 100, 101, 102])
+            ->get();
+
+        $typeMap = [100 => 'jn', 99 => 'mt', 101 => 'oski', 102 => 'test'];
+
+        foreach ($schedules as $schedule) {
+            $assessmentType = $typeMap[$schedule->training_type_code] ?? null;
+            if ($assessmentType) {
+                $missedAssessments->push([
+                    'subject_name' => $schedule->subject_name,
+                    'subject_id' => $schedule->subject_id,
+                    'assessment_type' => $assessmentType,
+                    'assessment_type_code' => (string) $schedule->training_type_code,
+                    'original_date' => Carbon::parse($schedule->lesson_date)->format('Y-m-d'),
+                ]);
+            }
+        }
+
+        // 2. Oraliq nazoratlar (JN)
+        $oraliqNazorats = OraliqNazorat::where('group_hemis_id', $groupId)
+            ->whereDate('start_date', '>=', $startDate)
+            ->whereDate('start_date', '<=', $endDate)
+            ->get();
+
+        foreach ($oraliqNazorats as $on) {
+            $missedAssessments->push([
+                'subject_name' => $on->subject_name,
+                'subject_id' => $on->subject_hemis_id,
+                'assessment_type' => 'jn',
+                'assessment_type_code' => '100',
+                'original_date' => Carbon::parse($on->start_date)->format('Y-m-d'),
+            ]);
+        }
+
+        // 3. OSKI
+        $oskis = Oski::where('group_hemis_id', $groupId)
+            ->whereDate('start_date', '>=', $startDate)
+            ->whereDate('start_date', '<=', $endDate)
+            ->get();
+
+        foreach ($oskis as $oski) {
+            $missedAssessments->push([
+                'subject_name' => $oski->subject_name,
+                'subject_id' => $oski->subject_hemis_id,
+                'assessment_type' => 'oski',
+                'assessment_type_code' => '101',
+                'original_date' => Carbon::parse($oski->start_date)->format('Y-m-d'),
+            ]);
+        }
+
+        // 4. Yakuniy testlar
+        $examTests = ExamTest::where('group_hemis_id', $groupId)
+            ->whereDate('start_date', '>=', $startDate)
+            ->whereDate('start_date', '<=', $endDate)
+            ->get();
+
+        foreach ($examTests as $et) {
+            $missedAssessments->push([
+                'subject_name' => $et->subject_name,
+                'subject_id' => $et->subject_hemis_id,
+                'assessment_type' => 'test',
+                'assessment_type_code' => '102',
+                'original_date' => Carbon::parse($et->start_date)->format('Y-m-d'),
+            ]);
+        }
+
+        // 5. Imtihon jadvali (OSKI va Test sanalari)
+        $examSchedules = ExamSchedule::where('group_hemis_id', $groupId)
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->where(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereDate('oski_date', '>=', $startDate)
+                        ->whereDate('oski_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereDate('test_date', '>=', $startDate)
+                        ->whereDate('test_date', '<=', $endDate);
+                });
+            })->get();
+
+        foreach ($examSchedules as $es) {
+            if ($es->oski_date && $es->oski_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'oski',
+                    'assessment_type_code' => '101',
+                    'original_date' => $es->oski_date->format('Y-m-d'),
+                ]);
+            }
+            if ($es->test_date && $es->test_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'test',
+                    'assessment_type_code' => '102',
+                    'original_date' => $es->test_date->format('Y-m-d'),
+                ]);
+            }
+        }
+
+        // Duplikatlarni olib tashlash
+        return $missedAssessments->unique(function ($item) {
+            return $item['subject_name'] . '|' . $item['assessment_type'] . '|' . $item['original_date'];
+        })->values();
     }
 
     public function rules(): array

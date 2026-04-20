@@ -15,6 +15,9 @@ Artisan::command('inspire', function () {
 // 3. Davomat nazorati FINAL (import:attendance-controls --mode=final)
 Schedule::command('nightly:run')->dailyAt('00:30')->withoutOverlapping(180);
 
+// Kontraktlar importi — har kuni kechqurun 23:00 da HEMISdan yangilanadi
+Schedule::command('import:contracts')->dailyAt('23:00')->withoutOverlapping(60);
+
 // 04:00 da retry: FAQAT oldingi run xato bergan bo'lsa qayta ishlaydi
 Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(function () {
     $lastSuccess = \Illuminate\Support\Facades\Cache::get('final_import_last_success');
@@ -22,8 +25,27 @@ Schedule::command('student:import-data --mode=final')->dailyAt('04:00')->when(fu
 });
 Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 
+// Moodle quiz natijalarini har kuni avtomatik import qilish — har kuni ertalab 04:30 da
+// Ushbu cron LMS'da `moodle_sync_requested` flagini qo'yadi.
+// Moodle serverdagi cron (har 3 daqiqada `/moodle/should-sync` ga so'rov yuboradi)
+// flagni ko'radi va push skriptni ishga tushiradi — kechagi kun (oxirgi 24 soat)
+// quiz natijalari LMSga keladi.
+Schedule::command('moodle:trigger-sync')->dailyAt('04:30');
+
 // Akademik ma'lumotnoma: HEMIS dan academic records import (har kuni 02:00 da)
 Schedule::command('import:academic-records')->dailyAt('02:00')->withoutOverlapping(120);
+
+// Attendance backfill: oxirgi 30 kunlik davomatni HEMIS dan qayta sinxronlash.
+// Faqat o'zgargan yozuvlarni yangilaydi, qolganini skip qiladi.
+// Har kuni 03:00 da ishga tushadi, kichik tunggi vaqt — server bo'sh.
+Schedule::call(function () {
+    $from = Carbon::now()->subDays(30)->toDateString();
+    $to   = Carbon::yesterday()->toDateString();
+    \Illuminate\Support\Facades\Artisan::call('attendance:backfill', [
+        '--from' => $from,
+        '--to'   => $to,
+    ]);
+})->dailyAt('03:00')->name('attendance-backfill-monthly')->withoutOverlapping(180);
 
 // O'qituvchilarga davomat va baho eslatmalari (har kuni 13:00, 15:00, 17:00, 19:00, 21:00, 23:00)
 Schedule::command('teachers:send-reminders')->dailyAt('13:00');
@@ -52,5 +74,21 @@ Schedule::command('teachers:send-lesson-opening-reminders')->dailyAt('18:00');
 Schedule::command('students:send-exam-reminders')->dailyAt('08:00');
 Schedule::command('students:send-exam-reminders')->dailyAt('20:00');
 
+// Registrator ofisiga kutilmoqda sababli arizalar eslatmasi (har kuni 16:00 da)
+Schedule::command('absence-excuses:send-pending-reminder')->dailyAt('16:00');
+
+// Registrator ofisiga baho qo'yilmaganlar hisoboti — back ofis menejerlari kesimida (har kuni 08:30 da)
+Schedule::command('registrar:send-unrated-report')->dailyAt('08:30');
+
+// Xalqaro talabalar viza va registratsiya muddatlarini tekshirish (har kuni 09:00 da)
+Schedule::command('visa:check-expiry')->dailyAt('09:00');
+
+// HEMIS exam grades sync — baholarni HEMIS dan tortib hemis_exam_grades jadvaliga saqlash (har kuni 03:00 da)
+Schedule::command('hemis:sync-exam-grades')->dailyAt('03:00')->withoutOverlapping(120);
+
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)
+
+// Teacher dashboard snapshot — har kuni 05:00 da (nightly import va final retry 04:00 dan keyin).
+// Dashboardga kirganda og'ir hisob-kitob qilinmasligi uchun kechagi kun holati saqlab qo'yiladi.
+Schedule::command('teachers:build-dashboard-snapshots')->dailyAt('05:00')->withoutOverlapping(120);

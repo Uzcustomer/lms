@@ -319,7 +319,7 @@ class AbsenceReportController extends Controller
             ->where('student_hemis_id', $hemisId)
             ->select('subject_name', 'lesson_date', 'lesson_pair_name',
                 'lesson_pair_start_time', 'lesson_pair_end_time',
-                'absent_on', 'absent_off', 'semester_name')
+                'absent_on', 'absent_off', 'semester_name', 'training_type_name')
             ->orderBy('lesson_date', 'desc')
             ->orderBy('lesson_pair_start_time');
 
@@ -357,6 +357,7 @@ class AbsenceReportController extends Controller
                 'lesson_date' => $lessonDate,
                 'pair_name' => $r->lesson_pair_name,
                 'pair_time' => $pairTime,
+                'training_type_name' => $r->training_type_name,
                 'type' => $type,
                 'hours' => $hours,
             ];

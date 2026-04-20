@@ -96,6 +96,12 @@
                                     </svg>
                                     YN oldi word
                                 </button>
+                                <button type="button" class="btn-export-excel" onclick="tcExportExcel()">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    Excel
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -123,6 +129,7 @@
                                     <th class="sortable" data-col="10" style="width:140px;text-align:center;">Sana <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="12" style="width:120px;text-align:center;">YN yuborilgan <span class="sort-icon"></span></th>
+                                    <th style="width:160px;text-align:center;">Test vaqti</th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -151,6 +158,7 @@
                                             <option value="red" data-color="#dc2626">Yuborilmagan</option>
                                         </select>
                                     </th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -216,6 +224,19 @@
                                                     <span class="yn-submitted-no">Yuborilmagan</span>
                                                 @endif
                                             </td>
+                                            <td style="text-align:center;padding:4px 6px;">
+                                                    <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;" oninput="formatTimeInput(this)" onblur="validateTimeInput(this)">
+                                                        <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
+                                                            <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                        </button>
+                                                        @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
+                                                            <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
+                                                                <span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o'zgarishi mumkin</span>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                            </td>
                                         </tr>
                                     @endforeach
                                 @endforeach
@@ -245,6 +266,179 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
+
+    <style>
+        .toast-popup {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 99999;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            padding: 18px 24px;
+            min-width: 320px;
+            max-width: 420px;
+            animation: toastSlideIn 0.3s ease-out;
+            border-left: 4px solid #16a34a;
+        }
+        .toast-popup.toast-error {
+            border-left-color: #dc2626;
+        }
+        .toast-popup .toast-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #16a34a;
+            margin-bottom: 6px;
+        }
+        .toast-popup.toast-error .toast-title {
+            color: #dc2626;
+        }
+        .toast-popup .toast-body {
+            font-size: 13px;
+            color: #334155;
+            line-height: 1.5;
+        }
+        .toast-popup .toast-close {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+        @keyframes toastSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toastSlideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+    </style>
+
+    <script>
+        function showToast(title, body, isError) {
+            var existing = document.querySelector('.toast-popup');
+            if (existing) existing.remove();
+
+            var toast = document.createElement('div');
+            toast.className = 'toast-popup' + (isError ? ' toast-error' : '');
+            toast.innerHTML = '<button class="toast-close" onclick="this.parentElement.remove()">&times;</button>'
+                + '<div class="toast-title">' + title + '</div>'
+                + '<div class="toast-body">' + body + '</div>';
+            document.body.appendChild(toast);
+
+            setTimeout(function() {
+                toast.style.animation = 'toastSlideOut 0.3s ease-in forwards';
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 4000);
+        }
+
+        function formatTimeInput(input) {
+            var val = input.value.replace(/[^0-9]/g, '');
+            if (val.length > 4) val = val.substring(0, 4);
+            if (val.length >= 3) {
+                val = val.substring(0, 2) + ':' + val.substring(2);
+            }
+            input.value = val;
+        }
+
+        function validateTimeInput(input) {
+            var val = input.value.trim();
+            if (!val) return;
+            var match = val.match(/^(\d{1,2}):(\d{2})$/);
+            if (!match) {
+                input.value = '';
+                showToast('Xatolik', 'Vaqt formati noto\'g\'ri. HH:MM formatida kiriting (masalan: 09:00, 14:30)', true);
+                return;
+            }
+            var h = parseInt(match[1], 10);
+            var m = parseInt(match[2], 10);
+            if (h > 23 || m > 59) {
+                input.value = '';
+                showToast('Xatolik', 'Vaqt noto\'g\'ri. Soat 0-23, daqiqa 0-59 oralig\'ida bo\'lishi kerak', true);
+                return;
+            }
+            input.value = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+        }
+
+        function saveTestTime(btn) {
+            var container = btn.parentElement;
+            var input = container.querySelector('.test-time-input');
+            var timeVal = input.value.trim();
+            if (!timeVal) {
+                showToast('Xatolik', 'Iltimos, vaqtni kiriting', true);
+                return;
+            }
+
+            var match = timeVal.match(/^(\d{1,2}):(\d{2})$/);
+            if (!match || parseInt(match[1]) > 23 || parseInt(match[2]) > 59) {
+                showToast('Xatolik', 'Vaqt formati noto\'g\'ri. HH:MM formatida kiriting', true);
+                return;
+            }
+
+            var subjectName = input.getAttribute('data-subject-name') || 'Fan';
+
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+
+            var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            fetch('{{ route($routePrefix . ".academic-schedule.test-center.save-test-time") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    group_hemis_id: input.getAttribute('data-group-hemis-id'),
+                    subject_id: input.getAttribute('data-subject-id'),
+                    semester_code: input.getAttribute('data-semester-code'),
+                    yn_type: input.getAttribute('data-yn-type') || 'Test',
+                    test_time: timeVal,
+                    yn_submitted: input.getAttribute('data-yn-submitted') === '1'
+                })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    var isChanged = data.time_changed;
+                    var title = isChanged ? 'O\'zgartirildi!' : 'Saqlandi!';
+                    var body = '<b>Fan:</b> ' + subjectName + '<br><b>Test vaqti ' + (isChanged ? 'o\'zgartirildi' : 'belgilandi') + ':</b> ' + timeVal;
+                    showToast(title, body, false);
+                    btn.style.background = '#16a34a';
+                    setTimeout(function() { btn.style.background = '#3b82f6'; }, 1500);
+
+                    // YN yuborilmagan bo'lsa izoh qo'shish/yangilash
+                    var wrapper = input.closest('div');
+                    var existingNote = wrapper.querySelector('.yn-time-note');
+                    if (input.getAttribute('data-yn-submitted') !== '1' && timeVal) {
+                        if (!existingNote) {
+                            var noteDiv = document.createElement('div');
+                            noteDiv.style.cssText = 'width:100%;text-align:center;margin-top:2px;';
+                            noteDiv.className = 'yn-time-note';
+                            noteDiv.innerHTML = '<span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o\'zgarishi mumkin</span>';
+                            wrapper.appendChild(noteDiv);
+                        }
+                    } else if (existingNote) {
+                        existingNote.remove();
+                    }
+                } else {
+                    showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
+                }
+            })
+            .catch(function() {
+                showToast('Xatolik', 'Xatolik yuz berdi', true);
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            });
+        }
+    </script>
 
     <script>
         var isUpdatingFilters = false;
@@ -415,6 +609,33 @@
         function applyFilter() {
             var url = new URL(window.location.href.split('?')[0]);
             url.searchParams.set('searched', '1');
+            var et = $('#education_type').val();
+            var dept = $('#department_id').val();
+            var spec = $('#specialty_id').val();
+            var lc = $('#level_code').val();
+            var sem = $('#semester_code').val();
+            var grp = $('#group_id').val();
+            var subj = $('#subject_id').val();
+            var status = $('#status').val();
+            var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
+            var dateFrom = $('#date_from').val();
+            var dateTo = $('#date_to').val();
+            if (et) url.searchParams.set('education_type', et);
+            if (dept) url.searchParams.set('department_id', dept);
+            if (spec) url.searchParams.set('specialty_id', spec);
+            if (lc) url.searchParams.set('level_code', lc);
+            if (sem) url.searchParams.set('semester_code', sem);
+            if (grp) url.searchParams.set('group_id', grp);
+            if (subj) url.searchParams.set('subject_id', subj);
+            if (status) url.searchParams.set('status', status);
+            if (dateFrom) url.searchParams.set('date_from', dateFrom);
+            if (dateTo) url.searchParams.set('date_to', dateTo);
+            url.searchParams.set('current_semester', cs);
+            window.location.href = url.toString();
+        }
+
+        function tcExportExcel() {
+            var url = new URL('{{ route($routePrefix . ".academic-schedule.test-center.export-excel") }}');
             var et = $('#education_type').val();
             var dept = $('#department_id').val();
             var spec = $('#specialty_id').val();
@@ -749,6 +970,9 @@
         .btn-yn-oldi-word { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(37,99,235,0.3); white-space: nowrap; height: 36px; }
         .btn-yn-oldi-word:hover:not(:disabled) { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 4px 12px rgba(37,99,235,0.4); transform: translateY(-1px); }
         .btn-yn-oldi-word:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-export-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); white-space: nowrap; height: 36px; }
+        .btn-export-excel:hover { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }

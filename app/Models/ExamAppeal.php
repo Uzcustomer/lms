@@ -61,6 +61,11 @@ class ExamAppeal extends Model
         return $this->belongsTo(StudentGrade::class);
     }
 
+    public function comments()
+    {
+        return $this->hasMany(ExamAppealComment::class);
+    }
+
     public function getStatusLabel(): string
     {
         return self::STATUSES[$this->status] ?? $this->status;

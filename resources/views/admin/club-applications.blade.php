@@ -94,6 +94,12 @@
                             $clubRejected = $clubApps->where('status', 'rejected')->count();
                             $kafedra = $clubApps->first()->kafedra_name ?? '—';
                             $schedule = trim(($clubApps->first()->club_day ?? '') . ' ' . ($clubApps->first()->club_time ?? ''));
+                            $deptHemisId = $clubApps->first()->department_hemis_id;
+                            $masul = $deptHemisId
+                                ? \App\Models\Teacher::where('department_hemis_id', $deptHemisId)
+                                    ->whereHas('roles', fn($q) => $q->where('name', 'kafedra_mudiri'))
+                                    ->value('full_name')
+                                : null;
                         @endphp
                         <div class="club-accordion bg-white rounded-xl shadow-sm" style="margin-bottom: 10px;"
                              x-data="{ open: false }"
@@ -106,7 +112,7 @@
                                     <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">{{ $loop->iteration }}</div>
                                     <div class="min-w-0">
                                         <div class="font-bold text-gray-800 truncate" style="font-size: 15px;">{{ $clubName }}</div>
-                                        <div class="text-gray-400" style="font-size: 13px;">{{ $kafedra }}@if($schedule) &middot; {{ $schedule }}@endif</div>
+                                        <div class="text-gray-400" style="font-size: 13px;">{{ $kafedra }}@if($schedule) &middot; {{ $schedule }}@endif @if($masul) &middot; <span class="text-gray-600 font-medium">{{ $masul }}</span>@endif</div>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2.5 flex-shrink-0">
@@ -145,7 +151,7 @@
                                                     <td class="font-semibold text-gray-800">{{ $app->student_name }}</td>
                                                     <td class="text-gray-600">{{ $app->group_name ?? '—' }}</td>
                                                     <td class="text-gray-500 text-xs">{{ $app->kafedra_name ?? '—' }}</td>
-                                                    <td class="text-gray-600 text-xs">{{ $app->masul_name ?? '—' }}</td>
+                                                    <td class="text-gray-600 text-xs">{{ $masul ?? '—' }}</td>
                                                     <td class="text-gray-500">{{ $app->created_at->format('d.m.Y H:i') }}</td>
                                                     <td class="text-center">
                                                         @if($app->status === 'pending')

@@ -1471,7 +1471,13 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
+                                                            @if($isSuperadmin && $gradeData)
+                                                            <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="superadminEditGrade(this, {{ $gradeData['id'] }})" title="Superadmin: bosib baho o'zgartiring">
+                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                            </div>
+                                                            @else
                                                             <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                            @endif
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
@@ -3702,6 +3708,77 @@
                 alert('Xatolik yuz berdi. Qaytadan urinib ko\'ring.');
                 cellDiv.innerHTML = originalContent;
                 currentEditingCell = null;
+            });
+        }
+
+        function superadminEditGrade(cellDiv, gradeId) {
+            if (currentEditingCell) return;
+            currentEditingCell = cellDiv;
+            const originalContent = cellDiv.innerHTML;
+            const currentVal = cellDiv.querySelector('span')?.textContent?.trim() || '';
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = 0;
+            input.max = 100;
+            input.value = currentVal;
+            input.className = 'w-full text-center font-medium border-2 border-blue-400 rounded';
+            input.style.cssText = 'width:50px; padding:2px; font-size:13px; outline:none;';
+
+            cellDiv.innerHTML = '';
+            cellDiv.appendChild(input);
+            input.focus();
+            input.select();
+
+            function save() {
+                const val = parseFloat(input.value);
+                if (isNaN(val) || val < 0 || val > 100) {
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                    return;
+                }
+                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ grade_id: gradeId, grade: val, action: 'update' })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const g = Math.round(data.grade);
+                        const cls = g < {{ $minimumLimit ?? 60 }} ? 'text-red-600' : 'text-gray-900';
+                        cellDiv.innerHTML = `<span class="${cls} font-medium">${g}</span>`;
+                        const n = document.createElement('div');
+                        n.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-50';
+                        n.textContent = 'Saqlandi: ' + g;
+                        document.body.appendChild(n);
+                        setTimeout(() => n.remove(), 2000);
+                    } else {
+                        alert(data.message || 'Xatolik');
+                        cellDiv.innerHTML = originalContent;
+                    }
+                    currentEditingCell = null;
+                })
+                .catch(() => {
+                    alert('Xatolik yuz berdi');
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                });
+            }
+
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); save(); }
+                if (e.key === 'Escape') { cellDiv.innerHTML = originalContent; currentEditingCell = null; }
+            });
+            input.addEventListener('blur', function() {
+                setTimeout(() => {
+                    if (currentEditingCell === cellDiv) { save(); }
+                }, 150);
             });
         }
 

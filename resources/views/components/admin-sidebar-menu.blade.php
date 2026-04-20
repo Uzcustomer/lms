@@ -442,6 +442,14 @@
             Faoliyat jurnali
         </a>
 
+        <a href="{{ route('admin.grade-history.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.grade-history.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Baholar tarixi
+        </a>
+
         <a href="{{ route('admin.face-id.test') }}"
            class="sidebar-link {{ request()->routeIs('admin.face-id.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

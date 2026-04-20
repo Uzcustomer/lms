@@ -2072,25 +2072,24 @@ class ReportController extends Controller
                 }
             }
 
-            // Yordamchi: sana berilsa, shu sanaga mos hafta indeksini topadi
+            // Yordamchi: sana berilsa, shu sanaga mos hafta indeksini topadi (yoki sintetik yaratadi)
             $resolveWeek = function ($lessonDate, $fallbackWeekNumber) use ($weekIndexMap, $weekRanges, &$weekStartByIdx) {
-                // 1-usul: week_number (curriculum_week_hemis_id) orqali
                 $idx = $weekIndexMap[(string) $fallbackWeekNumber] ?? null;
                 if ($idx !== null) return $idx;
-                // 2-usul: lesson_date curriculum_weeks ichida bormi?
                 $d = substr((string) $lessonDate, 0, 10);
-                if ($d !== '') {
-                    foreach ($weekRanges as $r) {
-                        if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
-                    }
-                    // 3-usul: sana diapazonga tushmasa, yangi "sintetik" hafta yaratib qo'shamiz
-                    // curriculum_weeks bilan siklikga keyin qo'shiladigan hafta
-                    $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
-                    $newIdx = $maxIdx + 1;
-                    $weekStartByIdx[$newIdx] = $d;
-                    return $newIdx;
+                if ($d === '') return null;
+                foreach ($weekRanges as $r) {
+                    if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
                 }
-                return null;
+                // Shu sana uchun sintetik indeks allaqachon bormi?
+                foreach ($weekStartByIdx as $wIdx => $startDate) {
+                    if ($startDate === $d) return $wIdx;
+                }
+                // Yangi sintetik hafta
+                $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
+                $newIdx = $maxIdx + 1;
+                $weekStartByIdx[$newIdx] = $d;
+                return $newIdx;
             };
 
             // HEMIS jadvaldan dars soatlarini hafta+dars_turi bo'yicha yig'ish
@@ -2127,17 +2126,45 @@ class ReportController extends Controller
 
             // O'qituvchi belgilagan soatlar (attendance_controls.load) - subject_schedule_id bo'yicha
             $markedByScheduleId = [];
+            $acRows = collect();
             if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
                 $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
                 if (!empty($scheduleHemisIds)) {
                     $markedByScheduleId = DB::table('attendance_controls')
                         ->whereNull('deleted_at')
                         ->whereIn('subject_schedule_id', $scheduleHemisIds)
-                        ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                        ->select('subject_schedule_id', DB::raw('SUM(`load`) as marked_load'))
                         ->groupBy('subject_schedule_id')
                         ->pluck('marked_load', 'subject_schedule_id')
                         ->toArray();
                 }
+
+                // attendance_controls dan ALOHIDA darslar ham chiqishi kerak
+                // (agar schedules da yo'q bo'lsa: o'chirilgan yoki sinxron qilinmagan)
+                // Jurnal kabi deleted_at filtri qo'yilmaydi
+                $acQuery = DB::table('attendance_controls')
+                    ->where('subject_id', $cs->subject_id)
+                    ->where('semester_code', $cs->semester_code)
+                    ->whereNotNull('lesson_date');
+                if ($cs->group_hemis_id) {
+                    $acQuery->where('group_id', $cs->group_hemis_id);
+                }
+                if ($request->filled('date_from')) {
+                    $acQuery->whereRaw('DATE(lesson_date) >= ?', [$request->date_from]);
+                }
+                if ($request->filled('date_to')) {
+                    $acQuery->whereRaw('DATE(lesson_date) <= ?', [$request->date_to]);
+                }
+                $acRows = $acQuery
+                    ->select(
+                        'training_type_code',
+                        'training_type_name',
+                        'lesson_date',
+                        'lesson_pair_start_time',
+                        'lesson_pair_end_time',
+                        'load'
+                    )
+                    ->get();
             }
 
             // hemisWeeks[weekIdx][tt_code] = hours (haftalik yig'indi)
@@ -2187,6 +2214,46 @@ class ReportController extends Controller
                 if (!isset($trainingTypes[$code])) {
                     $trainingTypes[$code] = [
                         'name' => $row->training_type_name ?? $code,
+                        'planned_hours' => 0,
+                    ];
+                }
+            }
+
+            // attendance_controls dan qo'shimcha darslarni qo'shish (schedules da yo'q bo'lsa)
+            foreach ($acRows as $ac) {
+                $code = (string) $ac->training_type_code;
+                if ($isMustaqil($ac->training_type_name ?? $code)) {
+                    continue;
+                }
+                $dateStr = substr((string) $ac->lesson_date, 0, 10);
+                if (!$dateStr) continue;
+
+                $dayKey = $code . '|' . $dateStr;
+                if (isset($dayAcc[$dayKey])) {
+                    // Schedule'da bor - AC dan faqat marked qiymatini yangilaymiz (agar hali belgilanmagan bo'lsa)
+                    $idx = $dayAcc[$dayKey];
+                    if (($hemisLessonsRaw[$code][$idx]['marked'] ?? 0) === 0) {
+                        $hemisLessonsRaw[$code][$idx]['marked'] = (int) $ac->load;
+                    }
+                    continue;
+                }
+                // Schedule'da yo'q - AC dan yangi dars sifatida qo'shamiz
+                $weekIdx = $resolveWeek($ac->lesson_date, null);
+                if ($weekIdx === null) continue;
+                $hours = max(1, (int) $ac->load);
+
+                $hemisLessonsRaw[$code][] = [
+                    'week' => $weekIdx,
+                    'date' => $ac->lesson_date,
+                    'start' => $ac->lesson_pair_start_time,
+                    'hours' => $hours,
+                    'marked' => (int) $ac->load,
+                ];
+                $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
+
+                if (!isset($trainingTypes[$code])) {
+                    $trainingTypes[$code] = [
+                        'name' => $ac->training_type_name ?? $code,
                         'planned_hours' => 0,
                     ];
                 }
@@ -2245,7 +2312,7 @@ class ReportController extends Controller
                 return $posA <=> $posB;
             });
 
-            // Har bir dars turi bo'yicha HEMIS darslarini hafta va sana bo'yicha tartibga solish
+            // Har bir dars turi bo'yicha HEMIS darslarini sana bo'yicha tartibga solish
             $hemisLessonsByType = [];
             foreach ($trainingTypes as $code => $info) {
                 $list = $hemisLessonsRaw[$code] ?? [];
@@ -2259,97 +2326,92 @@ class ReportController extends Controller
                 $hemisLessonsByType[$code] = $list;
             }
 
-            // Har bir dars turi uchun: hafta bo'yicha HEMIS darslari guruhlari
-            $hemisByWeek = []; // [$code][$weekIdx] = [{date, hours}, ...]
+            // Sana orqali hafta indeksini aniqlash (KTR soatini taqsimlash uchun)
+            $resolveWeekFromDate = function ($dateStr) use ($weekRanges, &$weekStartByIdx) {
+                if (!$dateStr) return null;
+                foreach ($weekRanges as $r) {
+                    if ($dateStr >= $r['start'] && $dateStr <= $r['end']) return $r['idx'];
+                }
+                foreach ($weekStartByIdx as $wIdx => $startDate) {
+                    if ($startDate === $dateStr) return $wIdx;
+                }
+                return null;
+            };
+
+            // Har bir dars turi uchun: haftadagi HEMIS darslar soni (KTR soatini taqsimlash uchun)
+            $lessonsPerWeekByType = [];
             foreach ($hemisLessonsByType as $code => $list) {
                 foreach ($list as $lesson) {
-                    $hemisByWeek[$code][$lesson['week']][] = $lesson;
+                    $w = $lesson['week'] ?? $resolveWeekFromDate(substr((string) $lesson['date'], 0, 10));
+                    if ($w === null) continue;
+                    $lessonsPerWeekByType[$code][$w] = ($lessonsPerWeekByType[$code][$w] ?? 0) + 1;
                 }
             }
 
-            // Har bir dars turi uchun: hafta raqamlari ro'yxati (HEMIS yoki KTR mavjud bo'lgan haftalar)
-            // Curriculum_weeks + HEMIS/KTR'dan kelgan haftalarni birlashtirib, sanaga ko'ra saralash
-            $allWeeks = [];
-            foreach ($weekStartByIdx as $w => $_) $allWeeks[$w] = true;
-            foreach ($hemisByWeek as $code => $byW) {
-                foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
-            }
-            foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
-            $orderedWeeks = array_keys($allWeeks);
-            // Haftalarni sanaga ko'ra saralash (mavjud start_date'ga asosan)
-            usort($orderedWeeks, function ($a, $b) use ($weekStartByIdx) {
-                $ad = $weekStartByIdx[$a] ?? '9999-12-31';
-                $bd = $weekStartByIdx[$b] ?? '9999-12-31';
-                if ($ad === $bd) return $a <=> $b;
-                return strcmp($ad, $bd);
-            });
-
-            // Har bir dars turi uchun darslar ro'yxatini hafta bo'yicha qurib chiqamiz
-            // $lessonsByType[$code] = [{date, hemis_hours, ktr_hours}, ...]
+            // Har bir dars turi uchun darslar ro'yxati (sana bo'yicha, HEMIS darslari + KTR-only haftalar)
             $lessonsByType = [];
             foreach ($trainingTypes as $code => $info) {
-                $lessons = [];
-                foreach ($orderedWeeks as $w) {
-                    $hemisList = $hemisByWeek[$code][$w] ?? [];
-                    $ktrWeekHours = (int) ($ktrWeeks[$w][$code] ?? 0);
+                $list = [];
+                $hemisDatesSet = [];
+                $hemisWeeksSet = [];
 
-                    if (!empty($hemisList)) {
-                        // HEMIS darslari bor - har bir kun uchun alohida qator
-                        $dayCount = count($hemisList);
-                        $ktrPerDay = $dayCount > 0 ? ($ktrWeekHours / $dayCount) : 0;
-                        foreach ($hemisList as $d) {
-                            $lessons[] = [
-                                'date' => substr((string) ($d['date'] ?? ''), 0, 10),
-                                'hemis' => (int) $d['hours'],
-                                'ktr' => $ktrPerDay,
-                                'marked' => (int) ($d['marked'] ?? 0),
-                            ];
-                        }
-                    } elseif ($ktrWeekHours > 0) {
-                        // HEMIS yo'q, KTR bor - hafta boshlanish sanasini ishlatamiz
-                        $lessons[] = [
-                            'date' => $weekStartByIdx[$w] ?? '',
-                            'hemis' => 0,
-                            'ktr' => $ktrWeekHours,
-                            'marked' => 0,
-                        ];
-                    }
-                    // ikkalasi ham yo'q - qator qo'shmaymiz
+                // HEMIS darslari
+                foreach ($hemisLessonsByType[$code] ?? [] as $lesson) {
+                    $dateStr = substr((string) $lesson['date'], 0, 10);
+                    $w = $lesson['week'] ?? $resolveWeekFromDate($dateStr);
+                    $ktrWeekHours = ($ktrExists && $w !== null) ? (int) ($ktrWeeks[$w][$code] ?? 0) : 0;
+                    $cnt = max(1, $lessonsPerWeekByType[$code][$w] ?? 1);
+                    $ktrPerLesson = $ktrWeekHours / $cnt;
+
+                    $list[] = [
+                        'date' => $dateStr,
+                        'hemis' => (int) $lesson['hours'],
+                        'ktr' => $ktrPerLesson,
+                        'marked' => (int) ($lesson['marked'] ?? 0),
+                    ];
+                    $hemisDatesSet[$dateStr] = true;
+                    if ($w !== null) $hemisWeeksSet[$w] = true;
                 }
-                $lessonsByType[$code] = $lessons;
+
+                // HEMIS yo'q, lekin KTR soati bor haftalar uchun alohida qator YARATILMAYDI
+                // (KTR soatlari Jami satrida to'liq ko'rinadi)
+
+                // Sana bo'yicha saralash
+                usort($list, function ($a, $b) {
+                    $ad = $a['date'] ?: '9999-12-31';
+                    $bd = $b['date'] ?: '9999-12-31';
+                    return strcmp($ad, $bd);
+                });
+
+                $lessonsByType[$code] = $list;
             }
 
-            // Jami darslar qatorlari soni
-            $maxLessons = 0;
-            foreach ($lessonsByType as $list) {
-                $maxLessons = max($maxLessons, count($list));
+            // Har bir dars turi uchun sana -> lesson xaritasi
+            $byTypeByDate = [];
+            $allDates = [];
+            foreach ($lessonsByType as $code => $list) {
+                foreach ($list as $l) {
+                    $d = $l['date'] ?? '';
+                    if ($d === '') continue;
+                    $byTypeByDate[$code][$d] = $l;
+                    $allDates[$d] = true;
+                }
             }
-            if ($maxLessons <= 0) {
-                $maxLessons = 1;
-            }
+            ksort($allDates);
+            $uniqueDates = array_keys($allDates);
+            $maxLessons = count($uniqueDates);
+            if ($maxLessons <= 0) $maxLessons = 1;
 
-            // Darslar ro'yxatini tuzish
+            // Darslar ro'yxatini tuzish - har bir noyob sana = bitta qator
             $lessonsList = [];
-            for ($k = 0; $k < $maxLessons; $k++) {
-                // Shu dars uchun eng erta sana (barcha dars turlari orasida)
-                $earliestDate = null;
-                foreach ($trainingTypes as $code => $info) {
-                    $l = $lessonsByType[$code][$k] ?? null;
-                    if ($l && !empty($l['date'])) {
-                        if ($earliestDate === null || strcmp($l['date'], $earliestDate) < 0) {
-                            $earliestDate = $l['date'];
-                        }
-                    }
-                }
-                $dateLabel = $earliestDate ? date('d.m.Y', strtotime($earliestDate)) : '';
-
+            foreach ($uniqueDates as $k => $date) {
                 $rowData = [
                     'lesson' => $k + 1,
-                    'date' => $dateLabel,
+                    'date' => date('d.m.Y', strtotime($date)),
                     'cells' => [],
                 ];
                 foreach ($trainingTypes as $code => $info) {
-                    $l = $lessonsByType[$code][$k] ?? null;
+                    $l = $byTypeByDate[$code][$date] ?? null;
                     $hemisH = $l ? (int) $l['hemis'] : 0;
                     $markedH = $l ? (int) ($l['marked'] ?? 0) : 0;
                     if ($ktrExists) {
@@ -2376,6 +2438,7 @@ class ReportController extends Controller
                 'total_lessons' => $maxLessons,
                 'training_types' => $trainingTypes,
                 'lessons' => $lessonsList,
+                'totals' => $this->computeModalTotals($trainingTypes, $hemisLessonsByType, $ktrWeeks, $ktrExists),
             ]);
         } catch (\Throwable $e) {
             \Log::error('Schedule-KTR compare detail error: ' . $e->getMessage(), [
@@ -2387,6 +2450,32 @@ class ReportController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function computeModalTotals(array $trainingTypes, array $hemisLessonsByType, array $ktrWeeks, bool $ktrExists): array
+    {
+        $totals = [];
+        foreach ($trainingTypes as $code => $info) {
+            $totalHemis = 0;
+            $totalMarked = 0;
+            foreach ($hemisLessonsByType[$code] ?? [] as $l) {
+                $totalHemis += (int) $l['hours'];
+                $totalMarked += (int) ($l['marked'] ?? 0);
+            }
+            $totalKtr = 0;
+            if ($ktrExists) {
+                foreach ($ktrWeeks as $w => $wd) {
+                    $totalKtr += (int) ($wd[$code] ?? 0);
+                }
+            }
+            $totals[$code] = [
+                'hemis' => $totalHemis,
+                'ktr' => $ktrExists ? $totalKtr : null,
+                'marked' => $totalMarked,
+                'diff' => $ktrExists ? ($totalKtr - $totalHemis) : null,
+            ];
+        }
+        return $totals;
     }
 
     /**
@@ -2535,16 +2624,39 @@ class ReportController extends Controller
 
         // O'qituvchi belgilagan soatlar (attendance_controls)
         $markedByScheduleId = [];
+        $acBySubject = []; // [group|subject|semester] => [AC qatorlari]
         if (\Illuminate\Support\Facades\Schema::hasTable('attendance_controls')) {
             $scheduleHemisIds = $scheduleRows->pluck('schedule_hemis_id')->filter()->unique()->toArray();
             if (!empty($scheduleHemisIds)) {
                 $markedByScheduleId = DB::table('attendance_controls')
                     ->whereNull('deleted_at')
                     ->whereIn('subject_schedule_id', $scheduleHemisIds)
-                    ->select('subject_schedule_id', DB::raw('MAX(`load`) as marked_load'))
+                    ->select('subject_schedule_id', DB::raw('SUM(`load`) as marked_load'))
                     ->groupBy('subject_schedule_id')
                     ->pluck('marked_load', 'subject_schedule_id')
                     ->toArray();
+            }
+
+            // attendance_controls dan alohida darslar (schedules da bo'lmaganlar) - jurnal kabi deleted_at qo'llanmaydi
+            $acAll = DB::table('attendance_controls')
+                ->whereIn('group_id', $groupIds)
+                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('semester_code', $semesterCodes)
+                ->whereNotNull('lesson_date');
+            if ($request->filled('date_from')) {
+                $acAll->whereRaw('DATE(lesson_date) >= ?', [$request->date_from]);
+            }
+            if ($request->filled('date_to')) {
+                $acAll->whereRaw('DATE(lesson_date) <= ?', [$request->date_to]);
+            }
+            $acAllRows = $acAll->select(
+                'group_id', 'subject_id', 'semester_code',
+                'training_type_code', 'training_type_name',
+                'lesson_date', 'lesson_pair_start_time', 'lesson_pair_end_time', 'load'
+            )->get();
+            foreach ($acAllRows as $ac) {
+                $key = $ac->group_id . '|' . $ac->subject_id . '|' . $ac->semester_code;
+                $acBySubject[$key][] = $ac;
             }
         }
 
@@ -2593,16 +2705,17 @@ class ReportController extends Controller
                 $idx = $wMap[(string) $fallbackWeekNumber] ?? null;
                 if ($idx !== null) return $idx;
                 $d = substr((string) $lessonDate, 0, 10);
-                if ($d !== '') {
-                    foreach ($wRanges as $r) {
-                        if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
-                    }
-                    $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
-                    $newIdx = $maxIdx + 1;
-                    $weekStartByIdx[$newIdx] = $d;
-                    return $newIdx;
+                if ($d === '') return null;
+                foreach ($wRanges as $r) {
+                    if ($d >= $r['start'] && $d <= $r['end']) return $r['idx'];
                 }
-                return null;
+                foreach ($weekStartByIdx as $wIdx => $startDate) {
+                    if ($startDate === $d) return $wIdx;
+                }
+                $maxIdx = empty($weekStartByIdx) ? 0 : max(array_keys($weekStartByIdx));
+                $newIdx = $maxIdx + 1;
+                $weekStartByIdx[$newIdx] = $d;
+                return $newIdx;
             };
 
             // HEMIS darslarini dars turi bo'yicha (bir kundagi soatlar bitta darsga jamlanadi)
@@ -2648,6 +2761,42 @@ class ReportController extends Controller
                     $trainingTypes[$code] = $name;
                 }
             }
+
+            // attendance_controls dan qo'shimcha darslarni qo'shish
+            $acKey = $cs->group_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
+            foreach ($acBySubject[$acKey] ?? [] as $ac) {
+                $code = (string) $ac->training_type_code;
+                $name = $ac->training_type_name ?? $code;
+                if ($isMustaqil($name)) continue;
+                if (!empty($trainingTypeFilter) && !in_array($code, $trainingTypeFilter)) continue;
+                $dateStr = substr((string) $ac->lesson_date, 0, 10);
+                if (!$dateStr) continue;
+
+                $dayKey = $code . '|' . $dateStr;
+                if (isset($dayAcc[$dayKey])) {
+                    $idx = $dayAcc[$dayKey];
+                    if (($hemisLessonsRaw[$code][$idx]['marked'] ?? 0) === 0) {
+                        $hemisLessonsRaw[$code][$idx]['marked'] = (int) $ac->load;
+                    }
+                    continue;
+                }
+                $wIdx = $resolveWeek($ac->lesson_date, null);
+                if ($wIdx === null) continue;
+                $hours = max(1, (int) $ac->load);
+
+                $hemisLessonsRaw[$code][] = [
+                    'week' => $wIdx,
+                    'date' => $ac->lesson_date,
+                    'start' => $ac->lesson_pair_start_time,
+                    'hours' => $hours,
+                    'marked' => (int) $ac->load,
+                ];
+                $dayAcc[$dayKey] = count($hemisLessonsRaw[$code]) - 1;
+                if (!isset($trainingTypes[$code])) {
+                    $trainingTypes[$code] = $name;
+                }
+            }
+
             foreach ($hemisLessonsRaw as $code => &$list) {
                 usort($list, function ($a, $b) {
                     $ad = substr((string) ($a['date'] ?? ''), 0, 10);
@@ -2688,59 +2837,81 @@ class ReportController extends Controller
 
             if (empty($trainingTypes)) continue;
 
-            // Har bir dars turi uchun: hafta bo'yicha HEMIS darslari
-            $hemisByWeek = [];
-            foreach ($hemisLessonsRaw as $code => $list) {
+            // HEMIS darslarini dars turi bo'yicha sana bo'yicha saralash
+            $hemisLessonsByType = [];
+            foreach ($trainingTypes as $code => $name) {
+                $list = $hemisLessonsRaw[$code] ?? [];
+                usort($list, function ($a, $b) {
+                    $ad = substr((string) ($a['date'] ?? ''), 0, 10);
+                    $bd = substr((string) ($b['date'] ?? ''), 0, 10);
+                    $cmp = strcmp($ad, $bd);
+                    if ($cmp !== 0) return $cmp;
+                    return strcmp((string) ($a['start'] ?? ''), (string) ($b['start'] ?? ''));
+                });
+                $hemisLessonsByType[$code] = $list;
+            }
+
+            // Sana orqali hafta indeksini aniqlash
+            $resolveWeekFromDate = function ($dateStr) use ($wRanges, &$weekStartByIdx) {
+                if (!$dateStr) return null;
+                foreach ($wRanges as $r) {
+                    if ($dateStr >= $r['start'] && $dateStr <= $r['end']) return $r['idx'];
+                }
+                foreach ($weekStartByIdx as $wIdx => $startDate) {
+                    if ($startDate === $dateStr) return $wIdx;
+                }
+                return null;
+            };
+
+            // Har bir dars turi uchun: haftadagi HEMIS darslar soni
+            $lessonsPerWeekByType = [];
+            foreach ($hemisLessonsByType as $code => $list) {
                 foreach ($list as $lesson) {
-                    $hemisByWeek[$code][$lesson['week']][] = $lesson;
+                    $w = $lesson['week'] ?? $resolveWeekFromDate(substr((string) $lesson['date'], 0, 10));
+                    if ($w === null) continue;
+                    $lessonsPerWeekByType[$code][$w] = ($lessonsPerWeekByType[$code][$w] ?? 0) + 1;
                 }
             }
 
-            // Hafta tartibini aniqlash: curriculum_weeks + resolveWeek qo'shgan sintetik haftalar + KTR haftalari
-            $allWeeks = [];
-            foreach ($weekStartByIdx as $w => $_) $allWeeks[$w] = true;
-            foreach ($hemisByWeek as $code => $byW) foreach (array_keys($byW) as $w) $allWeeks[$w] = true;
-            foreach ($ktrWeeks as $w => $_) $allWeeks[$w] = true;
-            $orderedWeeks = array_keys($allWeeks);
-            usort($orderedWeeks, function ($a, $b) use ($weekStartByIdx) {
-                $ad = $weekStartByIdx[$a] ?? '9999-12-31';
-                $bd = $weekStartByIdx[$b] ?? '9999-12-31';
-                if ($ad === $bd) return $a <=> $b;
-                return strcmp($ad, $bd);
-            });
-
-            // Har bir dars turi uchun darslar massivlarini hafta bo'yicha qurib chiqamiz
+            // Har bir dars turi uchun darslar massivlarini (sana bo'yicha tartibda) qurib chiqamiz
             $ttData = [];
             foreach ($trainingTypes as $code => $name) {
                 $hemisVals = [];
                 $ktrVals = [];
                 $markedVals = [];
                 $dates = [];
-                foreach ($orderedWeeks as $w) {
-                    $hemisList = $hemisByWeek[$code][$w] ?? [];
-                    $ktrWeekHours = (int) ($ktrWeeks[$w][$code] ?? 0);
+                $hemisWeeksSet = [];
 
-                    if (!empty($hemisList)) {
-                        $dayCount = count($hemisList);
-                        $ktrPerDay = $ktrExists && $dayCount > 0 ? ($ktrWeekHours / $dayCount) : 0;
-                        foreach ($hemisList as $d) {
-                            $hemisVals[] = (int) $d['hours'];
-                            $dates[] = substr((string) ($d['date'] ?? ''), 0, 10);
-                            $markedVals[] = (int) ($d['marked'] ?? 0);
-                            if ($ktrExists) {
-                                $ktrVals[] = (abs($ktrPerDay - round($ktrPerDay)) < 0.01) ? (int) round($ktrPerDay) : round($ktrPerDay, 1);
-                            }
-                        }
-                    } elseif ($ktrExists && $ktrWeekHours > 0) {
-                        $hemisVals[] = 0;
-                        $ktrVals[] = $ktrWeekHours;
-                        $markedVals[] = 0;
-                        $dates[] = $weekStartByIdx[$w] ?? '';
+                // HEMIS darslari
+                foreach ($hemisLessonsByType[$code] ?? [] as $lesson) {
+                    $dateStr = substr((string) $lesson['date'], 0, 10);
+                    $w = $lesson['week'] ?? $resolveWeekFromDate($dateStr);
+                    $ktrWeekHours = ($ktrExists && $w !== null) ? (int) ($ktrWeeks[$w][$code] ?? 0) : 0;
+                    $cnt = max(1, $lessonsPerWeekByType[$code][$w] ?? 1);
+                    $ktrPerLesson = $ktrWeekHours / $cnt;
+
+                    $hemisVals[] = (int) $lesson['hours'];
+                    $markedVals[] = (int) ($lesson['marked'] ?? 0);
+                    $dates[] = $dateStr;
+                    if ($ktrExists) {
+                        $ktrVals[] = (abs($ktrPerLesson - round($ktrPerLesson)) < 0.01) ? (int) round($ktrPerLesson) : round($ktrPerLesson, 1);
+                    }
+                    if ($w !== null) $hemisWeeksSet[$w] = true;
+                }
+
+                // HEMIS yo'q, lekin KTR soati bor haftalar uchun ALOHIDA qator yaratilmaydi
+                // KTR'ning to'liq jami'si Jami satrida ko'rinadi
+
+                // Jami uchun alohida KTR jami (barcha haftalar bo'yicha)
+                $totalKtrForCode = 0;
+                if ($ktrExists) {
+                    foreach ($ktrWeeks as $w => $wd) {
+                        $totalKtrForCode += (int) ($wd[$code] ?? 0);
                     }
                 }
 
-                if (empty($hemisVals) && empty($ktrVals)) continue;
-                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'marked' => $markedVals, 'dates' => $dates];
+                if (empty($hemisVals) && empty($ktrVals) && $totalKtrForCode === 0) continue;
+                $ttData[$code] = ['name' => $name, 'hemis' => $hemisVals, 'ktr' => $ktrVals, 'marked' => $markedVals, 'dates' => $dates, 'total_ktr' => $totalKtrForCode];
                 if (!isset($globalTrainingTypes[$code])) {
                     $globalTrainingTypes[$code] = $name;
                 }
@@ -2836,24 +3007,25 @@ class ReportController extends Controller
             $ttData = $block['training_types'];
             $ktrExists = $block['ktr_exists'];
 
-            // Bu (cs) bo'yicha eng ko'p darslari soni
-            $maxK = 0;
+            // Har bir dars turi uchun sana -> indeks xaritasi
+            $byTypeByDate = [];
+            $allDates = [];
             foreach ($ttData as $code => $td) {
-                $maxK = max($maxK, count($td['hemis']), count($td['ktr']));
+                foreach ($td['dates'] ?? [] as $i => $d) {
+                    if (empty($d)) continue;
+                    $byTypeByDate[$code][$d] = $i;
+                    $allDates[$d] = true;
+                }
             }
+            ksort($allDates);
+            $uniqueDates = array_keys($allDates);
+            $maxK = count($uniqueDates);
             if ($maxK === 0) continue;
 
             $blockStartRow = $excelRow;
 
-            for ($k = 0; $k < $maxK; $k++) {
-                // Birinchi mavjud sanani topib dars yorlig'ini tuzish
-                $rowDate = '';
-                foreach ($globalTtCodes as $code) {
-                    if (isset($ttData[$code]['dates'][$k]) && !empty($ttData[$code]['dates'][$k])) {
-                        $rowDate = $fmtDate($ttData[$code]['dates'][$k]);
-                        if ($rowDate !== '') break;
-                    }
-                }
+            foreach ($uniqueDates as $k => $rowDateRaw) {
+                $rowDate = $fmtDate($rowDateRaw);
                 $darsLabel = ($k + 1) . '-dars' . ($rowDate ? ' (' . $rowDate . ')' : '');
 
                 // Static cells
@@ -2874,9 +3046,10 @@ class ReportController extends Controller
                 $rowFarqSum = 0;
                 foreach ($globalTtCodes as $code) {
                     $td = $ttData[$code] ?? null;
-                    $h = ($td && isset($td['hemis'][$k])) ? $td['hemis'][$k] : '';
-                    $kt = ($td && isset($td['ktr'][$k])) ? $td['ktr'][$k] : '';
-                    $mk = ($td && isset($td['marked'][$k])) ? $td['marked'][$k] : '';
+                    $tdIdx = $byTypeByDate[$code][$rowDateRaw] ?? null;
+                    $h = ($td && $tdIdx !== null && isset($td['hemis'][$tdIdx])) ? $td['hemis'][$tdIdx] : '';
+                    $kt = ($td && $tdIdx !== null && isset($td['ktr'][$tdIdx])) ? $td['ktr'][$tdIdx] : '';
+                    $mk = ($td && $tdIdx !== null && isset($td['marked'][$tdIdx])) ? $td['marked'][$tdIdx] : '';
                     $sheet->setCellValue([$col, $excelRow], $h);
                     if ($ktrExists) {
                         $sheet->setCellValue([$col + 1, $excelRow], $kt);
@@ -2949,7 +3122,8 @@ class ReportController extends Controller
             foreach ($globalTtCodes as $code) {
                 $td = $ttData[$code] ?? null;
                 $h = $td ? array_sum($td['hemis']) : 0;
-                $kt = ($td && $ktrExists) ? array_sum($td['ktr']) : 0;
+                // KTR jami: total_ktr (to'liq yig'indi) ishlatiladi
+                $kt = ($td && $ktrExists) ? (int) ($td['total_ktr'] ?? array_sum($td['ktr'])) : 0;
                 $mk = $td ? array_sum($td['marked'] ?? []) : 0;
                 $f = $ktrExists ? round($kt - $h, 1) : 0;
                 $sheet->setCellValue([$col, $excelRow], $h);

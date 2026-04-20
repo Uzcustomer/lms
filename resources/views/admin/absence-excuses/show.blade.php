@@ -357,13 +357,63 @@
                 </div>
             @endif
 
+            {{-- ═══════ Baho konflikti ogohlantiruvi ═══════ --}}
+            @if($excuse->isPending() && !empty($gradeConflicts))
+                <div class="mb-6 rounded-lg border-2 border-red-400 bg-red-50 dark:bg-red-900/20 dark:border-red-600 p-4">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div class="flex-1">
+                            <h4 class="text-base font-bold text-red-800 dark:text-red-300 mb-1">
+                                Diqqat! Ma'lumotnoma soxta bo'lishi mumkin
+                            </h4>
+                            <p class="text-sm text-red-700 dark:text-red-300 mb-3">
+                                Talaba ariza sana oralig'idagi quyidagi kun(lar)da darsda bo'lgan va baho olgan.
+                                Demak, o'sha kun(lar)ga sababli ma'lumotnoma haqiqiy bo'lishi mumkin emas.
+                            </p>
+                            <div class="overflow-x-auto rounded-lg border border-red-200 dark:border-red-700">
+                                <table class="min-w-full text-sm">
+                                    <thead class="bg-red-100 dark:bg-red-900/40">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left font-semibold text-red-900 dark:text-red-200">Sana</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-red-900 dark:text-red-200">Fan</th>
+                                            <th class="px-3 py-2 text-left font-semibold text-red-900 dark:text-red-200">Juft</th>
+                                            <th class="px-3 py-2 text-right font-semibold text-red-900 dark:text-red-200">Baho</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-red-100 dark:divide-red-800">
+                                        @foreach($gradeConflicts as $conflict)
+                                            <tr>
+                                                <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ \Carbon\Carbon::parse($conflict->lesson_date)->format('d.m.Y') }}</td>
+                                                <td class="px-3 py-2 text-gray-900 dark:text-gray-100">{{ $conflict->subject_name }}</td>
+                                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300">{{ $conflict->lesson_pair_name ?? '—' }}</td>
+                                                <td class="px-3 py-2 text-right font-bold text-red-700 dark:text-red-300">{{ rtrim(rtrim(number_format((float)$conflict->grade, 2, '.', ''), '0'), '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="text-xs text-red-600 dark:text-red-400 mt-2">
+                                Tasdiqlashdan oldin hujjatni diqqat bilan tekshiring.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             {{-- ═══════ Tasdiqlash / Rad etish ═══════ --}}
             @if($excuse->isPending())
                 <div class="flex justify-end mb-6" x-data="{ showReject: false }">
                     <div class="flex flex-col items-end gap-3">
                         <div class="flex gap-3">
+                            @php
+                                $confirmMsg = !empty($gradeConflicts)
+                                    ? "DIQQAT! Talaba ariza kunlarida baho olgan — ma'lumotnoma soxta bo'lishi mumkin. Baribir tasdiqlaysizmi?"
+                                    : 'Arizani tasdiqlashni xohlaysizmi? PDF hujjat yaratiladi.';
+                            @endphp
                             <form method="POST" action="{{ route('admin.absence-excuses.approve', $excuse->id) }}"
-                                  onsubmit="return confirm('Arizani tasdiqlashni xohlaysizmi? PDF hujjat yaratiladi.')">
+                                  onsubmit="return confirm({{ Js::from($confirmMsg) }})">
                                 @csrf
                                 <button type="submit"
                                         class="inline-flex items-center px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition">

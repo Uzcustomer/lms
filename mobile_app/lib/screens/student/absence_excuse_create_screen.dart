@@ -97,8 +97,15 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         dateFormat.format(_endDate!),
       );
       if (mounted) {
+        final list = List<dynamic>.from(response['data'] as List<dynamic>? ?? []);
+        const typeOrder = {'jn': 0, 'mt': 1, 'oski': 2, 'test': 3};
+        list.sort((a, b) {
+          final aType = (a as Map<String, dynamic>)['assessment_type'] as String? ?? '';
+          final bType = (b as Map<String, dynamic>)['assessment_type'] as String? ?? '';
+          return (typeOrder[aType] ?? 9).compareTo(typeOrder[bType] ?? 9);
+        });
         setState(() {
-          _missedAssessments = response['data'] as List<dynamic>? ?? [];
+          _missedAssessments = list;
           _excuseDays = response['excuse_days'] as int? ?? 15;
           _assessmentsLoaded = true;
         });
@@ -247,7 +254,51 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     return maxDate;
   }
 
+  List<DateTimeRange> _getJnBlockedRanges() {
+    final ranges = <DateTimeRange>[];
+    for (int i = 0; i < _missedAssessments.length; i++) {
+      final a = _missedAssessments[i] as Map<String, dynamic>;
+      if (a['assessment_type'] != 'jn') continue;
+      final sel = _makeupSelections[i];
+      if (sel == null || sel['status'] != 'retake') continue;
+      final start = sel['makeup_start'] ?? '';
+      final end = sel['makeup_end'] ?? '';
+      if (start.isNotEmpty && end.isNotEmpty) {
+        ranges.add(DateTimeRange(
+          start: DateTime.parse(start),
+          end: DateTime.parse(end),
+        ));
+      }
+    }
+    return ranges;
+  }
+
   Future<void> _pickMakeupDate(int index) async {
+    final a = _missedAssessments[index] as Map<String, dynamic>;
+    final type = a['assessment_type'] as String? ?? '';
+    final jnRanges = (type != 'jn') ? _getJnBlockedRanges() : <DateTimeRange>[];
+
+    final usedDates = <DateTime>[];
+    DateTime? latestOski;
+
+    if (type == 'oski' || type == 'test') {
+      for (int i = 0; i < _missedAssessments.length; i++) {
+        if (i == index) continue;
+        final m = _missedAssessments[i] as Map<String, dynamic>;
+        final mType = m['assessment_type'] as String? ?? '';
+        if (mType != 'oski' && mType != 'test') continue;
+        final sel = _makeupSelections[i];
+        if (sel == null || sel['status'] != 'retake') continue;
+        final d = sel['makeup_date'] ?? '';
+        if (d.isEmpty) continue;
+        final date = DateTime.parse(d);
+        usedDates.add(DateTime(date.year, date.month, date.day));
+        if (mType == 'oski' && (latestOski == null || date.isAfter(latestOski))) {
+          latestOski = date;
+        }
+      }
+    }
+
     final now = DateTime.now();
     final maxDate = _calcMaxDate();
     final picked = await showModalBottomSheet<DateTime>(
@@ -259,6 +310,11 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         lastDate: maxDate,
         isRange: false,
         excludeSundays: true,
+        blockedRanges: jnRanges.isNotEmpty ? jnRanges : null,
+        blockedDates: usedDates.isNotEmpty ? usedDates : null,
+        minSelectableDate: (type == 'test' && latestOski != null)
+            ? latestOski!.add(const Duration(days: 1))
+            : null,
       ),
     );
     if (picked != null && mounted) {
@@ -977,6 +1033,9 @@ class _CalendarPicker extends StatefulWidget {
   final DateTime? initialEnd;
   final bool isRange;
   final bool excludeSundays;
+  final List<DateTimeRange>? blockedRanges;
+  final List<DateTime>? blockedDates;
+  final DateTime? minSelectableDate;
 
   const _CalendarPicker({
     required this.firstDate,
@@ -985,6 +1044,9 @@ class _CalendarPicker extends StatefulWidget {
     this.initialEnd,
     this.isRange = true,
     this.excludeSundays = false,
+    this.blockedRanges,
+    this.blockedDates,
+    this.minSelectableDate,
   });
 
   @override
@@ -1055,9 +1117,24 @@ class _CalendarPickerState extends State<_CalendarPicker> {
             selectedDayPredicate: widget.isRange
                 ? null
                 : (day) => isSameDay(_selectedDay, day),
-            enabledDayPredicate: widget.excludeSundays
-                ? (day) => day.weekday != DateTime.sunday
-                : null,
+            enabledDayPredicate: (day) {
+              if (widget.excludeSundays && day.weekday == DateTime.sunday) return false;
+              final d = DateTime(day.year, day.month, day.day);
+              if (widget.blockedRanges != null) {
+                for (final range in widget.blockedRanges!) {
+                  final s = DateTime(range.start.year, range.start.month, range.start.day);
+                  final e = DateTime(range.end.year, range.end.month, range.end.day);
+                  if (!d.isBefore(s) && !d.isAfter(e)) return false;
+                }
+              }
+              if (widget.blockedDates != null) {
+                for (final bd in widget.blockedDates!) {
+                  if (d.year == bd.year && d.month == bd.month && d.day == bd.day) return false;
+                }
+              }
+              if (widget.minSelectableDate != null && d.isBefore(widget.minSelectableDate!)) return false;
+              return true;
+            },
             onDaySelected: widget.isRange
                 ? null
                 : (selectedDay, focusedDay) {
@@ -1076,6 +1153,37 @@ class _CalendarPickerState extends State<_CalendarPicker> {
                   }
                 : null,
             onPageChanged: (focusedDay) => _focusedDay = focusedDay,
+            calendarBuilders: CalendarBuilders(
+              disabledBuilder: widget.blockedRanges != null
+                  ? (context, day, focusedDay) {
+                      final d = DateTime(day.year, day.month, day.day);
+                      for (final range in widget.blockedRanges!) {
+                        final s = DateTime(range.start.year, range.start.month, range.start.day);
+                        final e = DateTime(range.end.year, range.end.month, range.end.day);
+                        if (!d.isBefore(s) && !d.isAfter(e)) {
+                          return Container(
+                            margin: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withAlpha(40),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${day.day}',
+                                style: TextStyle(
+                                  color: Colors.amber[800],
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                      return null;
+                    }
+                  : null,
+            ),
             rowHeight: 42,
             daysOfWeekHeight: 28,
             calendarStyle: CalendarStyle(

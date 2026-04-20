@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
@@ -102,27 +103,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: StatCard(
-                                title: l.gpa,
-                                value: (data?['gpa'] ?? profile?['avg_gpa'] ?? 0).toString(),
-                                icon: Icons.trending_up,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: StatCard(
-                                title: l.avgGrade,
-                                value: (data?['avg_grade'] ?? profile?['avg_grade'] ?? 0).toString(),
-                                icon: Icons.star_outline,
-                                color: AppTheme.accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
+                        _buildGpaRow(data, profile, l),
                         const SizedBox(height: 12),
                         Row(
                           children: [
@@ -953,5 +934,139 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (g >= 71) return AppTheme.primaryColor;
     if (g >= 56) return AppTheme.warningColor;
     return AppTheme.errorColor;
+  }
+
+  Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
+    final gpa = ((data?['gpa'] ?? profile?['avg_gpa'] ?? 0) as num).toDouble();
+    final avgGrade = ((data?['avg_grade'] ?? profile?['avg_grade'] ?? 0) as num).toDouble();
+    final recentGrades = data?['recent_grades'] as List<dynamic>? ?? [];
+
+    final sparkPoints = recentGrades
+        .map((g) => ((g as Map<String, dynamic>)['grade'] as num?)?.toDouble() ?? 0)
+        .toList()
+        .reversed
+        .toList();
+
+    return Row(
+      children: [
+        Expanded(
+          child: _buildSparkCard(
+            icon: Icons.trending_up,
+            value: gpa.toStringAsFixed(2),
+            subtitle: 'GPA · 4.00+',
+            accentColor: const Color(0xFF4CAF50),
+            sparkData: sparkPoints.map((g) => g * 4.0 / 100.0).toList(),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildSparkCard(
+            icon: Icons.star_outline,
+            value: avgGrade.toStringAsFixed(1),
+            subtitle: l.avgGrade,
+            accentColor: const Color(0xFF4CAF50),
+            sparkData: sparkPoints,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSparkCard({
+    required IconData icon,
+    required String value,
+    required String subtitle,
+    required Color accentColor,
+    required List<double> sparkData,
+  }) {
+    final spots = <FlSpot>[];
+    if (sparkData.length >= 2) {
+      for (int i = 0; i < sparkData.length; i++) {
+        spots.add(FlSpot(i.toDouble(), sparkData[i]));
+      }
+    } else {
+      spots.addAll([
+        const FlSpot(0, 0.3), const FlSpot(1, 0.5), const FlSpot(2, 0.4),
+        const FlSpot(3, 0.7), const FlSpot(4, 0.6), const FlSpot(5, 0.8),
+      ]);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: accentColor.withAlpha(30),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accentColor, size: 20),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withAlpha(120),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 32,
+            child: LineChart(
+              LineChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                borderData: FlBorderData(show: false),
+                lineTouchData: const LineTouchData(enabled: false),
+                clipData: const FlClipData.all(),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.3,
+                    color: accentColor,
+                    barWidth: 2,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          accentColor.withAlpha(60),
+                          accentColor.withAlpha(5),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

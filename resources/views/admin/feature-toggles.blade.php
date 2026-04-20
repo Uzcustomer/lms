@@ -33,6 +33,7 @@
                                     id="btn-{{ $toggle['key'] }}"
                                     onclick="toggleFeature('{{ $toggle['key'] }}', this)"
                                     class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    data-enabled="{{ $toggle['enabled'] ? '1' : '0' }}"
                                     style="background: {{ $toggle['enabled'] ? '#2b5ea7' : '#d1d5db' }};">
                                 <span class="inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200"
                                       style="transform: translateX({{ $toggle['enabled'] ? '22px' : '4px' }});"></span>
@@ -52,7 +53,7 @@
     <script>
         function toggleFeature(key, btn) {
             btn.disabled = true;
-            const currentlyEnabled = btn.style.background.includes('5ea7');
+            const currentlyEnabled = btn.dataset.enabled === '1';
             const newState = !currentlyEnabled;
 
             fetch('{{ route("admin.feature-toggles.update") }}', {
@@ -67,6 +68,7 @@
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
+                    btn.dataset.enabled = newState ? '1' : '0';
                     btn.style.background = newState ? '#2b5ea7' : '#d1d5db';
                     btn.querySelector('span').style.transform = newState ? 'translateX(22px)' : 'translateX(4px)';
                     const status = document.getElementById('status-' + key);

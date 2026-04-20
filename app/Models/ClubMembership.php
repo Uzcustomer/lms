@@ -16,6 +16,7 @@ class ClubMembership extends Model
         'club_day',
         'club_time',
         'kafedra_name',
+        'masul_name',
         'department_hemis_id',
         'status',
         'reject_reason',

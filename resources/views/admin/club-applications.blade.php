@@ -18,8 +18,8 @@
         .club-table tbody tr:nth-child(even) { background: #f8fafc; }
         .club-table tbody tr:hover { background: #eff6ff; box-shadow: inset 4px 0 0 #2b5ea7; }
         .club-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; }
-        .club-accordion { transition: all 0.2s; }
-        .club-accordion:hover { border-color: #93c5fd; box-shadow: 0 2px 8px rgba(43,94,167,0.08); }
+        .club-accordion { transition: all 0.2s; border: 1.5px solid #93c5fd !important; }
+        .club-accordion:hover { border-color: #3b82f6 !important; box-shadow: 0 2px 8px rgba(43,94,167,0.12); }
     </style>
 
     <div class="py-4">
@@ -95,20 +95,18 @@
                             $kafedra = $clubApps->first()->kafedra_name ?? '—';
                             $schedule = trim(($clubApps->first()->club_day ?? '') . ' ' . ($clubApps->first()->club_time ?? ''));
                         @endphp
-                        <div class="club-accordion bg-white rounded-xl border border-gray-200 shadow-sm mb-3"
+                        <div class="club-accordion bg-white rounded-xl shadow-sm" style="margin-bottom: 10px;"
                              x-data="{ open: false }"
                              x-show="filter === 'all'
                                  || (filter === 'pending' && {{ $clubPending }} > 0)
                                  || (filter === 'approved' && {{ $clubApproved }} > 0)
                                  || (filter === 'rejected' && {{ $clubRejected }} > 0)">
-                            <div class="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none" @click="open = !open">
+                            <div class="flex items-center justify-between px-5 cursor-pointer select-none" style="padding-top: 14px; padding-bottom: 14px;" @click="open = !open">
                                 <div class="flex items-center gap-3 min-w-0">
-                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #e0e7ff, #c7d2fe);">
-                                        <svg class="w-4.5 h-4.5 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg>
-                                    </div>
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">{{ $loop->iteration }}</div>
                                     <div class="min-w-0">
-                                        <div class="font-bold text-gray-800 text-[13px] truncate">{{ $clubName }}</div>
-                                        <div class="text-[11px] text-gray-400">{{ $kafedra }}@if($schedule) &middot; {{ $schedule }}@endif</div>
+                                        <div class="font-bold text-gray-800 text-sm truncate">{{ $clubName }}</div>
+                                        <div class="text-xs text-gray-400">{{ $kafedra }}@if($schedule) &middot; {{ $schedule }}@endif</div>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2.5 flex-shrink-0">
@@ -135,9 +133,9 @@
                                                 <th class="text-left">Talaba</th>
                                                 <th class="text-left">Guruh</th>
                                                 <th class="text-left">Kafedra</th>
+                                                <th class="text-left">Masul shaxs</th>
                                                 <th class="text-left">Ariza sanasi</th>
                                                 <th class="text-center">Holati</th>
-                                                <th class="text-center" style="width: 80px;"></th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -147,6 +145,7 @@
                                                     <td class="font-semibold text-gray-800">{{ $app->student_name }}</td>
                                                     <td class="text-gray-600">{{ $app->group_name ?? '—' }}</td>
                                                     <td class="text-gray-500 text-xs">{{ $app->kafedra_name ?? '—' }}</td>
+                                                    <td class="text-gray-600 text-xs">{{ $app->masul_name ?? '—' }}</td>
                                                     <td class="text-gray-500">{{ $app->created_at->format('d.m.Y H:i') }}</td>
                                                     <td class="text-center">
                                                         @if($app->status === 'pending')
@@ -156,12 +155,6 @@
                                                         @else
                                                             <span class="inline-flex px-2.5 py-1 rounded-md text-[11px] font-semibold" style="background: #fee2e2; color: #991b1b;">Rad etilgan</span>
                                                         @endif
-                                                    </td>
-                                                    <td class="text-center">
-                                                        <a href="{{ route('admin.club-applications.show', $app) }}" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded-md transition" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6); color: #fff;">
-                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                                                            Ko'rish
-                                                        </a>
                                                     </td>
                                                 </tr>
                                             @endforeach

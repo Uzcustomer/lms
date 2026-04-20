@@ -2838,8 +2838,11 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
         }
 
+        $isRetake = $record->retake_grade !== null;
+        $field = $isRetake ? 'retake_grade' : 'grade';
+
         DB::table('student_grades')->where('id', $request->grade_id)->update([
-            'grade' => $request->grade,
+            $field => $request->grade,
             'updated_at' => now(),
         ]);
 

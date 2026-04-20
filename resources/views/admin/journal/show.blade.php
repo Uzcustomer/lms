@@ -1613,6 +1613,32 @@
                             </p>
                         </div>
                         <div>
+                            @php
+                                $sababliStudentsCount = 0;
+                                foreach (($students ?? []) as $__stu) {
+                                    $__h = $__stu->hemis_id;
+                                    $__hasSababli = false;
+                                    foreach ((($jbGrades ?? [])[$__h] ?? []) as $__dateGrades) {
+                                        foreach ($__dateGrades as $__g) {
+                                            if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                                        }
+                                    }
+                                    if (!$__hasSababli) {
+                                        foreach ((($mtGrades ?? [])[$__h] ?? []) as $__dateGrades) {
+                                            foreach ($__dateGrades as $__g) {
+                                                if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                                            }
+                                        }
+                                    }
+                                    if (!$__hasSababli) {
+                                        $__o = ($otherGrades ?? [])[$__h] ?? [];
+                                        if (!empty($__o['on_sababli']) || !empty($__o['oski_sababli']) || !empty($__o['test_sababli'])) {
+                                            $__hasSababli = true;
+                                        }
+                                    }
+                                    if ($__hasSababli) $sababliStudentsCount++;
+                                }
+                            @endphp
                             @if(isset($ynSubmission) && $ynSubmission)
                                 <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
                                     YN ga yuborilgan ({{ $ynSubmission->submitted_at?->format('d.m.Y H:i') ?? '-' }})

@@ -286,6 +286,10 @@ class JournalController extends Controller
             abort(404, "Guruh topilmadi (ID: {$groupId})");
         }
 
+        // Migratsiya hali ishlatilmagan instancelarda ham jurnal ochilishi uchun
+        // retake_was_sababli ustunining mavjudligini tekshirib olamiz
+        $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+
         // O'qituvchi uchun: faqat o'ziga dars jadvalida biriktirilgan guruh+fan kombinatsiyasiga ruxsat
         if (is_active_oqituvchi()) {
             $teacherHemisId = get_teacher_hemis_id();
@@ -485,7 +489,10 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason', 'is_final', 'deadline', 'created_at')
+            ->select(array_merge(
+                ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at'],
+                $hasSababliCol ? ['retake_was_sababli'] : []
+            ))
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -872,7 +879,10 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason', 'quiz_result_id')
+            ->select(array_merge(
+                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id'],
+                $hasSababliCol ? ['retake_was_sababli'] : []
+            ))
             ->get();
 
         $otherGrades = [];
@@ -6112,6 +6122,8 @@ class JournalController extends Controller
      */
     public function exportYnQaydnoma(Request $request)
     {
+        $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+
         $request->validate([
             'subject_id' => 'required',
             'semester_code' => 'required',
@@ -6272,7 +6284,10 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason')
+            ->select(array_merge(
+                ['student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason'],
+                $hasSababliCol ? ['retake_was_sababli'] : []
+            ))
             ->orderBy('lesson_date')
             ->orderBy('lesson_pair_code')
             ->get();
@@ -6405,7 +6420,10 @@ class JournalController extends Controller
                     });
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason', 'quiz_result_id')
+            ->select(array_merge(
+                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id'],
+                $hasSababliCol ? ['retake_was_sababli'] : []
+            ))
             ->get();
 
         $buildOtherGrades = function (bool $includeSababli) use ($otherGradesRaw, $getEffectiveGrade) {

@@ -115,6 +115,37 @@
                         </div>
                     </div>
                 </div>
+
+                {{-- Kafedra mudiri uchun: tasdiqlash / rad etish --}}
+                @php
+                    $activeRole = session('active_role', '');
+                    $canManage = in_array($activeRole, ['kafedra_mudiri']);
+                @endphp
+                @if($canManage && $application->status === 'pending')
+                    <div class="p-5" x-data="{ showReject: false }">
+                        <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">Qaror qabul qilish</div>
+                        <div class="flex gap-3">
+                            <form method="POST" action="{{ route('admin.club-applications.approve', $application) }}" class="flex-1">
+                                @csrf
+                                <button type="submit" class="w-full py-2.5 text-sm font-semibold rounded-lg text-white transition" style="background: linear-gradient(135deg, #059669, #10b981);">
+                                    To'garakka biriktirish
+                                </button>
+                            </form>
+                            <div class="flex-1">
+                                <button type="button" @click="showReject = !showReject" class="w-full py-2.5 text-sm font-semibold rounded-lg text-white transition" style="background: linear-gradient(135deg, #dc2626, #ef4444);">
+                                    Rad etish
+                                </button>
+                                <form method="POST" action="{{ route('admin.club-applications.reject', $application) }}" x-show="showReject" x-cloak class="mt-3">
+                                    @csrf
+                                    <textarea name="reject_reason" rows="2" placeholder="Rad etish sababini yozing..." class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-200 focus:border-red-400"></textarea>
+                                    <button type="submit" class="mt-2 w-full py-2 text-sm font-semibold rounded-lg text-white transition" style="background: linear-gradient(135deg, #991b1b, #dc2626);">
+                                        Rad etishni tasdiqlash
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                @endif
             </div>
 
         </div>

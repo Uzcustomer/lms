@@ -5417,6 +5417,17 @@ class JournalController extends Controller
             ->count();
 
         if ($existingCount > 0 || $pendingCount > 0) {
+            // Agar natijalar mavjud va kutilayotgan yo'q — results_fetched ni belgilash
+            if ($existingCount > 0 && $pendingCount === 0) {
+                $ynSubmission = \App\Models\YnSubmission::where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->where('group_hemis_id', $groupHemisId)
+                    ->first();
+                if ($ynSubmission && !$ynSubmission->results_fetched) {
+                    $ynSubmission->update(['results_fetched' => true]);
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Yuklangan: ' . $existingCount . ' ta. Kutilmoqda: ' . $pendingCount . ' ta. Yuklash uchun Diagnostika sahifasidan foydalaning.',

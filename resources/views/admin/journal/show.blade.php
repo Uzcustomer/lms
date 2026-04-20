@@ -1667,7 +1667,7 @@
                             @endphp
                             @if(isset($ynSubmission) && $ynSubmission)
                                 <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
-                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
+                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at?->format('d.m.Y H:i') ?? '-' }})
                                     @if($ynSubmission->submittedBy)
                                         <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
                                     @endif

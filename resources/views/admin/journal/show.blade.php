@@ -1417,7 +1417,28 @@
                                                         }
                                                     @endphp
                                                     @if($grade !== null)
-                                                        @if($canEditExcuseExisting)
+                                                        @if($isSuperAdmin && $gradeData)
+                                                            {{-- Superadmin: istalgan bahoni edit qilish --}}
+                                                            <div class="editable-cell cursor-pointer hover:bg-purple-50" onclick="superadminEdit(this, {{ $gradeData['id'] }})" title="Superadmin: bahoni o'zgartirish">
+                                                                @if($hasRetake && $retakeType === 'low_grade')
+                                                                    @php $origVal = round($gradeData['original_grade'], 0); $retakeVal = round($gradeData['retake_grade'], 0); @endphp
+                                                                    <div class="split-cell"><svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg><span class="split-top text-red-600">{{ $origVal }}</span><span class="split-bottom">{{ $retakeVal }}</span></div>
+                                                                @elseif($hasRetake && $retakeType === 'absent')
+                                                                    @php
+                                                                        $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                                        $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                                        $nbColorClass = $hemisSababli ? 'text-green-600' : 'text-red-600';
+                                                                    @endphp
+                                                                    <div class="split-cell"><svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg><span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span><span class="split-bottom">{{ round($grade, 0) }}</span></div>
+                                                                @else
+                                                                    @php
+                                                                        $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
+                                                                        $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
+                                                                    @endphp
+                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                                @endif
+                                                            </div>
+                                                        @elseif($canEditExcuseExisting)
                                                             {{-- Sababli ariza asosida mavjud bahoni o'zgartirish --}}
                                                             <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-amber-50"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"
@@ -1471,13 +1492,7 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            @if($isSuperAdmin && $gradeData)
-                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="superadminEdit(this, {{ $gradeData['id'] }})" title="Superadmin: bahoni o'zgartirish">
-                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                                </div>
-                                                            @else
-                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                            @endif
+                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php

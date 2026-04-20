@@ -23,6 +23,7 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Timer? _clockTimer;
   List<dynamic> _todayLessons = [];
+  Map<String, dynamic>? _nextDayLesson;
   DateTime _now = DateTime.now();
 
   @override
@@ -56,19 +57,49 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final scheduleList = schedule['schedule'];
       if (scheduleList == null || scheduleList is! List) return;
+
+      // First try to find today's lessons
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;
         if (day['date']?.toString() == today) {
           final lessons = day['lessons'];
-          if (lessons is List) {
-            setState(() => _todayLessons = lessons);
+          if (lessons is List && lessons.isNotEmpty) {
+            setState(() {
+              _todayLessons = lessons;
+              _nextDayLesson = null;
+            });
+            return;
           }
-          return;
         }
       }
+
+      // No lessons today — find the first lesson from the next available day
       setState(() => _todayLessons = []);
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        final dateStr = day['date']?.toString() ?? '';
+        if (dateStr.isEmpty) continue;
+        final dayDate = DateTime.tryParse(dateStr);
+        if (dayDate == null || !dayDate.isAfter(DateTime.now())) continue;
+        final lessons = day['lessons'];
+        if (lessons is! List || lessons.isEmpty) continue;
+        final firstLesson = lessons.first;
+        if (firstLesson is! Map<String, dynamic>) continue;
+        setState(() {
+          _nextDayLesson = {
+            ...firstLesson,
+            '_date': dateStr,
+            '_day_date': dayDate,
+          };
+        });
+        return;
+      }
+      setState(() => _nextDayLesson = null);
     } catch (_) {
-      if (mounted) setState(() => _todayLessons = []);
+      if (mounted) setState(() {
+        _todayLessons = [];
+        _nextDayLesson = null;
+      });
     }
   }
 
@@ -1009,7 +1040,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   Widget _buildLiveClassCard() {
     final lesson = _getCurrentOrNextLesson();
-    if (lesson == null) return const SizedBox.shrink();
+
+    // If no today lesson, show next day's first lesson
+    if (lesson == null) {
+      if (_nextDayLesson == null) return const SizedBox.shrink();
+      return _buildNextDayCard(_nextDayLesson!);
+    }
 
     final isActive = lesson['_is_active'] == true;
     final subjectName = lesson['subject_name']?.toString() ?? '';
@@ -1140,6 +1176,103 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withAlpha(200),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _weekdayName(int weekday) {
+    const days = ['', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+    return days[weekday.clamp(1, 7)];
+  }
+
+  Widget _buildNextDayCard(Map<String, dynamic> lesson) {
+    final subjectName = lesson['subject_name']?.toString() ?? '';
+    final startTime = lesson['lesson_pair_start_time']?.toString() ?? '';
+    final endTime = lesson['lesson_pair_end_time']?.toString() ?? '';
+    final room = lesson['auditorium_name']?.toString() ?? '';
+    final dayDate = lesson['_day_date'] as DateTime?;
+    final dateStr = lesson['_date']?.toString() ?? '';
+
+    String dayLabel = '';
+    if (dayDate != null) {
+      final diff = dayDate.difference(DateTime(
+        _now.year, _now.month, _now.day,
+      )).inDays;
+      if (diff == 1) {
+        dayLabel = 'Ertaga';
+      } else {
+        dayLabel = '${_weekdayName(dayDate.weekday)}, ${DateFormat('d-MMMM').format(dayDate)}';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF5C6BC0), Color(0xFF7986CB)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF5C6BC0).withAlpha(60),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.event, size: 16, color: Colors.white70),
+                const SizedBox(width: 6),
+                Text(
+                  dayLabel.isNotEmpty ? dayLabel : dateStr,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withAlpha(220),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subjectName,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.white.withAlpha(200)),
+                const SizedBox(width: 4),
+                Text(
+                  '$startTime–$endTime',
+                  style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500),
+                ),
+                if (room.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 6),
+                  Text(room, style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+                ],
+              ],
             ),
           ],
         ),

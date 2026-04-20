@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import 'dart:async';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
@@ -19,15 +21,81 @@ class StudentDashboardScreen extends StatefulWidget {
 }
 
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  Timer? _clockTimer;
+  List<dynamic> _todayLessons = [];
+  DateTime _now = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<StudentProvider>();
       provider.loadDashboard();
       provider.loadProfile();
       provider.loadContract();
+      _loadTodaySchedule();
     });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadTodaySchedule() async {
+    try {
+      final provider = context.read<StudentProvider>();
+      await provider.loadSchedule();
+      if (!mounted) return;
+      final schedule = provider.schedule;
+      if (schedule == null) return;
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final scheduleList = schedule['schedule'] as List<dynamic>? ?? [];
+      for (final day in scheduleList) {
+        final d = day as Map<String, dynamic>;
+        if (d['date'] == today) {
+          setState(() => _todayLessons = d['lessons'] as List<dynamic>? ?? []);
+          return;
+        }
+      }
+      setState(() => _todayLessons = []);
+    } catch (_) {}
+  }
+
+  Map<String, dynamic>? _getCurrentOrNextLesson() {
+    if (_todayLessons.isEmpty) return null;
+    final now = _now;
+    Map<String, dynamic>? nextLesson;
+
+    for (final lesson in _todayLessons) {
+      final l = lesson as Map<String, dynamic>;
+      final startStr = l['lesson_pair_start_time'] as String? ?? '';
+      final endStr = l['lesson_pair_end_time'] as String? ?? '';
+      if (startStr.isEmpty || endStr.isEmpty) continue;
+
+      final startParts = startStr.split(':');
+      final endParts = endStr.split(':');
+      if (startParts.length < 2 || endParts.length < 2) continue;
+
+      final start = DateTime(now.year, now.month, now.day,
+          int.parse(startParts[0]), int.parse(startParts[1]));
+      final end = DateTime(now.year, now.month, now.day,
+          int.parse(endParts[0]), int.parse(endParts[1]));
+
+      if (now.isAfter(start.subtract(const Duration(minutes: 1))) && now.isBefore(end)) {
+        return {...l, '_is_active': true, '_end': end, '_start': start};
+      }
+      if (now.isBefore(start)) {
+        if (nextLesson == null) {
+          nextLesson = {...l, '_is_active': false, '_start': start, '_end': end};
+        }
+      }
+    }
+    return nextLesson;
   }
 
   String? _buildImageUrl(String? imagePath) {
@@ -91,6 +159,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 provider.loadProfile(),
                 provider.loadContract(),
               ]);
+              _loadTodaySchedule();
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -103,6 +172,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildLiveClassCard(),
                         _buildGpaRow(data, profile, l),
                         const SizedBox(height: 12),
                         Row(
@@ -924,6 +994,146 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLiveClassCard() {
+    final lesson = _getCurrentOrNextLesson();
+    if (lesson == null) return const SizedBox.shrink();
+
+    final isActive = lesson['_is_active'] as bool;
+    final subjectName = lesson['subject_name'] as String? ?? '';
+    final startTime = lesson['lesson_pair_start_time'] as String? ?? '';
+    final endTime = lesson['lesson_pair_end_time'] as String? ?? '';
+    final room = lesson['auditorium_name'] as String? ?? '';
+    final start = lesson['_start'] as DateTime;
+    final end = lesson['_end'] as DateTime;
+
+    final Duration remaining;
+    final String statusText;
+    final Color bgColor;
+
+    if (isActive) {
+      remaining = end.difference(_now);
+      statusText = 'HOZIR DAVOM ETMOQDA';
+      bgColor = const Color(0xFF4CAF50);
+    } else {
+      remaining = start.difference(_now);
+      statusText = 'KEYINGI DARS';
+      bgColor = const Color(0xFFFFA726);
+    }
+
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes % 60;
+    String timeLeft;
+    if (hours > 0) {
+      timeLeft = '$hours soat $minutes daqiqa qoldi';
+    } else {
+      timeLeft = '${minutes > 0 ? minutes : 1} daqiqa qoldi';
+    }
+
+    final progress = isActive
+        ? 1.0 - (remaining.inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isActive
+                ? [const Color(0xFF43A047), const Color(0xFF66BB6A)]
+                : [const Color(0xFFF57C00), const Color(0xFFFFA726)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: bgColor.withAlpha(60),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withAlpha(220),
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subjectName,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.white.withAlpha(200)),
+                const SizedBox(width: 4),
+                Text(
+                  '$startTime–$endTime',
+                  style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500),
+                ),
+                if (room.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 6),
+                  Text(room, style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (isActive) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 4,
+                  backgroundColor: Colors.white.withAlpha(50),
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Text(
+              timeLeft,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withAlpha(200),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

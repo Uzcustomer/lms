@@ -4510,10 +4510,13 @@
             .then(({ok, data}) => {
                 if (ok && data.success) {
                     const notif = document.createElement('div');
-                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#3b82f6; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
                     notif.textContent = data.message;
                     document.body.appendChild(notif);
-                    setTimeout(() => location.reload(), 2000);
+                    setTimeout(() => notif.remove(), 4000);
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    btn.style.opacity = '1';
                 } else {
                     alert(data.message || 'Natijalarni yuklashda xatolik yuz berdi');
                     btn.disabled = false;
@@ -4672,19 +4675,7 @@
             });
         }
 
-        // Sahifa yuklanganda — agar OSKI/Test sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish
-        @php
-            $autoFetchEs = $examSchedule ?? null;
-            $autoFetchOskiPassed = $autoFetchEs && $autoFetchEs->oski_date && $autoFetchEs->oski_date->isPast();
-            $autoFetchTestPassed = $autoFetchEs && $autoFetchEs->test_date && $autoFetchEs->test_date->isPast();
-            $autoFetchAnyPassed = $autoFetchOskiPassed || $autoFetchTestPassed;
-        @endphp
-        @if(isset($ynSubmission) && $ynSubmission && $autoFetchAnyPassed && !$ynSubmission->results_fetched)
-        document.addEventListener('DOMContentLoaded', function() {
-            // Avtomatik natijalarni tortish
-            fetchYnResults();
-        });
-        @endif
+        // Auto-fetch o'chirilgan — foydalanuvchi o'zi tugmani bosadi yoki Diagnostika orqali yuklaydi
     </script>
 
     {{-- Sababli baho kiritish modal oynasi --}}

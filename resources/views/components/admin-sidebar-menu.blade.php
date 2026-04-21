@@ -94,6 +94,7 @@
     <nav class="flex-1 py-2 px-2 overflow-y-auto sidebar-nav"
          x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
         <!-- Xabarnomalar (Notifications) -->
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
         @php
             $sidebarUserType = get_class($user);
             $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)
@@ -112,6 +113,7 @@
             <span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">{{ $sidebarUnreadCount }}</span>
             @endif
         </a>
+        @endif
 
         <a href="{{ $r('admin.dashboard', 'teacher.dashboard') }}"
            class="sidebar-link {{ $isActive('admin.dashboard', 'teacher.dashboard') ? 'sidebar-active' : '' }}">

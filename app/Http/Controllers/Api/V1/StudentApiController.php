@@ -752,10 +752,27 @@ class StudentApiController extends Controller
                 'lesson_pair_end_time' => $g->lesson_pair_end_time,
             ]);
 
+        $scheduleDates = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->select('lesson_date', 'training_type_code', 'training_type_name')
+            ->orderBy('lesson_date', 'asc')
+            ->get()
+            ->map(fn($s) => [
+                'lesson_date' => $s->lesson_date,
+                'training_type_code' => $s->training_type_code,
+                'training_type_name' => $s->training_type_name,
+            ]);
+
         return response()->json([
             'data' => [
                 'subject_id' => $subjectId,
                 'grades' => $grades,
+                'schedule_dates' => $scheduleDates,
             ],
         ]);
     }

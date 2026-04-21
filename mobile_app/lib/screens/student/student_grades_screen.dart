@@ -299,7 +299,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             children: List.generate(3, (i) {
               final idx = i + 3;
               final entry = gradeEntries[idx];
-              final value = grades[entry['key']];
+              // YN (total) is calculated at semester end — show '-' for now
+              final value = entry['key'] == 'total' ? null : grades[entry['key']];
               return Expanded(
                 child: Padding(
                   padding: EdgeInsets.only(right: i < 2 ? 5 : 0),
@@ -845,8 +846,11 @@ class _JnGradesPage extends StatefulWidget {
 class _JnGradesPageState extends State<_JnGradesPage> {
   bool _isLoading = true;
   String? _error;
-  List<Map<String, dynamic>> _amaliyDaily = [];
-  List<Map<String, dynamic>> _maruzaDaily = [];
+  // All unique sorted dates from schedule
+  List<String> _allDates = [];
+  // Grade map: dateKey -> grade value (int or 'NB')
+  Map<String, dynamic> _amaliyByDate = {};
+  Map<String, dynamic> _maruzaByDate = {};
 
   @override
   void initState() {
@@ -860,35 +864,65 @@ class _JnGradesPageState extends State<_JnGradesPage> {
       final response = await service.getSubjectGrades(widget.subjectId);
 
       List<dynamic> grades = [];
+      List<dynamic> scheduleDates = [];
       final data = response['data'];
       if (data is Map<String, dynamic>) {
         grades = (data['grades'] as List<dynamic>?) ?? [];
+        scheduleDates = (data['schedule_dates'] as List<dynamic>?) ?? [];
       } else if (data is List) {
         grades = data;
-      }
-      if (grades.isEmpty) {
-        grades = (response['grades'] as List<dynamic>?) ?? [];
       }
 
       final amaliyRaw = <Map<String, dynamic>>[];
       final maruzaRaw = <Map<String, dynamic>>[];
 
       for (final g in grades) {
-        final grade = g as Map<String, dynamic>;
-        final typeCode = grade['training_type_code'];
-        final typeName = grade['training_type_name']?.toString() ?? '';
+        if (g is! Map<String, dynamic>) continue;
+        final typeCode = g['training_type_code'];
+        final typeName = g['training_type_name']?.toString() ?? '';
 
         if (typeCode == 11 || typeName.contains("Ma'ruza") || typeName.contains('Maruza')) {
-          maruzaRaw.add(grade);
-        } else if (typeCode != 99 && typeCode != 100 && typeCode != 101 && typeCode != 102) {
-          amaliyRaw.add(grade);
+          maruzaRaw.add(g);
+        } else if (typeCode != 99 && typeCode != 100 && typeCode != 101 && typeCode != 102 && typeCode != 103) {
+          amaliyRaw.add(g);
         }
       }
 
+      // Collect all dates from schedule
+      final amaliyDates = <String>{};
+      final maruzaDates = <String>{};
+      for (final s in scheduleDates) {
+        if (s is! Map<String, dynamic>) continue;
+        final dateStr = s['lesson_date']?.toString() ?? '';
+        if (dateStr.isEmpty) continue;
+        final dateKey = dateStr.substring(0, 10);
+        final typeCode = s['training_type_code'];
+        final typeName = s['training_type_name']?.toString() ?? '';
+        if (typeCode == 11 || typeName.contains("Ma'ruza") || typeName.contains('Maruza')) {
+          maruzaDates.add(dateKey);
+        } else if (typeCode != 99 && typeCode != 100 && typeCode != 101 && typeCode != 102 && typeCode != 103) {
+          amaliyDates.add(dateKey);
+        }
+      }
+
+      // Also add dates from grades that might not be in schedule
+      for (final g in amaliyRaw) {
+        final d = g['lesson_date']?.toString() ?? '';
+        if (d.length >= 10) amaliyDates.add(d.substring(0, 10));
+      }
+      for (final g in maruzaRaw) {
+        final d = g['lesson_date']?.toString() ?? '';
+        if (d.length >= 10) maruzaDates.add(d.substring(0, 10));
+      }
+
+      final allDates = <String>{...amaliyDates, ...maruzaDates};
+      final sortedDates = allDates.toList()..sort();
+
       if (mounted) {
         setState(() {
-          _amaliyDaily = _computeDailyAverages(amaliyRaw);
-          _maruzaDaily = _computeDailyAverages(maruzaRaw);
+          _allDates = sortedDates;
+          _amaliyByDate = _computeDailyMap(amaliyRaw, amaliyDates);
+          _maruzaByDate = _computeDailyMap(maruzaRaw, maruzaDates);
           _isLoading = false;
         });
       }
@@ -902,11 +936,14 @@ class _JnGradesPageState extends State<_JnGradesPage> {
     }
   }
 
-  List<Map<String, dynamic>> _computeDailyAverages(List<Map<String, dynamic>> grades) {
+  Map<String, dynamic> _computeDailyMap(List<Map<String, dynamic>> grades, Set<String> dates) {
     final byDate = <String, List<num>>{};
+    final absentDates = <String>{};
+
     for (final g in grades) {
-      final date = g['lesson_date']?.toString() ?? '';
-      if (date.isEmpty) continue;
+      final dateRaw = g['lesson_date']?.toString() ?? '';
+      if (dateRaw.length < 10) continue;
+      final dateKey = dateRaw.substring(0, 10);
 
       final retake = g['retake_grade'];
       final grade = g['grade'];
@@ -914,35 +951,40 @@ class _JnGradesPageState extends State<_JnGradesPage> {
       final status = g['status']?.toString();
 
       if (status == 'pending' && reason == 'low_grade' && grade is num) {
-        byDate.putIfAbsent(date, () => []).add(grade);
+        byDate.putIfAbsent(dateKey, () => []).add(grade);
       } else if (status == 'pending') {
         continue;
       } else if (retake != null && retake is num && retake > 0) {
-        byDate.putIfAbsent(date, () => []).add(retake);
+        byDate.putIfAbsent(dateKey, () => []).add(retake);
       } else if (reason == 'absent' && (grade == null || grade == 0)) {
-        byDate.putIfAbsent(date, () => []);
+        absentDates.add(dateKey);
+        byDate.putIfAbsent(dateKey, () => []);
       } else if (grade != null && grade is num) {
-        byDate.putIfAbsent(date, () => []).add(grade);
+        byDate.putIfAbsent(dateKey, () => []).add(grade);
       }
     }
 
-    final dates = byDate.keys.toList()..sort();
-    return dates.map((date) {
-      final vals = byDate[date]!;
-      final avg = vals.isNotEmpty
-          ? (vals.reduce((a, b) => a + b) / vals.length).round()
-          : 0;
-      return {'date': date, 'avg': avg, 'hasGrades': vals.isNotEmpty};
-    }).toList();
+    final result = <String, dynamic>{};
+    for (final dateKey in dates) {
+      if (byDate.containsKey(dateKey)) {
+        final vals = byDate[dateKey]!;
+        if (vals.isNotEmpty) {
+          result[dateKey] = (vals.reduce((a, b) => a + b) / vals.length).round();
+        } else {
+          result[dateKey] = 'NB';
+        }
+      }
+      // dates without grades: leave absent from map (will show '-')
+    }
+    return result;
   }
 
-  String _formatDate(String? dateStr) {
-    if (dateStr == null || dateStr.isEmpty) return '-';
+  String _formatDateShort(String dateKey) {
     try {
-      final date = DateTime.parse(dateStr);
+      final date = DateTime.parse(dateKey);
       return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
     } catch (_) {
-      return dateStr;
+      return dateKey;
     }
   }
 
@@ -950,7 +992,6 @@ class _JnGradesPageState extends State<_JnGradesPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
@@ -981,123 +1022,186 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                     ],
                   ),
                 )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    if (_amaliyDaily.isNotEmpty) ...[
-                      Text(
-                        'Amaliy mashg\'ulotlar',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+              : _allDates.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.school_outlined, size: 48, color: secondaryText),
+                          const SizedBox(height: 12),
+                          Text('Ma\'lumot topilmadi', style: TextStyle(color: secondaryText)),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      _buildGradeGrid(_amaliyDaily, cardColor, textColor, secondaryText),
-                    ],
-                    if (_maruzaDaily.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      Text(
-                        'Ma\'ruzalar',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildGradeGrid(_maruzaDaily, cardColor, textColor, secondaryText),
-                    ],
-                    if (_amaliyDaily.isEmpty && _maruzaDaily.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 60),
-                        child: Center(
-                          child: Column(
-                            children: [
-                              Icon(Icons.school_outlined, size: 48, color: secondaryText),
-                              const SizedBox(height: 12),
-                              Text('Ma\'lumot topilmadi', style: TextStyle(color: secondaryText)),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                    )
+                  : _buildHorizontalTable(isDark, textColor, secondaryText),
     );
   }
 
-  Widget _buildGradeGrid(
-    List<Map<String, dynamic>> dailyData,
-    Color cardColor,
-    Color textColor,
-    Color secondaryText,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final headerBg = AppTheme.primaryColor;
-    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFDEDEDE);
+  Widget _buildHorizontalTable(bool isDark, Color textColor, Color secondaryText) {
+    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
+    final headerBg = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5F7FA);
     final cellBg = isDark ? AppTheme.darkCard : Colors.white;
 
-    return Table(
-      border: TableBorder.all(color: borderColor, width: 1),
-      columnWidths: const {
-        0: FlexColumnWidth(1),
-        1: FixedColumnWidth(60),
-      },
-      children: [
-        // Header
-        TableRow(
-          decoration: BoxDecoration(color: headerBg),
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              alignment: Alignment.center,
-              child: const Text('Sana', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+    // Separate dates for amaliy and maruza
+    final amaliyDates = _allDates.where((d) => _amaliyByDate.containsKey(d) || _amaliyByDate.keys.isEmpty).toList();
+    final maruzaDates = _allDates.where((d) => _maruzaByDate.containsKey(d) || _maruzaByDate.keys.isEmpty).toList();
+
+    // Use all dates for the table, showing both rows
+    final hasAmaliy = _amaliyByDate.isNotEmpty;
+    final hasMaruza = _maruzaByDate.isNotEmpty;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasAmaliy) ...[
+            Text(
+              'Amaliy mashg\'ulotlar',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
             ),
+            const SizedBox(height: 8),
+            _buildScrollableGrid(
+              _amaliyByDate,
+              _allDates.where((d) =>
+                _amaliyByDate.containsKey(d) ||
+                !_maruzaByDate.containsKey(d)
+              ).toList()..removeWhere((d) => _maruzaByDate.containsKey(d) && !_amaliyByDate.containsKey(d)),
+              borderColor, headerBg, cellBg, textColor, secondaryText, isDark,
+            ),
+          ],
+          if (hasMaruza) ...[
+            const SizedBox(height: 20),
+            Text(
+              'Ma\'ruzalar',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+            ),
+            const SizedBox(height: 8),
+            _buildScrollableGrid(
+              _maruzaByDate,
+              _allDates.where((d) =>
+                _maruzaByDate.containsKey(d) ||
+                !_amaliyByDate.containsKey(d)
+              ).toList()..removeWhere((d) => _amaliyByDate.containsKey(d) && !_maruzaByDate.containsKey(d)),
+              borderColor, headerBg, cellBg, textColor, secondaryText, isDark,
+            ),
+          ],
+          if (!hasAmaliy && !hasMaruza) ...[
+            _buildScrollableGrid(
+              {},
+              _allDates,
+              borderColor, headerBg, cellBg, textColor, secondaryText, isDark,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScrollableGrid(
+    Map<String, dynamic> gradesByDate,
+    List<String> dates,
+    Color borderColor,
+    Color headerBg,
+    Color cellBg,
+    Color textColor,
+    Color secondaryText,
+    bool isDark,
+  ) {
+    if (dates.isEmpty) return const SizedBox.shrink();
+    const double colWidth = 56;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Column(
+          children: [
+            // Date header row (vertical text)
+            Row(
+              children: dates.map((dateKey) {
+                return Container(
+                  width: colWidth,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: headerBg,
+                    border: Border(
+                      right: BorderSide(color: borderColor, width: 0.5),
+                    ),
+                  ),
+                  child: RotatedBox(
+                    quarterTurns: 3,
+                    child: Text(
+                      _formatDateShort(dateKey),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            // Grade row
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              alignment: Alignment.center,
-              child: const Text('Baho', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: borderColor)),
+              ),
+              child: Row(
+                children: dates.map((dateKey) {
+                  final val = gradesByDate[dateKey];
+                  String text;
+                  Color color;
+
+                  if (val == null) {
+                    text = '-';
+                    color = secondaryText;
+                  } else if (val == 'NB') {
+                    text = 'NB';
+                    color = AppTheme.errorColor;
+                  } else if (val is int) {
+                    text = val.toString();
+                    color = val >= 70
+                        ? const Color(0xFF43A047)
+                        : val > 0
+                            ? const Color(0xFF1E88E5)
+                            : secondaryText;
+                  } else {
+                    text = '-';
+                    color = secondaryText;
+                  }
+
+                  return Container(
+                    width: colWidth,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: cellBg,
+                      border: Border(
+                        right: BorderSide(color: borderColor, width: 0.5),
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      text,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ],
         ),
-        // Data rows
-        ...dailyData.map((d) {
-          final avg = d['avg'] as int;
-          final hasGrades = d['hasGrades'] as bool;
-
-          String gradeText;
-          Color gradeColor;
-
-          if (!hasGrades) {
-            gradeText = 'NB';
-            gradeColor = AppTheme.errorColor;
-          } else if (avg >= 70) {
-            gradeText = avg.toString();
-            gradeColor = const Color(0xFF43A047);
-          } else if (avg > 0) {
-            gradeText = avg.toString();
-            gradeColor = const Color(0xFF1E88E5);
-          } else {
-            gradeText = '-';
-            gradeColor = secondaryText;
-          }
-
-          return TableRow(
-            decoration: BoxDecoration(color: cellBg),
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _formatDate(d['date'] as String?),
-                  style: TextStyle(fontSize: 13, color: textColor),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                alignment: Alignment.center,
-                child: Text(
-                  gradeText,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: gradeColor),
-                ),
-              ),
-            ],
-          );
-        }),
-      ],
+      ),
     );
   }
 }

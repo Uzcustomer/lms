@@ -1154,7 +1154,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget _buildLiveClassCard() {
     final lesson = _getCurrentOrNextLesson();
 
-    // If no today lesson, show next day's first lesson
     if (lesson == null) {
       if (_nextDayLesson == null) return const SizedBox.shrink();
       return _buildNextDayCard(_nextDayLesson!);
@@ -1170,16 +1169,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     final Duration remaining;
     final String statusText;
-    final Color bgColor;
 
     if (isActive) {
       remaining = end.difference(_now);
       statusText = 'HOZIR DAVOM ETMOQDA';
-      bgColor = const Color(0xFF4CAF50);
     } else {
       remaining = start.difference(_now);
       statusText = 'KEYINGI DARS';
-      bgColor = const Color(0xFFFFA726);
     }
 
     final hours = remaining.inHours;
@@ -1195,104 +1191,180 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         ? 1.0 - (remaining.inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0)
         : 0.0;
 
+    final gradientColors = isActive
+        ? [const Color(0xFF2E7D32), const Color(0xFF43A047), const Color(0xFF66BB6A)]
+        : [const Color(0xFFE65100), const Color(0xFFF57C00), const Color(0xFFFFA726)];
+    final shadowColor = isActive ? const Color(0xFF43A047) : const Color(0xFFF57C00);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(18),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: isActive
-                ? [const Color(0xFF43A047), const Color(0xFF66BB6A)]
-                : [const Color(0xFFF57C00), const Color(0xFFFFA726)],
+            colors: gradientColors,
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: bgColor.withAlpha(60),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+              color: shadowColor.withAlpha(70),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 8, height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
+            Positioned(
+              right: -30,
+              top: -30,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(15),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  statusText,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withAlpha(220),
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              subjectName,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 16, color: Colors.white.withAlpha(200)),
-                const SizedBox(width: 4),
-                Text(
-                  '$startTime–$endTime',
-                  style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500),
+            Positioned(
+              right: 20,
+              bottom: -20,
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(10),
                 ),
-                if (room.isNotEmpty) ...[
-                  const SizedBox(width: 12),
-                  Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
-                  const SizedBox(width: 6),
-                  Text(room, style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+              ),
+            ),
+            Positioned(
+              left: -15,
+              bottom: -15,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(8),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (isActive)
+                        _buildBlinkingDot()
+                      else
+                        Container(
+                          width: 8, height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(200),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withAlpha(220),
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    subjectName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, size: 16, color: Colors.white.withAlpha(200)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$startTime–$endTime',
+                        style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500),
+                      ),
+                      if (room.isNotEmpty) ...[
+                        const SizedBox(width: 10),
+                        Text('·', style: TextStyle(fontSize: 18, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 6),
+                        Text(room, style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500)),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (isActive) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        backgroundColor: Colors.white.withAlpha(40),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(
+                    timeLeft,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withAlpha(200),
+                    ),
+                  ),
                 ],
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (isActive) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 4,
-                  backgroundColor: Colors.white.withAlpha(50),
-                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              const SizedBox(height: 6),
-            ],
-            Text(
-              timeLeft,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.white.withAlpha(200),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBlinkingDot() {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.3, end: 1.0),
+      duration: const Duration(milliseconds: 800),
+      builder: (context, val, child) {
+        return Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withAlpha((val * 255).toInt()),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withAlpha((val * 120).toInt()),
+                blurRadius: 6,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        );
+      },
+      onEnd: () {
+        if (mounted) setState(() {});
+      },
     );
   }
 
@@ -1453,94 +1525,125 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
     final subTextColor = isDark ? Colors.white.withAlpha(150) : Colors.grey[600]!;
-    final trackColor = isDark ? Colors.white.withAlpha(20) : ringColor.withAlpha(30);
+    final trackColor = isDark ? Colors.white.withAlpha(20) : ringColor.withAlpha(25);
     final percent = (value / maxValue).clamp(0.0, 1.0);
     final colors = isDark ? darkGradientColors : gradientColors;
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: colors,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: ringColor.withAlpha(isDark ? 30 : 20),
+            color: ringColor.withAlpha(isDark ? 30 : 25),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Column(
+      child: Stack(
         children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: percent),
-            duration: const Duration(milliseconds: 1400),
-            curve: Curves.easeOutCubic,
-            builder: (context, animVal, _) {
-              return SizedBox(
-                width: 90,
-                height: 90,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 90,
-                      height: 90,
-                      child: PieChart(
-                        PieChartData(
-                          startDegreeOffset: -90,
-                          sectionsSpace: 0,
-                          centerSpaceRadius: 30,
-                          sections: [
-                            PieChartSectionData(
-                              value: animVal * maxValue,
-                              color: ringColor,
-                              radius: 12,
-                              showTitle: false,
-                            ),
-                            PieChartSectionData(
-                              value: maxValue - (animVal * maxValue),
-                              color: trackColor,
-                              radius: 12,
-                              showTitle: false,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Text(
-                      displayText,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 10),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: subTextColor,
+          Positioned(
+            right: -25,
+            top: -25,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: ringColor.withAlpha(isDark ? 15 : 18),
+              ),
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            '${displayText} / ${maxValue.toInt()}',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: subTextColor.withAlpha(180),
+          Positioned(
+            left: -15,
+            bottom: -15,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: ringColor.withAlpha(isDark ? 10 : 12),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+            child: Column(
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: percent),
+                  duration: const Duration(milliseconds: 1400),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, animVal, _) {
+                    return SizedBox(
+                      width: 110,
+                      height: 110,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 110,
+                            height: 110,
+                            child: PieChart(
+                              PieChartData(
+                                startDegreeOffset: -90,
+                                sectionsSpace: 0,
+                                centerSpaceRadius: 38,
+                                sections: [
+                                  PieChartSectionData(
+                                    value: animVal * maxValue,
+                                    color: ringColor,
+                                    radius: 14,
+                                    showTitle: false,
+                                  ),
+                                  PieChartSectionData(
+                                    value: maxValue - (animVal * maxValue),
+                                    color: trackColor,
+                                    radius: 14,
+                                    showTitle: false,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Text(
+                            displayText,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: ringColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$displayText / ${maxValue.toInt()}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: subTextColor,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

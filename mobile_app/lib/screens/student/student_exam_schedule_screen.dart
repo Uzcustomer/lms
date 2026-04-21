@@ -99,11 +99,13 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                 // Legend
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
                     children: [
-                      _legendDot(const Color(0xFFE53935), 'OSKI'),
-                      const SizedBox(width: 16),
-                      _legendDot(const Color(0xFF4A6CF7), 'Test'),
+                      _legendDot(const Color(0xFF29B6F6), 'OSKI'),
+                      _legendDot(const Color(0xFF66BB6A), 'Test'),
+                      _legendDot(const Color(0xFFE6A817), 'O\'tgan'),
                     ],
                   ),
                 ),
@@ -212,6 +214,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
       cells.add(const SizedBox());
     }
 
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+
     for (int day = 1; day <= lastDay.day; day++) {
       final date = DateTime(year, month, day);
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
@@ -222,6 +226,20 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
       final hasOski = dayExams.any((e) => e['exam_type'] == 'OSKI');
       final hasTest = dayExams.any((e) => e['exam_type'] == 'Test');
       final hasExam = dayExams.isNotEmpty;
+      final isPast = date.isBefore(today);
+
+      Color? cellBg;
+      if (isSelected) {
+        cellBg = const Color(0xFF4A6CF7);
+      } else if (hasExam && isPast) {
+        cellBg = const Color(0xFFE6A817).withOpacity(isDark ? 0.3 : 0.22);
+      } else if (hasOski && !isPast) {
+        cellBg = const Color(0xFF29B6F6).withOpacity(isDark ? 0.25 : 0.18);
+      } else if (hasTest && !isPast) {
+        cellBg = const Color(0xFF66BB6A).withOpacity(isDark ? 0.25 : 0.18);
+      } else if (isToday) {
+        cellBg = const Color(0xFF4A6CF7).withOpacity(0.08);
+      }
 
       cells.add(
         GestureDetector(
@@ -229,11 +247,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
           child: Container(
             margin: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFF4A6CF7)
-                  : isToday
-                      ? const Color(0xFF4A6CF7).withOpacity(0.08)
-                      : Colors.transparent,
+              color: cellBg ?? Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: isToday && !isSelected
                   ? Border.all(color: const Color(0xFF4A6CF7), width: 1.5)
@@ -268,7 +282,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                             shape: BoxShape.circle,
                             color: isSelected
                                 ? Colors.white
-                                : const Color(0xFFE53935),
+                                : isPast
+                                    ? const Color(0xFFE6A817)
+                                    : const Color(0xFF29B6F6),
                           ),
                         ),
                       if (hasTest)
@@ -280,7 +296,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                             shape: BoxShape.circle,
                             color: isSelected
                                 ? Colors.white
-                                : const Color(0xFF4A6CF7),
+                                : isPast
+                                    ? const Color(0xFFE6A817)
+                                    : const Color(0xFF66BB6A),
                           ),
                         ),
                     ],
@@ -310,14 +328,14 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
     final examType = exam['exam_type']?.toString() ?? '';
     final timeStr = exam['time']?.toString() ?? '';
     final isOski = examType == 'OSKI';
-    final color = isOski ? const Color(0xFFE53935) : const Color(0xFF4A6CF7);
-
     final dateStr = exam['date']?.toString() ?? '';
     String daysLeft = '';
+    bool isPast = false;
     try {
       final date = DateTime.parse(dateStr);
       final now = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
       final diff = date.difference(now).inDays;
+      isPast = diff < 0;
       if (diff == 0) {
         daysLeft = 'Bugun';
       } else if (diff == 1) {
@@ -328,6 +346,15 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
         daysLeft = 'O\'tgan';
       }
     } catch (_) {}
+
+    final Color color;
+    if (isPast) {
+      color = const Color(0xFFE6A817);
+    } else if (isOski) {
+      color = const Color(0xFF29B6F6);
+    } else {
+      color = const Color(0xFF66BB6A);
+    }
 
     return Container(
       padding: const EdgeInsets.all(14),

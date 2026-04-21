@@ -755,7 +755,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Joriy nazorat',
+          'Joriy nazorat baholari',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,

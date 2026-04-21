@@ -1491,8 +1491,14 @@
                                                                     if (!empty($absenceData['retake_graded_at'])) {
                                                                         $retakeTooltip .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
                                                                     }
+                                                                    $graderName = null;
                                                                     if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
-                                                                        $retakeTooltip .= "\nBaho qo'ydi: " . $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                        $graderName = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                    } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                        $graderName = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                    }
+                                                                    if ($graderName) {
+                                                                        $retakeTooltip .= "\nBaho qo'ydi: " . $graderName;
                                                                     }
                                                                     $retakeTooltip .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
                                                                 }
@@ -1579,8 +1585,14 @@
                                                                 if (!empty($absenceData['retake_graded_at'])) {
                                                                     $retakeTooltip2 .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
                                                                 }
+                                                                $graderName2 = null;
                                                                 if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
-                                                                    $retakeTooltip2 .= "\nBaho qo'ydi: " . $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                    $graderName2 = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                    $graderName2 = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                }
+                                                                if ($graderName2) {
+                                                                    $retakeTooltip2 .= "\nBaho qo'ydi: " . $graderName2;
                                                                 }
                                                                 $retakeTooltip2 .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
                                                             @endphp

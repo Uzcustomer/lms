@@ -1365,10 +1365,16 @@ class JournalController extends Controller
             }
         }
 
-        $retakeGraderIds = collect($jbAbsences)->flatten(2)->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
+        $absFlat = collect($jbAbsences)->flatten(2);
+        $retakeGraderIds = $absFlat->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
         $retakeGraderNames = [];
         if (!empty($retakeGraderIds)) {
             $retakeGraderNames = DB::table('users')->whereIn('id', $retakeGraderIds)->pluck('name', 'id')->toArray();
+        }
+        $retakeEmployeeIds = $absFlat->pluck('employee_id')->filter()->unique()->values()->toArray();
+        $retakeEmployeeNames = [];
+        if (!empty($retakeEmployeeIds)) {
+            $retakeEmployeeNames = DB::table('teachers')->whereIn('hemis_id', $retakeEmployeeIds)->pluck('full_name', 'hemis_id')->toArray();
         }
 
         return view('admin.journal.show', compact(
@@ -1398,6 +1404,7 @@ class JournalController extends Controller
             'mtGrades',
             'jbAbsences',
             'retakeGraderNames',
+            'retakeEmployeeNames',
             'mtAbsences',
             'jbAttendance',
             'mtAttendance',

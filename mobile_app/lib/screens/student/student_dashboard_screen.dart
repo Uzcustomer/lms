@@ -796,8 +796,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           final item = items[index];
           final jn = item['jn'] as double?;
           final att = item['attendance'] as double;
-          final gradientColors = _subjectGradients[index % _subjectGradients.length];
-          final accentColor = _subjectAccents[index % _subjectAccents.length];
 
           Color jnColor;
           if (jn == null) {
@@ -819,59 +817,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             attColor = const Color(0xFFE53935);
           }
 
-          final darkGradient = [
-            accentColor.withAlpha(25),
-            accentColor.withAlpha(15),
-          ];
-
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark ? darkGradient : gradientColors,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: isDark ? AppTheme.darkCard : Colors.white,
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: accentColor.withAlpha(isDark ? 20 : 15),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                border: Border.all(
+                  color: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
+                  width: 2,
+                ),
               ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -20,
-                    top: -20,
-                    child: Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: accentColor.withAlpha(isDark ? 15 : 20),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: 30,
-                    bottom: -15,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: accentColor.withAlpha(isDark ? 10 : 12),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
                       children: [
                         // JN circular indicator
                         TweenAnimationBuilder<double>(
@@ -975,8 +935,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       ],
                     ),
                   ),
-                ],
-              ),
             ),
           );
         }),

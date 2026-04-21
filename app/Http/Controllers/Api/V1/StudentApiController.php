@@ -14,6 +14,7 @@ use App\Models\Independent;
 use App\Models\IndependentGradeHistory;
 use App\Models\IndependentSubmission;
 use App\Models\MarkingSystemScore;
+use App\Models\ExamSchedule;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Setting;
@@ -1211,6 +1212,49 @@ class StudentApiController extends Controller
                 'course' => $course,
                 'semester_name' => $student->semester_name,
             ],
+        ]);
+    }
+
+    public function examSchedule(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $exams = ExamSchedule::where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $student->semester_code)
+            ->where(function ($query) use ($student) {
+                $query->where('education_year', $student->education_year_code)
+                    ->orWhereNull('education_year');
+            })
+            ->get()
+            ->flatMap(function ($exam) {
+                $items = [];
+
+                if (!$exam->oski_na && $exam->oski_date) {
+                    $items[] = [
+                        'subject_name' => $exam->subject_name,
+                        'exam_type' => 'OSKI',
+                        'date' => $exam->oski_date->format('Y-m-d'),
+                        'time' => $exam->oski_time,
+                    ];
+                }
+
+                if (!$exam->test_na && $exam->test_date) {
+                    $items[] = [
+                        'subject_name' => $exam->subject_name,
+                        'exam_type' => 'Test',
+                        'date' => $exam->test_date->format('Y-m-d'),
+                        'time' => $exam->test_time,
+                    ];
+                }
+
+                return $items;
+            })
+            ->sortBy('date')
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $exams,
         ]);
     }
 }

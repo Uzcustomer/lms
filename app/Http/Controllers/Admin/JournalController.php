@@ -505,7 +505,7 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
-                ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at'],
+                ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at', 'graded_by_user_id', 'retake_graded_at', 'quiz_result_id', 'employee_id'],
                 $hasSababliCol ? ['retake_was_sababli'] : []
             ))
             ->orderBy('lesson_date')
@@ -688,6 +688,10 @@ class JournalController extends Controller
                     'retake_grade' => $g->retake_grade,
                     'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'deadline' => $g->deadline,
+                    'graded_by_user_id' => $g->graded_by_user_id,
+                    'retake_graded_at' => $g->retake_graded_at,
+                    'quiz_result_id' => $g->quiz_result_id,
+                    'employee_id' => $g->employee_id,
                 ];
             }
         }
@@ -1361,6 +1365,12 @@ class JournalController extends Controller
             }
         }
 
+        $retakeGraderIds = collect($jbAbsences)->flatten(2)->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
+        $retakeGraderNames = [];
+        if (!empty($retakeGraderIds)) {
+            $retakeGraderNames = DB::table('users')->whereIn('id', $retakeGraderIds)->pluck('name', 'id')->toArray();
+        }
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -1387,6 +1397,7 @@ class JournalController extends Controller
             'jbGrades',
             'mtGrades',
             'jbAbsences',
+            'retakeGraderNames',
             'mtAbsences',
             'jbAttendance',
             'mtAttendance',

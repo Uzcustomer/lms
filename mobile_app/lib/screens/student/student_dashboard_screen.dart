@@ -762,6 +762,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final jnVal = jn != null
           ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0)
           : null;
+      if (jnVal == null) continue;
       final absentHours = _toDouble(s['absent_hours']);
       final totalHours = _toDouble(s['auditorium_hours']);
       final attendance = totalHours > 0
@@ -818,15 +819,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           }
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.darkCard : Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
-                  width: 2,
+                  color: isDark ? AppTheme.darkDivider : const Color(0xFF43A047),
+                  width: 1.5,
                 ),
               ),
               child: Padding(

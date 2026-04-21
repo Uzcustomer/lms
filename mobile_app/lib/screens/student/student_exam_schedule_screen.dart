@@ -191,7 +191,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                               child: GestureDetector(
                                 onTap: () {},
                                 child: Container(
-                                  width: 220,
+                                  width: 260,
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 20, vertical: 28),
                                   decoration: BoxDecoration(
@@ -243,6 +243,22 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                                           fontSize: 12,
                                           color: subColor,
                                         ),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          _legendDot(
+                                              const Color(0xFF29B6F6), 'OSKI'),
+                                          const SizedBox(width: 12),
+                                          _legendDot(
+                                              const Color(0xFF66BB6A), 'Test'),
+                                          const SizedBox(width: 12),
+                                          _legendDot(
+                                              const Color(0xFFE6A817),
+                                              'O\'tgan'),
+                                        ],
                                       ),
                                     ],
                                   ),

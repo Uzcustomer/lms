@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
@@ -68,71 +69,208 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final size = MediaQuery.of(context).size;
+    final headerH = size.height * 0.40;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: const Color(0xFFF0F2F8),
       resizeToAvoidBottomInset: true,
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Blue wave header
+            // Header with multiple wave layers + patterns
             SizedBox(
-              height: size.height * 0.38,
+              height: headerH,
               child: Stack(
                 children: [
-                  // Wave background
+                  // Back wave layer (darker)
                   ClipPath(
-                    clipper: _WaveClipper(),
+                    clipper: _WaveClipper2(),
                     child: Container(
-                      height: size.height * 0.38,
+                      height: headerH,
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Color(0xFF4A6CF7),
-                            Color(0xFF6C63FF),
-                            Color(0xFF5B5FE0),
+                            Color(0xFF3B3EBF),
+                            Color(0xFF5048C8),
                           ],
                         ),
                       ),
                     ),
                   ),
 
-                  // Decorative circles
-                  Positioned(
-                    top: -30,
-                    right: -30,
+                  // Front wave layer (main gradient)
+                  ClipPath(
+                    clipper: _WaveClipper1(),
                     child: Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.08),
+                      height: headerH,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF4A6CF7),
+                            Color(0xFF6C63FF),
+                            Color(0xFF7B68EE),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Dot grid pattern
+                  Positioned(
+                    top: 50,
+                    right: 20,
+                    child: CustomPaint(
+                      size: const Size(80, 80),
+                      painter: _DotGridPainter(
+                        color: Colors.white.withOpacity(0.12),
+                        dotSize: 2.5,
+                        spacing: 14,
                       ),
                     ),
                   ),
                   Positioned(
-                    top: 40,
-                    right: 30,
+                    bottom: 70,
+                    left: 15,
+                    child: CustomPaint(
+                      size: const Size(60, 60),
+                      painter: _DotGridPainter(
+                        color: Colors.white.withOpacity(0.08),
+                        dotSize: 2,
+                        spacing: 12,
+                      ),
+                    ),
+                  ),
+
+                  // Decorative rings
+                  Positioned(
+                    top: -40,
+                    right: -40,
                     child: Container(
-                      width: 80,
-                      height: 80,
+                      width: 160,
+                      height: 160,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.1),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: -20,
+                    right: -20,
+                    child: Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.06),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 30,
+                    left: -25,
+                    child: Container(
+                      width: 70,
+                      height: 70,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.white.withOpacity(0.06),
                       ),
                     ),
                   ),
+
+                  // Small floating circles
                   Positioned(
-                    bottom: 60,
-                    left: -20,
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                    top: 80,
+                    right: 60,
+                    child: _circle(10, Colors.white.withOpacity(0.15)),
+                  ),
+                  Positioned(
+                    top: 50,
+                    left: 80,
+                    child: _circle(6, Colors.white.withOpacity(0.12)),
+                  ),
+                  Positioned(
+                    bottom: 90,
+                    right: 100,
+                    child: _circle(8, Colors.white.withOpacity(0.1)),
+                  ),
+                  Positioned(
+                    bottom: 80,
+                    left: 60,
+                    child: _circle(14, Colors.white.withOpacity(0.05)),
+                  ),
+                  Positioned(
+                    top: 110,
+                    left: 40,
+                    child: _circle(5, Colors.white.withOpacity(0.18)),
+                  ),
+
+                  // Diamond shapes
+                  Positioned(
+                    top: 65,
+                    right: 130,
+                    child: Transform.rotate(
+                      angle: pi / 4,
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 100,
+                    right: 50,
+                    child: Transform.rotate(
+                      angle: pi / 4,
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.12),
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Plus signs
+                  Positioned(
+                    top: 100,
+                    right: 40,
+                    child: _plusSign(Colors.white.withOpacity(0.12), 10),
+                  ),
+                  Positioned(
+                    bottom: 95,
+                    left: 110,
+                    child: _plusSign(Colors.white.withOpacity(0.08), 8),
+                  ),
+
+                  // Triangle outline
+                  Positioned(
+                    top: 75,
+                    left: 120,
+                    child: CustomPaint(
+                      size: const Size(18, 18),
+                      painter: _TrianglePainter(
+                        color: Colors.white.withOpacity(0.1),
                       ),
                     ),
                   ),
@@ -143,17 +281,24 @@ class _LoginScreenState extends State<LoginScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           Container(
-                            width: 70,
-                            height: 70,
+                            width: 72,
+                            height: 72,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
+                              color: Colors.white.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: Colors.white.withOpacity(0.3),
                                 width: 1.5,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                             ),
                             child: const Icon(
                               Icons.school_rounded,
@@ -168,15 +313,15 @@ class _LoginScreenState extends State<LoginScreen>
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              letterSpacing: 1.5,
+                              letterSpacing: 2,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 5),
                           Text(
                             l.lmsSubtitle,
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.white.withOpacity(0.8),
+                              color: Colors.white.withOpacity(0.75),
                             ),
                           ),
                         ],
@@ -193,7 +338,7 @@ class _LoginScreenState extends State<LoginScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
 
                   // Tab selector
                   Container(
@@ -268,7 +413,7 @@ class _LoginScreenState extends State<LoginScreen>
                         _buildField(
                           controller: _loginController,
                           hint: l.loginHint,
-                          icon: Icons.email_outlined,
+                          icon: Icons.person_outline_rounded,
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) {
                               return l.loginRequired;
@@ -432,7 +577,7 @@ class _LoginScreenState extends State<LoginScreen>
                             );
                           },
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 28),
 
                         // Footer
                         Center(
@@ -444,7 +589,7 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
@@ -454,6 +599,22 @@ class _LoginScreenState extends State<LoginScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _circle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+  }
+
+  Widget _plusSign(Color color, double size) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _PlusPainter(color: color, strokeW: 1.5)),
     );
   }
 
@@ -468,24 +629,16 @@ class _LoginScreenState extends State<LoginScreen>
     return TextFormField(
       controller: controller,
       obscureText: obscure,
-      style: const TextStyle(
-        color: Color(0xFF2D2D3A),
-        fontSize: 15,
-      ),
+      style: const TextStyle(color: Color(0xFF2D2D3A), fontSize: 15),
       validator: validator,
       cursorColor: const Color(0xFF4A6CF7),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(
-          color: Color(0xFFB0B0B8),
-          fontSize: 14,
-        ),
+        hintStyle: const TextStyle(color: Color(0xFFB0B0B8), fontSize: 14),
         prefixIcon: Icon(icon, color: const Color(0xFFB0B0B8), size: 20),
         suffixIcon: suffixIcon != null
             ? Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: suffixIcon,
-              )
+                padding: const EdgeInsets.only(right: 12), child: suffixIcon)
             : null,
         filled: true,
         fillColor: Colors.white,
@@ -517,21 +670,23 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-class _WaveClipper extends CustomClipper<Path> {
+// Front wave
+class _WaveClipper1 extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
-    path.lineTo(0, size.height * 0.75);
+    path.lineTo(0, size.height * 0.72);
 
-    final firstControl = Offset(size.width * 0.25, size.height * 0.95);
-    final firstEnd = Offset(size.width * 0.5, size.height * 0.8);
-    path.quadraticBezierTo(
-        firstControl.dx, firstControl.dy, firstEnd.dx, firstEnd.dy);
-
-    final secondControl = Offset(size.width * 0.75, size.height * 0.65);
-    final secondEnd = Offset(size.width, size.height * 0.82);
-    path.quadraticBezierTo(
-        secondControl.dx, secondControl.dy, secondEnd.dx, secondEnd.dy);
+    path.cubicTo(
+      size.width * 0.2, size.height * 0.92,
+      size.width * 0.45, size.height * 0.68,
+      size.width * 0.65, size.height * 0.78,
+    );
+    path.cubicTo(
+      size.width * 0.85, size.height * 0.88,
+      size.width * 0.95, size.height * 0.72,
+      size.width, size.height * 0.80,
+    );
 
     path.lineTo(size.width, 0);
     path.close();
@@ -540,4 +695,110 @@ class _WaveClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+// Back wave (slightly different shape)
+class _WaveClipper2 extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height * 0.78);
+
+    path.cubicTo(
+      size.width * 0.15, size.height * 0.65,
+      size.width * 0.35, size.height * 0.98,
+      size.width * 0.55, size.height * 0.85,
+    );
+    path.cubicTo(
+      size.width * 0.75, size.height * 0.72,
+      size.width * 0.9, size.height * 0.95,
+      size.width, size.height * 0.88,
+    );
+
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
+// Dot grid painter
+class _DotGridPainter extends CustomPainter {
+  final Color color;
+  final double dotSize;
+  final double spacing;
+
+  _DotGridPainter({
+    required this.color,
+    required this.dotSize,
+    required this.spacing,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    for (double x = 0; x < size.width; x += spacing) {
+      for (double y = 0; y < size.height; y += spacing) {
+        canvas.drawCircle(Offset(x, y), dotSize / 2, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Plus sign painter
+class _PlusPainter extends CustomPainter {
+  final Color color;
+  final double strokeW;
+
+  _PlusPainter({required this.color, required this.strokeW});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeW
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(size.width / 2, 0),
+      Offset(size.width / 2, size.height),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(0, size.height / 2),
+      Offset(size.width, size.height / 2),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// Triangle outline painter
+class _TrianglePainter extends CustomPainter {
+  final Color color;
+
+  _TrianglePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final path = Path()
+      ..moveTo(size.width / 2, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

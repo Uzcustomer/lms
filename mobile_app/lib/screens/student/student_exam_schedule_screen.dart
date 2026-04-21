@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../config/theme.dart';
@@ -177,49 +178,77 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
               ],
             ),
                   if (_showHint)
-                    Positioned(
-                      top: 8,
-                      left: 24,
-                      right: 24,
+                    Positioned.fill(
                       child: FadeTransition(
                         opacity: _hintAnim,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF2A2D3E)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.12),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.touch_app_rounded,
-                                  color: const Color(0xFF4A6CF7), size: 22),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Belgilangan kunlarga bosib ko\'ring',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: textColor,
+                        child: GestureDetector(
+                          onTap: _dismissHint,
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+                            child: Container(
+                              color: Colors.black.withOpacity(0.3),
+                              alignment: Alignment.center,
+                              child: GestureDetector(
+                                onTap: () {},
+                                child: Container(
+                                  width: 220,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 28),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? const Color(0xFF2A2D3E)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.15),
+                                        blurRadius: 24,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 52,
+                                        height: 52,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF4A6CF7)
+                                              .withOpacity(0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.touch_app_rounded,
+                                          color: Color(0xFF4A6CF7),
+                                          size: 26,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'Belgilangan kunlarga\nbosib ko\'ring',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: textColor,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Imtihon ma\'lumotlarini ko\'rish uchun',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: subColor,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
-                              GestureDetector(
-                                onTap: _dismissHint,
-                                child: Icon(Icons.close_rounded,
-                                    size: 18, color: subColor),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),

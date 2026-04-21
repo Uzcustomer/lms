@@ -824,11 +824,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.darkCard : Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: isDark ? AppTheme.darkDivider : const Color(0xFF43A047),
-                  width: 1.5,
-                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(isDark ? 25 : 10),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Padding(
                 padding: const EdgeInsets.all(14),
@@ -1618,10 +1621,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       decoration: BoxDecoration(
         color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: ringColor,
-          width: 2,
-        ),
+        boxShadow: [
+          BoxShadow(
+            color: ringColor.withAlpha(isDark ? 25 : 35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
       child: Center(

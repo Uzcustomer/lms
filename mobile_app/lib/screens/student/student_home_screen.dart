@@ -5,7 +5,7 @@ import 'student_dashboard_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
-import 'absence_excuse_list_screen.dart';
+import 'student_services_screen.dart';
 
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
@@ -219,16 +219,16 @@ class _UsefulModalState extends State<_UsefulModal>
 
     final services = [
       _ModalServiceItem(
-        icon: Icons.description_outlined,
-        title: widget.l.absenceExcuse,
-        subtitle: widget.l.absenceExcuseDesc,
+        icon: Icons.fact_check_outlined,
+        title: 'Elektron xizmatlar',
+        subtitle: 'Sababli ariza va boshqa xizmatlar',
         color: const Color(0xFF4A6CF7),
         onTap: () {
           Navigator.pop(context);
           Navigator.push(
             context,
             MaterialPageRoute(
-                builder: (_) => const AbsenceExcuseListScreen()),
+                builder: (_) => const StudentServicesScreen()),
           );
         },
       ),

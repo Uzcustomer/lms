@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
@@ -68,6 +68,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final size = MediaQuery.of(context).size;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
@@ -75,298 +76,372 @@ class _LoginScreenState extends State<LoginScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background image
-          Image.asset(
-            'assets/images/bg_image.png',
-            fit: BoxFit.cover,
-          ),
-
-          // Dark gradient overlay
+          // Gradient background
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
                 colors: [
-                  Colors.black.withOpacity(0.1),
-                  Colors.black.withOpacity(0.6),
-                  Colors.black.withOpacity(0.85),
+                  Color(0xFF0A1628),
+                  Color(0xFF0D3D6D),
+                  Color(0xFF144E8A),
+                  Color(0xFF0A1628),
                 ],
-                stops: const [0.0, 0.45, 1.0],
+                stops: [0.0, 0.35, 0.65, 1.0],
               ),
             ),
           ),
 
-          // Content
+          // Decorative circles
+          Positioned(
+            top: -size.width * 0.3,
+            right: -size.width * 0.2,
+            child: Container(
+              width: size.width * 0.7,
+              height: size.width * 0.7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF26A69A).withOpacity(0.15),
+                    const Color(0xFF26A69A).withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -size.width * 0.25,
+            left: -size.width * 0.25,
+            child: Container(
+              width: size.width * 0.6,
+              height: size.width * 0.6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF0D3D6D).withOpacity(0.3),
+                    const Color(0xFF0D3D6D).withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: size.height * 0.35,
+            left: -40,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF26A69A).withOpacity(0.08),
+                    const Color(0xFF26A69A).withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Floating dots pattern
+          ..._buildFloatingDots(size),
+
+          // Main content
           SafeArea(
-            child: Column(
-              children: [
-                const Spacer(),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: bottom > 0 ? bottom + 16 : 0,
+              ),
+              child: SizedBox(
+                height: size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 3),
 
-                // Logo & Title
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.school_rounded,
-                    size: 40,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'TDTU LMS',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l.lmsSubtitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white.withOpacity(0.7),
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // Glass card with form
-                Padding(
-                  padding: EdgeInsets.only(
-                    left: 20,
-                    right: 20,
-                    bottom: bottom > 0 ? bottom + 12 : 32,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
+                      // Logo
+                      Container(
+                        width: 80,
+                        height: 80,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(22),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFF26A69A),
+                              Color(0xFF0D3D6D),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF26A69A).withOpacity(0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.school_rounded,
+                          size: 42,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'TDTU LMS',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        l.lmsSubtitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.5),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 36),
+
+                      // Tab selector
+                      Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.07),
+                          borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withOpacity(0.1),
                           ),
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Tab selector
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: TabBar(
-                                controller: _tabController,
-                                indicator: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFFFF8C00),
-                                      Color(0xFFFF6B00),
-                                    ],
-                                  ),
-                                  borderRadius: BorderRadius.circular(11),
-                                ),
-                                labelColor: Colors.white,
-                                unselectedLabelColor:
-                                    Colors.white.withOpacity(0.5),
-                                indicatorSize: TabBarIndicatorSize.tab,
-                                dividerColor: Colors.transparent,
-                                labelStyle: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                                tabs: [
-                                  Tab(text: l.student),
-                                  Tab(text: l.teacher),
-                                ],
-                                onTap: (_) {
-                                  _loginController.clear();
-                                  _passwordController.clear();
-                                  context.read<AuthProvider>().clearError();
-                                },
-                              ),
+                        child: TabBar(
+                          controller: _tabController,
+                          indicator: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [
+                                Color(0xFF26A69A),
+                                Color(0xFF2CB5A8),
+                              ],
                             ),
-                            const SizedBox(height: 20),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    const Color(0xFF26A69A).withOpacity(0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          labelColor: Colors.white,
+                          unselectedLabelColor: Colors.white.withOpacity(0.4),
+                          indicatorSize: TabBarIndicatorSize.tab,
+                          dividerColor: Colors.transparent,
+                          labelStyle: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                          tabs: [
+                            Tab(text: l.student),
+                            Tab(text: l.teacher),
+                          ],
+                          onTap: (_) {
+                            _loginController.clear();
+                            _passwordController.clear();
+                            context.read<AuthProvider>().clearError();
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 24),
 
-                            // Login form
-                            Form(
-                              key: _formKey,
-                              child: Column(
-                                children: [
-                                  _buildTextField(
-                                    controller: _loginController,
-                                    label: l.loginLabel,
-                                    hint: l.loginHint,
-                                    icon: Icons.person_outline,
-                                    validator: (value) {
-                                      if (value == null ||
-                                          value.trim().isEmpty) {
-                                        return l.loginRequired;
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 14),
-                                  _buildTextField(
-                                    controller: _passwordController,
-                                    label: l.password,
-                                    hint: l.passwordHint,
-                                    icon: Icons.lock_outline,
-                                    obscure: _obscurePassword,
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_off_outlined
-                                            : Icons.visibility_outlined,
-                                        color: Colors.white.withOpacity(0.5),
-                                        size: 20,
+                      // Form fields
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            _buildField(
+                              controller: _loginController,
+                              hint: l.loginHint,
+                              icon: Icons.person_outline_rounded,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return l.loginRequired;
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            _buildField(
+                              controller: _passwordController,
+                              hint: l.passwordHint,
+                              icon: Icons.lock_outline_rounded,
+                              obscure: _obscurePassword,
+                              suffixIcon: GestureDetector(
+                                onTap: () => setState(
+                                    () => _obscurePassword = !_obscurePassword),
+                                child: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_rounded
+                                      : Icons.visibility_rounded,
+                                  color: Colors.white.withOpacity(0.3),
+                                  size: 20,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.isEmpty) {
+                                  return l.passwordRequired;
+                                }
+                                return null;
+                              },
+                            ),
+
+                            // Error
+                            Consumer<AuthProvider>(
+                              builder: (context, auth, _) {
+                                if (auth.errorMessage == null) {
+                                  return const SizedBox(height: 20);
+                                }
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 14, bottom: 6),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE53935)
+                                          .withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: const Color(0xFFE53935)
+                                            .withOpacity(0.25),
                                       ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _obscurePassword = !_obscurePassword;
-                                        });
-                                      },
                                     ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return l.passwordRequired;
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // Error message
-                                  Consumer<AuthProvider>(
-                                    builder: (context, auth, _) {
-                                      if (auth.errorMessage != null) {
-                                        return Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.all(10),
-                                          margin:
-                                              const EdgeInsets.only(bottom: 10),
-                                          decoration: BoxDecoration(
-                                            color: Colors.red.withOpacity(0.15),
-                                            borderRadius:
-                                                BorderRadius.circular(10),
-                                            border: Border.all(
-                                              color:
-                                                  Colors.red.withOpacity(0.3),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.error_outline_rounded,
+                                            color: Color(0xFFEF5350),
+                                            size: 18),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            auth.errorMessage!,
+                                            style: const TextStyle(
+                                              color: Color(0xFFEF5350),
+                                              fontSize: 12,
                                             ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.error_outline,
-                                                  color: Colors.red.shade300,
-                                                  size: 18),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: Text(
-                                                  auth.errorMessage!,
-                                                  style: TextStyle(
-                                                    color: Colors.red.shade300,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }
-                                      return const SizedBox.shrink();
-                                    },
-                                  ),
-
-                                  // Login button
-                                  Consumer<AuthProvider>(
-                                    builder: (context, auth, _) {
-                                      return SizedBox(
-                                        width: double.infinity,
-                                        height: 50,
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: const LinearGradient(
-                                              colors: [
-                                                Color(0xFFFF8C00),
-                                                Color(0xFFFF5722),
-                                              ],
-                                            ),
-                                            borderRadius:
-                                                BorderRadius.circular(14),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: const Color(0xFFFF6B00)
-                                                    .withOpacity(0.4),
-                                                blurRadius: 12,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ],
-                                          ),
-                                          child: ElevatedButton(
-                                            onPressed:
-                                                auth.state == AuthState.loading
-                                                    ? null
-                                                    : _handleLogin,
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              shadowColor: Colors.transparent,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                              ),
-                                            ),
-                                            child: auth.state ==
-                                                    AuthState.loading
-                                                ? const SizedBox(
-                                                    width: 22,
-                                                    height: 22,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      color: Colors.white,
-                                                    ),
-                                                  )
-                                                : Text(
-                                                    l.signIn,
-                                                    style: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: Colors.white,
-                                                      letterSpacing: 0.5,
-                                                    ),
-                                                  ),
                                           ),
                                         ),
-                                      );
-                                    },
+                                      ],
+                                    ),
                                   ),
-                                ],
-                              ),
+                                );
+                              },
+                            ),
+
+                            // Sign in button
+                            Consumer<AuthProvider>(
+                              builder: (context, auth, _) {
+                                final isLoading =
+                                    auth.state == AuthState.loading;
+                                return SizedBox(
+                                  width: double.infinity,
+                                  height: 52,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: isLoading
+                                            ? [
+                                                const Color(0xFF26A69A)
+                                                    .withOpacity(0.5),
+                                                const Color(0xFF2CB5A8)
+                                                    .withOpacity(0.5),
+                                              ]
+                                            : const [
+                                                Color(0xFF26A69A),
+                                                Color(0xFF2CB5A8),
+                                              ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: isLoading
+                                          ? []
+                                          : [
+                                              BoxShadow(
+                                                color: const Color(0xFF26A69A)
+                                                    .withOpacity(0.4),
+                                                blurRadius: 16,
+                                                offset: const Offset(0, 6),
+                                              ),
+                                            ],
+                                    ),
+                                    child: ElevatedButton(
+                                      onPressed:
+                                          isLoading ? null : _handleLogin,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        disabledBackgroundColor:
+                                            Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                        ),
+                                      ),
+                                      child: isLoading
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child:
+                                                  CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : Text(
+                                              l.signIn,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                                letterSpacing: 0.8,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
                       ),
-                    ),
+
+                      const Spacer(flex: 2),
+
+                      // Footer
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          '© TDTU ${DateTime.now().year}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.2),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -374,9 +449,8 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  Widget _buildTextField({
+  Widget _buildField({
     required TextEditingController controller,
-    required String label,
     required String hint,
     required IconData icon,
     bool obscure = false,
@@ -386,47 +460,74 @@ class _LoginScreenState extends State<LoginScreen>
     return TextFormField(
       controller: controller,
       obscureText: obscure,
-      style: const TextStyle(color: Colors.white, fontSize: 14),
+      style: const TextStyle(color: Colors.white, fontSize: 15),
       validator: validator,
+      cursorColor: const Color(0xFF26A69A),
       decoration: InputDecoration(
-        labelText: label,
         hintText: hint,
-        labelStyle: TextStyle(
-          color: Colors.white.withOpacity(0.6),
-          fontSize: 13,
-        ),
         hintStyle: TextStyle(
-          color: Colors.white.withOpacity(0.3),
-          fontSize: 13,
+          color: Colors.white.withOpacity(0.25),
+          fontSize: 14,
         ),
-        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.5), size: 20),
-        suffixIcon: suffixIcon,
+        prefixIcon:
+            Icon(icon, color: Colors.white.withOpacity(0.35), size: 20),
+        suffixIcon: suffixIcon != null
+            ? Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: suffixIcon,
+              )
+            : null,
         filled: true,
-        fillColor: Colors.white.withOpacity(0.08),
+        fillColor: Colors.white.withOpacity(0.06),
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFFF8C00), width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: Color(0xFF26A69A), width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.red.shade300),
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFEF5350)),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.red.shade300, width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          borderSide:
+              const BorderSide(color: Color(0xFFEF5350), width: 1.5),
         ),
-        errorStyle: TextStyle(color: Colors.red.shade300, fontSize: 11),
+        errorStyle:
+            const TextStyle(color: Color(0xFFEF5350), fontSize: 11),
       ),
     );
+  }
+
+  List<Widget> _buildFloatingDots(Size size) {
+    final random = Random(42);
+    return List.generate(12, (i) {
+      final top = random.nextDouble() * size.height;
+      final left = random.nextDouble() * size.width;
+      final dotSize = 2.0 + random.nextDouble() * 3;
+      final opacity = 0.05 + random.nextDouble() * 0.1;
+      return Positioned(
+        top: top,
+        left: left,
+        child: Container(
+          width: dotSize,
+          height: dotSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withOpacity(opacity),
+          ),
+        ),
+      );
+    });
   }
 }

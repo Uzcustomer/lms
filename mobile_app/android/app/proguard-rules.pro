@@ -15,6 +15,9 @@
 -dontwarn okio.**
 -dontwarn javax.annotation.**
 
+## Google Play Core (deferred components)
+-dontwarn com.google.android.play.core.**
+
 ## General
 -keepattributes Signature
 -keepattributes Exceptions

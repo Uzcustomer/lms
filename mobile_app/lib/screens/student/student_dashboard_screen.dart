@@ -223,6 +223,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         _buildGpaRow(data, profile, l),
                         const SizedBox(height: 16),
                         _buildJnGradesList(provider.subjects, isDark, l),
+                        _buildAttendanceList(provider.subjects, isDark, l),
                         _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
                         const SizedBox(height: 100),
                       ],
@@ -846,6 +847,147 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceList(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
+    if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
+
+    final items = <Map<String, dynamic>>[];
+    for (final s in subjects) {
+      if (s is! Map<String, dynamic>) continue;
+      final davPercent = _toDouble(s['dav_percent']);
+      final absentHours = _toDouble(s['absent_hours']);
+      final totalHours = _toDouble(s['auditorium_hours']);
+      final attendance = totalHours > 0 ? ((totalHours - absentHours) / totalHours * 100) : 100;
+      items.add({
+        'name': s['subject_name']?.toString() ?? '',
+        'attendance': attendance.clamp(0.0, 100.0),
+        'absent': absentHours.round(),
+        'total': totalHours.round(),
+      });
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Davomat',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(isDark ? 30 : 10),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              indent: 16,
+              endIndent: 16,
+              color: isDark ? AppTheme.darkDivider : const Color(0xFFEEEEEE),
+            ),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final att = item['attendance'] as double;
+              final percent = att / 100;
+
+              Color barColor;
+              if (att >= 80) {
+                barColor = const Color(0xFF43A047);
+              } else if (att >= 60) {
+                barColor = const Color(0xFFFFA726);
+              } else {
+                barColor = const Color(0xFFE53935);
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['name'] as String,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: textColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0, end: percent),
+                            duration: Duration(milliseconds: 800 + index * 80),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, animVal, _) {
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: animVal,
+                                  minHeight: 6,
+                                  backgroundColor: isDark
+                                      ? Colors.white.withAlpha(15)
+                                      : barColor.withAlpha(25),
+                                  valueColor: AlwaysStoppedAnimation(barColor),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${item['absent']} / ${item['total']} soat',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: subTextColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      '${att.round()}%',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: barColor,
                       ),
                     ),
                   ],

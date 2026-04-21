@@ -222,8 +222,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         _buildLiveClassCard(),
                         _buildGpaRow(data, profile, l),
                         const SizedBox(height: 16),
-                        _buildJnGradesList(provider.subjects, isDark, l),
-                        _buildAttendanceList(provider.subjects, isDark, l),
+                        _buildSubjectsOverview(provider.subjects, isDark, l),
                         _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
                         const SizedBox(height: 100),
                       ],
@@ -730,7 +729,29 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return buf.toString();
   }
 
-  Widget _buildJnGradesList(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
+  static const List<List<Color>> _subjectGradients = [
+    [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
+    [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+    [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+    [Color(0xFFF3E5F5), Color(0xFFE1BEE7)],
+    [Color(0xFFFCE4EC), Color(0xFFF8BBD0)],
+    [Color(0xFFE0F7FA), Color(0xFFB2EBF2)],
+    [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
+    [Color(0xFFE8EAF6), Color(0xFFC5CAE9)],
+  ];
+
+  static const List<Color> _subjectAccents = [
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFFE65100),
+    Color(0xFF7B1FA2),
+    Color(0xFFC62828),
+    Color(0xFF00838F),
+    Color(0xFFF9A825),
+    Color(0xFF283593),
+  ];
+
+  Widget _buildSubjectsOverview(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
     if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
 
     final items = <Map<String, dynamic>>[];
@@ -738,141 +759,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       if (s is! Map<String, dynamic>) continue;
       final grades = s['grades'] as Map<String, dynamic>? ?? {};
       final jn = grades['jn'];
-      if (jn == null) continue;
-      final jnVal = jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0;
+      final jnVal = jn != null
+          ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0)
+          : null;
+      final absentHours = _toDouble(s['absent_hours']);
+      final totalHours = _toDouble(s['auditorium_hours']);
+      final attendance = totalHours > 0
+          ? ((totalHours - absentHours) / totalHours * 100).clamp(0.0, 100.0)
+          : 100.0;
       items.add({
         'name': s['subject_name']?.toString() ?? '',
         'jn': jnVal,
-      });
-    }
-
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Joriy nazorat baholari',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(isDark ? 30 : 10),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => Divider(
-              height: 1,
-              indent: 68,
-              color: isDark ? AppTheme.darkDivider : const Color(0xFFEEEEEE),
-            ),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final jn = item['jn'] as double;
-              final percent = (jn / 100).clamp(0.0, 1.0);
-
-              Color ringColor;
-              if (jn >= 71) {
-                ringColor = const Color(0xFF43A047);
-              } else if (jn >= 56) {
-                ringColor = const Color(0xFFFFA726);
-              } else {
-                ringColor = const Color(0xFFE53935);
-              }
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: percent),
-                      duration: Duration(milliseconds: 800 + index * 100),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, animVal, _) {
-                        return SizedBox(
-                          width: 44,
-                          height: 44,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              CircularProgressIndicator(
-                                value: animVal,
-                                strokeWidth: 3.5,
-                                backgroundColor: isDark
-                                    ? Colors.white.withAlpha(15)
-                                    : ringColor.withAlpha(25),
-                                valueColor: AlwaysStoppedAnimation(ringColor),
-                              ),
-                              Text(
-                                jn.round().toString(),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: ringColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        item['name'] as String,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: textColor,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  Widget _buildAttendanceList(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
-    if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
-
-    final items = <Map<String, dynamic>>[];
-    for (final s in subjects) {
-      if (s is! Map<String, dynamic>) continue;
-      final davPercent = _toDouble(s['dav_percent']);
-      final absentHours = _toDouble(s['absent_hours']);
-      final totalHours = _toDouble(s['auditorium_hours']);
-      final attendance = totalHours > 0 ? ((totalHours - absentHours) / totalHours * 100) : 100;
-      items.add({
-        'name': s['subject_name']?.toString() ?? '',
-        'attendance': attendance.clamp(0.0, 100.0),
+        'attendance': attendance,
         'absent': absentHours.round(),
         'total': totalHours.round(),
       });
@@ -881,14 +779,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (items.isEmpty) return const SizedBox.shrink();
 
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Davomat',
+          'Fanlar',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -896,107 +792,195 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(isDark ? 30 : 10),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => Divider(
-              height: 1,
-              indent: 16,
-              endIndent: 16,
-              color: isDark ? AppTheme.darkDivider : const Color(0xFFEEEEEE),
-            ),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final att = item['attendance'] as double;
-              final percent = att / 100;
+        ...List.generate(items.length, (index) {
+          final item = items[index];
+          final jn = item['jn'] as double?;
+          final att = item['attendance'] as double;
+          final gradientColors = _subjectGradients[index % _subjectGradients.length];
+          final accentColor = _subjectAccents[index % _subjectAccents.length];
 
-              Color barColor;
-              if (att >= 80) {
-                barColor = const Color(0xFF43A047);
-              } else if (att >= 60) {
-                barColor = const Color(0xFFFFA726);
-              } else {
-                barColor = const Color(0xFFE53935);
-              }
+          Color jnColor;
+          if (jn == null) {
+            jnColor = AppTheme.textSecondary;
+          } else if (jn >= 71) {
+            jnColor = const Color(0xFF43A047);
+          } else if (jn >= 56) {
+            jnColor = const Color(0xFFFFA726);
+          } else {
+            jnColor = const Color(0xFFE53935);
+          }
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['name'] as String,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: textColor,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0, end: percent),
-                            duration: Duration(milliseconds: 800 + index * 80),
-                            curve: Curves.easeOutCubic,
-                            builder: (context, animVal, _) {
-                              return ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(
-                                  value: animVal,
-                                  minHeight: 6,
-                                  backgroundColor: isDark
-                                      ? Colors.white.withAlpha(15)
-                                      : barColor.withAlpha(25),
-                                  valueColor: AlwaysStoppedAnimation(barColor),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '${item['absent']} / ${item['total']} soat',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: subTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      '${att.round()}%',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: barColor,
-                      ),
-                    ),
-                  ],
+          Color attColor;
+          if (att >= 80) {
+            attColor = const Color(0xFF43A047);
+          } else if (att >= 60) {
+            attColor = const Color(0xFFFFA726);
+          } else {
+            attColor = const Color(0xFFE53935);
+          }
+
+          final darkGradient = [
+            accentColor.withAlpha(25),
+            accentColor.withAlpha(15),
+          ];
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark ? darkGradient : gradientColors,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 20),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: accentColor.withAlpha(isDark ? 20 : 15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -20,
+                    top: -20,
+                    child: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accentColor.withAlpha(isDark ? 15 : 20),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 30,
+                    bottom: -15,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accentColor.withAlpha(isDark ? 10 : 12),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: [
+                        // JN circular indicator
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: jn != null ? (jn / 100).clamp(0.0, 1.0) : 0),
+                          duration: Duration(milliseconds: 900 + index * 100),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, animVal, _) {
+                            return SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: animVal,
+                                    strokeWidth: 4,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withAlpha(15)
+                                        : jnColor.withAlpha(30),
+                                    valueColor: AlwaysStoppedAnimation(jnColor),
+                                  ),
+                                  Text(
+                                    jn != null ? jn.round().toString() : '-',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: jnColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        // Subject name + attendance bar
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['name'] as String,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : AppTheme.textPrimary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0, end: att / 100),
+                                duration: Duration(milliseconds: 1000 + index * 80),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, animVal, _) {
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(5),
+                                    child: LinearProgressIndicator(
+                                      value: animVal,
+                                      minHeight: 5,
+                                      backgroundColor: isDark
+                                          ? Colors.white.withAlpha(15)
+                                          : attColor.withAlpha(30),
+                                      valueColor: AlwaysStoppedAnimation(attColor),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Davomat: ${item['absent']}/${item['total']} soat',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark ? Colors.white.withAlpha(120) : Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Attendance percentage
+                        Column(
+                          children: [
+                            Text(
+                              '${att.round()}%',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: attColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Icon(
+                              att >= 80 ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                              size: 14,
+                              color: attColor,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 16),
       ],
     );
   }

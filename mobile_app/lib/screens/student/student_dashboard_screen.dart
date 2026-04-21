@@ -36,6 +36,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       provider.loadDashboard();
       provider.loadProfile();
       provider.loadContract();
+      provider.loadSubjects();
       // Use cached schedule immediately, then refresh in background
       _parseSchedule(provider.schedule);
       _loadTodaySchedule();
@@ -203,6 +204,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 provider.loadDashboard(),
                 provider.loadProfile(),
                 provider.loadContract(),
+                provider.loadSubjects(),
               ]);
               _loadTodaySchedule();
             },
@@ -220,6 +222,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         _buildLiveClassCard(),
                         _buildGpaRow(data, profile, l),
                         const SizedBox(height: 16),
+                        _buildJnGradesList(provider.subjects, isDark, l),
                         _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
                         const SizedBox(height: 100),
                       ],
@@ -724,6 +727,136 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       buf.write(str[i]);
     }
     return buf.toString();
+  }
+
+  Widget _buildJnGradesList(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
+    if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
+
+    final items = <Map<String, dynamic>>[];
+    for (final s in subjects) {
+      if (s is! Map<String, dynamic>) continue;
+      final grades = s['grades'] as Map<String, dynamic>? ?? {};
+      final jn = grades['jn'];
+      if (jn == null) continue;
+      final jnVal = jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0;
+      items.add({
+        'name': s['subject_name']?.toString() ?? '',
+        'jn': jnVal,
+      });
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Joriy nazorat',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(isDark ? 30 : 10),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              indent: 68,
+              color: isDark ? AppTheme.darkDivider : const Color(0xFFEEEEEE),
+            ),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final jn = item['jn'] as double;
+              final percent = (jn / 100).clamp(0.0, 1.0);
+
+              Color ringColor;
+              if (jn >= 71) {
+                ringColor = const Color(0xFF43A047);
+              } else if (jn >= 56) {
+                ringColor = const Color(0xFFFFA726);
+              } else {
+                ringColor = const Color(0xFFE53935);
+              }
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                child: Row(
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: percent),
+                      duration: Duration(milliseconds: 800 + index * 100),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, animVal, _) {
+                        return SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                value: animVal,
+                                strokeWidth: 3.5,
+                                backgroundColor: isDark
+                                    ? Colors.white.withAlpha(15)
+                                    : ringColor.withAlpha(25),
+                                valueColor: AlwaysStoppedAnimation(ringColor),
+                              ),
+                              Text(
+                                jn.round().toString(),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: ringColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        item['name'] as String,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: textColor,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
   }
 
   Widget _buildTuitionFeeSection(

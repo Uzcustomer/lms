@@ -94,7 +94,7 @@
     <nav class="flex-1 py-2 px-2 overflow-y-auto sidebar-nav"
          x-data @click="if($event.target.closest('a')) { if(window.innerWidth < 768) $store.sidebar.close() }">
         <!-- Xabarnomalar (Notifications) -->
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        @if(!$hasActiveRole('oqituvchi'))
         @php
             $sidebarUserType = get_class($user);
             $sidebarUnreadCount = \App\Models\Notification::where('recipient_id', $user->id)

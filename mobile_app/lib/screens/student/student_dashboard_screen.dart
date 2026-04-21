@@ -762,6 +762,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final jnVal = jn != null
           ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0)
           : null;
+      if (jnVal == null) continue;
       final absentHours = _toDouble(s['absent_hours']);
       final totalHours = _toDouble(s['auditorium_hours']);
       final attendance = totalHours > 0
@@ -818,15 +819,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           }
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.only(bottom: 6),
             child: Container(
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.darkCard : Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
-                  width: 2,
+                  color: isDark ? AppTheme.darkDivider : const Color(0xFF43A047),
+                  width: 1.5,
                 ),
               ),
               child: Padding(
@@ -1391,7 +1392,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         const SizedBox(width: 10),
                         Text('·', style: TextStyle(fontSize: 18, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
                         const SizedBox(width: 6),
-                        Text(room, style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500)),
+                        Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500)),
                       ],
                     ],
                   ),
@@ -1539,7 +1540,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   const SizedBox(width: 12),
                   Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
                   const SizedBox(width: 6),
-                  Text(room, style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+                  Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
                 ],
               ],
             ),
@@ -1612,144 +1613,105 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final trackColor = isDark ? Colors.white.withAlpha(20) : ringColor.withAlpha(25);
     final percent = (value / maxValue).clamp(0.0, 1.0);
     final percentText = '${(percent * 100).round()}%';
-    final colors = isDark ? darkGradientColors : gradientColors;
 
     return Container(
-      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: isDark ? AppTheme.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: ringColor.withAlpha(isDark ? 30 : 25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        border: Border.all(
+          color: ringColor,
+          width: 2,
+        ),
       ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -25,
-            top: -25,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: ringColor.withAlpha(isDark ? 15 : 18),
-              ),
-            ),
-          ),
-          Positioned(
-            left: -15,
-            bottom: -15,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: ringColor.withAlpha(isDark ? 10 : 12),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: percent),
-                    duration: const Duration(milliseconds: 1400),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, animVal, _) {
-                      return SizedBox(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: percent),
+              duration: const Duration(milliseconds: 1400),
+              curve: Curves.easeOutCubic,
+              builder: (context, animVal, _) {
+                return SizedBox(
+                  width: 130,
+                  height: 130,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
                         width: 130,
                         height: 130,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              width: 130,
-                              height: 130,
-                              child: PieChart(
-                                PieChartData(
-                                  startDegreeOffset: -90,
-                                  sectionsSpace: 0,
-                                  centerSpaceRadius: 46,
-                                  sections: [
-                                    PieChartSectionData(
-                                      value: animVal * maxValue,
-                                      color: ringColor,
-                                      radius: 16,
-                                      showTitle: false,
-                                    ),
-                                    PieChartSectionData(
-                                      value: maxValue - (animVal * maxValue),
-                                      color: trackColor,
-                                      radius: 16,
-                                      showTitle: false,
-                                    ),
-                                  ],
-                                ),
+                        child: PieChart(
+                          PieChartData(
+                            startDegreeOffset: -90,
+                            sectionsSpace: 0,
+                            centerSpaceRadius: 46,
+                            sections: [
+                              PieChartSectionData(
+                                value: animVal * maxValue,
+                                color: ringColor,
+                                radius: 16,
+                                showTitle: false,
                               ),
-                            ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  displayText,
-                                  style: TextStyle(
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w800,
-                                    color: ringColor,
-                                  ),
-                                ),
-                                Text(
-                                  percentText,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: ringColor.withAlpha(150),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                              PieChartSectionData(
+                                value: maxValue - (animVal * maxValue),
+                                color: trackColor,
+                                radius: 16,
+                                showTitle: false,
+                              ),
+                            ],
+                          ),
                         ),
-                      );
-                    },
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            displayText,
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              color: ringColor,
+                            ),
+                          ),
+                          Text(
+                            percentText,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: ringColor.withAlpha(150),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: textColor,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$displayText / ${maxValue.toInt()}',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: subTextColor,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$displayText / ${maxValue.toInt()}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: subTextColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

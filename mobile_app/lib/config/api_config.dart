@@ -30,7 +30,6 @@ class ApiConfig {
   static const String studentExcuseReasons = '/student/excuses/reasons';
   static const String studentExcuses = '/student/excuses';
   static const String studentExcuseMissedAssessments = '/student/excuses/missed-assessments';
-  static const String studentChat = '/student/chat';
 
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';

@@ -79,14 +79,6 @@ class StudentService {
     );
   }
 
-  Future<Map<String, dynamic>> sendChatMessage(String message, List<Map<String, String>> history) async {
-    return await _api.post(
-      ApiConfig.studentChat,
-      {'message': message, 'history': history},
-      auth: true,
-    );
-  }
-
   Future<Map<String, dynamic>> submitExcuse({
     required String reason,
     required String docNumber,

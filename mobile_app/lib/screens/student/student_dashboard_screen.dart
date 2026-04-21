@@ -37,6 +37,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       provider.loadDashboard();
       provider.loadProfile();
       provider.loadContract();
+      // Use cached schedule immediately, then refresh in background
+      _parseSchedule(provider.schedule);
       _loadTodaySchedule();
     });
   }
@@ -47,18 +49,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     super.dispose();
   }
 
-  Future<void> _loadTodaySchedule() async {
+  void _parseSchedule(Map<String, dynamic>? schedule) {
+    if (schedule == null) return;
     try {
-      final provider = context.read<StudentProvider>();
-      await provider.loadSchedule();
-      if (!mounted) return;
-      final schedule = provider.schedule;
-      if (schedule == null) return;
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final scheduleList = schedule['schedule'];
       if (scheduleList == null || scheduleList is! List) return;
 
-      // First try to find today's lessons
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;
         if (day['date']?.toString() == today) {
@@ -73,7 +70,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         }
       }
 
-      // No lessons today — find the first lesson from the next available day
       setState(() => _todayLessons = []);
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;
@@ -95,6 +91,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         return;
       }
       setState(() => _nextDayLesson = null);
+    } catch (_) {}
+  }
+
+  Future<void> _loadTodaySchedule() async {
+    try {
+      final provider = context.read<StudentProvider>();
+      await provider.loadSchedule();
+      if (!mounted) return;
+      _parseSchedule(provider.schedule);
     } catch (_) {
       if (mounted) setState(() {
         _todayLessons = [];

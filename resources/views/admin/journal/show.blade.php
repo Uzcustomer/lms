@@ -1437,7 +1437,19 @@
                                                                 $isSababli = $lmsSababli || $hemisSababli;
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             @endphp
-                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}">
+                                                            @php
+                                                                $retakeTooltip = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . round($grade, 0);
+                                                                if (isset($absenceData)) {
+                                                                    if (!empty($absenceData['retake_graded_at'])) {
+                                                                        $retakeTooltip .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                    }
+                                                                    if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                        $retakeTooltip .= "\nBaho qo'ydi: " . $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                    }
+                                                                    $retakeTooltip .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
+                                                                }
+                                                            @endphp
+                                                            <div class="split-cell" title="{{ $retakeTooltip }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>
@@ -1511,8 +1523,16 @@
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php
                                                                 $retakeVal = round($absenceData['retake_grade'], 0);
+                                                                $retakeTooltip2 = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . $retakeVal;
+                                                                if (!empty($absenceData['retake_graded_at'])) {
+                                                                    $retakeTooltip2 .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                }
+                                                                if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                    $retakeTooltip2 .= "\nBaho qo'ydi: " . $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                }
+                                                                $retakeTooltip2 .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
                                                             @endphp
-                                                            <div class="split-cell" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}">
+                                                            <div class="split-cell" title="{{ $retakeTooltip2 }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>

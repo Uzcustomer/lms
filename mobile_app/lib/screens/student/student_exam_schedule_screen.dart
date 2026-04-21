@@ -11,15 +11,23 @@ class ExamScheduleScreen extends StatefulWidget {
   State<ExamScheduleScreen> createState() => _ExamScheduleScreenState();
 }
 
-class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
+class _ExamScheduleScreenState extends State<ExamScheduleScreen>
+    with SingleTickerProviderStateMixin {
   List<dynamic> _exams = [];
   bool _loading = true;
   DateTime _focusedMonth = DateTime.now();
   DateTime? _selectedDate;
+  bool _showHint = true;
+  late AnimationController _hintAnim;
 
   @override
   void initState() {
     super.initState();
+    _hintAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+      value: 0.0,
+    );
     _loadExams();
   }
 
@@ -33,12 +41,38 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
           _exams = response['data'] as List<dynamic>? ?? [];
           _loading = false;
         });
+        _showHintBanner();
       } else {
-        if (mounted) setState(() => _loading = false);
+        if (mounted) {
+          setState(() => _loading = false);
+          _showHintBanner();
+        }
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        _showHintBanner();
+      }
     }
+  }
+
+  void _showHintBanner() {
+    if (!mounted || !_showHint) return;
+    _hintAnim.forward();
+    Future.delayed(const Duration(seconds: 3), _dismissHint);
+  }
+
+  void _dismissHint() {
+    if (!mounted || !_showHint) return;
+    _hintAnim.reverse().then((_) {
+      if (mounted) setState(() => _showHint = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _hintAnim.dispose();
+    super.dispose();
   }
 
   Set<String> get _examDates =>
@@ -66,12 +100,19 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
       appBar: AppBar(
         title: const Text('Imtihon sanalari'),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Calendar
-                Container(
+      body: GestureDetector(
+        onTap: () {
+          if (_showHint) _dismissHint();
+        },
+        behavior: HitTestBehavior.translucent,
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : Stack(
+                children: [
+                  Column(
+                    children: [
+                      // Calendar
+                      Container(
                   margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   decoration: BoxDecoration(
                     color: cardColor,
@@ -135,6 +176,57 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen> {
                 ),
               ],
             ),
+                  if (_showHint)
+                    Positioned(
+                      top: 8,
+                      left: 24,
+                      right: 24,
+                      child: FadeTransition(
+                        opacity: _hintAnim,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF2A2D3E)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.12),
+                                blurRadius: 16,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.touch_app_rounded,
+                                  color: const Color(0xFF4A6CF7), size: 22),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Belgilangan kunlarga bosib ko\'ring',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: textColor,
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: _dismissHint,
+                                child: Icon(Icons.close_rounded,
+                                    size: 18, color: subColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+      ),
     );
   }
 

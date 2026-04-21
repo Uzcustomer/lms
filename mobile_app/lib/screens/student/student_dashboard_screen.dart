@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import 'dart:async';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
-import '../../widgets/stat_card.dart';
 import '../../widgets/loading_widget.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
@@ -18,15 +20,128 @@ class StudentDashboardScreen extends StatefulWidget {
 }
 
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  Timer? _clockTimer;
+  List<dynamic> _todayLessons = [];
+  Map<String, dynamic>? _nextDayLesson;
+  DateTime _now = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<StudentProvider>();
       provider.loadDashboard();
       provider.loadProfile();
       provider.loadContract();
+      provider.loadSubjects();
+      // Use cached schedule immediately, then refresh in background
+      _parseSchedule(provider.schedule);
+      _loadTodaySchedule();
     });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  void _parseSchedule(Map<String, dynamic>? schedule) {
+    if (schedule == null) return;
+    try {
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final scheduleList = schedule['schedule'];
+      if (scheduleList == null || scheduleList is! List) return;
+
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        if (day['date']?.toString() == today) {
+          final lessons = day['lessons'];
+          if (lessons is List && lessons.isNotEmpty) {
+            setState(() {
+              _todayLessons = lessons;
+              _nextDayLesson = null;
+            });
+            return;
+          }
+        }
+      }
+
+      setState(() => _todayLessons = []);
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        final dateStr = day['date']?.toString() ?? '';
+        if (dateStr.isEmpty) continue;
+        final dayDate = DateTime.tryParse(dateStr);
+        if (dayDate == null || !dayDate.isAfter(DateTime.now())) continue;
+        final lessons = day['lessons'];
+        if (lessons is! List || lessons.isEmpty) continue;
+        final firstLesson = lessons.first;
+        if (firstLesson is! Map<String, dynamic>) continue;
+        setState(() {
+          _nextDayLesson = {
+            ...firstLesson,
+            '_date': dateStr,
+            '_day_date': dayDate,
+          };
+        });
+        return;
+      }
+      setState(() => _nextDayLesson = null);
+    } catch (_) {}
+  }
+
+  Future<void> _loadTodaySchedule() async {
+    try {
+      final provider = context.read<StudentProvider>();
+      await provider.loadSchedule();
+      if (!mounted) return;
+      _parseSchedule(provider.schedule);
+    } catch (_) {
+      if (mounted) setState(() {
+        _todayLessons = [];
+        _nextDayLesson = null;
+      });
+    }
+  }
+
+  Map<String, dynamic>? _getCurrentOrNextLesson() {
+    if (_todayLessons.isEmpty) return null;
+    final now = _now;
+    Map<String, dynamic>? nextLesson;
+
+    for (final lesson in _todayLessons) {
+      if (lesson is! Map<String, dynamic>) continue;
+      final startStr = lesson['lesson_pair_start_time']?.toString() ?? '';
+      final endStr = lesson['lesson_pair_end_time']?.toString() ?? '';
+      if (startStr.isEmpty || endStr.isEmpty) continue;
+
+      final startParts = startStr.split(':');
+      final endParts = endStr.split(':');
+      if (startParts.length < 2 || endParts.length < 2) continue;
+
+      final startH = int.tryParse(startParts[0]);
+      final startM = int.tryParse(startParts[1]);
+      final endH = int.tryParse(endParts[0]);
+      final endM = int.tryParse(endParts[1]);
+      if (startH == null || startM == null || endH == null || endM == null) continue;
+
+      final start = DateTime(now.year, now.month, now.day, startH, startM);
+      final end = DateTime(now.year, now.month, now.day, endH, endM);
+
+      if (now.isAfter(start.subtract(const Duration(minutes: 1))) && now.isBefore(end)) {
+        return {...lesson, '_is_active': true, '_end': end, '_start': start};
+      }
+      if (now.isBefore(start)) {
+        if (nextLesson == null) {
+          nextLesson = {...lesson, '_is_active': false, '_start': start, '_end': end};
+        }
+      }
+    }
+    return nextLesson;
   }
 
   String? _buildImageUrl(String? imagePath) {
@@ -89,7 +204,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 provider.loadDashboard(),
                 provider.loadProfile(),
                 provider.loadContract(),
+                provider.loadSubjects(),
               ]);
+              _loadTodaySchedule();
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -102,52 +219,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: StatCard(
-                                title: l.gpa,
-                                value: (data?['gpa'] ?? profile?['avg_gpa'] ?? 0).toString(),
-                                icon: Icons.trending_up,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: StatCard(
-                                title: l.avgGrade,
-                                value: (data?['avg_grade'] ?? profile?['avg_grade'] ?? 0).toString(),
-                                icon: Icons.star_outline,
-                                color: AppTheme.accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: StatCard(
-                                title: l.debts,
-                                value: (data?['debt_subjects'] ?? 0).toString(),
-                                icon: Icons.warning_amber_outlined,
-                                color: data?['debt_subjects'] != null && data!['debt_subjects'] > 0
-                                    ? AppTheme.errorColor
-                                    : AppTheme.successColor,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: StatCard(
-                                title: l.absences,
-                                value: (data?['total_absences'] ?? 0).toString(),
-                                icon: Icons.event_busy_outlined,
-                                color: AppTheme.warningColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
+                        _buildLiveClassCard(),
+                        _buildGpaRow(data, profile, l),
+                        const SizedBox(height: 16),
+                        _buildSubjectsOverview(provider.subjects, isDark, l),
                         _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
                         const SizedBox(height: 100),
                       ],
@@ -654,6 +729,224 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return buf.toString();
   }
 
+  static const List<List<Color>> _subjectGradients = [
+    [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
+    [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+    [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+    [Color(0xFFF3E5F5), Color(0xFFE1BEE7)],
+    [Color(0xFFFCE4EC), Color(0xFFF8BBD0)],
+    [Color(0xFFE0F7FA), Color(0xFFB2EBF2)],
+    [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
+    [Color(0xFFE8EAF6), Color(0xFFC5CAE9)],
+  ];
+
+  static const List<Color> _subjectAccents = [
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFFE65100),
+    Color(0xFF7B1FA2),
+    Color(0xFFC62828),
+    Color(0xFF00838F),
+    Color(0xFFF9A825),
+    Color(0xFF283593),
+  ];
+
+  Widget _buildSubjectsOverview(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
+    if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
+
+    final items = <Map<String, dynamic>>[];
+    for (final s in subjects) {
+      if (s is! Map<String, dynamic>) continue;
+      final grades = s['grades'] as Map<String, dynamic>? ?? {};
+      final jn = grades['jn'];
+      final jnVal = jn != null
+          ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0)
+          : null;
+      if (jnVal == null) continue;
+      final absentHours = _toDouble(s['absent_hours']);
+      final totalHours = _toDouble(s['auditorium_hours']);
+      final attendance = totalHours > 0
+          ? ((totalHours - absentHours) / totalHours * 100).clamp(0.0, 100.0)
+          : 100.0;
+      items.add({
+        'name': s['subject_name']?.toString() ?? '',
+        'jn': jnVal,
+        'attendance': attendance,
+        'absent': absentHours.round(),
+        'total': totalHours.round(),
+      });
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Fanlar',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: textColor,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...List.generate(items.length, (index) {
+          final item = items[index];
+          final jn = item['jn'] as double?;
+          final att = item['attendance'] as double;
+
+          Color jnColor;
+          if (jn == null) {
+            jnColor = AppTheme.textSecondary;
+          } else if (jn >= 71) {
+            jnColor = const Color(0xFF43A047);
+          } else if (jn >= 56) {
+            jnColor = const Color(0xFFFFA726);
+          } else {
+            jnColor = const Color(0xFFE53935);
+          }
+
+          Color attColor;
+          if (att >= 80) {
+            attColor = const Color(0xFF43A047);
+          } else if (att >= 60) {
+            attColor = const Color(0xFFFFA726);
+          } else {
+            attColor = const Color(0xFFE53935);
+          }
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.darkCard : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(isDark ? 25 : 10),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                      children: [
+                        // JN circular indicator
+                        TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: jn != null ? (jn / 100).clamp(0.0, 1.0) : 0),
+                          duration: Duration(milliseconds: 900 + index * 100),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, animVal, _) {
+                            return SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: animVal,
+                                    strokeWidth: 4,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withAlpha(15)
+                                        : jnColor.withAlpha(30),
+                                    valueColor: AlwaysStoppedAnimation(jnColor),
+                                  ),
+                                  Text(
+                                    jn != null ? jn.round().toString() : '-',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: jnColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        // Subject name + attendance bar
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['name'] as String,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : AppTheme.textPrimary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0, end: att / 100),
+                                duration: Duration(milliseconds: 1000 + index * 80),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, animVal, _) {
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(5),
+                                    child: LinearProgressIndicator(
+                                      value: animVal,
+                                      minHeight: 5,
+                                      backgroundColor: isDark
+                                          ? Colors.white.withAlpha(15)
+                                          : attColor.withAlpha(30),
+                                      valueColor: AlwaysStoppedAnimation(attColor),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Davomat: ${item['absent']}/${item['total']} soat',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark ? Colors.white.withAlpha(120) : Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Attendance percentage
+                        Column(
+                          children: [
+                            Text(
+                              '${att.round()}%',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: attColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Icon(
+                              att >= 80 ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+                              size: 14,
+                              color: attColor,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+            ),
+          );
+        }),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   Widget _buildTuitionFeeSection(
     BuildContext context,
     Map<String, dynamic>? profile,
@@ -946,6 +1239,326 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
+  Widget _buildLiveClassCard() {
+    final lesson = _getCurrentOrNextLesson();
+
+    if (lesson == null) {
+      if (_nextDayLesson == null) return const SizedBox.shrink();
+      return _buildNextDayCard(_nextDayLesson!);
+    }
+
+    final isActive = lesson['_is_active'] == true;
+    final subjectName = lesson['subject_name']?.toString() ?? '';
+    final startTime = lesson['lesson_pair_start_time']?.toString() ?? '';
+    final endTime = lesson['lesson_pair_end_time']?.toString() ?? '';
+    final room = lesson['auditorium_name']?.toString() ?? '';
+    final start = lesson['_start'] as DateTime;
+    final end = lesson['_end'] as DateTime;
+
+    final Duration remaining;
+    final String statusText;
+
+    if (isActive) {
+      remaining = end.difference(_now);
+      statusText = 'HOZIR DAVOM ETMOQDA';
+    } else {
+      remaining = start.difference(_now);
+      statusText = 'KEYINGI DARS';
+    }
+
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes % 60;
+    String timeLeft;
+    if (hours > 0) {
+      timeLeft = '$hours soat $minutes daqiqa qoldi';
+    } else {
+      timeLeft = '${minutes > 0 ? minutes : 1} daqiqa qoldi';
+    }
+
+    final progress = isActive
+        ? 1.0 - (remaining.inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    final gradientColors = isActive
+        ? [const Color(0xFF2E7D32), const Color(0xFF43A047), const Color(0xFF66BB6A)]
+        : [const Color(0xFFE65100), const Color(0xFFF57C00), const Color(0xFFFFA726)];
+    final shadowColor = isActive ? const Color(0xFF43A047) : const Color(0xFFF57C00);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: shadowColor.withAlpha(70),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -30,
+              top: -30,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(15),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 20,
+              bottom: -20,
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(10),
+                ),
+              ),
+            ),
+            Positioned(
+              left: -15,
+              bottom: -15,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(8),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (isActive)
+                        _buildBlinkingDot()
+                      else
+                        Container(
+                          width: 8, height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(200),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withAlpha(220),
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    subjectName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, size: 16, color: Colors.white.withAlpha(200)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$startTime–$endTime',
+                        style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500),
+                      ),
+                      if (room.isNotEmpty) ...[
+                        const SizedBox(width: 10),
+                        Text('·', style: TextStyle(fontSize: 18, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 6),
+                        Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500)),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (isActive) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        backgroundColor: Colors.white.withAlpha(40),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(
+                    timeLeft,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withAlpha(200),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlinkingDot() {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.3, end: 1.0),
+      duration: const Duration(milliseconds: 800),
+      builder: (context, val, child) {
+        return Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withAlpha((val * 255).toInt()),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withAlpha((val * 120).toInt()),
+                blurRadius: 6,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        );
+      },
+      onEnd: () {
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  String _weekdayName(int weekday) {
+    const days = ['', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+    return days[weekday.clamp(1, 7)];
+  }
+
+  Widget _buildNextDayCard(Map<String, dynamic> lesson) {
+    final subjectName = lesson['subject_name']?.toString() ?? '';
+    final startTime = lesson['lesson_pair_start_time']?.toString() ?? '';
+    final endTime = lesson['lesson_pair_end_time']?.toString() ?? '';
+    final room = lesson['auditorium_name']?.toString() ?? '';
+    final dayDate = lesson['_day_date'] as DateTime?;
+    final dateStr = lesson['_date']?.toString() ?? '';
+
+    String dayLabel = '';
+    if (dayDate != null) {
+      final diff = dayDate.difference(DateTime(
+        _now.year, _now.month, _now.day,
+      )).inDays;
+      if (diff == 1) {
+        dayLabel = 'Ertaga';
+      } else {
+        dayLabel = '${_weekdayName(dayDate.weekday)}, ${DateFormat('d-MMMM').format(dayDate)}';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF5C6BC0), Color(0xFF7986CB)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF5C6BC0).withAlpha(60),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.event, size: 16, color: Colors.white70),
+                const SizedBox(width: 6),
+                Text(
+                  dayLabel.isNotEmpty ? dayLabel : dateStr,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withAlpha(220),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subjectName,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.white.withAlpha(200)),
+                const SizedBox(width: 4),
+                Text(
+                  '$startTime–$endTime',
+                  style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500),
+                ),
+                if (room.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 6),
+                  Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _toDouble(dynamic val) {
+    if (val == null) return 0;
+    if (val is num) return val.toDouble();
+    return double.tryParse(val.toString()) ?? 0;
+  }
+
   Color _gradeColor(dynamic grade) {
     if (grade == null) return AppTheme.textSecondary;
     final g = grade is num ? grade.toDouble() : double.tryParse(grade.toString()) ?? 0;
@@ -953,5 +1566,159 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (g >= 71) return AppTheme.primaryColor;
     if (g >= 56) return AppTheme.warningColor;
     return AppTheme.errorColor;
+  }
+
+  Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
+    final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
+    final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
+
+    return Row(
+      children: [
+        Expanded(
+          child: _buildDonutCard(
+            label: 'GPA',
+            value: gpa,
+            maxValue: 5.0,
+            displayText: gpa.toStringAsFixed(2),
+            ringColor: const Color(0xFF7C4DFF),
+            gradientColors: [const Color(0xFFEDE7F6), const Color(0xFFD1C4E9)],
+            darkGradientColors: [const Color(0xFF1A1030), const Color(0xFF2D1B69)],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildDonutCard(
+            label: l.avgGrade,
+            value: avgGrade,
+            maxValue: 100.0,
+            displayText: avgGrade.toStringAsFixed(1),
+            ringColor: const Color(0xFFFF6D00),
+            gradientColors: [const Color(0xFFFFF3E0), const Color(0xFFFFE0B2)],
+            darkGradientColors: [const Color(0xFF1A1508), const Color(0xFF3D2B10)],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDonutCard({
+    required String label,
+    required double value,
+    required double maxValue,
+    required String displayText,
+    required Color ringColor,
+    required List<Color> gradientColors,
+    required List<Color> darkGradientColors,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white.withAlpha(150) : Colors.grey[600]!;
+    final trackColor = isDark ? Colors.white.withAlpha(20) : ringColor.withAlpha(25);
+    final percent = (value / maxValue).clamp(0.0, 1.0);
+    final percentText = '${(percent * 100).round()}%';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: ringColor.withAlpha(isDark ? 25 : 35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: percent),
+              duration: const Duration(milliseconds: 1400),
+              curve: Curves.easeOutCubic,
+              builder: (context, animVal, _) {
+                return SizedBox(
+                  width: 130,
+                  height: 130,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 130,
+                        height: 130,
+                        child: PieChart(
+                          PieChartData(
+                            startDegreeOffset: -90,
+                            sectionsSpace: 0,
+                            centerSpaceRadius: 46,
+                            sections: [
+                              PieChartSectionData(
+                                value: animVal * maxValue,
+                                color: ringColor,
+                                radius: 16,
+                                showTitle: false,
+                              ),
+                              PieChartSectionData(
+                                value: maxValue - (animVal * maxValue),
+                                color: trackColor,
+                                radius: 16,
+                                showTitle: false,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            displayText,
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              color: ringColor,
+                            ),
+                          ),
+                          Text(
+                            percentText,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: ringColor.withAlpha(150),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$displayText / ${maxValue.toInt()}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: subTextColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

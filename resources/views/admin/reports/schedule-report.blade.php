@@ -105,13 +105,9 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="filter-item" style="min-width: 290px;">
+                        <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
-                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                    Excel
-                                </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
@@ -134,12 +130,22 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;">
+                        <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span id="total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                             <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                            <div style="margin-left:auto;display:flex;gap:8px;">
+                                <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel('excel')" disabled title="Umumiy Excel (har fan+guruh bir qator)">
+                                    <svg style="width:17px;height:17px;" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 8V3.5L18.5 9H14a1 1 0 0 1-1-1zM8.2 13l1.6 2.4L11.4 13h1.8l-2.4 3.5L13.4 20H11.6l-1.8-2.7L8 20H6.2l2.6-3.7L6.4 13h1.8z"/></svg>
+                                    Excel (umumiy)
+                                </button>
+                                <button type="button" id="btn-excel-lessons" class="btn-excel-lessons" onclick="downloadExcel('excel_lessons')" disabled title="Batafsil Excel: har bir dars o'z ustuni bilan">
+                                    <svg style="width:17px;height:17px;" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 8V3.5L18.5 9H14a1 1 0 0 1-1-1zM8.2 13l1.6 2.4L11.4 13h1.8l-2.4 3.5L13.4 20H11.6l-1.8-2.7L8 20H6.2l2.6-3.7L6.4 13h1.8z"/></svg>
+                                    Excel (batafsil)
+                                </button>
+                            </div>
                         </div>
                         <div style="max-height:calc(100vh - 380px);overflow-y:auto;overflow-x:auto;">
-                            <table class="journal-table">
+                            <table class="journal-table" id="report-table">
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
@@ -149,10 +155,25 @@
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="training_type">Dars turi <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda qo'yilgan soat <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th><a href="#" class="sort-link" data-sort="farq">Farq <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="planned_hours">Ajratilgan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="scheduled_hours">Jadvalda <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="ktr_hours">KTR <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="farq">Farq (ajrat.) <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="ktr_farq">Farq (KTR) <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                    </tr>
+                                    <tr class="cf-filter-row">
+                                        <th></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="faculty_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="specialty_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="level_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="semester_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="subject_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="group_name"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="planned_hours"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="scheduled_hours"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="ktr_hours"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="farq"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
+                                        <th><button type="button" class="col-filter-btn" data-col="ktr_farq"><span class="cf-label">Barchasi</span><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg></button></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -162,6 +183,23 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Ustun filtri popup (Excel uslubi) -->
+    <div id="col-filter-popup" class="cf-popup" style="display:none;"></div>
+
+    <!-- KTR vs HEMIS solishtirish modali -->
+    <div id="ktr-compare-modal-overlay" class="kcmp-overlay" style="display:none;" onclick="closeKtrCompareModal(event)">
+        <div class="kcmp-modal" onclick="event.stopPropagation()">
+            <div class="kcmp-modal-header">
+                <div>
+                    <h3 class="kcmp-modal-title" id="ktr-compare-modal-title">Fan nomi</h3>
+                    <div class="kcmp-modal-subtitle" id="ktr-compare-modal-subtitle"></div>
+                </div>
+                <button type="button" class="kcmp-modal-close" onclick="closeKtrCompareModal()" aria-label="Yopish">&times;</button>
+            </div>
+            <div class="kcmp-modal-body" id="ktr-compare-modal-body"></div>
         </div>
     </div>
 
@@ -210,6 +248,20 @@
             };
             var tt = $('#training_types').val();
             if (tt && tt.length > 0) params.training_types = tt;
+
+            // Ustun filtrlari - backendga yuborish (barcha sahifalarga ta'sir qilishi uchun)
+            var colFiltersObj = {};
+            var hasColFilter = false;
+            for (var col in columnFilters) {
+                var allowed = columnFilters[col];
+                if (allowed && allowed.size !== undefined) {
+                    var arr = [];
+                    allowed.forEach(function(v) { arr.push(v); });
+                    colFiltersObj[col] = arr;
+                    hasColFilter = true;
+                }
+            }
+            if (hasColFilter) params.col_filters = colFiltersObj;
             return params;
         }
 
@@ -274,10 +326,15 @@
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
+                    // Server qaytargan ustun qiymatlarini saqlash (filtr dropdown'lari uchun)
+                    if (res.column_values) {
+                        serverColumnValues = res.column_values;
+                    }
+
                     if (!res.data || res.data.length === 0) {
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
-                        $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
+                        $('#btn-excel, #btn-excel-lessons').prop('disabled', true).css('opacity', '0.5');
                         return;
                     }
 
@@ -286,7 +343,7 @@
                     renderTable(res.data);
                     renderPagination(res);
                     $('#table-area').show();
-                    $('#btn-excel').prop('disabled', false).css('opacity', '1');
+                    $('#btn-excel, #btn-excel-lessons').prop('disabled', false).css('opacity', '1');
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -305,6 +362,9 @@
         function esc(s) { return $('<span>').text(s || '-').html(); }
 
         function farqBadge(farq) {
+            if (farq === null || farq === undefined) {
+                return '<span style="color:#94a3b8;">-</span>';
+            }
             if (farq === 0) {
                 return '<span class="badge badge-status-full" style="font-size:13px;">' + farq + '</span>';
             } else if (farq > 0) {
@@ -319,24 +379,250 @@
                 var r = data[i];
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
-                html += '<td><span class="text-cell text-emerald">' + esc(r.faculty_name) + '</span></td>';
-                html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
-                html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
-                html += '<td><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
-                html += '<td><span class="text-cell text-subject">' + esc(r.subject_name) + '</span></td>';
-                html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
-                html += '<td><span class="text-cell" style="font-weight:600;color:#6d28d9;">' + esc(r.training_type) + '</span></td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
-                html += '<td style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
-                html += '<td style="text-align:center;">' + farqBadge(r.farq) + '</td>';
+                html += '<td data-filter-col="faculty_name"><span class="text-cell text-emerald">' + esc(r.faculty_name) + '</span></td>';
+                html += '<td data-filter-col="specialty_name"><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
+                html += '<td data-filter-col="level_name"><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
+                html += '<td data-filter-col="semester_name"><span class="badge badge-teal">' + esc(r.semester_name) + '</span></td>';
+                html += '<td data-filter-col="subject_name"><a href="#" class="subject-link" onclick="openKtrCompareModal(event, ' + r.cs_id + ', ' + (r.group_id || 0) + ')">' + esc(r.subject_name) + '</a></td>';
+                html += '<td data-filter-col="group_name"><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td data-filter-col="planned_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.planned_hours + '</td>';
+                html += '<td data-filter-col="scheduled_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.scheduled_hours + '</td>';
+                if (r.ktr_exists) {
+                    html += '<td data-filter-col="ktr_hours" style="text-align:center;font-weight:600;color:#475569;">' + r.ktr_hours + '</td>';
+                } else {
+                    html += '<td data-filter-col="ktr_hours" style="text-align:center;"><span class="badge badge-status-none" style="font-size:11px;">yo\'q</span></td>';
+                }
+                html += '<td data-filter-col="farq" style="text-align:center;">' + farqBadge(r.farq) + '</td>';
+                if (r.ktr_exists) {
+                    html += '<td data-filter-col="ktr_farq" style="text-align:center;">' + farqBadge(r.ktr_farq) + '</td>';
+                } else {
+                    html += '<td data-filter-col="ktr_farq" style="text-align:center;color:#94a3b8;">-</td>';
+                }
                 html += '</tr>';
             }
             $('#table-body').html(html);
         }
 
-        function downloadExcel() {
+        function openKtrCompareModal(e, csId, groupId) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
             var params = getFilters();
-            params.export = 'excel';
+            $('#ktr-compare-modal-title').text('Yuklanmoqda...');
+            $('#ktr-compare-modal-subtitle').text('');
+            $('#ktr-compare-modal-body').html('<div style="padding:60px 20px;text-align:center;"><div class="spinner"></div><p style="color:#2b5ea7;font-size:13px;margin-top:14px;font-weight:600;">Yuklanmoqda...</p></div>');
+            $('#ktr-compare-modal-overlay').fadeIn(150);
+
+            $.ajax({
+                url: '{{ url('admin/reports/schedule-report/detail') }}/' + csId,
+                type: 'GET',
+                data: {
+                    group: groupId || params.group || '',
+                    date_from: params.date_from || '',
+                    date_to: params.date_to || '',
+                    auditorium: params.auditorium || '',
+                },
+                success: function(res) {
+                    renderKtrCompareModal(res);
+                },
+                error: function(xhr) {
+                    var msg = 'Xatolik yuz berdi';
+                    try { msg = JSON.parse(xhr.responseText).error || msg; } catch(e) {}
+                    $('#ktr-compare-modal-body').html('<div style="padding:40px 20px;text-align:center;color:#dc2626;">' + esc(msg) + '</div>');
+                }
+            });
+        }
+
+        function closeKtrCompareModal(e) {
+            if (e && e.target && e.target.id && e.target.id !== 'ktr-compare-modal-overlay') return;
+            $('#ktr-compare-modal-overlay').fadeOut(120);
+        }
+
+        function renderKtrCompareModal(res) {
+            $('#ktr-compare-modal-title').text(res.subject_name || '');
+            $('#ktr-compare-modal-subtitle').text('Guruh: ' + (res.group_name || '-'));
+
+            if (!res.ktr_exists) {
+                $('#ktr-compare-modal-body').html(
+                    '<div style="padding:40px 20px;text-align:center;">' +
+                    '<svg style="width:48px;height:48px;margin:0 auto 12px;color:#fbbf24;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>' +
+                    '<p style="color:#92400e;font-size:15px;font-weight:600;">Bu fan uchun KTR yaratilmagan</p>' +
+                    '<p style="color:#94a3b8;font-size:12.5px;margin-top:6px;">KTR (Kalendar tematik reja) sahifasida reja yaratilganidan keyin solishtirish imkoniyati paydo bo\'ladi.</p>' +
+                    '</div>'
+                );
+                return;
+            }
+
+            var types = res.training_types || {};
+            var typeCodes = Object.keys(types);
+            if (typeCodes.length === 0) {
+                $('#ktr-compare-modal-body').html('<div style="padding:40px 20px;text-align:center;color:#64748b;">Dars turlari topilmadi</div>');
+                return;
+            }
+
+            var html = '<div style="overflow-x:auto;">';
+            html += '<table class="ktr-cmp-table"><thead>';
+            html += '<tr><th rowspan="2" class="wk-col">Dars</th>';
+            typeCodes.forEach(function(code, idx) {
+                var c = idx % 6;
+                html += '<th colspan="4" class="tt-col-head tt-head-' + c + '">' + esc(types[code].name) + '</th>';
+            });
+            html += '</tr><tr>';
+            typeCodes.forEach(function(code, idx) {
+                var c = idx % 6;
+                html += '<th class="sub-head tt-sub-' + c + '">HEMIS</th>';
+                html += '<th class="sub-head tt-sub-' + c + '">KTR</th>';
+                html += '<th class="sub-head tt-sub-' + c + '" title="O\'qituvchi belgilagan soat">Belgi</th>';
+                html += '<th class="sub-head tt-sub-' + c + '">Farq</th>';
+            });
+            html += '</tr></thead><tbody>';
+
+            var totalHemis = {}, totalKtr = {}, totalMarked = {};
+            typeCodes.forEach(function(c) { totalHemis[c] = 0; totalKtr[c] = 0; totalMarked[c] = 0; });
+
+            function fmt(v) {
+                if (v === null || v === undefined) return 0;
+                if (Math.abs(v - Math.round(v)) < 0.01) return Math.round(v);
+                return Math.round(v * 10) / 10;
+            }
+
+            (res.lessons || []).forEach(function(wk) {
+                var darsLabel = wk.lesson + '-dars' + (wk.date ? ' <span class="dars-date">(' + wk.date + ')</span>' : '');
+                html += '<tr><td class="wk-col">' + darsLabel + '</td>';
+                typeCodes.forEach(function(code, idx) {
+                    var c = idx % 6;
+                    var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, marked:0, diff:0};
+                    var markedV = cell.marked || 0;
+                    totalHemis[code] += (cell.hemis || 0);
+                    if (cell.ktr) totalKtr[code] += (cell.ktr || 0);
+                    totalMarked[code] += markedV;
+                    var diff = cell.diff;
+                    var diffNum = diff === null || diff === undefined ? 0 : diff;
+                    var diffCls = Math.abs(diffNum) < 0.01 ? 'diff-zero' : (diffNum > 0 ? 'diff-pos' : 'diff-neg');
+                    var diffDisp = diff === null ? '-' : (diffNum > 0 ? '+' + fmt(diffNum) : fmt(diffNum));
+                    html += '<td class="num-cell tt-body-' + c + '">' + fmt(cell.hemis) + '</td>';
+                    html += '<td class="num-cell tt-body-' + c + '">' + fmt(cell.ktr) + '</td>';
+                    var markedCls = markedV > 0 ? 'marked-yes' : '';
+                    html += '<td class="num-cell tt-body-' + c + ' ' + markedCls + '">' + fmt(markedV) + '</td>';
+                    html += '<td class="num-cell tt-body-' + c + ' ' + diffCls + '">' + diffDisp + '</td>';
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody><tfoot><tr><td class="wk-col">Jami</td>';
+            var serverTotals = res.totals || {};
+            typeCodes.forEach(function(code, idx) {
+                var c = idx % 6;
+                var t = serverTotals[code] || { hemis: totalHemis[code] || 0, ktr: totalKtr[code] || 0, marked: totalMarked[code] || 0, diff: 0 };
+                var h = t.hemis || 0;
+                var kt = t.ktr === null || t.ktr === undefined ? 0 : t.ktr;
+                var mk = t.marked || 0;
+                var d = t.diff === null || t.diff === undefined ? 0 : t.diff;
+                var diffCls = Math.abs(d) < 0.01 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(h) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(kt) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(mk) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + ' ' + diffCls + '">' + (d > 0 ? '+' + fmt(d) : fmt(d)) + '</td>';
+            });
+            html += '</tr></tfoot></table></div>';
+            html += '<div style="padding:10px 16px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11.5px;color:#64748b;display:flex;gap:14px;flex-wrap:wrap;">' +
+                '<span><span class="legend-dot" style="background:#16a34a;"></span> Farq = 0 (mos)</span>' +
+                '<span><span class="legend-dot" style="background:#d97706;"></span> Farq &gt; 0 (KTR ko\'p)</span>' +
+                '<span><span class="legend-dot" style="background:#dc2626;"></span> Farq &lt; 0 (HEMIS ko\'p)</span>' +
+                '<span><span class="legend-dot" style="background:#bbf7d0;border:1px solid #16a34a;"></span> Belgi: o\'qituvchi belgilagan dars</span>' +
+                '</div>';
+
+            $('#ktr-compare-modal-body').html(html);
+        }
+
+        // Ustun filtri holati: {columnName: Set<allowedValue>}
+        // Agar col kalit ma'lumotda bo'lmasa, u ustun bo'yicha filtr yo'q (barchasi ko'rinadi)
+        var columnFilters = {};
+
+        function applyColumnFilters() {
+            // Server-side filtr: hisobotni qayta yuklash
+            updateFilterIcons();
+            loadReport(1);
+        }
+
+        // Backend qaytargan ustun qiymatlari (filtrgacha) - dropdown'lar uchun
+        var serverColumnValues = {};
+
+        function updateFilterIcons() {
+            $('.col-filter-btn').each(function() {
+                var col = $(this).data('col');
+                var filter = columnFilters[col];
+                var $label = $(this).find('.cf-label');
+                if (!filter) {
+                    $(this).removeClass('cf-active');
+                    $label.text('Barchasi');
+                } else {
+                    $(this).addClass('cf-active');
+                    if (filter.size === 0) {
+                        $label.text('(tanlanmagan)');
+                    } else if (filter.size === 1) {
+                        $label.text([...filter][0] || '(bo\'sh)');
+                    } else {
+                        $label.text('(' + filter.size + ' tanlangan)');
+                    }
+                }
+            });
+        }
+
+        function openColFilter(e, col) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Server qaytargan barcha sahifalardagi noyob qiymatlardan foydalanamiz
+            var keys = (serverColumnValues[col] || []).slice();
+            // Son ko'rinishida bo'lsa raqam tartibida
+            var allNum = keys.length > 0 && keys.every(function(k) { return k === '' || /^-?\d+(\.\d+)?$/.test(String(k).replace(',', '.')); });
+            if (allNum) {
+                keys.sort(function(a, b) { return parseFloat(String(a).replace(',', '.')) - parseFloat(String(b).replace(',', '.')); });
+            } else {
+                keys.sort(function(a, b) { return String(a).localeCompare(String(b), 'uz'); });
+            }
+
+            var active = columnFilters[col] || null;
+            var html = '';
+            html += '<div class="cf-head"><input type="text" class="cf-search" placeholder="Qidirish..." autocomplete="off" /></div>';
+            html += '<div class="cf-actions"><a href="#" class="cf-select-all">Barchasini belgilash</a><a href="#" class="cf-clear-all">Tozalash</a></div>';
+            html += '<div class="cf-list">';
+            keys.forEach(function(v) {
+                var sv = String(v);
+                var checked = (active === null || active.has(sv)) ? 'checked' : '';
+                var display = sv === '' ? '(bo\'sh)' : sv;
+                html += '<label class="cf-item"><input type="checkbox" value="' + esc(sv).replace(/"/g,'&quot;') + '" ' + checked + '><span>' + esc(display) + '</span></label>';
+            });
+            html += '</div>';
+            html += '<div class="cf-footer">';
+            html += '<button type="button" class="cf-btn cf-ok" data-col="' + col + '">OK</button>';
+            html += '<button type="button" class="cf-btn cf-cancel">Bekor</button>';
+            html += '</div>';
+
+            var popup = document.getElementById('col-filter-popup');
+            popup.innerHTML = html;
+            popup.style.display = 'block';
+
+            // Tugma oldiga joylashtirish
+            var btn = e.currentTarget || e.target.closest('.col-filter-btn');
+            var rect = btn.getBoundingClientRect();
+            var popupRect = popup.getBoundingClientRect();
+            var left = rect.left;
+            if (left + popupRect.width > window.innerWidth - 8) {
+                left = window.innerWidth - popupRect.width - 8;
+            }
+            popup.style.left = Math.max(8, left) + 'px';
+            popup.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+
+            setTimeout(function() { popup.querySelector('.cf-search')?.focus(); }, 30);
+        }
+
+        function closeColFilter() {
+            var popup = document.getElementById('col-filter-popup');
+            if (popup) popup.style.display = 'none';
+        }
+
+        function downloadExcel(type) {
+            var params = getFilters();
+            params.export = type || 'excel';
             var query = $.param(params);
             window.location.href = '{{ route("admin.reports.schedule-report.data") }}?' + query;
         }
@@ -362,6 +648,57 @@
             // Kalendarlarni yaratish
             new ScrollCalendar('date_from');
             new ScrollCalendar('date_to');
+
+            // Ustun filtri tugmasini bosganda popup ochiladi
+            $(document).on('click', '.col-filter-btn', function(e) {
+                openColFilter(e, $(this).data('col'));
+            });
+
+            // Popup ichidagi amallar
+            $(document).on('input', '.cf-search', function() {
+                var q = ($(this).val() || '').toLowerCase();
+                $('.cf-list .cf-item').each(function() {
+                    var txt = $(this).find('span').first().text().toLowerCase();
+                    $(this).toggle(txt.indexOf(q) !== -1);
+                });
+            });
+            $(document).on('click', '.cf-select-all', function(e) {
+                e.preventDefault();
+                $('.cf-list .cf-item:visible input').prop('checked', true);
+            });
+            $(document).on('click', '.cf-clear-all', function(e) {
+                e.preventDefault();
+                $('.cf-list .cf-item:visible input').prop('checked', false);
+            });
+            $(document).on('click', '.cf-cancel', function() { closeColFilter(); });
+            $(document).on('click', '.cf-ok', function() {
+                var col = $(this).data('col');
+                var total = $('.cf-list .cf-item input').length;
+                var checked = $('.cf-list .cf-item input:checked');
+                if (checked.length === 0) {
+                    // Hech narsa belgilanmagan - hech qanday qator ko'rinmasin
+                    columnFilters[col] = new Set();
+                } else if (checked.length === total) {
+                    delete columnFilters[col];
+                } else {
+                    var selected = new Set();
+                    checked.each(function() { selected.add($(this).val()); });
+                    columnFilters[col] = selected;
+                }
+                applyColumnFilters();
+                closeColFilter();
+            });
+
+            // Popup tashqariga bosilganda yopish
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#col-filter-popup').length &&
+                    !$(e.target).closest('.col-filter-btn').length) {
+                    closeColFilter();
+                }
+            });
+
+            // Popup tugmalari sort eventini chaqirmasligi uchun
+            $(document).on('click', '.col-filter-btn', function(e) { e.stopPropagation(); });
 
             // Sort links
             $(document).on('click', '.sort-link', function(e) {
@@ -427,12 +764,14 @@
             });
 
             // Cascading dropdowns
-            function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
+            function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_name: $('#specialty').val()||'', department_id: $('#department').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', subject_id: $('#subject').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
             function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
             function pd(url, p, el, cb) { $.get(url, p, function(d) { $.each(d, function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb) cb(); }); }
             function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
+            // Yo'nalishlar uchun: nom dubllari bo'lishi mumkin bo'lgani sababli option qiymati ham nom bo'ladi
+            function pdSpec(url, p, el, cb) { $.get(url, p, function(d) { var names = {}; $.each(d, function(k,v){ if (v) names[v] = true; }); Object.keys(names).sort().forEach(function(n){ $(el).append('<option value="'+n+'">'+n+'</option>'); }); if(cb) cb(); }); }
 
-            function rSpec() { rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
+            function rSpec() { rd('#specialty'); pdSpec('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty'); }
             function rSubj() { rd('#subject'); pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject'); }
             function rGrp() { rd('#group'); pd('{{ route("admin.journal.get-groups") }}', fp(), '#group'); }
 
@@ -445,7 +784,7 @@
             $('#subject').change(function() { rGrp(); });
 
             // Init dropdowns
-            pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
+            pdSpec('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');
             pd('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code');
             pdu('{{ route("admin.journal.get-subjects") }}', fp(), '#subject');
@@ -469,9 +808,12 @@
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
 
-        .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
+        .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
+        .btn-excel-lessons { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: linear-gradient(135deg, #0891b2, #06b6d4); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(8,145,178,0.3); height: 36px; }
+        .btn-excel-lessons:hover:not(:disabled) { background: linear-gradient(135deg, #0e7490, #0891b2); box-shadow: 0 4px 12px rgba(8,145,178,0.4); transform: translateY(-1px); }
+        .btn-excel-lessons:disabled { cursor: not-allowed; opacity: 0.5; }
 
         .btn-sync { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; background: linear-gradient(135deg, #6366f1, #818cf8); color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(99,102,241,0.3); flex-shrink: 0; }
         .btn-sync:hover:not(:disabled) { background: linear-gradient(135deg, #4f46e5, #6366f1); box-shadow: 0 4px 10px rgba(99,102,241,0.4); transform: translateY(-1px); }
@@ -541,5 +883,104 @@
         .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
         .pg-btn:hover { background: #eff6ff; border-color: #2b5ea7; color: #2b5ea7; }
         .pg-active { background: linear-gradient(135deg, #2b5ea7, #3b7ddb) !important; color: #fff !important; border-color: #2b5ea7 !important; }
+
+        /* Ustun filtri (Excel uslubi) - sarlavha ostida katak shaklida */
+        .cf-filter-row th { padding: 4px 6px; background: #fff; border-bottom: 1px solid #cbd5e1; border-top: 1px solid #e2e8f0; }
+        .col-filter-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 60px; height: 28px; padding: 2px 8px; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; cursor: pointer; font-size: 11.5px; font-weight: 500; color: #1e293b; transition: all 0.15s; text-align: left; }
+        .col-filter-btn:hover { background: #eff6ff; border-color: #2b5ea7; }
+        .col-filter-btn svg { width: 14px; height: 14px; color: #64748b; flex-shrink: 0; }
+        .col-filter-btn:hover svg { color: #2b5ea7; }
+        .col-filter-btn .cf-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; font-weight: 500; }
+        .col-filter-btn.cf-active { background: linear-gradient(135deg, #dbeafe, #bfdbfe); border-color: #2b5ea7; color: #1e3a8a; font-weight: 700; }
+        .col-filter-btn.cf-active .cf-label { color: #1e3a8a; font-weight: 700; }
+        .col-filter-btn.cf-active svg { color: #2b5ea7; }
+
+        .cf-popup { position: absolute; z-index: 999; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.18); min-width: 240px; max-width: 320px; padding: 8px; font-size: 12.5px; }
+        .cf-head { padding: 2px 2px 6px; }
+        .cf-search { width: 100%; height: 30px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 12px; outline: none; }
+        .cf-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .cf-actions { display: flex; gap: 8px; padding: 4px 2px 6px; border-bottom: 1px solid #e2e8f0; }
+        .cf-actions a { color: #2b5ea7; font-size: 11.5px; font-weight: 600; text-decoration: none; }
+        .cf-actions a:hover { text-decoration: underline; }
+        .cf-list { max-height: 260px; overflow-y: auto; padding: 4px 0; }
+        .cf-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; cursor: pointer; border-radius: 4px; font-size: 12px; color: #1e293b; line-height: 1.3; }
+        .cf-item:hover { background: #eff6ff; }
+        .cf-item input { margin: 0; cursor: pointer; flex-shrink: 0; }
+        .cf-item span:first-of-type { flex: 1; word-break: break-word; }
+        .cf-item .cf-count { color: #94a3b8; font-size: 10.5px; font-weight: 600; flex-shrink: 0; }
+        .cf-footer { display: flex; gap: 6px; padding: 6px 2px 2px; border-top: 1px solid #e2e8f0; margin-top: 4px; }
+        .cf-btn { flex: 1; padding: 6px 10px; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+        .cf-ok { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; }
+        .cf-ok:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); }
+        .cf-cancel { background: #f1f5f9; color: #475569; }
+        .cf-cancel:hover { background: #e2e8f0; }
+
+        .subject-link { color: #0f172a; font-weight: 700; font-size: 12.5px; text-decoration: none; border-bottom: 1.5px dashed #6d28d9; cursor: pointer; max-width: 260px; display: inline-block; word-break: break-word; }
+        .subject-link:hover { color: #6d28d9; border-bottom-color: #7c3aed; }
+
+        /* KTR compare modal */
+        .kcmp-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.55); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(2px); }
+        .kcmp-modal { background: #fff; border-radius: 12px; max-width: 1100px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.24); }
+        .kcmp-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f5f3ff, #ede9fe); }
+        .kcmp-modal-title { font-size: 17px; font-weight: 700; color: #1e293b; margin: 0; line-height: 1.3; }
+        .kcmp-modal-subtitle { font-size: 12.5px; color: #6d28d9; font-weight: 600; margin-top: 4px; }
+        .kcmp-modal-close { background: transparent; border: none; font-size: 28px; color: #64748b; cursor: pointer; line-height: 1; padding: 0 6px; border-radius: 6px; transition: all 0.15s; }
+        .kcmp-modal-close:hover { background: #fee2e2; color: #dc2626; }
+        .kcmp-modal-body { flex: 1; overflow: auto; }
+
+        .ktr-cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+        .ktr-cmp-table thead tr:first-child th { padding: 10px 8px; font-size: 12px; font-weight: 700; text-align: center; }
+        .ktr-cmp-table thead tr:last-child th.sub-head { padding: 6px 6px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; text-align: center; white-space: nowrap; }
+        .ktr-cmp-table th.wk-col { background: linear-gradient(135deg, #1e3a5f, #2b5ea7); color: #fff; border-bottom: 1px solid #2b5ea7; }
+        .ktr-cmp-table td.wk-col { background: #f8fafc; font-weight: 700; color: #1e3a5f; padding: 8px 10px; border-right: 1px solid #e2e8f0; text-align: center; white-space: nowrap; }
+        .dars-date { font-weight: 500; color: #64748b; font-size: 11px; }
+        .ktr-cmp-table td.num-cell { padding: 7px 8px; text-align: center; font-weight: 600; color: #334155; border-bottom: 1px solid #f1f5f9; }
+        .ktr-cmp-table tbody tr:hover td.num-cell { filter: brightness(0.96); }
+        .ktr-cmp-table tbody tr:hover td.wk-col { background: #dbeafe; }
+        .ktr-cmp-table td.diff-zero { color: #16a34a; }
+        .ktr-cmp-table td.diff-pos { color: #d97706; background: #fffbeb !important; }
+        .ktr-cmp-table td.diff-neg { color: #dc2626; background: #fef2f2 !important; }
+        .ktr-cmp-table tfoot td { padding: 10px 8px; font-weight: 800; border-top: 2px solid #cbd5e1; text-align: center; }
+        .ktr-cmp-table tfoot td.wk-col { background: #1e3a5f; color: #fff; }
+        /* Har bir dars turi guruhi 4 sub-ustun (HEMIS|KTR|Belgi|Farq) bilan. Dars ustuni 1-chi.
+           Guruhlar orasiga qalin chiziq: 2-ustun, 6, 10, 14, ... (4n+2) */
+        .ktr-cmp-table th.tt-col-head { border-left: 3px solid #1e3a5f; }
+        .ktr-cmp-table tbody td.num-cell:nth-child(4n+2),
+        .ktr-cmp-table thead tr:last-child th.sub-head:nth-child(4n+2),
+        .ktr-cmp-table tfoot td.num-cell:nth-child(4n+2) { border-left: 3px solid #1e3a5f; }
+
+        /* Mashg'ulot turlari uchun ranglar */
+        .tt-head-0 { background: linear-gradient(135deg, #bfdbfe, #93c5fd); color: #1e3a8a; border-bottom: 1px solid #93c5fd; }
+        .tt-sub-0  { background: #dbeafe; color: #1e40af; border-bottom: 2px solid #93c5fd; }
+        .tt-body-0 { background: #eff6ff; }
+        .tt-foot-0 { background: #dbeafe; color: #1e3a8a; }
+
+        .tt-head-1 { background: linear-gradient(135deg, #bbf7d0, #86efac); color: #064e3b; border-bottom: 1px solid #86efac; }
+        .tt-sub-1  { background: #d1fae5; color: #065f46; border-bottom: 2px solid #86efac; }
+        .tt-body-1 { background: #ecfdf5; }
+        .tt-foot-1 { background: #d1fae5; color: #064e3b; }
+
+        .tt-head-2 { background: linear-gradient(135deg, #fbcfe8, #f9a8d4); color: #831843; border-bottom: 1px solid #f9a8d4; }
+        .tt-sub-2  { background: #fce7f3; color: #9f1239; border-bottom: 2px solid #f9a8d4; }
+        .tt-body-2 { background: #fdf2f8; }
+        .tt-foot-2 { background: #fce7f3; color: #831843; }
+
+        .tt-head-3 { background: linear-gradient(135deg, #fed7aa, #fdba74); color: #7c2d12; border-bottom: 1px solid #fdba74; }
+        .tt-sub-3  { background: #ffedd5; color: #9a3412; border-bottom: 2px solid #fdba74; }
+        .tt-body-3 { background: #fff7ed; }
+        .tt-foot-3 { background: #ffedd5; color: #7c2d12; }
+
+        .tt-head-4 { background: linear-gradient(135deg, #c7d2fe, #a5b4fc); color: #312e81; border-bottom: 1px solid #a5b4fc; }
+        .tt-sub-4  { background: #e0e7ff; color: #3730a3; border-bottom: 2px solid #a5b4fc; }
+        .tt-body-4 { background: #eef2ff; }
+        .tt-foot-4 { background: #e0e7ff; color: #312e81; }
+
+        .tt-head-5 { background: linear-gradient(135deg, #e2e8f0, #cbd5e1); color: #1e293b; border-bottom: 1px solid #cbd5e1; }
+        .tt-sub-5  { background: #e2e8f0; color: #334155; border-bottom: 2px solid #cbd5e1; }
+        .tt-body-5 { background: #f8fafc; }
+        .tt-foot-5 { background: #e2e8f0; color: #1e293b; }
+
+        .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+        .ktr-cmp-table td.marked-yes { background: #bbf7d0 !important; color: #14532d; font-weight: 700; }
     </style>
 </x-app-layout>

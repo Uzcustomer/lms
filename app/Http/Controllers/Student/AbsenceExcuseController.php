@@ -73,18 +73,21 @@ class AbsenceExcuseController extends Controller
             }
         }
 
-        // Qoldirilgan kunlardagi fanlar ro'yxati (subject_name bo'yicha)
-        // Nazoratlar + shu oraliqda darsi bo'lgan barcha fanlar
-        $scheduledSubjectNames = Schedule::where('group_id', $groupId)
+        // Qoldirilgan kunlardagi fanlar ro'yxati (subject_id + subject_name bo'yicha)
+        $scheduledSubjects = Schedule::where('group_id', $groupId)
             ->whereDate('lesson_date', '>=', $startDate)
             ->whereDate('lesson_date', '<=', $endDate)
-            ->pluck('subject_name')
-            ->unique()
-            ->toArray();
-        $missedSubjectNames = array_unique(array_merge(
-            $missedAssessments->pluck('subject_name')->unique()->toArray(),
-            $scheduledSubjectNames
+            ->select('subject_id', 'subject_name')
+            ->distinct()
+            ->get();
+        $missedSubjectIds = array_unique(array_merge(
+            $missedAssessments->pluck('subject_id')->filter()->unique()->toArray(),
+            $scheduledSubjects->pluck('subject_id')->filter()->unique()->toArray()
         ));
+        $missedSubjectNames = array_unique(array_map('mb_strtolower', array_merge(
+            $missedAssessments->pluck('subject_name')->unique()->toArray(),
+            $scheduledSubjects->pluck('subject_name')->unique()->toArray()
+        )));
 
         // 2. Sababli kun tugashidan qayta topshirish muddati oxirigacha bo'lgan nazoratlar
         // Faqat qoldirilgan fanlardagi testlar ko'rsatiladi
@@ -100,8 +103,9 @@ class AbsenceExcuseController extends Controller
                 $existingKeys = $missedAssessments->map(fn($a) => $a['subject_name'] . '|' . $a['assessment_type'] . '|' . $a['original_date'])->toArray();
 
                 foreach ($makeupAssessments as $ma) {
-                    // Faqat qoldirilgan kunlardagi fanlarga tegishli testlarni qo'shish
-                    if (!in_array($ma['subject_name'], $missedSubjectNames)) {
+                    $matchById = !empty($ma['subject_id']) && in_array($ma['subject_id'], $missedSubjectIds);
+                    $matchByName = in_array(mb_strtolower($ma['subject_name']), $missedSubjectNames);
+                    if (!$matchById && !$matchByName) {
                         continue;
                     }
                     $key = $ma['subject_name'] . '|' . $ma['assessment_type'] . '|' . $ma['original_date'];

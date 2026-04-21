@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ActivityLogController;
+use App\Http\Controllers\Admin\GradeHistoryController;
 use App\Http\Controllers\Admin\IndependentController;
 use App\Http\Controllers\Admin\JournalController;
 use App\Http\Controllers\Admin\OraliqNazoratController;
@@ -270,6 +271,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/show/{groupId}/{subjectId}/{semesterCode}', [JournalController::class, 'show'])->name('show');
             Route::post('/save-mt-grade', [JournalController::class, 'saveMtGrade'])->name('save-mt-grade');
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
+            Route::post('/superadmin-edit-grade', [JournalController::class, 'superadminEditGrade'])->name('superadmin-edit-grade');
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
             Route::post('/save-exam-grade', [JournalController::class, 'saveExamGrade'])->name('save-exam-grade');
@@ -540,6 +542,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/transfer', [KafedraController::class, 'transfer'])->name('transfer');
         });
 
+        // Feature toggles (superadmin only)
+        Route::prefix('feature-toggles')->name('feature-toggles.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\FeatureToggleController::class, 'index'])->name('index');
+            Route::post('/update', [\App\Http\Controllers\Admin\FeatureToggleController::class, 'update'])->name('update');
+        });
+
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');
         Route::get('/reports/jn/data', [ReportController::class, 'jnReportData'])->name('reports.jn.data');
 
@@ -551,8 +559,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/lesson-assignment/export-status', [ReportController::class, 'lessonAssignmentExportStatus'])->name('reports.lesson-assignment.export-status');
         Route::get('/reports/lesson-assignment/export-download', [ReportController::class, 'lessonAssignmentExportDownload'])->name('reports.lesson-assignment.export-download');
 
+        Route::get('/reports/lesson-hours', [ReportController::class, 'lessonHours'])->name('reports.lesson-hours');
+        Route::get('/reports/lesson-hours/data', [ReportController::class, 'lessonHoursData'])->name('reports.lesson-hours.data');
+
         Route::get('/reports/schedule-report', [ReportController::class, 'scheduleReport'])->name('reports.schedule-report');
         Route::get('/reports/schedule-report/data', [ReportController::class, 'scheduleReportData'])->name('reports.schedule-report.data');
+        Route::get('/reports/schedule-report/detail/{csId}', [ReportController::class, 'scheduleKtrCompareDetail'])->name('reports.schedule-report.detail');
         Route::get('/reports/schedule-report/get-auditoriums', [ReportController::class, 'getAuditoriums'])->name('reports.schedule-report.get-auditoriums');
         Route::post('/reports/schedule-report/sync-auditoriums', [ReportController::class, 'syncAuditoriums'])->name('reports.schedule-report.sync-auditoriums');
 
@@ -617,6 +629,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('activity-log')->name('activity-log.')->group(function () {
             Route::get('/', [ActivityLogController::class, 'index'])->name('index');
             Route::get('/{activityLog}', [ActivityLogController::class, 'show'])->name('show');
+        });
+
+        Route::prefix('grade-history')->name('grade-history.')->group(function () {
+            Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
         });
 
         // Diagnostika sahifasi (yangi dizayn)

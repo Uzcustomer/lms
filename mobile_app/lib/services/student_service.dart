@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../config/api_config.dart';
 import 'api_service.dart';
 
@@ -55,5 +56,72 @@ class StudentService {
 
   Future<Map<String, dynamic>> getContract() async {
     return await _api.get(ApiConfig.studentContract);
+  }
+
+  // Absence excuse methods
+  Future<Map<String, dynamic>> getExcuseReasons() async {
+    return await _api.get(ApiConfig.studentExcuseReasons);
+  }
+
+  Future<Map<String, dynamic>> getExcuses() async {
+    return await _api.get(ApiConfig.studentExcuses);
+  }
+
+  Future<Map<String, dynamic>> getExcuseDetail(int id) async {
+    return await _api.get('${ApiConfig.studentExcuses}/$id');
+  }
+
+  Future<Map<String, dynamic>> getMissedAssessments(String startDate, String endDate) async {
+    return await _api.post(
+      ApiConfig.studentExcuseMissedAssessments,
+      {'start_date': startDate, 'end_date': endDate},
+      auth: true,
+    );
+  }
+
+  Future<Map<String, dynamic>> submitExcuse({
+    required String reason,
+    required String docNumber,
+    required String startDate,
+    required String endDate,
+    String? description,
+    required Uint8List fileBytes,
+    required String fileName,
+    List<Map<String, dynamic>>? makeupDates,
+  }) async {
+    final fields = <String, String>{
+      'reason': reason,
+      'doc_number': docNumber,
+      'start_date': startDate,
+      'end_date': endDate,
+    };
+    if (description != null && description.isNotEmpty) {
+      fields['description'] = description;
+    }
+    if (makeupDates != null) {
+      for (int i = 0; i < makeupDates.length; i++) {
+        final m = makeupDates[i];
+        fields['makeup_dates[$i][subject_name]'] = m['subject_name'] ?? '';
+        fields['makeup_dates[$i][subject_id]'] = m['subject_id'] ?? '';
+        fields['makeup_dates[$i][assessment_type]'] = m['assessment_type'] ?? '';
+        fields['makeup_dates[$i][assessment_type_code]'] = m['assessment_type_code'] ?? '';
+        fields['makeup_dates[$i][original_date]'] = m['original_date'] ?? '';
+        if (m['assessment_type'] == 'jn') {
+          fields['makeup_dates[$i][makeup_start]'] = m['makeup_start'] ?? '';
+          fields['makeup_dates[$i][makeup_end]'] = m['makeup_end'] ?? '';
+          fields['makeup_dates[$i][makeup_date]'] = '';
+        } else {
+          fields['makeup_dates[$i][makeup_date]'] = m['makeup_date'] ?? '';
+          fields['makeup_dates[$i][makeup_start]'] = '';
+          fields['makeup_dates[$i][makeup_end]'] = '';
+        }
+      }
+    }
+    return await _api.multipartPost(
+      ApiConfig.studentExcuses,
+      fields,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
   }
 }

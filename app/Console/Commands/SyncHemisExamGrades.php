@@ -3,91 +3,79 @@
 namespace App\Console\Commands;
 
 use App\Models\Group;
-use App\Models\Semester;
+use App\Models\HemisExamGrade;
 use App\Services\HemisService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class SyncHemisExamGrades extends Command
 {
     protected $signature = 'hemis:sync-exam-grades
-                            {--group= : Bitta guruh HEMIS ID}
-                            {--subject= : Bitta fan ID}
-                            {--semester= : Semestr kodi}';
+                            {--full : Barchasini boshidan tortish (updated_at filtersiz)}
+                            {--group= : Bitta guruh HEMIS ID (per-student sync)}
+                            {--subject= : Bitta fan ID (--group bilan birga)}
+                            {--semester= : Semestr kodi (--group bilan birga)}';
 
     protected $description = 'HEMIS student-performance-list dan baholarni hemis_exam_grades jadvaliga sync qilish';
 
     public function handle(HemisService $hemis): int
     {
-        $groupFilter = $this->option('group');
-        $subjectFilter = $this->option('subject');
-        $semesterFilter = $this->option('semester');
+        // Bitta guruh/fan uchun — per-student sync (HEMIS yangilash tugmasi kabi)
+        if ($this->option('group') && $this->option('subject')) {
+            return $this->syncSingleGroup($hemis);
+        }
 
-        // Agar aniq parametrlar berilgan bo'lsa — faqat shu uchun sync
-        if ($groupFilter && $subjectFilter) {
-            $group = Group::where('group_hemis_id', $groupFilter)->first();
-            if (!$group) {
-                $this->error("Guruh topilmadi: {$groupFilter}");
-                return self::FAILURE;
+        // Bulk sync — faqat oxirgi o'zgarishlar (yoki --full bilan barchasi)
+        return $this->syncBulk($hemis);
+    }
+
+    private function syncSingleGroup(HemisService $hemis): int
+    {
+        $group = Group::where('group_hemis_id', $this->option('group'))->first();
+        if (!$group) {
+            $this->error("Guruh topilmadi: {$this->option('group')}");
+            return self::FAILURE;
+        }
+
+        $studentHemisIds = \App\Models\Student::where('group_id', $group->group_hemis_id)
+            ->pluck('hemis_id')->toArray();
+
+        $synced = $hemis->syncExamGradesForGroup(
+            $studentHemisIds,
+            $this->option('subject'),
+            $this->option('semester') ?? '',
+            null,
+            30
+        );
+
+        $this->info("Synced {$synced} exam grade(s).");
+        return self::SUCCESS;
+    }
+
+    private function syncBulk(HemisService $hemis): int
+    {
+        $updatedAtFrom = null;
+
+        if (!$this->option('full')) {
+            // HEMIS'dagi eng oxirgi updated_at vaqtini olamiz (lokal updated_at
+            // EMAS — chunki qo'lda "HEMIS yangilash" tugmasi faqat ayrim
+            // guruhlarni yangilaydi va lokal updated_at shu vaqtga o'zgaradi,
+            // lekin boshqa guruhlar yangilanmay qoladi. hemis_updated_at esa
+            // HEMIS tizimining o'z vaqti — cron shu joydan davom etadi).
+            $lastHemisUpdated = HemisExamGrade::max('hemis_updated_at');
+            if ($lastHemisUpdated) {
+                // 1 soat orqaga — chegaradagi yozuvlar tushib qolmasligi uchun
+                $updatedAtFrom = (int) $lastHemisUpdated - 3600;
+                $this->info("Oxirgi HEMIS updated_at: {$lastHemisUpdated} — faqat o'zgarganlarni tortamiz (updated_at_from={$updatedAtFrom})");
+            } else {
+                $this->info("Jadval bo'sh yoki hemis_updated_at yo'q — barchasini tortamiz.");
             }
-            $studentHemisIds = \App\Models\Student::where('group_id', $group->group_hemis_id)
-                ->pluck('hemis_id')->toArray();
-
-            $synced = $hemis->syncExamGradesForGroup(
-                $studentHemisIds,
-                $subjectFilter,
-                $semesterFilter ?? '',
-                null,
-                30
-            );
-            $this->info("Synced {$synced} exam grade(s) for group={$groupFilter}, subject={$subjectFilter}.");
-            return self::SUCCESS;
+        } else {
+            $this->info("--full rejim: barchasini boshidan tortamiz.");
         }
 
-        // Barcha aktiv guruhlarning joriy semestr fanlarini sync qilish
-        $currentSemesters = Semester::where('current', true)->get();
-        if ($currentSemesters->isEmpty()) {
-            $this->warn('Joriy semestr topilmadi.');
-            return self::SUCCESS;
-        }
+        $synced = $hemis->syncExamGradesBulk($updatedAtFrom, 30);
 
-        $totalSynced = 0;
-        $groups = Group::where('active', true)->where('department_active', true)->get();
-
-        $bar = $this->output->createProgressBar($groups->count());
-        $bar->start();
-
-        foreach ($groups as $group) {
-            $studentHemisIds = \App\Models\Student::where('group_id', $group->group_hemis_id)
-                ->pluck('hemis_id')->toArray();
-            if (empty($studentHemisIds)) { $bar->advance(); continue; }
-
-            $semesters = $currentSemesters->where('curriculum_hemis_id', $group->curriculum_hemis_id);
-
-            foreach ($semesters as $semester) {
-                $subjects = DB::table('curriculum_subjects')
-                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-                    ->where('semester_code', $semester->code)
-                    ->pluck('subject_id');
-
-                foreach ($subjects as $subjectId) {
-                    $totalSynced += $hemis->syncExamGradesForGroup(
-                        $studentHemisIds,
-                        $subjectId,
-                        $semester->code,
-                        null,
-                        30
-                    );
-                }
-            }
-
-            $bar->advance();
-        }
-
-        $bar->finish();
-        $this->newLine();
-        $this->info("Jami {$totalSynced} ta HEMIS exam grade sync qilindi.");
-
+        $this->info("Jami {$synced} ta HEMIS exam grade sync qilindi.");
         return self::SUCCESS;
     }
 }

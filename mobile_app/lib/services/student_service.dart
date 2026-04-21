@@ -58,6 +58,10 @@ class StudentService {
     return await _api.get(ApiConfig.studentContract);
   }
 
+  Future<Map<String, dynamic>> getExamSchedule() async {
+    return await _api.get(ApiConfig.studentExamSchedule);
+  }
+
   // Absence excuse methods
   Future<Map<String, dynamic>> getExcuseReasons() async {
     return await _api.get(ApiConfig.studentExcuseReasons);

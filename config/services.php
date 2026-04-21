@@ -58,6 +58,10 @@ return [
         'registrar_group_id' => env('TELEGRAM_REGISTRAR_GROUP_ID'),
     ],
 
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+    ],
+
     'moodle' => [
         'ssh_host' => env('MOODLE_SSH_HOST'),
         'ssh_user' => env('MOODLE_SSH_USER'),

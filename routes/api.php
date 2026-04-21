@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
+use App\Http\Controllers\Api\V1\ChatbotApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -46,6 +47,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
             Route::get('/contract', [StudentApiController::class, 'contract']);
+            Route::post('/chat', [ChatbotApiController::class, 'chat']);
 
             // Profile completion
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);

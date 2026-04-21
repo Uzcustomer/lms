@@ -6,6 +6,7 @@ import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_services_screen.dart';
 import 'student_profile_screen.dart';
+import 'student_chat_screen.dart';
 
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
@@ -47,6 +48,19 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     return Scaffold(
       extendBody: true,
       body: _screens[_currentIndex],
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 70),
+        child: FloatingActionButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const StudentChatScreen()),
+            );
+          },
+          backgroundColor: const Color(0xFF4A6CF7),
+          elevation: 6,
+          child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

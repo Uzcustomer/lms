@@ -64,6 +64,7 @@ class AppLocalizations {
   String get level => get('level');
   String get greeting => get('greeting');
   String get services => get('services');
+  String get useful => get('useful');
   String get tuitionFee => get('tuition_fee');
   String get paymentForm => get('payment_form');
   String get paid => get('paid');
@@ -257,6 +258,7 @@ class AppLocalizations {
       'mt_deadline': 'Muddat',
       'mt_remaining': 'Qolgan urinish',
       'services': 'Xizmatlar',
+      'useful': 'Foydali',
       'absence_excuse': 'Sababli ariza',
       'absence_excuse_desc': 'Darsga kelmaganlik uchun sababli ariza yuborish',
       'coming_soon': 'Tez kunda',
@@ -433,6 +435,7 @@ class AppLocalizations {
       'mt_deadline': 'Срок',
       'mt_remaining': 'Осталось попыток',
       'services': 'Услуги',
+      'useful': 'Полезное',
       'absence_excuse': 'Заявление об отсутствии',
       'absence_excuse_desc': 'Подать заявление об уважительной причине отсутствия',
       'coming_soon': 'Скоро',
@@ -609,6 +612,7 @@ class AppLocalizations {
       'mt_deadline': 'Deadline',
       'mt_remaining': 'Remaining attempts',
       'services': 'Services',
+      'useful': 'Useful',
       'absence_excuse': 'Absence Excuse',
       'absence_excuse_desc': 'Submit an excuse for class absence',
       'coming_soon': 'Coming Soon',

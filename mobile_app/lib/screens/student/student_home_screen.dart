@@ -219,7 +219,7 @@ class _UsefulModalState extends State<_UsefulModal>
 
     final services = [
       _ModalServiceItem(
-        icon: Icons.electrical_services_rounded,
+        icon: Icons.fact_check_outlined,
         title: 'Elektron xizmatlar',
         subtitle: 'Sababli ariza va boshqa xizmatlar',
         color: const Color(0xFF4A6CF7),

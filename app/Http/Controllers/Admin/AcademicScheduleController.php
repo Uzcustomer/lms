@@ -1421,6 +1421,20 @@ class AcademicScheduleController extends Controller
                     );
                 }
 
+                $nonAuditoriumCodes = ['17'];
+                $entryAuditoriumHours = 0;
+                if (is_array($entrySubject->subject_details)) {
+                    foreach ($entrySubject->subject_details as $detail) {
+                        $trainingCode = (string) (($detail['trainingType'] ?? [])['code'] ?? '');
+                        if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                            $entryAuditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($entryAuditoriumHours <= 0) {
+                    $entryAuditoriumHours = (float) ($entrySubject->total_acload ?: 1);
+                }
+
                 foreach ($entryStudents as $student) {
                     $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
 
@@ -1431,8 +1445,7 @@ class AcademicScheduleController extends Controller
                         ->whereNotIn('training_type_code', [99, 100, 101, 102])
                         ->sum('absent_off');
 
-                    $totalAcload = $entrySubject->total_acload ?: 1;
-                    $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
+                    $qoldiq = round($qoldirgan * 100 / $entryAuditoriumHours, 2);
 
                     // Kontrakt qarzdorligi tekshiruvi
                     $contract = ContractList::where('student_hemis_id', $student->hemis_id)
@@ -1464,7 +1477,7 @@ class AcademicScheduleController extends Controller
                         $mtFailed = true;
                         $holat = 'X';
                     }
-                    if ($qoldiq > 25) {
+                    if ($qoldiq >= 25) {
                         $davomatFailed = true;
                         $holat = 'X';
                     }

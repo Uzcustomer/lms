@@ -50,11 +50,26 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   void _parseSchedule(Map<String, dynamic>? schedule) {
-    if (schedule == null) return;
+    if (schedule == null) {
+      debugPrint('[SCHEDULE] schedule is null');
+      return;
+    }
     try {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      debugPrint('[SCHEDULE] today=$today');
       final scheduleList = schedule['schedule'];
-      if (scheduleList == null || scheduleList is! List) return;
+      if (scheduleList == null || scheduleList is! List) {
+        debugPrint('[SCHEDULE] scheduleList is null or not List, keys=${schedule.keys.toList()}');
+        return;
+      }
+      debugPrint('[SCHEDULE] days count=${scheduleList.length}');
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        final d = day['date']?.toString() ?? '?';
+        final les = day['lessons'];
+        final count = (les is List) ? les.length : 0;
+        debugPrint('[SCHEDULE] day=$d lessons=$count');
+      }
 
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
-import '../../services/api_service.dart';
-import '../../services/student_service.dart';
 import 'student_dashboard_screen.dart';
+import 'student_exam_schedule_screen.dart';
+import 'library_webview_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
@@ -182,9 +181,6 @@ class _UsefulModalState extends State<_UsefulModal>
   late AnimationController _animController;
   late Animation<Offset> _slideAnim;
   late Animation<double> _fadeAnim;
-  List<dynamic> _exams = [];
-  bool _examsLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -204,30 +200,6 @@ class _UsefulModalState extends State<_UsefulModal>
       curve: Curves.easeOut,
     ));
     _animController.forward();
-    _loadExams();
-  }
-
-  Future<void> _loadExams() async {
-    try {
-      final api = ApiService();
-      final service = StudentService(api);
-      final response = await service.getExamSchedule();
-      if (mounted && response['success'] == true) {
-        final all = response['data'] as List<dynamic>? ?? [];
-        final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-        setState(() {
-          _exams = all.where((e) {
-            final d = e['date']?.toString() ?? '';
-            return d.compareTo(today) >= 0;
-          }).toList();
-          _examsLoading = false;
-        });
-      } else {
-        if (mounted) setState(() => _examsLoading = false);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _examsLoading = false);
-    }
   }
 
   @override
@@ -262,6 +234,20 @@ class _UsefulModalState extends State<_UsefulModal>
         },
       ),
       _ModalServiceItem(
+        icon: Icons.event_note_rounded,
+        title: 'Imtihon sanalari',
+        subtitle: 'OSKI va Test kunlari kalendarda',
+        color: const Color(0xFFE53935),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const ExamScheduleScreen()),
+          );
+        },
+      ),
+      _ModalServiceItem(
         icon: Icons.calculate_outlined,
         title: 'GPA Kalkulyator',
         subtitle: 'GPA ni hisoblash va prognoz qilish',
@@ -282,8 +268,14 @@ class _UsefulModalState extends State<_UsefulModal>
         title: 'Kutubxona',
         subtitle: 'Elektron darsliklar va resurslar',
         color: const Color(0xFFFF6D00),
-        onTap: () {},
-        comingSoon: true,
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const LibraryWebViewScreen()),
+          );
+        },
       ),
     ];
 
@@ -292,9 +284,9 @@ class _UsefulModalState extends State<_UsefulModal>
       child: FadeTransition(
         opacity: _fadeAnim,
         child: DraggableScrollableSheet(
-          initialChildSize: 0.65,
+          initialChildSize: 0.55,
           minChildSize: 0.3,
-          maxChildSize: 0.85,
+          maxChildSize: 0.75,
           builder: (context, scrollController) {
             return Container(
               decoration: BoxDecoration(
@@ -370,65 +362,19 @@ class _UsefulModalState extends State<_UsefulModal>
                   ),
                   Divider(color: divColor, height: 1),
 
-                  // Content
+                  // Services list
                   Expanded(
-                    child: ListView(
+                    child: ListView.separated(
                       controller: scrollController,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
-                      children: [
-                        // Services
-                        ...services.map((item) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _buildServiceTile(
-                              item, textColor, subColor, widget.isDark),
-                        )),
-
-                        // Exam dates section
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Icon(Icons.event_note_rounded,
-                                size: 20, color: const Color(0xFFE53935)),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Imtihon sanalari',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: textColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        if (_examsLoading)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20),
-                              child: SizedBox(
-                                width: 24, height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            ),
-                          )
-                        else if (_exams.isEmpty)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Text(
-                                'Hozircha imtihon sanalari yo\'q',
-                                style: TextStyle(fontSize: 13, color: subColor),
-                              ),
-                            ),
-                          )
-                        else
-                          ..._exams.map((exam) => _buildExamCard(
-                              exam, textColor, subColor, widget.isDark)),
-
-                        const SizedBox(height: 16),
-                      ],
+                      itemCount: services.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final item = services[index];
+                        return _buildServiceTile(
+                            item, textColor, subColor, widget.isDark);
+                      },
                     ),
                   ),
                 ],
@@ -519,169 +465,6 @@ class _UsefulModalState extends State<_UsefulModal>
         ),
       ),
     );
-  }
-
-  Widget _buildExamCard(dynamic exam, Color textColor, Color subColor, bool isDark) {
-    final subject = exam['subject_name']?.toString() ?? '';
-    final examType = exam['exam_type']?.toString() ?? '';
-    final dateStr = exam['date']?.toString() ?? '';
-    final timeStr = exam['time']?.toString() ?? '';
-
-    String formattedDate = dateStr;
-    String daysLeft = '';
-    Color urgencyColor = const Color(0xFF4A6CF7);
-
-    try {
-      final date = DateTime.parse(dateStr);
-      final now = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-      final diff = date.difference(now).inDays;
-
-      formattedDate = DateFormat('d-MMMM, EEEE').format(date);
-
-      if (diff == 0) {
-        daysLeft = 'Bugun';
-        urgencyColor = const Color(0xFFE53935);
-      } else if (diff == 1) {
-        daysLeft = 'Ertaga';
-        urgencyColor = const Color(0xFFE53935);
-      } else if (diff <= 3) {
-        daysLeft = '$diff kun qoldi';
-        urgencyColor = const Color(0xFFFF6D00);
-      } else {
-        daysLeft = '$diff kun qoldi';
-        urgencyColor = const Color(0xFF26A69A);
-      }
-    } catch (_) {}
-
-    final cardBg = isDark ? AppTheme.darkBackground : Colors.white;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: urgencyColor.withOpacity(0.2),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: urgencyColor.withOpacity(0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Date badge
-            Container(
-              width: 50,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: urgencyColor.withOpacity(isDark ? 0.2 : 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    _extractDay(dateStr),
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: urgencyColor,
-                    ),
-                  ),
-                  Text(
-                    _extractMonth(dateStr),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: urgencyColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    subject,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: urgencyColor.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          examType,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: urgencyColor,
-                          ),
-                        ),
-                      ),
-                      if (timeStr.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.access_time_rounded, size: 12, color: subColor),
-                        const SizedBox(width: 3),
-                        Text(timeStr, style: TextStyle(fontSize: 11, color: subColor)),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  daysLeft,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: urgencyColor,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _extractDay(String dateStr) {
-    try {
-      return DateTime.parse(dateStr).day.toString();
-    } catch (_) {
-      return '';
-    }
-  }
-
-  String _extractMonth(String dateStr) {
-    try {
-      const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
-      return months[DateTime.parse(dateStr).month - 1];
-    } catch (_) {
-      return '';
-    }
   }
 }
 

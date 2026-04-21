@@ -21,16 +21,6 @@
             from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .form-slide-enter { animation: slideIn .35s ease-out; }
-        .form-slide-leave { animation: slideOut .25s ease-in forwards; }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(16px) scale(0.97); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes slideOut {
-            from { opacity: 1; transform: translateY(0) scale(1); }
-            to { opacity: 0; transform: translateY(-10px) scale(0.97); }
-        }
         .input-group {
             position: relative;
             border-left: 3px solid #3b82f6;
@@ -167,25 +157,10 @@
 </script>
 
 <div class="min-h-screen flex items-center justify-center p-4" x-data="{
-    tab: '{{ old('_profile') }}' || 'student',
-    switching: false,
+    tab: '{{ old('_profile') }}' || localStorage.getItem('lastLoginTab') || 'student',
     c: 0, adm: false,
-    tap() { this.c++; if(this.c>=5){this.adm=true;this.tab='admin';} },
-    switchTab(to) {
-        if (this.switching || this.tab === to) return;
-        this.switching = true;
-        const container = document.getElementById('forms-container');
-        container.classList.add('form-slide-leave');
-        setTimeout(() => {
-            container.classList.remove('form-slide-leave');
-            this.tab = to;
-            this.$nextTick(() => {
-                container.classList.add('form-slide-enter');
-                setTimeout(() => { container.classList.remove('form-slide-enter'); this.switching = false; }, 350);
-            });
-        }, 250);
-    }
-}">
+    tap() { this.c++; if(this.c>=5){this.adm=true;this.tab='admin';} }
+}" x-init="$watch('tab', val => localStorage.setItem('lastLoginTab', val))">
     <div class="login-card">
 
         {{-- Logo --}}
@@ -204,12 +179,26 @@
             <p class="text-center text-[13px] font-semibold text-slate-700">Termiz filiali</p>
             <p class="text-center text-[11px] text-blue-600 font-medium mt-0.5 mb-5 tracking-wide">elektron jurnali</p>
 
-            {{-- Admin (yashirin) --}}
-            <template x-if="adm">
-                <div class="flex justify-end mb-2">
-                    <button @click="tab = 'admin'" class="text-[11px] font-semibold text-violet-600 hover:text-violet-800 transition" x-show="tab !== 'admin'">Admin</button>
-                </div>
-            </template>
+            {{-- Rol tugmalari --}}
+            <div class="flex gap-2.5 mb-5">
+                <button @click="tab = 'student'"
+                        :class="tab === 'student' ? 'role-btn-student-active' : 'role-btn-student-inactive'"
+                        class="role-btn">
+                    Talaba
+                </button>
+                <button @click="tab = 'teacher'"
+                        :class="tab === 'teacher' ? 'role-btn-teacher-active' : 'role-btn-teacher-inactive'"
+                        class="role-btn">
+                    Xodim
+                </button>
+                <template x-if="adm">
+                    <button @click="tab = 'admin'"
+                            :class="tab === 'admin' ? 'role-btn-admin-active' : 'role-btn-admin-inactive'"
+                            class="role-btn">
+                        Admin
+                    </button>
+                </template>
+            </div>
 
             {{-- Sessiya xabarlari --}}
             @if(session('status'))
@@ -228,7 +217,7 @@
             @endif
 
             {{-- Formalar konteyneri — tab almashtirganda bounce bo'lmasligi uchun --}}
-            <div id="forms-container" style="min-height: 320px;">
+            <div style="min-height: 320px;">
 
             {{-- Student forma --}}
             <form x-show="tab === 'student'" method="POST" action="{{ route('student.login.post') }}">
@@ -275,16 +264,6 @@
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg>
                     Hemis orqali kirish
                 </a>
-
-                {{-- Xodim sifatida kirish --}}
-                <div style="margin-top: 14px;">
-                    <button type="button" @click="switchTab('teacher')"
-                            style="width:100%; padding:11px 0; font-size:13px; font-weight:600; color:#475569; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all .2s;"
-                            onmouseover="this.style.background='#e2e8f0'; this.style.borderColor='#cbd5e1'" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='#e2e8f0'">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
-                        Xodim sifatida LMS ga kirish
-                    </button>
-                </div>
             </form>
 
             {{-- Xodim forma --}}
@@ -318,15 +297,6 @@
                     Kirish
                 </button>
 
-                {{-- Talaba sifatida kirish --}}
-                <div style="margin-top: 14px;">
-                    <button type="button" @click="switchTab('student')"
-                            style="width:100%; padding:11px 0; font-size:13px; font-weight:600; color:#475569; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all .2s;"
-                            onmouseover="this.style.background='#e2e8f0'; this.style.borderColor='#cbd5e1'" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='#e2e8f0'">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342"/></svg>
-                        Talaba sifatida kirish
-                    </button>
-                </div>
             </form>
 
             {{-- Admin forma (yashirin) --}}

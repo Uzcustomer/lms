@@ -3,6 +3,7 @@ import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'student_dashboard_screen.dart';
 import 'student_exam_schedule_screen.dart';
+import 'library_webview_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
@@ -267,8 +268,14 @@ class _UsefulModalState extends State<_UsefulModal>
         title: 'Kutubxona',
         subtitle: 'Elektron darsliklar va resurslar',
         color: const Color(0xFFFF6D00),
-        onTap: () {},
-        comingSoon: true,
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const LibraryWebViewScreen()),
+          );
+        },
       ),
     ];
 

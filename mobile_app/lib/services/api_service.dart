@@ -19,7 +19,11 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString(key);
     }
-    return await _secureStorage.read(key: key);
+    try {
+      return await _secureStorage.read(key: key);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _write(String key, String value) async {
@@ -27,7 +31,12 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(key, value);
     } else {
-      await _secureStorage.write(key: key, value: value);
+      try {
+        await _secureStorage.write(key: key, value: value);
+      } catch (_) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(key, value);
+      }
     }
   }
 
@@ -37,7 +46,12 @@ class ApiService {
       await prefs.remove(_tokenKey);
       await prefs.remove(_guardKey);
     } else {
-      await _secureStorage.deleteAll();
+      try {
+        await _secureStorage.deleteAll();
+      } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_guardKey);
     }
   }
 

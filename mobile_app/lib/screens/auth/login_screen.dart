@@ -99,9 +99,15 @@ class _LoginScreenState extends State<LoginScreen>
 
           // Content
           SafeArea(
-            child: Column(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: bottom > 0 ? bottom : 0),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    MediaQuery.of(context).padding.bottom,
+                child: Column(
               children: [
-                const Spacer(),
+                const Spacer(flex: 3),
 
                 // Logo & Title
                 Container(
@@ -139,14 +145,13 @@ class _LoginScreenState extends State<LoginScreen>
                     color: Colors.white.withOpacity(0.7),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
                 // Glass card with form
                 Padding(
-                  padding: EdgeInsets.only(
+                  padding: const EdgeInsets.only(
                     left: 20,
                     right: 20,
-                    bottom: bottom > 0 ? bottom + 12 : 32,
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
@@ -366,7 +371,10 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                 ),
+                const Spacer(flex: 1),
               ],
+                ),
+              ),
             ),
           ),
         ],

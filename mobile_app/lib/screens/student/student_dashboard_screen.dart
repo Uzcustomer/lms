@@ -37,6 +37,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       provider.loadDashboard();
       provider.loadProfile();
       provider.loadContract();
+      // Use cached schedule immediately, then refresh in background
+      _parseSchedule(provider.schedule);
       _loadTodaySchedule();
     });
   }
@@ -47,18 +49,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     super.dispose();
   }
 
-  Future<void> _loadTodaySchedule() async {
+  void _parseSchedule(Map<String, dynamic>? schedule) {
+    if (schedule == null) return;
     try {
-      final provider = context.read<StudentProvider>();
-      await provider.loadSchedule();
-      if (!mounted) return;
-      final schedule = provider.schedule;
-      if (schedule == null) return;
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final scheduleList = schedule['schedule'];
       if (scheduleList == null || scheduleList is! List) return;
 
-      // First try to find today's lessons
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;
         if (day['date']?.toString() == today) {
@@ -73,7 +70,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         }
       }
 
-      // No lessons today — find the first lesson from the next available day
       setState(() => _todayLessons = []);
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;
@@ -95,6 +91,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         return;
       }
       setState(() => _nextDayLesson = null);
+    } catch (_) {}
+  }
+
+  Future<void> _loadTodaySchedule() async {
+    try {
+      final provider = context.read<StudentProvider>();
+      await provider.loadSchedule();
+      if (!mounted) return;
+      _parseSchedule(provider.schedule);
     } catch (_) {
       if (mounted) setState(() {
         _todayLessons = [];
@@ -1298,70 +1303,45 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
     final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
     final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
-    final currentSemAvg = _toDouble(data?['current_semester_avg']);
-    final prevSemAvg = _toDouble(data?['prev_semester_avg']);
-    final recentGrades = data?['recent_grades'] as List<dynamic>? ?? [];
-
-    final sparkPoints = recentGrades
-        .where((g) => g is Map<String, dynamic>)
-        .map((g) => _toDouble((g as Map<String, dynamic>)['grade']))
-        .toList()
-        .reversed
-        .toList();
-
-    final gradeDiff = (prevSemAvg > 0) ? currentSemAvg - prevSemAvg : null;
-    final gpaDiff = (prevSemAvg > 0) ? (currentSemAvg - prevSemAvg) * 4.0 / 100.0 : null;
 
     return Row(
       children: [
         Expanded(
-          child: _buildSparkCard(
-            icon: Icons.trending_up,
-            value: gpa.toStringAsFixed(2),
-            subtitle: 'GPA · 4.00+',
-            diff: gpaDiff,
-            sparkData: sparkPoints.map((g) => g * 4.0 / 100.0).toList(),
+          child: _buildDonutCard(
+            label: 'GPA',
+            value: gpa,
+            maxValue: 5.0,
+            displayText: gpa.toStringAsFixed(2),
+            color: const Color(0xFF6C63FF),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildSparkCard(
-            icon: Icons.star_outline,
-            value: avgGrade.toStringAsFixed(1),
-            subtitle: l.avgGrade,
-            diff: gradeDiff,
-            sparkData: sparkPoints,
+          child: _buildDonutCard(
+            label: l.avgGrade,
+            value: avgGrade,
+            maxValue: 100.0,
+            displayText: avgGrade.toStringAsFixed(1),
+            color: const Color(0xFF26C6DA),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSparkCard({
-    required IconData icon,
-    required String value,
-    required String subtitle,
-    required List<double> sparkData,
-    double? diff,
+  Widget _buildDonutCard({
+    required String label,
+    required double value,
+    required double maxValue,
+    required String displayText,
+    required Color color,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isUp = diff != null && diff >= 0;
-    final trendColor = (diff == null) ? AppTheme.accentColor : (isUp ? const Color(0xFF4CAF50) : const Color(0xFFE53935));
     final bgColor = isDark ? const Color(0xFF1A1A2E) : Colors.white;
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
     final subTextColor = isDark ? Colors.white.withAlpha(120) : AppTheme.textSecondary;
-
-    final spots = <FlSpot>[];
-    if (sparkData.length >= 2) {
-      for (int i = 0; i < sparkData.length; i++) {
-        spots.add(FlSpot(i.toDouble(), sparkData[i]));
-      }
-    } else {
-      spots.addAll([
-        const FlSpot(0, 0.3), const FlSpot(1, 0.5), const FlSpot(2, 0.4),
-        const FlSpot(3, 0.7), const FlSpot(4, 0.6), const FlSpot(5, 0.8),
-      ]);
-    }
+    final trackColor = isDark ? Colors.white.withAlpha(15) : Colors.grey.withAlpha(30);
+    final percent = (value / maxValue).clamp(0.0, 1.0);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1377,96 +1357,76 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: trendColor.withAlpha(25),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: trendColor, size: 20),
-              ),
-              const Spacer(),
-              if (diff != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: trendColor.withAlpha(20),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        isUp ? Icons.arrow_upward : Icons.arrow_downward,
-                        size: 12,
-                        color: trendColor,
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${isUp ? "+" : ""}${diff.toStringAsFixed(1)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: trendColor,
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: percent),
+            duration: const Duration(milliseconds: 1200),
+            curve: Curves.easeOutCubic,
+            builder: (context, animVal, _) {
+              return SizedBox(
+                width: 100,
+                height: 100,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 100,
+                      height: 100,
+                      child: PieChart(
+                        PieChartData(
+                          startDegreeOffset: -90,
+                          sectionsSpace: 0,
+                          centerSpaceRadius: 36,
+                          sections: [
+                            PieChartSectionData(
+                              value: animVal * maxValue,
+                              color: color,
+                              radius: 14,
+                              showTitle: false,
+                            ),
+                            PieChartSectionData(
+                              value: maxValue - (animVal * maxValue),
+                              color: trackColor,
+                              radius: 14,
+                              showTitle: false,
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: TextStyle(fontSize: 12, color: subTextColor),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 32,
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                lineTouchData: const LineTouchData(enabled: false),
-                clipData: const FlClipData.all(),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    curveSmoothness: 0.3,
-                    color: trendColor,
-                    barWidth: 2,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          trendColor.withAlpha(60),
-                          trendColor.withAlpha(5),
-                        ],
-                      ),
                     ),
-                  ),
-                ],
-              ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          displayText,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: textColor,
+                          ),
+                        ),
+                        Text(
+                          '/ ${maxValue.toInt()}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: subTextColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: subTextColor,
             ),
           ),
         ],

@@ -181,7 +181,7 @@
                         </div>
                         <div class="p-4">
                             <div class="text-sm text-gray-600">
-                                <span class="text-gray-400 text-xs">Ish beruvchi:</span> {{ $contract->employer_name ?: '—' }}
+                                <span class="text-gray-400 text-xs">Ish beruvchi:</span> <span class="font-medium text-gray-700">{{ $contract->employer_name ? $contract->employer_name . ' viloyati sog\'liqni saqlash bosh boshqarmasi' : '—' }}</span>
                             </div>
                             @if($contract->status === 'rejected' && $contract->reject_reason)
                                 <div class="mt-2 p-2.5 bg-red-50 rounded-lg border border-red-100 text-sm text-red-700">

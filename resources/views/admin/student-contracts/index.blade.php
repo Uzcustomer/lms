@@ -27,7 +27,7 @@
             @endif
 
             {{-- Stat cards --}}
-            <div class="grid grid-cols-5 gap-3 mb-5">
+            <div class="flex gap-3 mb-5">
                 <a href="{{ route('admin.student-contracts.index') }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ !request('status') ? 'bg-blue-50 border-blue-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="{{ !request('status') ? '' : '' }}">
                     <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>

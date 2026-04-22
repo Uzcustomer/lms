@@ -29,9 +29,11 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                {{-- Chap ustun — talaba ma'lumotlari (2/5) --}}
-                <div class="lg:col-span-2 space-y-4">
+            <form method="POST" action="{{ route('admin.student-contracts.approve', $studentContract) }}">
+                @csrf
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {{-- Chap ustun — talaba ma'lumotlari --}}
+                <div class="space-y-4">
                     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                         <div class="px-5 py-3 flex items-center gap-2" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef); border-bottom: 2px solid #cbd5e1;">
                             <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
@@ -74,10 +76,8 @@
                     @endif
                 </div>
 
-                {{-- O'ng ustun — ish beruvchi + amallar (3/5) --}}
-                <div class="lg:col-span-3">
-                    <form method="POST" action="{{ route('admin.student-contracts.approve', $studentContract) }}">
-                        @csrf
+                {{-- O'ng ustun — ish beruvchi + amallar --}}
+                <div>
                         <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                             <div class="px-5 py-3 flex items-center gap-2" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-bottom: 2px solid #a7f3d0;">
                                 <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #059669, #10b981);">
@@ -153,34 +153,39 @@
                             </div>
                             @endif
 
-                            {{-- Amallar --}}
-                            <div class="px-5 py-4 flex gap-3" style="background: #f8fafc; border-top: 1px solid #e5e7eb;">
-                                <button type="submit" class="flex-1 py-2.5 text-sm font-semibold rounded-lg text-white transition" style="background: linear-gradient(135deg, #059669, #10b981);"
-                                        onmouseover="this.style.boxShadow='0 4px 12px rgba(5,150,105,0.3)'" onmouseout="this.style.boxShadow='none'">
-                                    Tasdiqlash va hujjat yaratish
-                                </button>
-                            </div>
                         </div>
-                    </form>
-
-                    {{-- Rad etish --}}
-                    <form method="POST" action="{{ route('admin.student-contracts.reject', $studentContract) }}" x-data="{ showReject: false }" class="mt-3">
-                        @csrf
-                        <button type="button" @click="showReject = !showReject"
-                                class="w-full py-2.5 text-sm font-semibold rounded-lg transition" style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;"
-                                onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'">
-                            Rad etish
-                        </button>
-                        <div x-show="showReject" x-transition x-cloak class="mt-3 p-4 bg-red-50 rounded-xl border border-red-200">
-                            <label class="text-[11px] font-bold text-red-700 uppercase tracking-wide mb-1 block">Rad etish sababi</label>
-                            <textarea name="reject_reason" rows="3" required class="review-input" style="height: auto; border-color: #fca5a5;" placeholder="Sababni yozing..."></textarea>
-                            <button type="submit" class="mt-2 w-full py-2 text-sm font-semibold rounded-lg text-white" style="background: linear-gradient(135deg, #991b1b, #dc2626);">
-                                Rad etishni tasdiqlash
-                            </button>
-                        </div>
-                    </form>
                 </div>
             </div>
+
+            {{-- Amallar — o'ng tarafda --}}
+            <div class="mt-4 flex justify-end gap-3">
+                <button type="submit" class="px-8 py-2.5 text-sm font-semibold rounded-lg text-white transition" style="background: linear-gradient(135deg, #059669, #10b981);"
+                        onmouseover="this.style.boxShadow='0 4px 12px rgba(5,150,105,0.3)'" onmouseout="this.style.boxShadow='none'">
+                    Tasdiqlash va hujjat yaratish
+                </button>
+            </div>
+            </form>
+
+            {{-- Rad etish --}}
+            <form method="POST" action="{{ route('admin.student-contracts.reject', $studentContract) }}" x-data="{ showReject: false }" class="mt-3">
+                @csrf
+                <div class="flex justify-end">
+                    <button type="button" @click="showReject = !showReject"
+                            class="px-8 py-2.5 text-sm font-semibold rounded-lg transition" style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;"
+                            onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'">
+                        Rad etish
+                    </button>
+                </div>
+                <div x-show="showReject" x-transition x-cloak class="mt-3 p-4 bg-red-50 rounded-xl border border-red-200">
+                    <label class="text-[11px] font-bold text-red-700 uppercase tracking-wide mb-1 block">Rad etish sababi</label>
+                    <textarea name="reject_reason" rows="3" required class="review-input" style="height: auto; border-color: #fca5a5;" placeholder="Sababni yozing..."></textarea>
+                    <div class="flex justify-end mt-2">
+                        <button type="submit" class="px-8 py-2 text-sm font-semibold rounded-lg text-white" style="background: linear-gradient(135deg, #991b1b, #dc2626);">
+                            Rad etishni tasdiqlash
+                        </button>
+                    </div>
+                </div>
+            </form>
 
         </div>
     </div>

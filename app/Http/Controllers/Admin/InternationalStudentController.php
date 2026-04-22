@@ -103,43 +103,11 @@ class InternationalStudentController extends Controller
             });
         }
 
-        if ($request->filled('visa_end_from')) {
-            $from = $request->visa_end_from;
-            $query->whereHas('visaInfo', function ($q) use ($from) {
-                $q->whereNotNull('visa_end_date')
-                  ->whereDate('visa_end_date', '>=', $from);
-            });
-        }
-
-        if ($request->filled('visa_end_to')) {
-            $to = $request->visa_end_to;
-            $query->whereHas('visaInfo', function ($q) use ($to) {
-                $q->whereNotNull('visa_end_date')
-                  ->whereDate('visa_end_date', '<=', $to);
-            });
-        }
-
         if ($request->has('registration_expiry') && $request->registration_expiry !== '' && $request->registration_expiry !== null) {
             $days = (int) $request->registration_expiry;
             $query->whereHas('visaInfo', function ($q) use ($days) {
                 $q->whereNotNull('registration_end_date')
                   ->whereDate('registration_end_date', '<=', now()->addDays($days));
-            });
-        }
-
-        if ($request->filled('registration_end_from')) {
-            $from = $request->registration_end_from;
-            $query->whereHas('visaInfo', function ($q) use ($from) {
-                $q->whereNotNull('registration_end_date')
-                  ->whereDate('registration_end_date', '>=', $from);
-            });
-        }
-
-        if ($request->filled('registration_end_to')) {
-            $to = $request->registration_end_to;
-            $query->whereHas('visaInfo', function ($q) use ($to) {
-                $q->whereNotNull('registration_end_date')
-                  ->whereDate('registration_end_date', '<=', $to);
             });
         }
 

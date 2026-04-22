@@ -3119,8 +3119,10 @@
             }
         }
 
-        // Admin/Superadmin: OSKI/Test baho kiritish (YN qulfidan qat'iy nazar)
+        // OSKI/Test baho kiritish vaqtinchalik yopilgan
         function editExamGrade(cell, studentHemisId, typeCode, currentValue) {
+            alert('OSKI/Test baholarini qo\'yish vaqtinchalik yopilgan.');
+            return;
             if (cell.querySelector('input')) return;
             var typeNames = {101: 'OSKI', 102: 'Test'};
             var original = cell.innerHTML;

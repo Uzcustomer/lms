@@ -395,6 +395,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{studentContract}/review', [AdminStudentContractController::class, 'review'])->name('review');
             Route::post('/{studentContract}/approve', [AdminStudentContractController::class, 'approve'])->name('approve');
             Route::post('/{studentContract}/reject', [AdminStudentContractController::class, 'reject'])->name('reject');
+            Route::delete('/{studentContract}', [AdminStudentContractController::class, 'destroy'])->name('destroy');
             Route::get('/{studentContract}/download', [AdminStudentContractController::class, 'download'])->name('download');
             Route::post('/{studentContract}/regenerate', [AdminStudentContractController::class, 'regenerate'])->name('regenerate');
         });

@@ -161,6 +161,21 @@ class StudentContractController extends Controller
         return response()->download($path, $filename);
     }
 
+    public function destroy(StudentContract $studentContract)
+    {
+        if ($studentContract->document_path) {
+            $path = storage_path('app/public/' . $studentContract->document_path);
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+
+        $studentContract->delete();
+
+        return redirect()->route('admin.student-contracts.index')
+            ->with('success', 'Shartnoma o\'chirildi.');
+    }
+
     public function regenerate(StudentContract $studentContract)
     {
         try {

@@ -31,7 +31,7 @@
 
             <form method="POST" action="{{ route('admin.student-contracts.approve', $studentContract) }}">
                 @csrf
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: stretch;">
                 {{-- Chap ustun — talaba ma'lumotlari --}}
                 <div class="space-y-4">
                     <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -158,13 +158,13 @@
             </div>
 
             {{-- Amallar --}}
-            <div class="mt-4 flex justify-end gap-3">
-                <button type="submit" class="px-8 py-2.5 text-sm font-semibold rounded-lg text-white transition" style="background: linear-gradient(135deg, #059669, #10b981);"
+            <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 12px; padding: 0 16px;">
+                <button type="submit" style="padding: 10px 32px; font-size: 13px; font-weight: 600; border-radius: 8px; color: #fff; border: none; cursor: pointer; background: linear-gradient(135deg, #059669, #10b981); transition: all 0.2s;"
                         onmouseover="this.style.boxShadow='0 4px 12px rgba(5,150,105,0.3)'" onmouseout="this.style.boxShadow='none'">
                     Tasdiqlash va hujjat yaratish
                 </button>
                 <button type="button" onclick="document.getElementById('reject-panel').style.display = document.getElementById('reject-panel').style.display === 'none' ? 'block' : 'none'"
-                        class="px-8 py-2.5 text-sm font-semibold rounded-lg transition" style="background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;">
+                        style="padding: 10px 32px; font-size: 13px; font-weight: 600; border-radius: 8px; color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; cursor: pointer; transition: all 0.2s;">
                     Rad etish
                 </button>
             </div>

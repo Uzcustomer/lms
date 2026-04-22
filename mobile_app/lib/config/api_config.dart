@@ -37,6 +37,8 @@ class ApiConfig {
   static const String chatContacts = '/chat/contacts';
   static const String chatMessages = '/chat/messages';
   static const String chatSend = '/chat/send';
+  static const String chatGroup = '/chat/group';
+  static const String chatGroupSend = '/chat/group/send';
 
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';

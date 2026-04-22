@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import 'chat_conversation_screen.dart';
+import 'chat_group_screen.dart';
 
 class ChatContactsScreen extends StatefulWidget {
   const ChatContactsScreen({super.key});
@@ -12,14 +13,23 @@ class ChatContactsScreen extends StatefulWidget {
   State<ChatContactsScreen> createState() => _ChatContactsScreenState();
 }
 
-class _ChatContactsScreenState extends State<ChatContactsScreen> {
+class _ChatContactsScreenState extends State<ChatContactsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   List<dynamic> _contacts = [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -43,47 +53,88 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppTheme.darkBackground : const Color(0xFFF5F7FB);
-    final card = isDark ? AppTheme.darkCard : Colors.white;
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final bg = isDark ? AppTheme.darkBackground : const Color(0xFFF0F4F8);
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(title: const Text('Xabarlar')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _contacts.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.chat_bubble_outline_rounded,
-                          size: 48, color: sub),
-                      const SizedBox(height: 12),
-                      Text('Guruhda boshqa talaba topilmadi',
-                          style: TextStyle(color: sub)),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: _contacts.length,
-                    separatorBuilder: (_, __) => Divider(
-                        height: 1,
-                        indent: 76,
-                        color: isDark ? Colors.white10 : Colors.grey.shade200),
-                    itemBuilder: (_, i) =>
-                        _buildContact(_contacts[i], card, txt, sub, isDark),
-                  ),
-                ),
+      appBar: AppBar(
+        title: const Text('Xabarlar'),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          labelStyle: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w600),
+          unselectedLabelStyle: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w400),
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.person_outline, size: 20),
+              text: 'Foydalanuvchilar',
+            ),
+            Tab(
+              icon: Icon(Icons.group_outlined, size: 20),
+              text: 'Guruh',
+            ),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildContactsTab(isDark, sub),
+          const ChatGroupScreen(),
+        ],
+      ),
     );
   }
 
-  Widget _buildContact(
-      dynamic c, Color card, Color txt, Color sub, bool isDark) {
+  Widget _buildContactsTab(bool isDark, Color sub) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_contacts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A6CF7).withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.chat_bubble_outline_rounded,
+                  size: 36, color: sub),
+            ),
+            const SizedBox(height: 16),
+            Text('Guruhda boshqa talaba topilmadi',
+                style: TextStyle(
+                    color: sub,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500)),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
+        itemCount: _contacts.length,
+        itemBuilder: (_, i) => _buildContact(_contacts[i], isDark),
+      ),
+    );
+  }
+
+  Widget _buildContact(dynamic c, bool isDark) {
+    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardBg = isDark ? AppTheme.darkCard : Colors.white;
     final name = c['name']?.toString() ?? '';
     final image = c['image']?.toString();
     final lastMsg = c['last_message']?.toString();
@@ -105,81 +156,165 @@ class _ChatContactsScreenState extends State<ChatContactsScreen> {
       } catch (_) {}
     }
 
-    final initials = name.split(' ').take(2).map((w) =>
-        w.isNotEmpty ? w[0].toUpperCase() : '').join();
+    final initials = name
+        .split(' ')
+        .take(2)
+        .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+        .join();
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: CircleAvatar(
-        radius: 26,
-        backgroundColor: const Color(0xFF4A6CF7).withOpacity(0.12),
-        backgroundImage: image != null && image.isNotEmpty
-            ? NetworkImage('${ApiConfig.baseUrl}/image-proxy?url=$image')
-            : null,
-        child: image == null || image.isEmpty
-            ? Text(initials,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF4A6CF7)))
-            : null,
-      ),
-      title: Text(name,
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w500,
-              color: txt)),
-      subtitle: lastMsg != null
-          ? Text(
-              lastIsMe ? 'Siz: $lastMsg' : lastMsg,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: unread > 0 ? txt : sub,
-                  fontWeight:
-                      unread > 0 ? FontWeight.w500 : FontWeight.normal),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            )
-          : Text('Xabar yo\'q', style: TextStyle(fontSize: 12, color: sub)),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (timeStr != null)
-            Text(timeStr,
-                style: TextStyle(
-                    fontSize: 11,
-                    color: unread > 0 ? const Color(0xFF4A6CF7) : sub)),
-          if (unread > 0) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4A6CF7),
-                borderRadius: BorderRadius.circular(10),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        elevation: isDark ? 0 : 1,
+        shadowColor: Colors.black12,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatConversationScreen(
+                  contactId: contactId,
+                  contactName: name,
+                  contactImage: image,
+                ),
               ),
-              child: Text('$unread',
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600)),
+            );
+            _load();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: unread > 0
+                    ? const Color(0xFF4A6CF7).withOpacity(0.4)
+                    : isDark
+                        ? Colors.white10
+                        : Colors.grey.shade200,
+                width: unread > 0 ? 1.5 : 1,
+              ),
             ),
-          ],
-        ],
-      ),
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ChatConversationScreen(
-              contactId: contactId,
-              contactName: name,
-              contactImage: image,
+            child: Row(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF4A6CF7).withOpacity(0.2),
+                      width: 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4A6CF7).withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 26,
+                    backgroundColor:
+                        const Color(0xFF4A6CF7).withOpacity(0.08),
+                    backgroundImage: image != null && image.isNotEmpty
+                        ? NetworkImage(
+                            '${ApiConfig.baseUrl}/image-proxy?url=$image')
+                        : null,
+                    child: image == null || image.isEmpty
+                        ? Text(initials,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF4A6CF7)))
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(name,
+                                style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: unread > 0
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
+                                    color: txt),
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                          if (timeStr != null)
+                            Text(timeStr,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: unread > 0
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                    color: unread > 0
+                                        ? const Color(0xFF4A6CF7)
+                                        : sub)),
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          if (lastIsMe)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 3),
+                              child: Icon(Icons.done_all,
+                                  size: 14,
+                                  color: const Color(0xFF4A6CF7)
+                                      .withOpacity(0.6)),
+                            ),
+                          Expanded(
+                            child: Text(
+                              lastMsg ?? 'Xabar yo\'q',
+                              style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: unread > 0 ? txt : sub,
+                                  fontWeight: unread > 0
+                                      ? FontWeight.w500
+                                      : FontWeight.normal),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (unread > 0) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF4A6CF7),
+                                    Color(0xFF6C63FF),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text('$unread',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-        );
-        _load();
-      },
+        ),
+      ),
     );
   }
 }

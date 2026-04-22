@@ -1281,18 +1281,23 @@ class StudentApiController extends Controller
         $rank = 0;
         $myRank = 0;
         $list = [];
+        $limit = ($filterType === 'group') ? null : 100;
+
         foreach ($students as $i => $s) {
             $rank = $i + 1;
             $isMe = $s->student_hemis_id == $student->hemis_id;
             if ($isMe) $myRank = $rank;
-            $list[] = [
-                'rank' => $rank,
-                'full_name' => $s->full_name,
-                'group_name' => $s->group_name,
-                'jn_average' => (float) $s->jn_average,
-                'subjects_count' => $s->subjects_count,
-                'is_me' => $isMe,
-            ];
+
+            if ($limit === null || $rank <= $limit || $isMe) {
+                $list[] = [
+                    'rank' => $rank,
+                    'full_name' => $s->full_name,
+                    'group_name' => $s->group_name,
+                    'jn_average' => (float) $s->jn_average,
+                    'subjects_count' => $s->subjects_count,
+                    'is_me' => $isMe,
+                ];
+            }
         }
 
         return response()->json([
@@ -1300,7 +1305,7 @@ class StudentApiController extends Controller
             'data' => [
                 'my_rank' => $myRank,
                 'my_jn_average' => $myRating ? (float) $myRating->jn_average : 0,
-                'total_students' => count($list),
+                'total_students' => count($students),
                 'filter' => $filterType,
                 'students' => $list,
             ],

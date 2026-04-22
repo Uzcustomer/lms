@@ -123,16 +123,6 @@
             Dashboard
         </a>
 
-        @if($hasActiveRole(['admin', 'superadmin', 'registrator_ofisi']))
-        <a href="{{ route('admin.student-ratings.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.student-ratings.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-            </svg>
-            Talabalar reytingi
-        </a>
-        @endif
-
         @if($hasActiveRole('javobgar_firma'))
         <a href="{{ route('admin.firm-students.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.firm-students.*') ? 'sidebar-active' : '' }}">
@@ -163,6 +153,16 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
             </svg>
             Talabalar
+        </a>
+        @endif
+
+        @if($hasActiveRole(['admin', 'superadmin', 'registrator_ofisi']))
+        <a href="{{ route('admin.student-ratings.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.student-ratings.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+            Talabalar reytingi
         </a>
         @endif
 

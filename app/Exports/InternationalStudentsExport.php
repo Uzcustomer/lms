@@ -81,9 +81,29 @@ class InternationalStudentsExport implements FromQuery, WithHeadings, ShouldAuto
             $query->whereHas('visaInfo', fn($q) => $q->whereNotNull('visa_end_date')->whereDate('visa_end_date', '<=', now()->addDays($days)));
         }
 
+        if (!empty($this->filters['visa_end_from'])) {
+            $from = $this->filters['visa_end_from'];
+            $query->whereHas('visaInfo', fn($q) => $q->whereNotNull('visa_end_date')->whereDate('visa_end_date', '>=', $from));
+        }
+
+        if (!empty($this->filters['visa_end_to'])) {
+            $to = $this->filters['visa_end_to'];
+            $query->whereHas('visaInfo', fn($q) => $q->whereNotNull('visa_end_date')->whereDate('visa_end_date', '<=', $to));
+        }
+
         if (isset($this->filters['registration_expiry']) && $this->filters['registration_expiry'] !== '' && $this->filters['registration_expiry'] !== null) {
             $days = (int) $this->filters['registration_expiry'];
             $query->whereHas('visaInfo', fn($q) => $q->whereNotNull('registration_end_date')->whereDate('registration_end_date', '<=', now()->addDays($days)));
+        }
+
+        if (!empty($this->filters['registration_end_from'])) {
+            $from = $this->filters['registration_end_from'];
+            $query->whereHas('visaInfo', fn($q) => $q->whereNotNull('registration_end_date')->whereDate('registration_end_date', '>=', $from));
+        }
+
+        if (!empty($this->filters['registration_end_to'])) {
+            $to = $this->filters['registration_end_to'];
+            $query->whereHas('visaInfo', fn($q) => $q->whereNotNull('registration_end_date')->whereDate('registration_end_date', '<=', $to));
         }
 
         if (!empty($this->filters['hemis_status'])) {

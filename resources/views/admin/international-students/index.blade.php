@@ -152,6 +152,37 @@
                                 </button>
                             </div>
                         </div>
+                        {{-- 3-qator: Aniq tugash sanasi bo'yicha filtr --}}
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width:160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash (dan)</label>
+                                <div class="filter-wrap">
+                                    <input type="date" name="visa_end_from" value="{{ request('visa_end_from') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
+                                    @if(request('visa_end_from'))<button type="button" class="filter-clear" onclick="clearFilter('visa_end_from')">&times;</button>@endif
+                                </div>
+                            </div>
+                            <div class="filter-item" style="min-width:160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash (gacha)</label>
+                                <div class="filter-wrap">
+                                    <input type="date" name="visa_end_to" value="{{ request('visa_end_to') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
+                                    @if(request('visa_end_to'))<button type="button" class="filter-clear" onclick="clearFilter('visa_end_to')">&times;</button>@endif
+                                </div>
+                            </div>
+                            <div class="filter-item" style="min-width:160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Reg. tugash (dan)</label>
+                                <div class="filter-wrap">
+                                    <input type="date" name="registration_end_from" value="{{ request('registration_end_from') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
+                                    @if(request('registration_end_from'))<button type="button" class="filter-clear" onclick="clearFilter('registration_end_from')">&times;</button>@endif
+                                </div>
+                            </div>
+                            <div class="filter-item" style="min-width:160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Reg. tugash (gacha)</label>
+                                <div class="filter-wrap">
+                                    <input type="date" name="registration_end_to" value="{{ request('registration_end_to') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
+                                    @if(request('registration_end_to'))<button type="button" class="filter-clear" onclick="clearFilter('registration_end_to')">&times;</button>@endif
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </form>
 

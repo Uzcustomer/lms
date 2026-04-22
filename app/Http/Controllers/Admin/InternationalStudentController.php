@@ -103,22 +103,6 @@ class InternationalStudentController extends Controller
             });
         }
 
-        if ($request->filled('visa_end_from')) {
-            $from = $request->visa_end_from;
-            $query->whereHas('visaInfo', function ($q) use ($from) {
-                $q->whereNotNull('visa_end_date')
-                  ->whereDate('visa_end_date', '>=', $from);
-            });
-        }
-
-        if ($request->filled('visa_end_to')) {
-            $to = $request->visa_end_to;
-            $query->whereHas('visaInfo', function ($q) use ($to) {
-                $q->whereNotNull('visa_end_date')
-                  ->whereDate('visa_end_date', '<=', $to);
-            });
-        }
-
         if ($request->has('registration_expiry') && $request->registration_expiry !== '' && $request->registration_expiry !== null) {
             $days = (int) $request->registration_expiry;
             $query->whereHas('visaInfo', function ($q) use ($days) {
@@ -127,20 +111,19 @@ class InternationalStudentController extends Controller
             });
         }
 
-        if ($request->filled('registration_end_from')) {
-            $from = $request->registration_end_from;
-            $query->whereHas('visaInfo', function ($q) use ($from) {
-                $q->whereNotNull('registration_end_date')
-                  ->whereDate('registration_end_date', '>=', $from);
-            });
+        // Excel-style ustun filtri: aniq tanlangan sanalar
+        if ($request->filled('visa_end_dates')) {
+            $dates = array_filter((array) $request->visa_end_dates);
+            if (!empty($dates)) {
+                $query->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $dates));
+            }
         }
 
-        if ($request->filled('registration_end_to')) {
-            $to = $request->registration_end_to;
-            $query->whereHas('visaInfo', function ($q) use ($to) {
-                $q->whereNotNull('registration_end_date')
-                  ->whereDate('registration_end_date', '<=', $to);
-            });
+        if ($request->filled('registration_end_dates')) {
+            $dates = array_filter((array) $request->registration_end_dates);
+            if (!empty($dates)) {
+                $query->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $dates));
+            }
         }
 
         if ($request->filled('hemis_status')) {
@@ -170,6 +153,19 @@ class InternationalStudentController extends Controller
         $baseQuery = $this->internationalStudentsQuery();
         $countries = (clone $baseQuery)->whereNotNull('country_name')->where('country_name', '!=', '')->distinct()->pluck('country_name')->sort()->values();
         $departments = (clone $baseQuery)->whereNotNull('department_name')->where('department_name', '!=', '')->select('department_id', 'department_name')->distinct()->get()->sortBy('department_name');
+
+        // Excel-style ustun filtri uchun mavjud sanalar ro'yxati
+        $intStudentIds = (clone $baseQuery)->pluck('students.id');
+        $visaEndDates = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('visa_end_date')
+            ->distinct()
+            ->orderBy('visa_end_date')
+            ->pluck('visa_end_date');
+        $regEndDates = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('registration_end_date')
+            ->distinct()
+            ->orderBy('registration_end_date')
+            ->pluck('registration_end_date');
 
         // Statistika — filtrlangan natijaga asoslangan
         $totalFiltered = $filteredIds->count();
@@ -230,7 +226,7 @@ class InternationalStudentController extends Controller
                 ->exists();
         }
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates'));
     }
 
     /**

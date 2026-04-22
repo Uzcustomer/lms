@@ -152,37 +152,6 @@
                                 </button>
                             </div>
                         </div>
-                        {{-- 3-qator: Aniq tugash sanasi bo'yicha filtr --}}
-                        <div class="filter-row">
-                            <div class="filter-item" style="min-width:160px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash (dan)</label>
-                                <div class="filter-wrap">
-                                    <input type="date" name="visa_end_from" value="{{ request('visa_end_from') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
-                                    @if(request('visa_end_from'))<button type="button" class="filter-clear" onclick="clearFilter('visa_end_from')">&times;</button>@endif
-                                </div>
-                            </div>
-                            <div class="filter-item" style="min-width:160px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Viza tugash (gacha)</label>
-                                <div class="filter-wrap">
-                                    <input type="date" name="visa_end_to" value="{{ request('visa_end_to') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
-                                    @if(request('visa_end_to'))<button type="button" class="filter-clear" onclick="clearFilter('visa_end_to')">&times;</button>@endif
-                                </div>
-                            </div>
-                            <div class="filter-item" style="min-width:160px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Reg. tugash (dan)</label>
-                                <div class="filter-wrap">
-                                    <input type="date" name="registration_end_from" value="{{ request('registration_end_from') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
-                                    @if(request('registration_end_from'))<button type="button" class="filter-clear" onclick="clearFilter('registration_end_from')">&times;</button>@endif
-                                </div>
-                            </div>
-                            <div class="filter-item" style="min-width:160px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Reg. tugash (gacha)</label>
-                                <div class="filter-wrap">
-                                    <input type="date" name="registration_end_to" value="{{ request('registration_end_to') }}" class="filter-input" style="padding-right:28px;" onchange="document.getElementById('filterForm').submit();">
-                                    @if(request('registration_end_to'))<button type="button" class="filter-clear" onclick="clearFilter('registration_end_to')">&times;</button>@endif
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </form>
 
@@ -350,8 +319,72 @@
                                 <th>Yo'nalish</th>
                                 <th>Guruh</th>
                                 <th>Ma'lumot</th>
-                                <th>Reg. tugash</th>
-                                <th>Viza tugash</th>
+                                @php
+                                    $selectedRegDates = array_filter((array) request('registration_end_dates', []));
+                                    $selectedVisaDates = array_filter((array) request('visa_end_dates', []));
+                                @endphp
+                                <th style="position:relative;white-space:nowrap;">
+                                    <span>Reg. tugash</span>
+                                    <button type="button" class="col-filter-btn {{ count($selectedRegDates) ? 'col-filter-active' : '' }}" onclick="toggleColFilter(event, 'reg_end')" title="Sana bo'yicha filtr">
+                                        <svg style="width:12px;height:12px;" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4h18l-7 9v7l-4-2v-5L3 4z"/></svg>
+                                        @if(count($selectedRegDates)) <span class="col-filter-count">{{ count($selectedRegDates) }}</span>@endif
+                                    </button>
+                                    <div id="colFilter_reg_end" class="col-filter-popup" onclick="event.stopPropagation();">
+                                        <div class="col-filter-head">
+                                            <input type="text" placeholder="Sana qidirish..." class="col-filter-search" oninput="filterColList('reg_end', this.value)">
+                                        </div>
+                                        <label class="col-filter-item col-filter-all">
+                                            <input type="checkbox" id="colFilterAll_reg_end" onchange="toggleAllColItems('reg_end', this.checked)"> <span>Barchasini tanlash</span>
+                                        </label>
+                                        <div class="col-filter-list" id="colFilterList_reg_end">
+                                            @foreach($regEndDates as $d)
+                                                @php $val = \Illuminate\Support\Carbon::parse($d)->format('Y-m-d'); @endphp
+                                                <label class="col-filter-item" data-text="{{ \Illuminate\Support\Carbon::parse($d)->format('d.m.Y') }}">
+                                                    <input type="checkbox" form="filterForm" name="registration_end_dates[]" value="{{ $val }}" {{ in_array($val, $selectedRegDates, true) ? 'checked' : '' }} class="col-filter-cb-reg_end">
+                                                    <span>{{ \Illuminate\Support\Carbon::parse($d)->format('d.m.Y') }}</span>
+                                                </label>
+                                            @endforeach
+                                            @if($regEndDates->isEmpty())
+                                                <div class="col-filter-empty">Sanalar topilmadi</div>
+                                            @endif
+                                        </div>
+                                        <div class="col-filter-actions">
+                                            <button type="button" class="col-filter-clear-btn" onclick="clearColFilter('reg_end')">Tozalash</button>
+                                            <button type="submit" form="filterForm" class="col-filter-apply-btn">Qo'llash</button>
+                                        </div>
+                                    </div>
+                                </th>
+                                <th style="position:relative;white-space:nowrap;">
+                                    <span>Viza tugash</span>
+                                    <button type="button" class="col-filter-btn {{ count($selectedVisaDates) ? 'col-filter-active' : '' }}" onclick="toggleColFilter(event, 'visa_end')" title="Sana bo'yicha filtr">
+                                        <svg style="width:12px;height:12px;" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4h18l-7 9v7l-4-2v-5L3 4z"/></svg>
+                                        @if(count($selectedVisaDates)) <span class="col-filter-count">{{ count($selectedVisaDates) }}</span>@endif
+                                    </button>
+                                    <div id="colFilter_visa_end" class="col-filter-popup" onclick="event.stopPropagation();">
+                                        <div class="col-filter-head">
+                                            <input type="text" placeholder="Sana qidirish..." class="col-filter-search" oninput="filterColList('visa_end', this.value)">
+                                        </div>
+                                        <label class="col-filter-item col-filter-all">
+                                            <input type="checkbox" id="colFilterAll_visa_end" onchange="toggleAllColItems('visa_end', this.checked)"> <span>Barchasini tanlash</span>
+                                        </label>
+                                        <div class="col-filter-list" id="colFilterList_visa_end">
+                                            @foreach($visaEndDates as $d)
+                                                @php $val = \Illuminate\Support\Carbon::parse($d)->format('Y-m-d'); @endphp
+                                                <label class="col-filter-item" data-text="{{ \Illuminate\Support\Carbon::parse($d)->format('d.m.Y') }}">
+                                                    <input type="checkbox" form="filterForm" name="visa_end_dates[]" value="{{ $val }}" {{ in_array($val, $selectedVisaDates, true) ? 'checked' : '' }} class="col-filter-cb-visa_end">
+                                                    <span>{{ \Illuminate\Support\Carbon::parse($d)->format('d.m.Y') }}</span>
+                                                </label>
+                                            @endforeach
+                                            @if($visaEndDates->isEmpty())
+                                                <div class="col-filter-empty">Sanalar topilmadi</div>
+                                            @endif
+                                        </div>
+                                        <div class="col-filter-actions">
+                                            <button type="button" class="col-filter-clear-btn" onclick="clearColFilter('visa_end')">Tozalash</button>
+                                            <button type="submit" form="filterForm" class="col-filter-apply-btn">Qo'llash</button>
+                                        </div>
+                                    </div>
+                                </th>
                                 <th>Firma</th>
                                 <th>Holat</th>
                                 <th style="text-align:center;">Pasport</th>
@@ -622,6 +655,29 @@
     .int-empty { color: #cbd5e1; }
     .int-row-urgent { background: #fef2f2 !important; }
     .int-row-urgent:hover { background: #fee2e2 !important; box-shadow: inset 4px 0 0 #dc2626; }
+
+    /* Excel-style ustun filtri */
+    .col-filter-btn { display:inline-flex; align-items:center; gap:2px; margin-left:4px; padding:2px 5px; border:1px solid transparent; border-radius:5px; background:transparent; color:#64748b; cursor:pointer; vertical-align:middle; transition:all 0.15s; }
+    .col-filter-btn:hover { background:#e2e8f0; color:#1e293b; border-color:#cbd5e1; }
+    .col-filter-btn.col-filter-active { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+    .col-filter-count { font-size:10px; font-weight:700; padding:0 4px; background:#1e40af; color:#fff; border-radius:8px; line-height:14px; }
+    .col-filter-popup { display:none; position:fixed; z-index:9999; width:240px; background:#fff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 10px 25px rgba(0,0,0,0.12); overflow:hidden; text-align:left; font-weight:500; }
+    .col-filter-popup.show { display:block; }
+    .col-filter-head { padding:8px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+    .col-filter-search { width:100%; height:30px; padding:0 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; box-sizing:border-box; }
+    .col-filter-search:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 2px rgba(43,94,167,0.15); }
+    .col-filter-list { max-height:220px; overflow-y:auto; }
+    .col-filter-item { display:flex; align-items:center; gap:6px; padding:5px 10px; font-size:12px; color:#334155; cursor:pointer; white-space:nowrap; text-transform:none; font-weight:500; letter-spacing:normal; }
+    .col-filter-item:hover { background:#f1f5f9; }
+    .col-filter-item input[type="checkbox"] { accent-color:#2b5ea7; cursor:pointer; margin:0; }
+    .col-filter-all { border-bottom:1px solid #e2e8f0; background:#fafbfc; font-weight:600; color:#1e293b; }
+    .col-filter-empty { padding:12px; text-align:center; color:#94a3b8; font-size:12px; }
+    .col-filter-actions { display:flex; gap:6px; padding:8px; border-top:1px solid #e2e8f0; background:#f8fafc; }
+    .col-filter-clear-btn, .col-filter-apply-btn { flex:1; height:30px; border:1px solid; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+    .col-filter-clear-btn { background:#fff; color:#64748b; border-color:#cbd5e1; }
+    .col-filter-clear-btn:hover { background:#f1f5f9; color:#1e293b; }
+    .col-filter-apply-btn { background:#2b5ea7; color:#fff; border-color:#2b5ea7; }
+    .col-filter-apply-btn:hover { background:#1e4a8a; }
 </style>
 
 <script>
@@ -698,5 +754,83 @@ function syncInputs(containerId) {
         c.innerHTML += '<input type="hidden" name="student_ids[]" value="' + cb.value + '">';
     });
 }
+
+// Excel-uslubidagi ustun filtri
+function toggleColFilter(event, key) {
+    event.stopPropagation();
+    var popup = document.getElementById('colFilter_' + key);
+    if (!popup) return;
+    var wasOpen = popup.classList.contains('show');
+    document.querySelectorAll('.col-filter-popup.show').forEach(function(p) { p.classList.remove('show'); });
+    if (!wasOpen) {
+        var btn = event.currentTarget;
+        var rect = btn.getBoundingClientRect();
+        var popupWidth = 240;
+        var left = rect.left;
+        if (left + popupWidth > window.innerWidth - 10) {
+            left = Math.max(10, window.innerWidth - popupWidth - 10);
+        }
+        popup.style.top = (rect.bottom + 4) + 'px';
+        popup.style.left = left + 'px';
+        popup.classList.add('show');
+        syncColAllCheckbox(key);
+        var search = popup.querySelector('.col-filter-search');
+        if (search) { search.value = ''; filterColList(key, ''); setTimeout(function(){ search.focus(); }, 50); }
+    }
+}
+
+function filterColList(key, term) {
+    term = (term || '').trim().toLowerCase();
+    var list = document.getElementById('colFilterList_' + key);
+    if (!list) return;
+    list.querySelectorAll('.col-filter-item').forEach(function(item) {
+        var text = (item.getAttribute('data-text') || '').toLowerCase();
+        item.style.display = (!term || text.indexOf(term) !== -1) ? '' : 'none';
+    });
+}
+
+function toggleAllColItems(key, checked) {
+    document.querySelectorAll('.col-filter-cb-' + key).forEach(function(cb) {
+        var item = cb.closest('.col-filter-item');
+        if (item && item.style.display === 'none') return;
+        cb.checked = checked;
+    });
+}
+
+function syncColAllCheckbox(key) {
+    var master = document.getElementById('colFilterAll_' + key);
+    if (!master) return;
+    var boxes = document.querySelectorAll('.col-filter-cb-' + key);
+    if (boxes.length === 0) { master.checked = false; master.indeterminate = false; return; }
+    var checkedCount = 0;
+    boxes.forEach(function(cb) { if (cb.checked) checkedCount++; });
+    if (checkedCount === 0) { master.checked = false; master.indeterminate = false; }
+    else if (checkedCount === boxes.length) { master.checked = true; master.indeterminate = false; }
+    else { master.checked = false; master.indeterminate = true; }
+}
+
+function clearColFilter(key) {
+    document.querySelectorAll('.col-filter-cb-' + key).forEach(function(cb) { cb.checked = false; });
+    document.getElementById('filterForm').submit();
+}
+
+document.querySelectorAll('[class*="col-filter-cb-"]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+        var key = null;
+        cb.classList.forEach(function(c) { if (c.indexOf('col-filter-cb-') === 0) key = c.substring(14); });
+        if (key) syncColAllCheckbox(key);
+    });
+});
+
+document.addEventListener('click', function(e) {
+    if (e.target.closest && e.target.closest('.col-filter-popup')) return;
+    document.querySelectorAll('.col-filter-popup.show').forEach(function(p) { p.classList.remove('show'); });
+});
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.col-filter-popup.show').forEach(function(p) { p.classList.remove('show'); });
+    }
+});
 </script>
 </x-app-layout>

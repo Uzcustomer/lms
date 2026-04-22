@@ -1,74 +1,109 @@
 <x-app-layout>
-    <div class="p-4 sm:ml-64">
-        <div class="mt-14">
+    <x-slot name="header">
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Ishga joylashish shartnomasi</h2>
+    </x-slot>
 
-            <div class="flex items-center justify-between mb-6">
-                <h1 class="text-2xl font-bold text-gray-800">Ishga joylashish shartnomasi</h1>
-            </div>
+    <style>
+        .sc-stat { cursor: pointer; transition: all 0.2s; position: relative; }
+        .sc-stat:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .sc-stat.active::after { content: ''; position: absolute; bottom: -2px; left: 15%; right: 15%; height: 3px; border-radius: 3px; }
+        .sc-table { font-size: 13px; border-collapse: separate; width: 100%; }
+        .sc-table thead { background: linear-gradient(135deg, #e8edf5, #dbe4ef); position: sticky; top: 0; z-index: 1; }
+        .sc-table th { padding: 10px 14px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; border-bottom: 2px solid #cbd5e1; }
+        .sc-table tbody tr { transition: all 0.15s; }
+        .sc-table tbody tr:nth-child(even) { background: #f8fafc; }
+        .sc-table tbody tr:hover { background: #eff6ff; box-shadow: inset 4px 0 0 #2b5ea7; }
+        .sc-table td { padding: 10px 14px; border-bottom: 1px solid #f1f5f9; }
+    </style>
+
+    <div class="py-4">
+        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
 
             @if(session('success'))
-                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                    {{ session('success') }}
-                </div>
+                <div class="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 font-medium">{{ session('success') }}</div>
             @endif
-
             @if(session('error'))
-                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    {{ session('error') }}
-                </div>
+                <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-medium">{{ session('error') }}</div>
             @endif
 
-            {{-- Status badges --}}
-            <div class="flex flex-wrap gap-2 mb-4">
-                <a href="{{ route('admin.student-contracts.index') }}"
-                   class="px-3 py-1.5 rounded-full text-xs font-semibold {{ !request('status') ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' }}">
-                    Barchasi ({{ $statusCounts['all'] }})
+            {{-- Stat cards --}}
+            <div class="grid grid-cols-5 gap-3 mb-5">
+                <a href="{{ route('admin.student-contracts.index') }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ !request('status') ? 'bg-blue-50 border-blue-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="{{ !request('status') ? '' : '' }}">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold" style="color: #1a3268;">{{ $statusCounts['all'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Jami</div>
+                    </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'pending']) }}"
-                   class="px-3 py-1.5 rounded-full text-xs font-semibold {{ request('status') === 'pending' ? 'bg-yellow-500 text-white' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100' }}">
-                    Kutilmoqda ({{ $statusCounts['pending'] }})
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'pending']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'pending' ? 'bg-amber-50 border-amber-300 active shadow-sm' : 'bg-white border-gray-200' }}">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #d97706, #f59e0b);">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-amber-700">{{ $statusCounts['pending'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Kutilmoqda</div>
+                    </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'registrar_review']) }}"
-                   class="px-3 py-1.5 rounded-full text-xs font-semibold {{ request('status') === 'registrar_review' ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100' }}">
-                    Ko'rib chiqilmoqda ({{ $statusCounts['registrar_review'] }})
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'registrar_review']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'registrar_review' ? 'bg-blue-50 border-blue-300 active shadow-sm' : 'bg-white border-gray-200' }}">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #1e40af, #3b82f6);">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-blue-700">{{ $statusCounts['registrar_review'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Ko'rilmoqda</div>
+                    </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'approved']) }}"
-                   class="px-3 py-1.5 rounded-full text-xs font-semibold {{ request('status') === 'approved' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100' }}">
-                    Tasdiqlangan ({{ $statusCounts['approved'] }})
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'approved']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'approved' ? 'bg-emerald-50 border-emerald-300 active shadow-sm' : 'bg-white border-gray-200' }}">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #059669, #10b981);">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-emerald-700">{{ $statusCounts['approved'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tasdiqlangan</div>
+                    </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'rejected']) }}"
-                   class="px-3 py-1.5 rounded-full text-xs font-semibold {{ request('status') === 'rejected' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100' }}">
-                    Rad etilgan ({{ $statusCounts['rejected'] }})
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'rejected']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'rejected' ? 'bg-red-50 border-red-300 active shadow-sm' : 'bg-white border-gray-200' }}">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #dc2626, #ef4444);">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <div class="text-xl font-bold text-red-600">{{ $statusCounts['rejected'] }}</div>
+                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Rad etilgan</div>
+                    </div>
                 </a>
             </div>
 
-            {{-- Filters --}}
-            <form method="GET" action="{{ route('admin.student-contracts.index') }}" class="bg-white rounded-lg shadow-sm p-4 mb-4">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Qidiruv</label>
+            {{-- Filter --}}
+            <form method="GET" action="{{ route('admin.student-contracts.index') }}" class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4" style="background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef;">
+                <div class="flex gap-3 items-end">
+                    <div class="flex-1">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Qidiruv</label>
                         <input type="text" name="search" value="{{ request('search') }}" placeholder="FIO, HEMIS ID, guruh..."
-                               class="w-full rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500">
+                               style="height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; padding: 0 12px; width: 100%; outline: none;"
+                               onfocus="this.style.borderColor='#2b5ea7'; this.style.boxShadow='0 0 0 2px rgba(43,94,167,0.15)'" onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none'">
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Shartnoma turi</label>
-                        <select name="contract_type" class="w-full rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <div style="width: 180px;">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Shartnoma turi</label>
+                        <select name="contract_type" style="height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; padding: 0 10px; width: 100%; outline: none; background: #fff;">
                             <option value="">Barchasi</option>
                             <option value="3_tomonlama" {{ request('contract_type') === '3_tomonlama' ? 'selected' : '' }}>3 tomonlama</option>
                             <option value="4_tomonlama" {{ request('contract_type') === '4_tomonlama' ? 'selected' : '' }}>4 tomonlama</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Fakultet</label>
-                        <select name="department" class="w-full rounded-lg border-gray-300 text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <div style="width: 220px;">
+                        <label class="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1 block">Fakultet</label>
+                        <select name="department" style="height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; padding: 0 10px; width: 100%; outline: none; background: #fff;">
                             <option value="">Barchasi</option>
                             @foreach($departments as $dept)
                                 <option value="{{ $dept }}" {{ request('department') === $dept ? 'selected' : '' }}>{{ $dept }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <div class="flex items-end">
-                        <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition">
+                    <div>
+                        <button type="submit" style="height: 36px; padding: 0 24px; background: linear-gradient(135deg, #2b5ea7, #3b82f6); color: #fff; font-size: 12px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                                onmouseover="this.style.boxShadow='0 4px 12px rgba(43,94,167,0.3)'" onmouseout="this.style.boxShadow='none'">
                             Qidirish
                         </button>
                     </div>
@@ -79,68 +114,62 @@
             </form>
 
             {{-- Table --}}
-            <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
+                    <table class="sc-table">
+                        <thead>
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Talaba</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guruh</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fakultet</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tur</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Holat</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sana</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amallar</th>
+                                <th class="text-center" style="width: 40px;">#</th>
+                                <th class="text-left">Talaba</th>
+                                <th class="text-left">Guruh</th>
+                                <th class="text-left">Fakultet</th>
+                                <th class="text-center">Turi</th>
+                                <th class="text-center">Holati</th>
+                                <th class="text-left">Sana</th>
+                                <th class="text-center">Amallar</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody>
                             @forelse($contracts as $i => $contract)
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-4 py-3 text-sm text-gray-500">{{ $contracts->firstItem() + $i }}</td>
-                                    <td class="px-4 py-3">
-                                        <div class="text-sm font-medium text-gray-900">{{ $contract->student_full_name }}</div>
-                                        <div class="text-xs text-gray-500">{{ $contract->student_hemis_id }}</div>
+                                <tr>
+                                    <td class="text-center text-gray-400 font-medium">{{ $contracts->firstItem() + $i }}</td>
+                                    <td>
+                                        <div class="font-semibold text-gray-800">{{ $contract->student_full_name }}</div>
+                                        <div class="text-[11px] text-gray-400">{{ $contract->student_hemis_id }}</div>
                                     </td>
-                                    <td class="px-4 py-3 text-sm text-gray-600">{{ $contract->group_name }}</td>
-                                    <td class="px-4 py-3 text-sm text-gray-600">{{ $contract->department_name }}</td>
-                                    <td class="px-4 py-3">
-                                        <span class="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full {{ $contract->contract_type === '4_tomonlama' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700' }}">
+                                    <td class="text-gray-600">{{ $contract->group_name }}</td>
+                                    <td class="text-gray-500 text-xs">{{ $contract->department_name }}</td>
+                                    <td class="text-center">
+                                        <span class="inline-flex px-2.5 py-1 rounded-md text-[11px] font-semibold {{ $contract->contract_type === '4_tomonlama' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700' }}">
                                             {{ $contract->type_label }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-3">
+                                    <td class="text-center">
                                         @php
-                                            $statusColors = [
-                                                'pending' => 'bg-yellow-100 text-yellow-700',
-                                                'registrar_review' => 'bg-blue-100 text-blue-700',
-                                                'approved' => 'bg-green-100 text-green-700',
-                                                'rejected' => 'bg-red-100 text-red-700',
+                                            $sc = [
+                                                'pending' => ['bg' => '#fef3c7', 'color' => '#92400e'],
+                                                'registrar_review' => ['bg' => '#dbeafe', 'color' => '#1e40af'],
+                                                'approved' => ['bg' => '#d1fae5', 'color' => '#065f46'],
+                                                'rejected' => ['bg' => '#fee2e2', 'color' => '#991b1b'],
                                             ];
+                                            $s = $sc[$contract->status] ?? $sc['pending'];
                                         @endphp
-                                        <span class="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full {{ $statusColors[$contract->status] ?? 'bg-gray-100 text-gray-700' }}">
-                                            {{ $contract->status_label }}
-                                        </span>
+                                        <span class="inline-flex px-2.5 py-1 rounded-md text-[11px] font-semibold" style="background: {{ $s['bg'] }}; color: {{ $s['color'] }};">{{ $contract->status_label }}</span>
                                     </td>
-                                    <td class="px-4 py-3 text-sm text-gray-500">{{ $contract->created_at->format('d.m.Y H:i') }}</td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
+                                    <td class="text-gray-500 text-xs">{{ $contract->created_at->format('d.m.Y H:i') }}</td>
+                                    <td class="text-center">
+                                        <div class="flex items-center justify-center gap-2">
                                             @if(in_array($contract->status, ['pending', 'registrar_review']))
-                                                <a href="{{ route('admin.student-contracts.review', $contract) }}"
-                                                   class="inline-flex items-center px-2.5 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition">
+                                                <a href="{{ route('admin.student-contracts.review', $contract) }}" class="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-md text-white" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                                                     Ko'rib chiqish
                                                 </a>
                                             @else
-                                                <a href="{{ route('admin.student-contracts.show', $contract) }}"
-                                                   class="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded hover:bg-gray-200 transition">
-                                                    Ko'rish
-                                                </a>
+                                                <a href="{{ route('admin.student-contracts.show', $contract) }}" class="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-md text-gray-600 bg-gray-100 hover:bg-gray-200 transition">Ko'rish</a>
                                             @endif
-
                                             @if($contract->status === 'approved' && $contract->document_path)
-                                                <a href="{{ route('admin.student-contracts.download', $contract) }}"
-                                                   class="inline-flex items-center px-2.5 py-1 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 transition">
-                                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                <a href="{{ route('admin.student-contracts.download', $contract) }}" class="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-md text-white" style="background: linear-gradient(135deg, #059669, #10b981);">
+                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
                                                     Yuklab olish
                                                 </a>
                                             @endif
@@ -149,22 +178,20 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="px-4 py-12 text-center text-gray-500">
-                                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                        <p class="text-sm font-medium">Shartnoma topilmadi</p>
+                                    <td colspan="8" class="text-center" style="padding: 40px;">
+                                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                        <div class="text-gray-400 text-sm">Shartnoma topilmadi</div>
                                     </td>
                                 </tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
-
                 @if($contracts->hasPages())
-                    <div class="px-4 py-3 border-t border-gray-200">
-                        {{ $contracts->links() }}
-                    </div>
+                    <div class="px-4 py-3 border-t border-gray-200">{{ $contracts->links() }}</div>
                 @endif
             </div>
+
         </div>
     </div>
 </x-app-layout>

@@ -111,6 +111,21 @@ class InternationalStudentController extends Controller
             });
         }
 
+        // Excel-style ustun filtri: aniq tanlangan sanalar
+        if ($request->filled('visa_end_dates')) {
+            $dates = array_filter((array) $request->visa_end_dates);
+            if (!empty($dates)) {
+                $query->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $dates));
+            }
+        }
+
+        if ($request->filled('registration_end_dates')) {
+            $dates = array_filter((array) $request->registration_end_dates);
+            if (!empty($dates)) {
+                $query->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $dates));
+            }
+        }
+
         if ($request->filled('hemis_status')) {
             if ($request->hemis_status === 'inactive') {
                 $query->where('student_status_code', '60');
@@ -138,6 +153,19 @@ class InternationalStudentController extends Controller
         $baseQuery = $this->internationalStudentsQuery();
         $countries = (clone $baseQuery)->whereNotNull('country_name')->where('country_name', '!=', '')->distinct()->pluck('country_name')->sort()->values();
         $departments = (clone $baseQuery)->whereNotNull('department_name')->where('department_name', '!=', '')->select('department_id', 'department_name')->distinct()->get()->sortBy('department_name');
+
+        // Excel-style ustun filtri uchun mavjud sanalar ro'yxati
+        $intStudentIds = (clone $baseQuery)->pluck('students.id');
+        $visaEndDates = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('visa_end_date')
+            ->distinct()
+            ->orderBy('visa_end_date')
+            ->pluck('visa_end_date');
+        $regEndDates = StudentVisaInfo::whereIn('student_id', $intStudentIds)
+            ->whereNotNull('registration_end_date')
+            ->distinct()
+            ->orderBy('registration_end_date')
+            ->pluck('registration_end_date');
 
         // Statistika — filtrlangan natijaga asoslangan
         $totalFiltered = $filteredIds->count();
@@ -198,7 +226,7 @@ class InternationalStudentController extends Controller
                 ->exists();
         }
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled'));
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates'));
     }
 
     /**

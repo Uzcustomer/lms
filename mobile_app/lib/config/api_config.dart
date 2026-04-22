@@ -26,6 +26,7 @@ class ApiConfig {
   static const String studentCheckTelegram = '/student/complete-profile/telegram/check';
   static const String studentContract = '/student/contract';
   static const String studentExamSchedule = '/student/exam-schedule';
+  static const String studentRating = '/student/rating';
 
   // Absence excuse endpoints
   static const String studentExcuseReasons = '/student/excuses/reasons';

@@ -5,6 +5,7 @@ import 'student_dashboard_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'library_webview_screen.dart';
 import 'gpa_calculator_screen.dart';
+import 'student_rating_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
@@ -263,12 +264,18 @@ class _UsefulModalState extends State<_UsefulModal>
         },
       ),
       _ModalServiceItem(
-        icon: Icons.smart_toy_outlined,
-        title: 'AI Yordamchi',
-        subtitle: 'Sun\'iy intellekt bilan suhbat',
+        icon: Icons.leaderboard_rounded,
+        title: 'Talabalar reytingi',
+        subtitle: 'Guruh va yo\'nalish bo\'yicha reyting',
         color: const Color(0xFF7C4DFF),
-        onTap: () {},
-        comingSoon: true,
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const StudentRatingScreen()),
+          );
+        },
       ),
       _ModalServiceItem(
         icon: Icons.library_books_outlined,

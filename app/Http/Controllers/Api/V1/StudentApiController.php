@@ -1273,7 +1273,8 @@ class StudentApiController extends Controller
             $query->where('specialty_code', $myRating->specialty_code)
                   ->where('level_code', $myRating->level_code);
         } elseif ($filterType === 'department' && $myRating) {
-            $query->where('department_code', $myRating->department_code);
+            $query->where('department_code', $myRating->department_code)
+                  ->where('level_code', $myRating->level_code);
         }
 
         $students = $query->orderByDesc('jn_average')->get();

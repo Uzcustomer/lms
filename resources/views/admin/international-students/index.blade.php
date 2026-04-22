@@ -234,6 +234,7 @@
                             <div style="margin-bottom:12px;">
                                 <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Registratsiya muddati (oylarda)</label>
                                 <select name="reg_months" required style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                                    <option value="1">1 oy</option>
                                     <option value="3">3 oy</option>
                                     <option value="6">6 oy</option>
                                     <option value="12">12 oy</option>
@@ -257,6 +258,7 @@
                             <div style="margin-bottom:12px;">
                                 <label style="font-size:12px;font-weight:600;color:#475569;display:block;margin-bottom:4px;">Viza muddati (oylarda)</label>
                                 <select name="visa_months" required style="width:100%;padding:8px;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;">
+                                    <option value="1">1 oy</option>
                                     <option value="3">3 oy</option>
                                     <option value="6">6 oy</option>
                                     <option value="12">12 oy</option>

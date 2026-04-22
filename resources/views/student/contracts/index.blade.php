@@ -103,7 +103,7 @@
                         <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}" required
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                               placeholder="{{ __('Surxondaryo viloyati') }}">
+                               placeholder="{{ __('Viloyatingizni kiriting') }}">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi boshlig\'i') }} <span class="text-red-500">*</span></label>

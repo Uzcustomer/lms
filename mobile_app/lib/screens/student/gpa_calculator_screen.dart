@@ -20,6 +20,12 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
     }
   }
 
+  static double? _toDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString());
+  }
+
   static int _scoreTo5(num? score) {
     if (score == null) return 0;
     final s = score.toDouble();
@@ -82,12 +88,14 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
 
           for (final s in subjects) {
             final name = s['subject_name']?.toString() ?? '';
-            final credit =
-                (s['credit'] as num?)?.toDouble() ?? 0;
+            final creditRaw = s['credit'];
+            final credit = creditRaw is num
+                ? creditRaw.toDouble()
+                : double.tryParse(creditRaw?.toString() ?? '') ?? 0;
             final grades = s['grades'] as Map<String, dynamic>? ?? {};
-            final jn = grades['jn'] as num?;
-            final mt = grades['mt'] as num?;
-            final total = grades['total'] as num?;
+            final jn = _toDouble(grades['jn']);
+            final mt = _toDouble(grades['mt']);
+            final total = _toDouble(grades['total']);
 
             final entry = _SubjectGpa(
               name: name,

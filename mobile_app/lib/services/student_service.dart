@@ -62,6 +62,10 @@ class StudentService {
     return await _api.get(ApiConfig.studentExamSchedule);
   }
 
+  Future<Map<String, dynamic>> getRating({String filter = 'group'}) async {
+    return await _api.get(ApiConfig.studentRating, queryParams: {'filter': filter});
+  }
+
   // Absence excuse methods
   Future<Map<String, dynamic>> getExcuseReasons() async {
     return await _api.get(ApiConfig.studentExcuseReasons);

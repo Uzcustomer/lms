@@ -15,6 +15,7 @@ use App\Models\IndependentGradeHistory;
 use App\Models\IndependentSubmission;
 use App\Models\MarkingSystemScore;
 use App\Models\ExamSchedule;
+use App\Models\StudentRating;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Setting;
@@ -1255,6 +1256,54 @@ class StudentApiController extends Controller
         return response()->json([
             'success' => true,
             'data' => $exams,
+        ]);
+    }
+
+    public function studentRating(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        $myRating = StudentRating::where('student_hemis_id', $student->hemis_id)->first();
+
+        $query = StudentRating::query();
+
+        $filterType = $request->input('filter', 'group');
+        if ($filterType === 'group' && $myRating) {
+            $query->where('group_name', $myRating->group_name);
+        } elseif ($filterType === 'specialty' && $myRating) {
+            $query->where('specialty_code', $myRating->specialty_code)
+                  ->where('level_code', $myRating->level_code);
+        } elseif ($filterType === 'department' && $myRating) {
+            $query->where('department_code', $myRating->department_code);
+        }
+
+        $students = $query->orderByDesc('jn_average')->get();
+
+        $rank = 0;
+        $myRank = 0;
+        $list = [];
+        foreach ($students as $i => $s) {
+            $rank = $i + 1;
+            $isMe = $s->student_hemis_id == $student->hemis_id;
+            if ($isMe) $myRank = $rank;
+            $list[] = [
+                'rank' => $rank,
+                'full_name' => $s->full_name,
+                'group_name' => $s->group_name,
+                'jn_average' => (float) $s->jn_average,
+                'subjects_count' => $s->subjects_count,
+                'is_me' => $isMe,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'my_rank' => $myRank,
+                'my_jn_average' => $myRating ? (float) $myRating->jn_average : 0,
+                'total_students' => count($list),
+                'filter' => $filterType,
+                'students' => $list,
+            ],
         ]);
     }
 }

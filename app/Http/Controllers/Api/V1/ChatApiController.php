@@ -16,7 +16,7 @@ class ChatApiController extends Controller
 
         $groupMembers = Student::where('group_id', $student->group_id)
             ->where('id', '!=', $student->id)
-            ->where('status', 11)
+            ->where('student_status_code', 11)
             ->orderBy('short_name')
             ->get(['id', 'hemis_id', 'short_name', 'full_name', 'image']);
 

@@ -755,6 +755,8 @@ class ReportController extends Controller
             return $this->startLessonAssignmentExport($request);
         }
 
+        set_time_limit(120);
+
         try {
             return $this->lessonAssignmentDataInner($request);
         } catch (\Throwable $e) {
@@ -906,6 +908,7 @@ class ReportController extends Controller
             ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
+            ->whereIn('subject_id', $subjectIds)
             ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->where('load', '>', 0)
             ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
@@ -927,6 +930,7 @@ class ReportController extends Controller
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('sg.subject_id', $subjectIds)
             ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
             ->select(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))

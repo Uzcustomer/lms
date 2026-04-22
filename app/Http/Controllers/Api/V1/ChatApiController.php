@@ -119,4 +119,58 @@ class ChatApiController extends Controller
             ],
         ]);
     }
+
+    public function groupMessages(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $groupMemberIds = Student::where('group_id', $student->group_id)
+            ->where('student_status_code', 11)
+            ->pluck('id')
+            ->toArray();
+
+        $messages = ChatMessage::where('receiver_id', 0)
+            ->whereIn('sender_id', $groupMemberIds)
+            ->orderBy('created_at')
+            ->with('sender:id,short_name,full_name,image')
+            ->get();
+
+        $list = $messages->map(fn($m) => [
+            'id' => $m->id,
+            'message' => $m->message,
+            'is_me' => $m->sender_id == $student->id,
+            'sender_name' => $m->sender?->short_name ?? $m->sender?->full_name ?? '',
+            'sender_image' => $m->sender?->image,
+            'created_at' => $m->created_at->toIso8601String(),
+        ]);
+
+        return response()->json(['success' => true, 'data' => $list]);
+    }
+
+    public function groupSend(Request $request): JsonResponse
+    {
+        $request->validate([
+            'message' => 'required|string|max:1000',
+        ]);
+
+        $student = $request->user();
+
+        $msg = ChatMessage::create([
+            'sender_id' => $student->id,
+            'receiver_id' => 0,
+            'message' => $request->input('message'),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $msg->id,
+                'message' => $msg->message,
+                'is_me' => true,
+                'sender_name' => $student->short_name ?? $student->full_name,
+                'sender_image' => $student->image,
+                'created_at' => $msg->created_at->toIso8601String(),
+            ],
+        ]);
+    }
 }

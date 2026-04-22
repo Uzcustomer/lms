@@ -70,6 +70,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/contacts', [ChatApiController::class, 'contacts']);
             Route::get('/messages/{contactId}', [ChatApiController::class, 'messages']);
             Route::post('/send', [ChatApiController::class, 'send']);
+            Route::get('/group', [ChatApiController::class, 'groupMessages']);
+            Route::post('/group/send', [ChatApiController::class, 'groupSend']);
         });
 
         // ── Teacher endpoints ─────────────────────────────

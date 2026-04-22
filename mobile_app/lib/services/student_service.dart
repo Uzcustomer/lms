@@ -149,4 +149,16 @@ class StudentService {
       auth: true,
     );
   }
+
+  Future<Map<String, dynamic>> getGroupMessages() async {
+    return await _api.get(ApiConfig.chatGroup);
+  }
+
+  Future<Map<String, dynamic>> sendGroupMessage(String message) async {
+    return await _api.post(
+      ApiConfig.chatGroupSend,
+      {'message': message},
+      auth: true,
+    );
+  }
 }

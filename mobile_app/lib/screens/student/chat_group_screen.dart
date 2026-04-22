@@ -6,23 +6,14 @@ import '../../config/theme.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 
-class ChatConversationScreen extends StatefulWidget {
-  final int contactId;
-  final String contactName;
-  final String? contactImage;
-
-  const ChatConversationScreen({
-    super.key,
-    required this.contactId,
-    required this.contactName,
-    this.contactImage,
-  });
+class ChatGroupScreen extends StatefulWidget {
+  const ChatGroupScreen({super.key});
 
   @override
-  State<ChatConversationScreen> createState() => _ChatConversationScreenState();
+  State<ChatGroupScreen> createState() => _ChatGroupScreenState();
 }
 
-class _ChatConversationScreenState extends State<ChatConversationScreen> {
+class _ChatGroupScreenState extends State<ChatGroupScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
@@ -53,7 +44,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     try {
       final api = ApiService();
       final service = StudentService(api);
-      final res = await service.getChatMessages(widget.contactId);
+      final res = await service.getGroupMessages();
       if (mounted && res['success'] == true) {
         final newList = res['data'] as List<dynamic>? ?? [];
         final hadMessages = _messages.length;
@@ -94,7 +85,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     try {
       final api = ApiService();
       final service = StudentService(api);
-      final res = await service.sendChatMessage(widget.contactId, text);
+      final res = await service.sendGroupMessage(text);
       if (mounted && res['success'] == true) {
         final msg = res['data'];
         setState(() {
@@ -121,134 +112,92 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
-    final initials = widget.contactName
-        .split(' ')
-        .take(2)
-        .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
-        .join();
-
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: Row(
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _MedicalPatternPainter(isDark: isDark),
+          ),
+        ),
+        Column(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white30, width: 1.5),
-              ),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.white.withOpacity(0.15),
-                backgroundImage: widget.contactImage != null &&
-                        widget.contactImage!.isNotEmpty
-                    ? NetworkImage(
-                        '${ApiConfig.baseUrl}/image-proxy?url=${widget.contactImage}')
-                    : null,
-                child:
-                    widget.contactImage == null || widget.contactImage!.isEmpty
-                        ? Text(initials,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white))
-                        : null,
-              ),
-            ),
-            const SizedBox(width: 10),
             Expanded(
-              child: Text(widget.contactName,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16)),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _messages.isEmpty
+                      ? Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 32, vertical: 24),
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            decoration: BoxDecoration(
+                              color: (isDark ? Colors.black : Colors.white)
+                                  .withOpacity(0.85),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: isDark
+                                      ? Colors.white10
+                                      : Colors.grey.shade200),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 60,
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF4A6CF7)
+                                        .withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(Icons.group_outlined,
+                                      size: 28, color: sub),
+                                ),
+                                const SizedBox(height: 14),
+                                Text('Guruh chati',
+                                    style: TextStyle(
+                                        color: isDark
+                                            ? AppTheme.darkTextPrimary
+                                            : AppTheme.textPrimary,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 4),
+                                Text(
+                                    'Guruhingiz a\'zolari bilan suhbatlashing!',
+                                    textAlign: TextAlign.center,
+                                    style:
+                                        TextStyle(color: sub, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          itemCount: _messages.length,
+                          itemBuilder: (_, i) {
+                            final msg = _messages[i];
+                            final isMe = msg['is_me'] == true;
+                            final showDate = i == 0 ||
+                                _dateDiffers(_messages[i - 1], msg);
+                            final showName = !isMe &&
+                                (i == 0 ||
+                                    _messages[i - 1]['is_me'] == true ||
+                                    _senderDiffers(_messages[i - 1], msg));
+                            return Column(
+                              children: [
+                                if (showDate) _buildDateChip(msg, isDark),
+                                _buildBubble(msg, isMe, isDark, showName),
+                              ],
+                            );
+                          },
+                        ),
             ),
+            _buildInput(isDark),
           ],
         ),
-      ),
-      body: Stack(
-        children: [
-          // Medical pattern background
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _MedicalPatternPainter(isDark: isDark),
-            ),
-          ),
-          Column(
-            children: [
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _messages.isEmpty
-                        ? Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 32, vertical: 24),
-                              margin:
-                                  const EdgeInsets.symmetric(horizontal: 40),
-                              decoration: BoxDecoration(
-                                color: (isDark ? Colors.black : Colors.white)
-                                    .withOpacity(0.85),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                    color: isDark
-                                        ? Colors.white10
-                                        : Colors.grey.shade200),
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 60,
-                                    height: 60,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF4A6CF7)
-                                          .withOpacity(0.1),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                        Icons.chat_bubble_outline_rounded,
-                                        size: 28,
-                                        color: sub),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Text('Hali xabar yo\'q',
-                                      style: TextStyle(
-                                          color: isDark
-                                              ? AppTheme.darkTextPrimary
-                                              : AppTheme.textPrimary,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600)),
-                                  const SizedBox(height: 4),
-                                  Text('Birinchi xabarni yuboring!',
-                                      style: TextStyle(
-                                          color: sub, fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            itemCount: _messages.length,
-                            itemBuilder: (_, i) {
-                              final msg = _messages[i];
-                              final isMe = msg['is_me'] == true;
-                              final showDate = i == 0 ||
-                                  _dateDiffers(_messages[i - 1], msg);
-                              return Column(
-                                children: [
-                                  if (showDate) _buildDateChip(msg, isDark),
-                                  _buildBubble(msg, isMe, isDark),
-                                ],
-                              );
-                            },
-                          ),
-              ),
-              _buildInput(isDark),
-            ],
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -260,6 +209,11 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     } catch (_) {
       return false;
     }
+  }
+
+  bool _senderDiffers(dynamic prev, dynamic curr) {
+    return prev['sender_name']?.toString() !=
+        curr['sender_name']?.toString();
   }
 
   Widget _buildDateChip(dynamic msg, bool isDark) {
@@ -308,9 +262,11 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     );
   }
 
-  Widget _buildBubble(dynamic msg, bool isMe, bool isDark) {
+  Widget _buildBubble(
+      dynamic msg, bool isMe, bool isDark, bool showName) {
     final text = msg['message']?.toString() ?? '';
-    final read = msg['read'] == true;
+    final senderName = msg['sender_name']?.toString() ?? '';
+    final senderImage = msg['sender_image']?.toString();
     String time = '';
     try {
       final dt = DateTime.parse(msg['created_at'].toString()).toLocal();
@@ -329,69 +285,125 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
             ? AppTheme.darkTextSecondary
             : AppTheme.textSecondary;
 
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints:
-            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        margin: const EdgeInsets.symmetric(vertical: 3),
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-        decoration: BoxDecoration(
-          gradient: isMe
-              ? const LinearGradient(
-                  colors: [Color(0xFF4A6CF7), Color(0xFF5B7BF8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: isMe
-              ? null
-              : isDark
-                  ? AppTheme.darkCard
-                  : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMe ? 18 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 18),
-          ),
-          border: isMe
-              ? null
-              : Border.all(
-                  color: isDark ? Colors.white10 : Colors.grey.shade200,
+    final nameColors = [
+      const Color(0xFFE53935),
+      const Color(0xFF8E24AA),
+      const Color(0xFF43A047),
+      const Color(0xFFFF6D00),
+      const Color(0xFF1E88E5),
+      const Color(0xFF00897B),
+      const Color(0xFFC62828),
+      const Color(0xFF6A1B9A),
+    ];
+    final nameColor =
+        nameColors[senderName.hashCode.abs() % nameColors.length];
+
+    final initials = senderName
+        .split(' ')
+        .take(2)
+        .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+        .join();
+
+    return Padding(
+      padding: EdgeInsets.only(top: showName && !isMe ? 8 : 2, bottom: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isMe) ...[
+            if (showName)
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: nameColor.withOpacity(0.3), width: 1.5),
                 ),
-          boxShadow: [
-            BoxShadow(
-              color: isMe
-                  ? const Color(0xFF4A6CF7).withOpacity(0.2)
-                  : Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: nameColor.withOpacity(0.1),
+                  backgroundImage:
+                      senderImage != null && senderImage.isNotEmpty
+                          ? NetworkImage(
+                              '${ApiConfig.baseUrl}/image-proxy?url=$senderImage')
+                          : null,
+                  child: senderImage == null || senderImage.isEmpty
+                      ? Text(initials,
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: nameColor))
+                      : null,
+                ),
+              )
+            else
+              const SizedBox(width: 34),
+            const SizedBox(width: 6),
           ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(text, style: TextStyle(fontSize: 14.5, color: textColor)),
-            const SizedBox(height: 3),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(time,
-                    style: TextStyle(fontSize: 10.5, color: timeColor)),
-                if (isMe) ...[
-                  const SizedBox(width: 3),
-                  Icon(
-                    read ? Icons.done_all : Icons.done,
-                    size: 14,
-                    color: read ? const Color(0xFF64FFDA) : Colors.white54,
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.72),
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+              decoration: BoxDecoration(
+                gradient: isMe
+                    ? const LinearGradient(
+                        colors: [Color(0xFF4A6CF7), Color(0xFF5B7BF8)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isMe
+                    ? null
+                    : isDark
+                        ? AppTheme.darkCard
+                        : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isMe ? 18 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 18),
+                ),
+                border: isMe
+                    ? null
+                    : Border.all(
+                        color: isDark ? Colors.white10 : Colors.grey.shade200),
+                boxShadow: [
+                  BoxShadow(
+                    color: isMe
+                        ? const Color(0xFF4A6CF7).withOpacity(0.2)
+                        : Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
-              ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (showName && !isMe)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Text(senderName,
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: nameColor)),
+                    ),
+                  Text(text,
+                      style: TextStyle(fontSize: 14.5, color: textColor)),
+                  const SizedBox(height: 2),
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Text(time,
+                        style:
+                            TextStyle(fontSize: 10.5, color: timeColor)),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -438,7 +450,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                 maxLines: 4,
                 minLines: 1,
                 decoration: InputDecoration(
-                  hintText: 'Xabar yozing...',
+                  hintText: 'Guruhga yozing...',
                   hintStyle: TextStyle(
                       color: isDark
                           ? AppTheme.darkTextSecondary
@@ -510,8 +522,8 @@ class _MedicalPatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFEDF2F7);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = bgColor);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = bgColor);
 
     final paint = Paint()
       ..color = (isDark ? Colors.white : const Color(0xFF4A6CF7))
@@ -611,8 +623,10 @@ class _MedicalPatternPainter extends CustomPainter {
     final path = Path();
     path.moveTo(cx - s * 0.25, cy - s * 0.4);
     path.lineTo(cx - s * 0.25, cy - s * 0.1);
-    path.quadraticBezierTo(cx - s * 0.25, cy + s * 0.15, cx, cy + s * 0.15);
-    path.quadraticBezierTo(cx + s * 0.25, cy + s * 0.15, cx + s * 0.25, cy - s * 0.1);
+    path.quadraticBezierTo(
+        cx - s * 0.25, cy + s * 0.15, cx, cy + s * 0.15);
+    path.quadraticBezierTo(
+        cx + s * 0.25, cy + s * 0.15, cx + s * 0.25, cy - s * 0.1);
     path.lineTo(cx + s * 0.25, cy - s * 0.4);
     canvas.drawPath(path, p);
 

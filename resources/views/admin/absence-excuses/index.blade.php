@@ -224,11 +224,13 @@
                                                         <div class="flex items-center justify-center gap-2">
                                                             <a href="{{ route('admin.absence-excuses.show', $exc->id) }}"
                                                                class="text-indigo-600 hover:text-indigo-800 font-medium">Ko'rish</a>
+                                                            @if(\App\Models\Setting::get('feature_absence_excuse_delete', '0') === '1')
                                                             <form method="POST" action="{{ route('admin.absence-excuses.destroy', $exc->id) }}" onsubmit="return confirm('Haqiqatan o\'chirmoqchimisiz? Talabadan ham o\'chadi.')">
                                                                 @csrf
                                                                 @method('DELETE')
                                                                 <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
                                                             </form>
+                                                            @endif
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -427,11 +429,13 @@
                                             <div class="flex items-center gap-2">
                                                 <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
                                                    class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
+                                                @if(\App\Models\Setting::get('feature_absence_excuse_delete', '0') === '1')
                                                 <form method="POST" action="{{ route('admin.absence-excuses.destroy', $excuse->id) }}" onsubmit="return confirm('Haqiqatan o\'chirmoqchimisiz? Talabadan ham o\'chadi.')">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
                                                 </form>
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>

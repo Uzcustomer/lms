@@ -13,6 +13,10 @@ class FeatureToggleController extends Controller
             'label' => 'Superadmin baho tahrirlash',
             'description' => 'Jurnalda batafsilga o\'tib istalgan bahoni edit qilish imkoniyati',
         ],
+        'absence_excuse_delete' => [
+            'label' => 'Sababli ariza o\'chirish',
+            'description' => 'Sababli arizalar ro\'yxatida O\'chirish tugmasini ko\'rsatish',
+        ],
     ];
 
     public function index()

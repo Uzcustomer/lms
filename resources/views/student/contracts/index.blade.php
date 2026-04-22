@@ -29,7 +29,7 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('student.contracts.generate') }}">
+        <form method="POST" action="{{ route('student.contracts.store') }}">
             @csrf
 
             {{-- Shartnoma turi tanlash --}}
@@ -103,7 +103,7 @@
                         <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi') }} <span class="text-red-500">*</span></label>
                         <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}" required
                                class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                               placeholder="{{ __('Surxondaryo viloyati') }}">
+                               placeholder="{{ __('Viloyatingizni kiriting') }}">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi boshlig\'i') }} <span class="text-red-500">*</span></label>
@@ -144,7 +144,7 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
                     </svg>
-                    {{ __('Shartnoma olish') }}
+                    {{ __('Ariza yuborish') }}
                 </button>
             </div>
         </form>
@@ -154,37 +154,43 @@
             <h3 class="text-lg font-bold text-gray-800 mb-3">{{ __('Yuborilgan arizalar') }}</h3>
             <div class="space-y-4">
                 @foreach($contracts as $contract)
+                    @php
+                        $sc = [
+                            'pending' => ['bg' => '#fef3c7', 'border' => '#fde68a', 'color' => '#92400e', 'label' => 'Kutilmoqda'],
+                            'registrar_review' => ['bg' => '#dbeafe', 'border' => '#93c5fd', 'color' => '#1e40af', 'label' => 'Ko\'rib chiqilmoqda'],
+                            'approved' => ['bg' => '#d1fae5', 'border' => '#a7f3d0', 'color' => '#065f46', 'label' => 'Tasdiqlangan'],
+                            'rejected' => ['bg' => '#fee2e2', 'border' => '#fecaca', 'color' => '#991b1b', 'label' => 'Rad etilgan'],
+                        ];
+                        $s = $sc[$contract->status] ?? $sc['pending'];
+                    @endphp
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div class="p-5">
-                            <div class="mb-3">
-                                <h3 class="text-base font-semibold text-gray-800">{{ $contract->type_label }}</h3>
-                                <p class="text-sm text-gray-500">Ariza #{{ str_pad($contract->id, 4, '0', STR_PAD_LEFT) }} | {{ $contract->created_at->format('d.m.Y H:i') }}</p>
-                            </div>
-
-                            @if($contract->status === 'rejected' && $contract->reject_reason)
-                                <div class="bg-red-50 rounded-lg p-3 mt-2">
-                                    <p class="text-sm text-red-700"><strong>{{ __('Rad etish sababi:') }}</strong> {{ $contract->reject_reason }}</p>
+                        <div style="background: {{ $s['bg'] }}; border-bottom: 1px solid {{ $s['border'] }}; padding: 12px 20px;">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 700; color: {{ $s['color'] }};">{{ $s['label'] }}</span>
+                                    <span style="font-size: 12px; color: {{ $s['color'] }}; opacity: 0.7;"> &middot; {{ $contract->type_label }} &middot; #{{ str_pad($contract->id, 4, '0', STR_PAD_LEFT) }} &middot; {{ $contract->created_at->format('d.m.Y H:i') }}</span>
                                 </div>
-                            @endif
-
-                            <div class="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100">
-                                @if($contract->document_path)
+                                @if($contract->status === 'approved' && $contract->document_path)
                                     <a href="{{ route('student.contracts.download', $contract) }}"
-                                       class="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition">
-                                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                        {{ __('Yuklab olish') }}
+                                       style="display: inline-flex; align-items: center; gap: 5px; padding: 6px 16px; background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-size: 12px; font-weight: 600; border-radius: 8px; text-decoration: none;">
+                                        <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                                        Yuklab olish
                                     </a>
                                 @endif
-                                <form method="POST" action="{{ route('student.contracts.destroy', $contract) }}" class="inline"
-                                      onsubmit="return confirm('Haqiqatan ham bu shartnomani o\'chirmoqchimisiz?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="inline-flex items-center px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition">
-                                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                        {{ __('O\'chirish') }}
-                                    </button>
-                                </form>
                             </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="text-sm text-gray-600">
+                                <span class="text-gray-400 text-xs">Ish beruvchi:</span> {{ $contract->employer_name ?: '—' }}
+                            </div>
+                            @if($contract->status === 'rejected' && $contract->reject_reason)
+                                <div class="mt-2 p-2.5 bg-red-50 rounded-lg border border-red-100 text-sm text-red-700">
+                                    <strong>Rad etish sababi:</strong> {{ $contract->reject_reason }}
+                                </div>
+                            @endif
+                            @if($contract->status === 'pending')
+                                <div class="mt-2 text-xs text-amber-600">Ariza ko'rib chiqilmoqda. Tasdiqlangandan keyin hujjatni yuklab olishingiz mumkin.</div>
+                            @endif
                         </div>
                     </div>
                 @endforeach

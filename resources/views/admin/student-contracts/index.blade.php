@@ -173,6 +173,11 @@
                                                     Yuklab olish
                                                 </a>
                                             @endif
+                                            <form method="POST" action="{{ route('admin.student-contracts.destroy', $contract) }}" onsubmit="return confirm('Haqiqatan o\'chirmoqchimisiz? Talabadan ham o\'chadi.')">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-semibold rounded-md text-red-600 bg-red-50 hover:bg-red-100 transition border border-red-200">O'chirish</button>
+                                            </form>
                                         </div>
                                     </td>
                                 </tr>

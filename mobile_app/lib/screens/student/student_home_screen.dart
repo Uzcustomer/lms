@@ -4,6 +4,7 @@ import '../../l10n/app_localizations.dart';
 import 'student_dashboard_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'library_webview_screen.dart';
+import 'gpa_calculator_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
@@ -252,8 +253,14 @@ class _UsefulModalState extends State<_UsefulModal>
         title: 'GPA Kalkulyator',
         subtitle: 'GPA ni hisoblash va prognoz qilish',
         color: const Color(0xFF26A69A),
-        onTap: () {},
-        comingSoon: true,
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const GpaCalculatorScreen()),
+          );
+        },
       ),
       _ModalServiceItem(
         icon: Icons.smart_toy_outlined,

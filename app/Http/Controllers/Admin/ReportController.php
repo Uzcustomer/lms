@@ -750,29 +750,100 @@ class ReportController extends Controller
 
     public function lessonAssignmentData(Request $request)
     {
-        // Excel export — darhol background job'ga yuborish (og'ir query'siz)
         if ($request->get('export') === 'excel') {
             return $this->startLessonAssignmentExport($request);
         }
 
-        set_time_limit(120);
+        $calcKey = 'report_calc_' . auth()->id();
 
-        try {
-            return $this->lessonAssignmentDataInner($request);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('[lessonAssignmentData] ' . $e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'params' => $request->all(),
-                'trace' => mb_substr($e->getTraceAsString(), 0, 2000),
-            ]);
-
-            return response()->json([
-                'error' => true,
-                'message' => $e->getMessage(),
-                'file' => basename($e->getFile()) . ':' . $e->getLine(),
-            ], 500);
+        $existing = \Illuminate\Support\Facades\Cache::get($calcKey);
+        if ($existing && ($existing['status'] ?? '') === 'running') {
+            return response()->json(['queued' => true, 'message' => 'Allaqachon hisoblanmoqda.']);
         }
+
+        $filters = $request->all();
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && empty($filters['faculty'])) {
+            $filters['dekan_faculty_ids'] = $dekanFacultyIds;
+        }
+
+        \Illuminate\Support\Facades\Cache::put($calcKey, [
+            'status' => 'running',
+            'message' => 'Hisoblanmoqda...',
+        ], 600);
+
+        \App\Jobs\CalculateLessonAssignmentJob::dispatch($filters, $calcKey);
+
+        return response()->json(['queued' => true, 'message' => 'Hisoblash boshlandi.']);
+    }
+
+    public function lessonAssignmentCalcStatus()
+    {
+        $calcKey = 'report_calc_' . auth()->id();
+        $data = \Illuminate\Support\Facades\Cache::get($calcKey);
+
+        if (!$data) {
+            return response()->json(['status' => 'none']);
+        }
+
+        if (($data['status'] ?? '') === 'done') {
+            return response()->json(['status' => 'done']);
+        }
+
+        return response()->json($data);
+    }
+
+    public function lessonAssignmentCalcResults(Request $request)
+    {
+        $calcKey = 'report_calc_' . auth()->id();
+        $data = \Illuminate\Support\Facades\Cache::get($calcKey);
+
+        if (!$data || ($data['status'] ?? '') !== 'done') {
+            return response()->json(['data' => [], 'total' => 0]);
+        }
+
+        $results = $data['results'] ?? [];
+
+        if ($request->filled('status_filter')) {
+            $results = array_values(array_filter($results, function ($r) use ($request) {
+                return match ($request->status_filter) {
+                    'any_missing' => !$r['has_attendance'] || $r['has_grades'] === false,
+                    'attendance_missing' => !$r['has_attendance'],
+                    'grade_missing' => $r['has_grades'] === false,
+                    'both_missing' => !$r['has_attendance'] && $r['has_grades'] === false,
+                    'all_done' => $r['has_attendance'] && $r['has_grades'] !== false,
+                    default => true,
+                };
+            }));
+        }
+
+        $sortColumn = $request->get('sort', 'lesson_date');
+        $sortDirection = $request->get('direction', 'desc');
+        usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
+            $valA = $a[$sortColumn] ?? '';
+            $valB = $b[$sortColumn] ?? '';
+            $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+            return $sortDirection === 'desc' ? -$cmp : $cmp;
+        });
+
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 50);
+        $total = count($results);
+        $offset = ($page - 1) * $perPage;
+        $pageData = array_slice($results, $offset, $perPage);
+
+        foreach ($pageData as $i => &$item) {
+            $item['row_num'] = $offset + $i + 1;
+        }
+        unset($item);
+
+        return response()->json([
+            'data' => $pageData,
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => (int) $page,
+            'last_page' => ceil($total / $perPage),
+        ]);
     }
 
     private function lessonAssignmentDataInner(Request $request)

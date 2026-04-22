@@ -27,50 +27,50 @@
             @endif
 
             {{-- Stat cards --}}
-            <div class="flex gap-3 mb-5">
-                <a href="{{ route('admin.student-contracts.index') }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ !request('status') ? 'bg-blue-50 border-blue-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="{{ !request('status') ? '' : '' }}">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <a href="{{ route('admin.student-contracts.index') }}" class="sc-stat {{ !request('status') ? 'bg-blue-50 border-blue-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="flex: 1; display: flex; align-items: center; gap: 12px; padding: 18px 16px; border-radius: 12px; border-width: 1px; text-decoration: none;">
+                    <div style="width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2b5ea7, #3b82f6); flex-shrink: 0;">
+                        <svg style="width: 20px; height: 20px; color: #fff;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
                     </div>
                     <div>
-                        <div class="text-xl font-bold" style="color: #1a3268;">{{ $statusCounts['all'] }}</div>
-                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Jami</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #1a3268;">{{ $statusCounts['all'] }}</div>
+                        <div style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Jami</div>
                     </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'pending']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'pending' ? 'bg-amber-50 border-amber-300 active shadow-sm' : 'bg-white border-gray-200' }}">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #d97706, #f59e0b);">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'pending']) }}" class="sc-stat {{ request('status') === 'pending' ? 'bg-amber-50 border-amber-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="flex: 1; display: flex; align-items: center; gap: 12px; padding: 18px 16px; border-radius: 12px; border-width: 1px; text-decoration: none;">
+                    <div style="width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #d97706, #f59e0b); flex-shrink: 0;">
+                        <svg style="width: 20px; height: 20px; color: #fff;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-amber-700">{{ $statusCounts['pending'] }}</div>
-                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Kutilmoqda</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #b45309;">{{ $statusCounts['pending'] }}</div>
+                        <div style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Kutilmoqda</div>
                     </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'registrar_review']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'registrar_review' ? 'bg-blue-50 border-blue-300 active shadow-sm' : 'bg-white border-gray-200' }}">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #1e40af, #3b82f6);">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'registrar_review']) }}" class="sc-stat {{ request('status') === 'registrar_review' ? 'bg-blue-50 border-blue-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="flex: 1; display: flex; align-items: center; gap: 12px; padding: 18px 16px; border-radius: 12px; border-width: 1px; text-decoration: none;">
+                    <div style="width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1e40af, #3b82f6); flex-shrink: 0;">
+                        <svg style="width: 20px; height: 20px; color: #fff;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-blue-700">{{ $statusCounts['registrar_review'] }}</div>
-                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Ko'rilmoqda</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #1e40af;">{{ $statusCounts['registrar_review'] }}</div>
+                        <div style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Ko'rilmoqda</div>
                     </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'approved']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'approved' ? 'bg-emerald-50 border-emerald-300 active shadow-sm' : 'bg-white border-gray-200' }}">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #059669, #10b981);">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'approved']) }}" class="sc-stat {{ request('status') === 'approved' ? 'bg-emerald-50 border-emerald-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="flex: 1; display: flex; align-items: center; gap: 12px; padding: 18px 16px; border-radius: 12px; border-width: 1px; text-decoration: none;">
+                    <div style="width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #059669, #10b981); flex-shrink: 0;">
+                        <svg style="width: 20px; height: 20px; color: #fff;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-emerald-700">{{ $statusCounts['approved'] }}</div>
-                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tasdiqlangan</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #059669;">{{ $statusCounts['approved'] }}</div>
+                        <div style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Tasdiqlangan</div>
                     </div>
                 </a>
-                <a href="{{ route('admin.student-contracts.index', ['status' => 'rejected']) }}" class="sc-stat rounded-xl p-4 border flex items-center gap-3 {{ request('status') === 'rejected' ? 'bg-red-50 border-red-300 active shadow-sm' : 'bg-white border-gray-200' }}">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #dc2626, #ef4444);">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <a href="{{ route('admin.student-contracts.index', ['status' => 'rejected']) }}" class="sc-stat {{ request('status') === 'rejected' ? 'bg-red-50 border-red-300 active shadow-sm' : 'bg-white border-gray-200' }}" style="flex: 1; display: flex; align-items: center; gap: 12px; padding: 18px 16px; border-radius: 12px; border-width: 1px; text-decoration: none;">
+                    <div style="width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #dc2626, #ef4444); flex-shrink: 0;">
+                        <svg style="width: 20px; height: 20px; color: #fff;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <div class="text-xl font-bold text-red-600">{{ $statusCounts['rejected'] }}</div>
-                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Rad etilgan</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #dc2626;">{{ $statusCounts['rejected'] }}</div>
+                        <div style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Rad etilgan</div>
                     </div>
                 </a>
             </div>

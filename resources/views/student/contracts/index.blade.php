@@ -101,9 +101,9 @@
                 <div class="space-y-3">
                     <div>
                         <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi') }} <span class="text-red-500">*</span></label>
-                        <input type="text" name="employer_name" value="{{ $placeholderData['employer_name'] }}" required
-                               class="w-full rounded-lg border-blue-300 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                               placeholder="{{ __('Viloyatingizni kiriting') }}">
+                        <input type="text" name="employer_name" value="{{ $student->province_name ?? $placeholderData['employer_name'] }}" required
+                               class="w-full rounded-lg border-blue-300 text-sm bg-gray-100 text-gray-700"
+                               {{ $student->province_name ? 'readonly' : '' }}>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-blue-600 mb-1">{{ __('Viloyat sog\'liqni saqlash bosh boshqarmasi boshlig\'i') }} <span class="text-red-500">*</span></label>
@@ -120,8 +120,9 @@
                 <div class="space-y-3">
                     <div>
                         <label class="block text-sm font-medium text-purple-600 mb-1">{{ __('Tuman sog\'liqni saqlash bosh boshqarmasi') }} <span class="text-red-500">*</span></label>
-                        <input type="text" name="fourth_party_name" value=""
-                               class="w-full rounded-lg border-purple-300 text-sm focus:ring-purple-500 focus:border-purple-500 bg-white"
+                        <input type="text" name="fourth_party_name" value="{{ $student->district_name ?? '' }}"
+                               class="w-full rounded-lg border-purple-300 text-sm {{ $student->district_name ? 'bg-gray-100 text-gray-700' : 'focus:ring-purple-500 focus:border-purple-500 bg-white' }}"
+                               {{ $student->district_name ? 'readonly' : '' }}
                                placeholder="{{ __('Tuman nomini kiriting') }}"
                                x-bind:required="contractType === '4_tomonlama'">
                     </div>

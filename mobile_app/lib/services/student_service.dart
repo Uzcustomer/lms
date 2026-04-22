@@ -132,4 +132,21 @@ class StudentService {
       fileName: fileName,
     );
   }
+
+  // Chat methods
+  Future<Map<String, dynamic>> getChatContacts() async {
+    return await _api.get(ApiConfig.chatContacts);
+  }
+
+  Future<Map<String, dynamic>> getChatMessages(int contactId) async {
+    return await _api.get('${ApiConfig.chatMessages}/$contactId');
+  }
+
+  Future<Map<String, dynamic>> sendChatMessage(int receiverId, String message) async {
+    return await _api.post(
+      ApiConfig.chatSend,
+      {'receiver_id': receiverId, 'message': message},
+      auth: true,
+    );
+  }
 }

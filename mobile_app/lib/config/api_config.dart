@@ -33,6 +33,11 @@ class ApiConfig {
   static const String studentExcuses = '/student/excuses';
   static const String studentExcuseMissedAssessments = '/student/excuses/missed-assessments';
 
+  // Chat endpoints
+  static const String chatContacts = '/chat/contacts';
+  static const String chatMessages = '/chat/messages';
+  static const String chatSend = '/chat/send';
+
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';
   static const String teacherProfile = '/teacher/profile';

@@ -221,8 +221,15 @@
                                                     </td>
                                                     <td class="px-4 py-3 text-gray-500">{{ $exc->reviewed_at ? $exc->reviewed_at->format('d.m.Y H:i') : '-' }}</td>
                                                     <td class="px-4 py-3 text-center">
-                                                        <a href="{{ route('admin.absence-excuses.show', $exc->id) }}"
-                                                           class="text-indigo-600 hover:text-indigo-800 font-medium">Ko'rish</a>
+                                                        <div class="flex items-center justify-center gap-2">
+                                                            <a href="{{ route('admin.absence-excuses.show', $exc->id) }}"
+                                                               class="text-indigo-600 hover:text-indigo-800 font-medium">Ko'rish</a>
+                                                            <form method="POST" action="{{ route('admin.absence-excuses.destroy', $exc->id) }}" onsubmit="return confirm('Haqiqatan o\'chirmoqchimisiz? Talabadan ham o\'chadi.')">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
+                                                            </form>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             @endforeach
@@ -417,8 +424,15 @@
                                             <div class="text-xs text-gray-400">{{ $excuse->created_at?->format('H:i') }}</div>
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
-                                            <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
-                                               class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
+                                            <div class="flex items-center gap-2">
+                                                <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
+                                                   class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
+                                                <form method="POST" action="{{ route('admin.absence-excuses.destroy', $excuse->id) }}" onsubmit="return confirm('Haqiqatan o\'chirmoqchimisiz? Talabadan ham o\'chadi.')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach

@@ -323,10 +323,6 @@ class AbsenceExcuseController extends Controller
     {
         $excuse = AbsenceExcuse::findOrFail($id);
 
-        if (!in_array($excuse->status, ['pending', 'approved'], true)) {
-            return back()->with('error', "Faqat yangi yoki tasdiqlangan arizani o'chirish mumkin.");
-        }
-
         if ($excuse->file_path && Storage::disk('public')->exists($excuse->file_path)) {
             Storage::disk('public')->delete($excuse->file_path);
         }
@@ -335,6 +331,7 @@ class AbsenceExcuseController extends Controller
             Storage::disk('public')->delete($excuse->approved_pdf_path);
         }
 
+        $excuse->makeups()->delete();
         $excuse->delete();
 
         return redirect()->route('admin.absence-excuses.index')

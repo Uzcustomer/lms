@@ -6,6 +6,7 @@ import 'student_exam_schedule_screen.dart';
 import 'library_webview_screen.dart';
 import 'gpa_calculator_screen.dart';
 import 'student_rating_screen.dart';
+import 'chat_contacts_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
@@ -274,6 +275,20 @@ class _UsefulModalState extends State<_UsefulModal>
             context,
             MaterialPageRoute(
                 builder: (_) => const StudentRatingScreen()),
+          );
+        },
+      ),
+      _ModalServiceItem(
+        icon: Icons.chat_rounded,
+        title: 'Guruh chati',
+        subtitle: 'Guruhingiz a\'zolari bilan yozishing',
+        color: const Color(0xFF00BCD4),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const ChatContactsScreen()),
           );
         },
       ),

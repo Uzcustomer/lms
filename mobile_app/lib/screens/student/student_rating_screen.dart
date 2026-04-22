@@ -143,11 +143,17 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
   }
 
   Widget _buildMyRankCard(bool isDark) {
-    final Color color;
-    if (_myRank <= 3 && _myRank > 0) {
-      color = const Color(0xFFFF9800);
+    const color = Color(0xFF4CAF50);
+
+    IconData rankIcon;
+    if (_myRank == 1) {
+      rankIcon = Icons.emoji_events_rounded;
+    } else if (_myRank == 2) {
+      rankIcon = Icons.emoji_events_rounded;
+    } else if (_myRank == 3) {
+      rankIcon = Icons.emoji_events_rounded;
     } else {
-      color = const Color(0xFF4A6CF7);
+      rankIcon = Icons.leaderboard_rounded;
     }
 
     return Container(
@@ -184,13 +190,16 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                     height: 20,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white))
-                : Text(
-                    _myRank > 0 ? '#$_myRank' : '—',
-                    style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
+                : _myRank <= 3 && _myRank > 0
+                    ? const Icon(Icons.emoji_events_rounded,
+                        color: Colors.white, size: 28)
+                    : Text(
+                        _myRank > 0 ? '$_myRank' : '—',
+                        style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -206,7 +215,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                 Text(
                   _loading
                       ? '...'
-                      : '$_totalStudents talaba ichida $_myRank-o\'rin',
+                      : '$_totalStudents talaba ichida ${_myRank}-o\'rin',
                   style: const TextStyle(
                       fontSize: 15,
                       color: Colors.white,

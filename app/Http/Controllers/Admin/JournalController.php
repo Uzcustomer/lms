@@ -5088,9 +5088,7 @@ class JournalController extends Controller
      */
     public function saveExamGrade(Request $request)
     {
-        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
-            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
-        }
+        return response()->json(['success' => false, 'message' => 'OSKI/Test baholarini qo\'yish vaqtinchalik yopilgan.'], 403);
 
         $request->validate([
             'student_hemis_id' => 'required|string',

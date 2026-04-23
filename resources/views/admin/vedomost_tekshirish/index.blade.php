@@ -395,8 +395,8 @@
             function rGrp(){
                 var prev=getCbValues('groups');
                 $.get('{{ route("admin.journal.get-groups") }}',fp(),function(d){
-                    var seen={},items=[];
-                    $.each(d,function(k,v){ if(!seen[v]){seen[v]=true;items.push({value:k,label:v});} });
+                    var items=[];
+                    $.each(d,function(k,v){ items.push({value:k,label:v}); });
                     loadCbItems('groups',items,prev);
                 });
             }

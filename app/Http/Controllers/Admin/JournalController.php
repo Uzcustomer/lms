@@ -850,23 +850,7 @@ class JournalController extends Controller
                     });
             });
         } else {
-            // student_subjects da ma'lumot yo'q — eski logika (guruhdagi barcha talabalar)
-            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
-                $query
-                    ->where(function ($q) {
-                        $q->where('student_status_code', '!=', '60')
-                          ->orWhereNull('student_status_code');
-                    })
-                    ->orWhere('semester_code', $semesterCode)
-                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
-                        $sub->select(DB::raw(1))
-                            ->from('student_grades')
-                            ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
-                            ->where('student_grades.subject_id', $subjectId)
-                            ->where('student_grades.semester_code', $semesterCode)
-                            ->whereNull('student_grades.deleted_at');
-                    });
-            });
+            // student_subjects da ma'lumot yo'q — guruhdagi barcha talabalar ko'rsatiladi
         }
 
         $students = $studentsQuery

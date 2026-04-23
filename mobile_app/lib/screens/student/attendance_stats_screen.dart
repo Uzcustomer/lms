@@ -215,23 +215,21 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       );
     }
 
-    int totalPairs = 0;
-    int absentPairs = 0;
-    int retakePairs = 0;
+    int totalDays = 0;
+    int absentDays = 0;
+    int retakeDays = 0;
     for (final day in dayRows) {
-      final pairs = day['pairs'] as List<Map<String, dynamic>>;
-      for (final p in pairs) {
-        totalPairs++;
-        if (p['type'] == 'absent') absentPairs++;
-        if (p['type'] == 'retake') retakePairs++;
-      }
+      if (day['type'] == 'no_data') continue;
+      totalDays++;
+      if (day['type'] == 'absent') absentDays++;
+      if (day['type'] == 'retake') retakeDays++;
     }
-    final attendedPairs = totalPairs - absentPairs;
+    final attendedDays = totalDays - absentDays;
 
     return Column(
       children: [
         _buildStatsRow(
-            totalPairs, attendedPairs, absentPairs, retakePairs, isDark, txt),
+            totalDays, attendedDays, absentDays, retakeDays, isDark, txt),
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
@@ -365,45 +363,68 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
 
     for (final dateKey in sortedDates) {
       final dayGrades = gradeMap[dateKey];
-      final pairs = <Map<String, dynamic>>[];
 
       if (dayGrades == null || dayGrades.isEmpty) {
-        pairs.add({
+        dayRows.add({
+          'date': dateKey,
           'type': 'no_data',
           'grade': null,
           'retake_grade': null,
-          'pair': '',
         });
-      } else {
-        for (final g in dayGrades) {
-          final reason = g['reason']?.toString();
-          final status = g['status']?.toString();
-          final grade = g['grade'];
-          final retakeGrade = g['retake_grade'];
+        continue;
+      }
 
-          String type;
-          if (reason == 'absent' && (grade == null || grade == 0)) {
-            if (retakeGrade != null && retakeGrade is num && retakeGrade > 0) {
-              type = 'retake';
-            } else {
-              type = 'absent';
-            }
-          } else if (status == 'pending') {
-            type = 'pending';
-          } else {
-            type = 'graded';
+      final gradeValues = <num>[];
+      bool hasAbsent = false;
+      bool hasRetake = false;
+      num? retakeVal;
+
+      for (final g in dayGrades) {
+        final reason = g['reason']?.toString();
+        final status = g['status']?.toString();
+        final grade = g['grade'];
+        final retakeGrade = g['retake_grade'];
+
+        if (reason == 'absent' && (grade == null || grade == 0)) {
+          hasAbsent = true;
+          if (retakeGrade != null && retakeGrade is num && retakeGrade > 0) {
+            hasRetake = true;
+            retakeVal = retakeGrade;
           }
-
-          pairs.add({
-            'type': type,
-            'grade': grade,
-            'retake_grade': retakeGrade,
-            'pair': g['lesson_pair_name']?.toString() ?? '',
-          });
+        } else if (status == 'pending' && reason == 'low_grade' && grade is num) {
+          gradeValues.add(grade);
+        } else if (status == 'pending') {
+          continue;
+        } else if (retakeGrade != null && retakeGrade is num && retakeGrade > 0) {
+          gradeValues.add(retakeGrade);
+        } else if (grade != null && grade is num && grade > 0) {
+          gradeValues.add(grade);
         }
       }
 
-      dayRows.add({'date': dateKey, 'pairs': pairs});
+      String type;
+      num? avgGrade;
+
+      if (hasAbsent && gradeValues.isEmpty) {
+        if (hasRetake) {
+          type = 'retake';
+          avgGrade = retakeVal;
+        } else {
+          type = 'absent';
+        }
+      } else if (gradeValues.isNotEmpty) {
+        type = 'graded';
+        avgGrade = (gradeValues.reduce((a, b) => a + b) / gradeValues.length).round();
+      } else {
+        type = 'no_data';
+      }
+
+      dayRows.add({
+        'date': dateKey,
+        'type': type,
+        'grade': avgGrade,
+        'retake_grade': hasRetake ? retakeVal : null,
+      });
     }
 
     return dayRows;
@@ -412,10 +433,9 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   Widget _buildDayRow(Map<String, dynamic> day, Color borderColor,
       Color cellBg, Color txt, Color sub, bool isDark) {
     final dateKey = day['date'] as String;
-    final pairs = day['pairs'] as List<Map<String, dynamic>>;
-
-    final hasAbsent = pairs.any((p) => p['type'] == 'absent');
-    final hasRetake = pairs.any((p) => p['type'] == 'retake');
+    final type = day['type'] as String;
+    final grade = day['grade'];
+    final retakeGrade = day['retake_grade'];
 
     String dateStr;
     String weekDay;
@@ -436,9 +456,9 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
         color: cellBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: hasAbsent
+          color: type == 'absent'
               ? AppTheme.errorColor.withOpacity(0.3)
-              : hasRetake
+              : type == 'retake'
                   ? AppTheme.warningColor.withOpacity(0.3)
                   : borderColor,
         ),
@@ -466,117 +486,167 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
             ),
             Container(
               width: 1,
-              height: 40,
+              height: 36,
               margin: const EdgeInsets.symmetric(horizontal: 10),
               color: borderColor,
             ),
             Expanded(
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: pairs.map((p) {
-                  final pairLabel = p['pair']?.toString() ?? '';
-                  return _buildPairCell(
-                      p['type'] as String,
-                      p['grade'],
-                      p['retake_grade'],
-                      pairLabel,
-                      isDark,
-                      txt,
-                      sub);
-                }).toList(),
-              ),
+              child: _buildDayStatus(type, txt, sub),
             ),
+            const SizedBox(width: 8),
+            _buildGradeCell(type, grade, retakeGrade, isDark, sub),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPairCell(String type, dynamic grade, dynamic retakeGrade,
-      String pairLabel, bool isDark, Color txt, Color sub) {
-    if (type == 'retake') {
-      return Column(
+  Widget _buildDayStatus(String type, Color txt, Color sub) {
+    if (type == 'absent') {
+      return Row(
         children: [
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: CustomPaint(
-              painter: _DiagonalCellPainter(
-                nbText: 'NB',
-                gradeText: retakeGrade is num
-                    ? (retakeGrade % 1 == 0
-                        ? retakeGrade.toInt().toString()
-                        : retakeGrade.toStringAsFixed(1))
-                    : retakeGrade?.toString() ?? '',
-                isDark: isDark,
-              ),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppTheme.errorColor,
+              shape: BoxShape.circle,
             ),
           ),
-          if (pairLabel.isNotEmpty)
-            Text(pairLabel,
-                style: TextStyle(fontSize: 9, color: sub)),
+          const SizedBox(width: 8),
+          Text('Kelmagan',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.errorColor)),
         ],
       );
     }
+    if (type == 'retake') {
+      return Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppTheme.warningColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('Retake',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.warningColor)),
+        ],
+      );
+    }
+    if (type == 'graded') {
+      return Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppTheme.successColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('Qatnashgan',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: txt)),
+        ],
+      );
+    }
+    return Text('—', style: TextStyle(fontSize: 13, color: sub));
+  }
 
-    Color bgColor;
-    Color borderCol;
-    String displayText;
-    Color textColor;
-
-    if (type == 'absent') {
-      bgColor = AppTheme.errorColor.withOpacity(0.1);
-      borderCol = AppTheme.errorColor.withOpacity(0.3);
-      displayText = 'NB';
-      textColor = AppTheme.errorColor;
-    } else if (type == 'pending' || type == 'no_data') {
-      bgColor = Colors.grey.withOpacity(0.08);
-      borderCol = Colors.grey.withOpacity(0.2);
-      displayText = '—';
-      textColor = sub;
-    } else {
-      final gradeVal = grade is num
-          ? grade.toDouble()
-          : double.tryParse(grade?.toString() ?? '') ?? 0;
-      final gradeColor = gradeVal >= 86
-          ? AppTheme.successColor
-          : gradeVal >= 71
-              ? const Color(0xFF1E88E5)
-              : gradeVal >= 56
-                  ? AppTheme.warningColor
-                  : gradeVal > 0
-                      ? AppTheme.errorColor
-                      : sub;
-      bgColor = gradeColor.withOpacity(0.1);
-      borderCol = gradeColor.withOpacity(0.3);
-      displayText = gradeVal % 1 == 0
-          ? gradeVal.toInt().toString()
-          : gradeVal.toStringAsFixed(1);
-      textColor = gradeColor;
+  Widget _buildGradeCell(
+      String type, dynamic grade, dynamic retakeGrade, bool isDark, Color sub) {
+    if (type == 'retake') {
+      return SizedBox(
+        width: 48,
+        height: 48,
+        child: CustomPaint(
+          painter: _DiagonalCellPainter(
+            nbText: 'NB',
+            gradeText: retakeGrade is num
+                ? (retakeGrade % 1 == 0
+                    ? retakeGrade.toInt().toString()
+                    : retakeGrade.toStringAsFixed(1))
+                : retakeGrade?.toString() ?? '',
+            isDark: isDark,
+          ),
+        ),
+      );
     }
 
-    return Column(
-      children: [
-        Container(
-          width: 48,
-          height: 36,
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: borderCol),
-          ),
-          alignment: Alignment.center,
-          child: Text(displayText,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: textColor)),
+    if (type == 'absent') {
+      return Container(
+        width: 48,
+        height: 36,
+        decoration: BoxDecoration(
+          color: AppTheme.errorColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
         ),
-        if (pairLabel.isNotEmpty)
-          Text(pairLabel,
-              style: TextStyle(fontSize: 9, color: sub)),
-      ],
+        alignment: Alignment.center,
+        child: const Text('NB',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.errorColor)),
+      );
+    }
+
+    if (type == 'no_data') {
+      return Container(
+        width: 48,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.grey.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Text('—', style: TextStyle(fontSize: 14, color: sub)),
+      );
+    }
+
+    final gradeVal = grade is num
+        ? grade.toDouble()
+        : double.tryParse(grade?.toString() ?? '') ?? 0;
+    final gradeColor = gradeVal >= 86
+        ? AppTheme.successColor
+        : gradeVal >= 71
+            ? const Color(0xFF1E88E5)
+            : gradeVal >= 56
+                ? AppTheme.warningColor
+                : gradeVal > 0
+                    ? AppTheme.errorColor
+                    : sub;
+
+    final displayText = gradeVal % 1 == 0
+        ? gradeVal.toInt().toString()
+        : gradeVal.toStringAsFixed(1);
+
+    return Container(
+      width: 48,
+      height: 36,
+      decoration: BoxDecoration(
+        color: gradeColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: gradeColor.withOpacity(0.3)),
+      ),
+      alignment: Alignment.center,
+      child: Text(displayText,
+          style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: gradeColor)),
     );
   }
 

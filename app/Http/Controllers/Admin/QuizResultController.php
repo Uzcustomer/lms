@@ -1764,10 +1764,11 @@ class QuizResultController extends Controller
             // Quiz type dan training_type_code va name aniqlash
             $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
             $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-            if (in_array($result->quiz_type, $oskiTypes)) {
+            $shaklLower = mb_strtolower($result->shakl ?? '');
+            if (in_array($result->quiz_type, $oskiTypes) || $shaklLower === 'oski' || stripos($result->quiz_type ?? '', 'OSKI') !== false) {
                 $trainingTypeCode = 101;
                 $trainingTypeName = 'Oski';
-            } elseif (in_array($result->quiz_type, $testTypes)) {
+            } elseif (in_array($result->quiz_type, $testTypes) || stripos($shaklLower, 'test') !== false || stripos($result->quiz_type ?? '', 'test') !== false) {
                 $trainingTypeCode = 102;
                 $trainingTypeName = 'Yakuniy test';
             } else {

@@ -261,7 +261,7 @@
     </div>
 
     <script>
-        var MAX_SIZE = 2000;
+        var MAX_SIZE = 1200;
         var currentStudentId = null;
         var currentBlob = null;
         var uploadActionUrl = '';
@@ -319,7 +319,7 @@
                 document.getElementById('photo-capture-btn').style.display = 'none';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                 document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
-            }, 'image/jpeg', 0.98);
+            }, 'image/jpeg', 0.92);
         }
 
         function deletePhoto() {

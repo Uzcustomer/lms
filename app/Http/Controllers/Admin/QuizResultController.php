@@ -1765,10 +1765,14 @@ class QuizResultController extends Controller
             $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
             $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
             $shaklLower = mb_strtolower($result->shakl ?? '');
-            if (in_array($result->quiz_type, $oskiTypes) || $shaklLower === 'oski' || stripos($result->quiz_type ?? '', 'OSKI') !== false) {
+            $ynTuriOverrides = $request->input('yn_turi_overrides', []);
+            $ynOverrideKey = $result->fan_id . '_' . ($student->group_id ?? '');
+            $manualYnTuri = $ynTuriOverrides[$ynOverrideKey] ?? null;
+
+            if ($manualYnTuri === 'oski' || in_array($result->quiz_type, $oskiTypes) || $shaklLower === 'oski' || stripos($result->quiz_type ?? '', 'OSKI') !== false) {
                 $trainingTypeCode = 101;
                 $trainingTypeName = 'Oski';
-            } elseif (in_array($result->quiz_type, $testTypes) || stripos($shaklLower, 'test') !== false || stripos($result->quiz_type ?? '', 'test') !== false) {
+            } elseif ($manualYnTuri === 'test' || in_array($result->quiz_type, $testTypes) || stripos($shaklLower, 'test') !== false || stripos($result->quiz_type ?? '', 'test') !== false) {
                 $trainingTypeCode = 102;
                 $trainingTypeName = 'Yakuniy test';
             } else {
@@ -2066,7 +2070,10 @@ class QuizResultController extends Controller
         }
 
         // uploadToGrades ni chaqirish (endi eski yozuvlar tozalangan — qayta yuklanadi)
-        $request->merge(['skip_shakl_filter' => true]);
+        $request->merge([
+            'skip_shakl_filter' => true,
+            'yn_turi_overrides' => $request->input('yn_turi_overrides', []),
+        ]);
         return $this->uploadToGrades($request);
     }
 
@@ -2107,6 +2114,8 @@ class QuizResultController extends Controller
                     'grade_count' => 0,
                     'sample_grades' => [],
                     'available_subjects' => [],
+                    'quiz_type' => $r->quiz_type,
+                    'shakl' => $r->shakl,
                 ];
             }
             $groups[$key]['grade_count']++;
@@ -2155,6 +2164,21 @@ class QuizResultController extends Controller
                 'subject_code' => $s->subject_code,
                 'semester_name' => $s->semester_name,
             ])->toArray();
+        }
+        unset($g);
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        foreach ($groups as &$g) {
+            $qt = $g['quiz_type'] ?? '';
+            $sh = $g['shakl'] ?? '';
+            if (in_array($qt, $oskiTypes) || mb_strtolower($sh) === 'oski' || stripos($qt, 'OSKI') !== false) {
+                $g['yn_turi'] = 'oski';
+            } elseif (in_array($qt, $testTypes) || stripos(mb_strtolower($sh), 'test') !== false || stripos($qt, 'test') !== false) {
+                $g['yn_turi'] = 'test';
+            } else {
+                $g['yn_turi'] = null;
+            }
         }
         unset($g);
 

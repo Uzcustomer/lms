@@ -988,7 +988,7 @@
                 html += '<div class="reupload-modal-body">';
                 html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Dropdown — talabaning <strong>joriy semestriga biriktirilgan fanlar</strong>. Default — Moodledan kelgan fan, lekin to\'g\'ri fanga o\'zgartirib yuklash mumkin.</p>';
                 html += '<table class="reupload-modal-table">';
-                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>Yuklanadigan fan</th></tr></thead>';
+                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>YN turi</th><th>Yuklanadigan fan</th></tr></thead>';
                 html += '<tbody>';
                 groups.forEach(function(g, i) {
                     html += '<tr>';
@@ -997,6 +997,17 @@
                     html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
+                    html += '<td>';
+                    if (g.yn_turi) {
+                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;' + (g.yn_turi === 'oski' ? 'background:#dbeafe;color:#1e40af;' : 'background:#d1fae5;color:#065f46;') + '">' + (g.yn_turi === 'oski' ? 'OSKI' : 'Test') + '</span>';
+                    } else {
+                        html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;background:#fef2f2;">';
+                        html += '<option value="">Tanlang</option>';
+                        html += '<option value="oski">OSKI</option>';
+                        html += '<option value="test">Test</option>';
+                        html += '</select>';
+                    }
+                    html += '</td>';
                     html += '<td>';
                     if (g.available_subjects && g.available_subjects.length > 0) {
                         // Moodle ID semestr ro'yxatida bormi tekshirish
@@ -1044,12 +1055,21 @@
                     $('.reupload-subject-select').each(function() {
                         var key = $(this).data('key');
                         var newSubjectId = $(this).val();
-                        // Faqat o'zgartirilganlarini yuborish — backend default sifatida fan_id ni ishlatadi
                         var origFanId = key.split('_')[0];
                         if (String(newSubjectId) !== String(origFanId)) {
                             overrides[key] = newSubjectId;
                         }
                     });
+
+                    var ynTuriOverrides = {};
+                    var ynMissing = false;
+                    $('.reupload-yn-turi-select').each(function() {
+                        var key = $(this).data('key');
+                        var val = $(this).val();
+                        if (!val) { ynMissing = true; $(this).css('border-color', '#dc2626'); }
+                        else { ynTuriOverrides[key] = val; $(this).css('border-color', '#cbd5e1'); }
+                    });
+                    if (ynMissing) { alert('YN turini tanlang (OSKI yoki Test)'); return; }
 
                     var btn = $(this);
                     btn.prop('disabled', true).html('<span class="spinner-sm"></span> Yuklanmoqda...');
@@ -1058,7 +1078,7 @@
                         url: reuploadUrl, type: 'POST',
                         headers: { 'X-CSRF-TOKEN': csrfToken },
                         contentType: 'application/json',
-                        data: JSON.stringify({ ids: ids, subject_overrides: overrides }),
+                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides }),
                         success: function(data) {
                             closeReuploadModal();
                             var html = '';

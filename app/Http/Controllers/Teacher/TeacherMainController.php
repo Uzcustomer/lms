@@ -236,12 +236,16 @@ class TeacherMainController extends Controller
         if ($base64 && preg_match('/^data:image\/(\w+);base64,/', $base64, $matches)) {
             $ext = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
             $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $base64));
-            $filename = 'student-photos/' . date('Y-m') . '/' . $student->student_id_number . '_' . preg_replace('/[^a-zA-Z0-9]/', '_', $student->full_name) . '.jpg';
+            $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
+            $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
+            $filename = 'student-photos/' . date('Y-m') . '/' . $student->student_id_number . '_' . $safeName . '.jpg';
             \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imageData);
             $path = $filename;
         } elseif ($request->hasFile('photo')) {
             $request->validate(['photo' => 'required|image|max:5120']);
-            $fname = $student->student_id_number . '_' . preg_replace('/[^a-zA-Z0-9]/', '_', $student->full_name) . '.' . $request->file('photo')->getClientOriginalExtension();
+            $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
+            $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
+            $fname = $student->student_id_number . '_' . $safeName . '.jpg';
             $path = $request->file('photo')->storeAs('student-photos/' . date('Y-m'), $fname, 'public');
         } else {
             return back()->with('error', 'Rasm tanlanmadi');

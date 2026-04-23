@@ -247,6 +247,7 @@
                         <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
                         <span id="photo-btn-text">Rasmga olish</span>
                     </button>
+                    <div id="face-status" style="display:none;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;text-align:center;margin-bottom:8px;"></div>
                     {{-- Saqlash --}}
                     <button type="button" id="photo-save-btn" onclick="uploadPhoto()" style="display:none;width:100%;padding:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
                         Saqlash
@@ -260,12 +261,22 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <script>
         var MAX_SIZE = 1200;
         var currentStudentId = null;
         var currentBlob = null;
         var uploadActionUrl = '';
         var cameraStream = null;
+        var faceApiLoaded = false;
+
+        // Face-api.js modellarini yuklash
+        (function() {
+            if (typeof faceapi === 'undefined') return;
+            faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/')
+                .then(function() { faceApiLoaded = true; console.log('Face-api.js loaded'); })
+                .catch(function(e) { console.warn('Face-api models failed:', e); });
+        })();
 
         function stopCamera() {
             if (cameraStream) {
@@ -314,11 +325,73 @@
                 img.src = URL.createObjectURL(blob);
                 img.style.display = 'block';
                 document.getElementById('modal-no-photo').style.display = 'none';
-                document.getElementById('photo-save-btn').style.display = 'block';
-                document.getElementById('photo-retake-btn').style.display = 'block';
                 document.getElementById('photo-capture-btn').style.display = 'none';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
-                document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+
+                // Face detection tekshirish
+                if (faceApiLoaded) {
+                    document.getElementById('photo-save-btn').style.display = 'none';
+                    document.getElementById('photo-retake-btn').style.display = 'block';
+                    var faceStatus = document.getElementById('face-status');
+                    faceStatus.style.display = 'block';
+                    faceStatus.textContent = 'Yuz tekshirilmoqda...';
+                    faceStatus.style.color = '#64748b';
+                    faceStatus.style.background = '#f1f5f9';
+
+                    var tempImg = new Image();
+                    tempImg.onload = function() {
+                        faceapi.detectAllFaces(tempImg, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 }))
+                            .then(function(faces) {
+                                if (faces.length === 1) {
+                                    var face = faces[0].box;
+                                    var faceW = face.width / tempImg.width;
+                                    var faceH = face.height / tempImg.height;
+                                    var cx = (face.x + face.width / 2) / tempImg.width;
+                                    var cy = (face.y + face.height / 2) / tempImg.height;
+                                    var score = Math.round(faces[0].score * 100);
+
+                                    if (faceW < 0.12 || faceH < 0.1) {
+                                        faceStatus.textContent = 'Yuz juda kichik — yaqinroq turing';
+                                        faceStatus.style.color = '#dc2626';
+                                        faceStatus.style.background = '#fef2f2';
+                                        document.getElementById('modal-photo-frame').style.borderColor = '#fca5a5';
+                                    } else if (cx < 0.25 || cx > 0.75 || cy < 0.1 || cy > 0.6) {
+                                        faceStatus.textContent = 'Yuz markazda emas — to\'g\'rilab qayta tushiring';
+                                        faceStatus.style.color = '#d97706';
+                                        faceStatus.style.background = '#fffbeb';
+                                        document.getElementById('modal-photo-frame').style.borderColor = '#fde68a';
+                                        document.getElementById('photo-save-btn').style.display = 'block';
+                                    } else {
+                                        faceStatus.textContent = 'Yuz aniqlandi (' + score + '% aniqlik) — sifati yaxshi!';
+                                        faceStatus.style.color = '#059669';
+                                        faceStatus.style.background = '#ecfdf5';
+                                        document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+                                        document.getElementById('photo-save-btn').style.display = 'block';
+                                    }
+                                } else if (faces.length > 1) {
+                                    faceStatus.textContent = faces.length + ' ta yuz topildi — faqat 1 kishi bo\'lishi kerak';
+                                    faceStatus.style.color = '#dc2626';
+                                    faceStatus.style.background = '#fef2f2';
+                                    document.getElementById('modal-photo-frame').style.borderColor = '#fca5a5';
+                                } else {
+                                    faceStatus.textContent = 'Yuz topilmadi — qayta tushiring';
+                                    faceStatus.style.color = '#dc2626';
+                                    faceStatus.style.background = '#fef2f2';
+                                    document.getElementById('modal-photo-frame').style.borderColor = '#fca5a5';
+                                }
+                            })
+                            .catch(function() {
+                                faceStatus.textContent = 'Tekshirish xatosi';
+                                faceStatus.style.color = '#64748b';
+                                document.getElementById('photo-save-btn').style.display = 'block';
+                            });
+                    };
+                    tempImg.src = img.src;
+                } else {
+                    document.getElementById('photo-save-btn').style.display = 'block';
+                    document.getElementById('photo-retake-btn').style.display = 'block';
+                    document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+                }
             }, 'image/jpeg', 0.92);
         }
 
@@ -365,6 +438,7 @@
             }
             document.getElementById('photo-save-btn').style.display = 'none';
             document.getElementById('photo-progress').style.display = 'none';
+            document.getElementById('face-status').style.display = 'none';
 
             document.getElementById('photo-modal').style.display = 'flex';
         }

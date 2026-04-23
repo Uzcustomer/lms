@@ -217,7 +217,35 @@ class TeacherMainController extends Controller
                 ->get();
         }
 
-        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory'));
+        $photo = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)
+            ->latest()
+            ->first();
+
+        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'photo'));
+    }
+
+    public function uploadStudentPhoto(Request $request, Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403);
+        }
+
+        $request->validate(['photo' => 'required|image|max:5120']);
+
+        $path = $request->file('photo')->store('student-photos/' . date('Y-m'), 'public');
+
+        \App\Models\StudentPhoto::create([
+            'student_id_number' => $student->student_id_number,
+            'full_name' => $student->full_name,
+            'group_name' => $student->group_name,
+            'semester_name' => $student->semester_name,
+            'uploaded_by' => $teacher->full_name ?? $teacher->short_name ?? 'Tyutor',
+            'photo_path' => $path,
+        ]);
+
+        return back()->with('success', 'Rasm yuklandi');
     }
 
     private function studentsAdmin(Request $request)

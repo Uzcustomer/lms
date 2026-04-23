@@ -232,37 +232,45 @@ class TeacherMainController extends Controller
             abort(403);
         }
 
-        $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
-        $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
-        $fname = $student->student_id_number . '_' . $safeName . '.jpg';
-        $dir = public_path('uploads/student-photos/' . date('Y-m'));
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        try {
+            $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
+            $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
+            $fname = $student->student_id_number . '_' . $safeName . '.jpg';
+            $dir = public_path('uploads/student-photos/' . date('Y-m'));
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $fullPath = $dir . '/' . $fname;
+            $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
+
+            $base64 = $request->input('photo_base64');
+            if ($base64 && preg_match('/^data:image\/\w+;base64,/', $base64)) {
+                $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $base64));
+                if (!$imageData) {
+                    return back()->with('error', 'Rasm decode qilinmadi');
+                }
+                file_put_contents($fullPath, $imageData);
+            } elseif ($request->hasFile('photo')) {
+                $request->validate(['photo' => 'required|image|max:5120']);
+                $request->file('photo')->move($dir, $fname);
+            } else {
+                return back()->with('error', 'Rasm tanlanmadi');
+            }
+
+            \App\Models\StudentPhoto::create([
+                'student_id_number' => $student->student_id_number,
+                'full_name' => $student->full_name,
+                'group_name' => $student->group_name,
+                'semester_name' => $student->semester_name,
+                'uploaded_by' => $teacher->full_name ?? $teacher->short_name ?? 'Tyutor',
+                'photo_path' => $path,
+            ]);
+
+            return back()->with('success', 'Rasm yuklandi');
+        } catch (\Throwable $e) {
+            \Log::error('Student photo upload error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return back()->with('error', 'Xatolik: ' . $e->getMessage());
         }
-        $fullPath = $dir . '/' . $fname;
-        $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
-
-        $base64 = $request->input('photo_base64');
-        if ($base64 && preg_match('/^data:image\/\w+;base64,/', $base64)) {
-            $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $base64));
-            file_put_contents($fullPath, $imageData);
-        } elseif ($request->hasFile('photo')) {
-            $request->validate(['photo' => 'required|image|max:5120']);
-            $request->file('photo')->move($dir, $fname);
-        } else {
-            return back()->with('error', 'Rasm tanlanmadi');
-        }
-
-        \App\Models\StudentPhoto::create([
-            'student_id_number' => $student->student_id_number,
-            'full_name' => $student->full_name,
-            'group_name' => $student->group_name,
-            'semester_name' => $student->semester_name,
-            'uploaded_by' => $teacher->full_name ?? $teacher->short_name ?? 'Tyutor',
-            'photo_path' => $path,
-        ]);
-
-        return back()->with('success', 'Rasm yuklandi');
     }
 
     public function deleteStudentPhoto(Request $request, Student $student)

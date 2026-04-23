@@ -2060,7 +2060,7 @@
                                                 }
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
-                                            $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                            $isAdminMt = (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false) && \App\Models\Setting::get('feature_admin_mt_grade', '0') === '1';
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
 
                                             // Sababli ariza orqali MT bahosi: talaba uchun tasdiqlangan

@@ -17,6 +17,10 @@ class FeatureToggleController extends Controller
             'label' => 'Sababli ariza o\'chirish',
             'description' => 'Sababli arizalar ro\'yxatida O\'chirish tugmasini ko\'rsatish',
         ],
+        'admin_mt_grade' => [
+            'label' => 'Admin/Superadmin MT baho qo\'yish',
+            'description' => 'Jurnalda admin va superadmin MT baholarini qo\'ya olish imkoniyati',
+        ],
     ];
 
     public function index()

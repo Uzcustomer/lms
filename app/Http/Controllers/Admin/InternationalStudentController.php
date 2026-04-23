@@ -698,7 +698,7 @@ class InternationalStudentController extends Controller
             $this->addField($section, "18. Moliya vazirligidan o'tgan yat raqami va muddati: ", "yo'q", true);
             $this->addField($section, "19. Hujjatlarni rasmiylashtirish va topshirishga ma'sul bo'lgan shaxsning F.I.SH, passport ma'lumotlari hamda telefon raqami: ", "Temirov Shukrullo Xonimqulovich AC 2275461  +998995721774", true);
 
-            $section->addTextBreak(1);
+            $section->addTextBreak(3);
             $st = $section->addTable(); $st->addRow();
             $st->addCell(4500)->addText('Direktor', ['bold' => true, 'size' => 13]);
             $st->addCell(4500)->addText('F.A.Otamuradov', ['bold' => true, 'size' => 13], ['alignment' => Jc::END]);

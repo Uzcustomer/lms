@@ -147,9 +147,16 @@
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div class="student-list">
                         @forelse($students as $index => $student)
-                            <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}">
+                            @php
+                                $studentPhoto = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
+                            @endphp
+                            <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}"
+                                 onclick="openPhotoModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}', '{{ $student->group_name }}', '{{ $studentPhoto ? asset('storage/' . $studentPhoto->photo_path) : '' }}')"
+                                 style="cursor:pointer;">
                                 <div style="font-size:12px;color:#94a3b8;width:24px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
-                                @if($student->image)
+                                @if($studentPhoto)
+                                    <div class="student-avatar"><img src="{{ asset('storage/' . $studentPhoto->photo_path) }}" alt=""></div>
+                                @elseif($student->image)
                                     <div class="student-avatar"><img src="{{ $student->image }}" alt=""></div>
                                 @else
                                     <div class="student-avatar">{{ mb_substr($student->full_name, 0, 1) }}</div>
@@ -167,7 +174,9 @@
                                             {{ number_format($student->avg_gpa, 2) }}
                                         </div>
                                     @endif
-                                    @if($student->student_status_code == '11' || $student->student_status_name == 'Faol')
+                                    @if($studentPhoto)
+                                        <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
+                                    @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Faol</span>
                                     @elseif($student->student_status_name)
                                         <span class="student-status" style="background:#fef3c7;color:#92400e;">{{ $student->student_status_name }}</span>
@@ -191,7 +200,89 @@
         @endif
     </div>
 
+    {{-- Photo Modal --}}
+    <div id="photo-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                    <div id="modal-name" style="font-size:15px;font-weight:700;color:#1e293b;"></div>
+                    <div id="modal-info" style="font-size:12px;color:#64748b;margin-top:2px;"></div>
+                </div>
+                <button onclick="closePhotoModal()" style="width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:18px;color:#64748b;">&times;</button>
+            </div>
+            <div style="padding:20px;text-align:center;">
+                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f8fafc;">
+                    <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;">
+                        <svg style="width:48px;height:48px;margin:0 auto 8px;color:#cbd5e1;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                        Rasm yuklanmagan
+                    </div>
+                    <img id="modal-photo-img" style="width:100%;height:100%;object-fit:cover;display:none;" alt="">
+                </div>
+            </div>
+            <div style="padding:0 20px 20px;">
+                <form id="photo-upload-form" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <input type="file" id="photo-input" name="photo" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)">
+                    <button type="button" onclick="document.getElementById('photo-input').click()"
+                            style="width:100%;padding:12px;background:linear-gradient(135deg,#2b5ea7,#3b82f6);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+                        <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                        Rasmga olish
+                    </button>
+                    <button type="submit" id="photo-save-btn" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
+                        Saqlash
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
+        function openPhotoModal(studentId, name, idNumber, groupName, photoUrl) {
+            document.getElementById('modal-name').textContent = name;
+            document.getElementById('modal-info').textContent = idNumber + ' · ' + groupName;
+            document.getElementById('photo-upload-form').action = '/teacher/students/' + studentId + '/upload-photo';
+
+            var img = document.getElementById('modal-photo-img');
+            var noPhoto = document.getElementById('modal-no-photo');
+            if (photoUrl) {
+                img.src = photoUrl;
+                img.style.display = 'block';
+                noPhoto.style.display = 'none';
+            } else {
+                img.style.display = 'none';
+                noPhoto.style.display = 'block';
+            }
+            document.getElementById('photo-save-btn').style.display = 'none';
+            document.getElementById('photo-input').value = '';
+
+            var modal = document.getElementById('photo-modal');
+            modal.style.display = 'flex';
+        }
+
+        function closePhotoModal() {
+            document.getElementById('photo-modal').style.display = 'none';
+        }
+
+        function previewPhoto(input) {
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var img = document.getElementById('modal-photo-img');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('modal-no-photo').style.display = 'none';
+                    document.getElementById('photo-save-btn').style.display = 'block';
+                    document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
+                    document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        document.getElementById('photo-modal').addEventListener('click', function(e) {
+            if (e.target === this) closePhotoModal();
+        });
+
         function filterStudents(query) {
             query = query.toLowerCase().replace(/[\/\-\s]/g, '');
             document.querySelectorAll('.student-item').forEach(function(el) {

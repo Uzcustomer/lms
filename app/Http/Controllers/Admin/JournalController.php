@@ -822,18 +822,22 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id);
 
         if ($hasSubjectAssignments) {
-            // student_subjects da ma'lumot bor — fanga biriktirilgan talabalarni ko'rsatish
+            // student_subjects da ma'lumot bor — faqat fanga biriktirilgan talabalarni ko'rsatish
             $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
-                    // Fanga biriktirilgan talabalar (status cheklovisiz)
-                    ->whereExists(function ($sub) use ($subjectId, $semesterCode) {
-                        $sub->select(DB::raw(1))
-                            ->from('student_subjects')
-                            ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
-                            ->where('student_subjects.subject_id', $subjectId)
-                            ->where('student_subjects.semester_id', $semesterCode);
+                    ->where(function ($q) use ($subjectId, $semesterCode) {
+                        $q->where(function ($q2) {
+                            $q2->where('student_status_code', '!=', '60')
+                               ->orWhereNull('student_status_code');
+                        })
+                        ->whereExists(function ($sub) use ($subjectId, $semesterCode) {
+                            $sub->select(DB::raw(1))
+                                ->from('student_subjects')
+                                ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
+                                ->where('student_subjects.subject_id', $subjectId)
+                                ->where('student_subjects.semester_id', $semesterCode);
+                        });
                     })
-                    // Bahosi bo'lgan talabalar ham ko'rsatiladi
                     ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
                         $sub->select(DB::raw(1))
                             ->from('student_grades')
@@ -844,7 +848,23 @@ class JournalController extends Controller
                     });
             });
         } else {
-            // student_subjects da ma'lumot yo'q — guruhdagi barcha talabalar ko'rsatiladi
+            // student_subjects da ma'lumot yo'q — eski logika
+            $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
+                $query
+                    ->where(function ($q) {
+                        $q->where('student_status_code', '!=', '60')
+                          ->orWhereNull('student_status_code');
+                    })
+                    ->orWhere('semester_code', $semesterCode)
+                    ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
+                        $sub->select(DB::raw(1))
+                            ->from('student_grades')
+                            ->whereColumn('student_grades.student_hemis_id', 'students.hemis_id')
+                            ->where('student_grades.subject_id', $subjectId)
+                            ->where('student_grades.semester_code', $semesterCode)
+                            ->whereNull('student_grades.deleted_at');
+                    });
+            });
         }
 
         $students = $studentsQuery

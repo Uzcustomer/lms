@@ -204,37 +204,49 @@
                 <button onclick="closePhotoModal()" style="width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:18px;color:#64748b;">&times;</button>
             </div>
             <div style="padding:20px;text-align:center;">
-                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f8fafc;position:relative;">
-                    {{-- Sariq qolip (guide overlay) --}}
+                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000;position:relative;">
+                    {{-- Sariq qolip --}}
                     <svg id="photo-guide" viewBox="0 0 300 400" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;">
-                        <ellipse cx="150" cy="140" rx="65" ry="80" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" opacity="0.8"/>
-                        <path d="M85 220 Q85 280 60 320 Q55 330 70 335 L150 360 L230 335 Q245 330 240 320 Q215 280 215 220" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" opacity="0.6"/>
-                        <line x1="150" y1="30" x2="150" y2="60" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
-                        <line x1="150" y1="370" x2="150" y2="390" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
-                        <text x="150" y="395" text-anchor="middle" font-size="11" fill="#f59e0b" opacity="0.7" font-weight="600">Bosh va yelkalarni moslang</text>
+                        <ellipse cx="150" cy="130" rx="60" ry="75" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="8 4" opacity="0.9"/>
+                        <path d="M90 205 Q90 260 68 300 Q63 310 76 314 L150 340 L224 314 Q237 310 232 300 Q210 260 210 205" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" opacity="0.7"/>
+                        <text x="150" y="380" text-anchor="middle" font-size="12" fill="#fbbf24" font-weight="600">Moslang va tushiring</text>
                     </svg>
-                    <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;">
-                        <svg style="width:48px;height:48px;margin:0 auto 8px;color:#cbd5e1;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                    {{-- Live kamera --}}
+                    <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;transform:scaleX(-1);"></video>
+                    {{-- Placeholder --}}
+                    <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;z-index:1;">
+                        <svg style="width:48px;height:48px;margin:0 auto 8px;color:#475569;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
                         Rasm yuklanmagan
                     </div>
-                    <img id="modal-photo-img" style="width:100%;height:100%;object-fit:cover;display:none;" alt="">
+                    {{-- Tushirilgan rasm --}}
+                    <img id="modal-photo-img" style="width:100%;height:100%;object-fit:cover;display:none;z-index:1;" alt="">
                 </div>
             </div>
             <div style="padding:0 20px 20px;">
-                    <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)">
                     <div id="photo-delete-wrap" style="display:none;margin-bottom:8px;">
                         <button type="button" onclick="deletePhoto()"
                                 style="width:100%;padding:10px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:600;border:1px solid #fecaca;border-radius:10px;cursor:pointer;">
                             O'chirish
                         </button>
                     </div>
-                    <button type="button" id="photo-capture-btn" onclick="document.getElementById('photo-input').click()"
+                    {{-- Kamera ochish --}}
+                    <button type="button" id="photo-capture-btn" onclick="startCamera()"
                             style="width:100%;padding:12px;background:linear-gradient(135deg,#2b5ea7,#3b82f6);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
                         <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
                         <span id="photo-btn-text">Rasmga olish</span>
                     </button>
+                    {{-- Tushirish (kamera ochiq) --}}
+                    <button type="button" id="photo-snap-btn" onclick="snapPhoto()" style="display:none;width:100%;padding:14px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-size:15px;font-weight:700;border:none;border-radius:50px;cursor:pointer;display:none;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(220,38,38,0.4);">
+                        <svg style="width:22px;height:22px;" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
+                        Tushirish
+                    </button>
+                    {{-- Saqlash --}}
                     <button type="button" id="photo-save-btn" onclick="uploadPhoto()" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
                         Saqlash
+                    </button>
+                    {{-- Qayta tushirish --}}
+                    <button type="button" id="photo-retake-btn" onclick="startCamera()" style="display:none;width:100%;padding:10px;margin-top:6px;background:#f1f5f9;color:#475569;font-size:13px;font-weight:600;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer;">
+                        Qayta tushirish
                     </button>
                     <div id="photo-progress" style="display:none;margin-top:8px;text-align:center;font-size:12px;color:#64748b;">Yuklanmoqda...</div>
             </div>
@@ -246,6 +258,71 @@
         var currentStudentId = null;
         var currentBlob = null;
         var uploadActionUrl = '';
+        var cameraStream = null;
+
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(function(t) { t.stop(); });
+                cameraStream = null;
+            }
+            document.getElementById('camera-video').style.display = 'none';
+        }
+
+        function startCamera() {
+            var video = document.getElementById('camera-video');
+            var img = document.getElementById('modal-photo-img');
+            var noPhoto = document.getElementById('modal-no-photo');
+            var guide = document.getElementById('photo-guide');
+
+            img.style.display = 'none';
+            noPhoto.style.display = 'none';
+            guide.style.display = 'block';
+            guide.style.opacity = '1';
+            document.getElementById('photo-save-btn').style.display = 'none';
+            document.getElementById('photo-retake-btn').style.display = 'none';
+            document.getElementById('photo-capture-btn').style.display = 'none';
+            document.getElementById('modal-photo-frame').style.background = '#000';
+
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 800 }, height: { ideal: 1067 } }, audio: false })
+                .then(function(stream) {
+                    cameraStream = stream;
+                    video.srcObject = stream;
+                    video.style.display = 'block';
+                    video.style.transform = '';
+                    document.getElementById('photo-snap-btn').style.display = 'flex';
+                })
+                .catch(function(err) {
+                    alert('Kamera ochilmadi: ' + err.message);
+                    document.getElementById('photo-capture-btn').style.display = 'flex';
+                });
+        }
+
+        function snapPhoto() {
+            var video = document.getElementById('camera-video');
+            var canvas = document.createElement('canvas');
+            var w = video.videoWidth, h = video.videoHeight;
+            if (w > MAX_SIZE || h > MAX_SIZE) {
+                if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+                else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+            }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+
+            stopCamera();
+            document.getElementById('photo-snap-btn').style.display = 'none';
+
+            canvas.toBlob(function(blob) {
+                currentBlob = blob;
+                var img = document.getElementById('modal-photo-img');
+                img.src = URL.createObjectURL(blob);
+                img.style.display = 'block';
+                document.getElementById('photo-guide').style.opacity = '0.4';
+                document.getElementById('photo-save-btn').style.display = 'block';
+                document.getElementById('photo-retake-btn').style.display = 'block';
+                document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
+                document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+            }, 'image/jpeg', 0.8);
+        }
 
         function deletePhoto() {
             if (!confirm('Rasmni o\'chirmoqchimisiz?')) return;
@@ -264,10 +341,16 @@
             document.getElementById('modal-name').textContent = name;
             document.getElementById('modal-info').textContent = idNumber + ' · ' + groupName;
 
+            stopCamera();
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
             var frame = document.getElementById('modal-photo-frame');
             var guide = document.getElementById('photo-guide');
+
+            document.getElementById('photo-snap-btn').style.display = 'none';
+            document.getElementById('photo-retake-btn').style.display = 'none';
+            frame.style.background = '#000';
+
             if (photoUrl) {
                 img.src = photoUrl;
                 img.style.display = 'block';
@@ -275,60 +358,30 @@
                 guide.style.display = 'none';
                 frame.style.borderStyle = 'solid';
                 frame.style.borderColor = '#3b82f6';
-                document.getElementById('photo-btn-text').textContent = 'Qayta yuklash';
+                document.getElementById('photo-btn-text').textContent = 'Qayta tushirish';
+                document.getElementById('photo-capture-btn').style.display = 'flex';
                 document.getElementById('photo-delete-wrap').style.display = 'block';
             } else {
                 img.style.display = 'none';
                 noPhoto.style.display = 'block';
                 guide.style.display = 'block';
+                guide.style.opacity = '1';
                 frame.style.borderStyle = 'dashed';
                 frame.style.borderColor = '#cbd5e1';
-                document.getElementById('photo-btn-text').textContent = 'Rasmga olish';
+                frame.style.background = '#1e293b';
+                document.getElementById('photo-btn-text').textContent = 'Kamerani ochish';
+                document.getElementById('photo-capture-btn').style.display = 'flex';
                 document.getElementById('photo-delete-wrap').style.display = 'none';
             }
             document.getElementById('photo-save-btn').style.display = 'none';
             document.getElementById('photo-progress').style.display = 'none';
-            document.getElementById('photo-input').value = '';
 
             document.getElementById('photo-modal').style.display = 'flex';
         }
 
         function closePhotoModal() {
+            stopCamera();
             document.getElementById('photo-modal').style.display = 'none';
-        }
-
-        function previewPhoto(input) {
-            if (!input.files || !input.files[0]) return;
-            var file = input.files[0];
-            var reader = new FileReader();
-            reader.onload = function(e) {
-                var img = new Image();
-                img.onload = function() {
-                    var canvas = document.createElement('canvas');
-                    var w = img.width, h = img.height;
-                    if (w > MAX_SIZE || h > MAX_SIZE) {
-                        if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
-                        else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
-                    }
-                    canvas.width = w; canvas.height = h;
-                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    canvas.toBlob(function(blob) {
-                        currentBlob = blob;
-                        var previewImg = document.getElementById('modal-photo-img');
-                        previewImg.src = URL.createObjectURL(blob);
-                        previewImg.style.display = 'block';
-                        document.getElementById('modal-no-photo').style.display = 'none';
-                        document.getElementById('photo-guide').style.display = 'block';
-                        document.getElementById('photo-guide').style.opacity = '0.5';
-                        document.getElementById('photo-save-btn').style.display = 'block';
-                        document.getElementById('photo-btn-text').textContent = 'Boshqa rasm';
-                        document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
-                        document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
-                    }, 'image/jpeg', 0.8);
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
         }
 
         function uploadPhoto() {
@@ -336,6 +389,7 @@
             var btn = document.getElementById('photo-save-btn');
             var prog = document.getElementById('photo-progress');
             btn.style.display = 'none';
+            document.getElementById('photo-retake-btn').style.display = 'none';
             prog.style.display = 'block';
             prog.textContent = 'Yuklanmoqda...';
 

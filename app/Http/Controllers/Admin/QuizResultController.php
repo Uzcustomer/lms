@@ -1690,8 +1690,8 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Faqat 1-urinish yuklanadi (OSKI/YN test)
-            if ($result->shakl !== '1-urinish') {
+            // Faqat 1-urinish yuklanadi (OSKI/YN test) — qayta yuklashda bu filtr o'tkazib yuboriladi
+            if (!$request->input('skip_shakl_filter') && $result->shakl !== '1-urinish') {
                 $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$result->shakl})";
                 $errors[] = $rowInfo;
                 continue;
@@ -2065,6 +2065,7 @@ class QuizResultController extends Controller
         }
 
         // uploadToGrades ni chaqirish (endi eski yozuvlar tozalangan — qayta yuklanadi)
+        $request->merge(['skip_shakl_filter' => true]);
         return $this->uploadToGrades($request);
     }
 

@@ -826,24 +826,18 @@ class JournalController extends Controller
             ->where('group_id', $group->group_hemis_id);
 
         if ($hasSubjectAssignments) {
-            // student_subjects da ma'lumot bor — faqat fanga biriktirilgan talabalarni ko'rsatish
+            // student_subjects da ma'lumot bor — fanga biriktirilgan talabalarni ko'rsatish
             $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
-                    // Fanga biriktirilgan faol talabalar
-                    ->where(function ($q) use ($subjectId, $semesterCode) {
-                        $q->where(function ($q2) {
-                            $q2->where('student_status_code', '!=', '60')
-                               ->orWhereNull('student_status_code');
-                        })
-                        ->whereExists(function ($sub) use ($subjectId, $semesterCode) {
-                            $sub->select(DB::raw(1))
-                                ->from('student_subjects')
-                                ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
-                                ->where('student_subjects.subject_id', $subjectId)
-                                ->where('student_subjects.semester_id', $semesterCode);
-                        });
+                    // Fanga biriktirilgan talabalar (status cheklovisiz)
+                    ->whereExists(function ($sub) use ($subjectId, $semesterCode) {
+                        $sub->select(DB::raw(1))
+                            ->from('student_subjects')
+                            ->whereColumn('student_subjects.student_hemis_id', 'students.hemis_id')
+                            ->where('student_subjects.subject_id', $subjectId)
+                            ->where('student_subjects.semester_id', $semesterCode);
                     })
-                    // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
+                    // Bahosi bo'lgan talabalar ham ko'rsatiladi
                     ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
                         $sub->select(DB::raw(1))
                             ->from('student_grades')

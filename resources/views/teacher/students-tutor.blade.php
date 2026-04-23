@@ -265,7 +265,7 @@
     </div>
 
     <script>
-        var MAX_SIZE = 800;
+        var MAX_SIZE = 1200;
         var currentStudentId = null;
         var currentBlob = null;
         var uploadActionUrl = '';
@@ -308,12 +308,12 @@
             snapBtn.style.cursor = 'not-allowed';
             document.getElementById('snap-btn-text').textContent = 'Yuzni qolipga moslang';
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 800 }, height: { ideal: 1067 } }, audio: false })
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 853 } }, audio: false })
                 .then(function(stream) {
                     cameraStream = stream;
                     video.srcObject = stream;
                     video.style.display = 'block';
-                    video.style.transform = '';
+                    video.style.transform = 'scaleX(-1)';
                     snapBtn.style.display = 'flex';
 
                     if (faceCheckInterval) clearInterval(faceCheckInterval);
@@ -389,7 +389,8 @@
                 else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
             }
             canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, w, h);
 
             stopCamera();
             document.getElementById('photo-snap-btn').style.display = 'none';
@@ -404,7 +405,7 @@
                 document.getElementById('photo-retake-btn').style.display = 'block';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                 document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
-            }, 'image/jpeg', 0.8);
+            }, 'image/jpeg', 0.92);
         }
 
         function deletePhoto() {

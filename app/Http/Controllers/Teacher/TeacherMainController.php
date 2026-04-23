@@ -232,9 +232,19 @@ class TeacherMainController extends Controller
             abort(403);
         }
 
-        $request->validate(['photo' => 'required|image|max:5120']);
-
-        $path = $request->file('photo')->store('student-photos/' . date('Y-m'), 'public');
+        $base64 = $request->input('photo_base64');
+        if ($base64 && preg_match('/^data:image\/(\w+);base64,/', $base64, $matches)) {
+            $ext = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
+            $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $base64));
+            $filename = 'student-photos/' . date('Y-m') . '/' . uniqid() . '.' . $ext;
+            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imageData);
+            $path = $filename;
+        } elseif ($request->hasFile('photo')) {
+            $request->validate(['photo' => 'required|image|max:5120']);
+            $path = $request->file('photo')->store('student-photos/' . date('Y-m'), 'public');
+        } else {
+            return back()->with('error', 'Rasm tanlanmadi');
+        }
 
         \App\Models\StudentPhoto::create([
             'student_id_number' => $student->student_id_number,

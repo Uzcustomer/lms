@@ -2088,12 +2088,12 @@
                                                 && (!$mtSababliDeadlinePassed || $isAdminMt);
 
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? !$mtSababliCanGrade
+                                                ? ($isAdminMt ? false : !$mtSababliCanGrade)
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
                                             // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
-                                            if ($isYnSubmittedMt && !$mtSababliCanGrade) {
+                                            if ($isYnSubmittedMt && !$mtSababliCanGrade && !$isAdminMt) {
                                                 $canRegrade = false;
                                             }
 

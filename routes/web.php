@@ -977,6 +977,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');
         Route::get('/students/{student}', [TeacherMainController::class, 'showStudent'])->name('students.show');
         Route::post('/students/{student}/upload-photo', [TeacherMainController::class, 'uploadStudentPhoto'])->name('students.upload-photo');
+        Route::delete('/students/{student}/delete-photo', [TeacherMainController::class, 'deleteStudentPhoto'])->name('students.delete-photo');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
 
         // Tyutor hisobotlari

@@ -236,12 +236,13 @@ class TeacherMainController extends Controller
         if ($base64 && preg_match('/^data:image\/(\w+);base64,/', $base64, $matches)) {
             $ext = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
             $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $base64));
-            $filename = 'student-photos/' . date('Y-m') . '/' . uniqid() . '.' . $ext;
+            $filename = 'student-photos/' . date('Y-m') . '/' . $student->student_id_number . '_' . preg_replace('/[^a-zA-Z0-9]/', '_', $student->full_name) . '.jpg';
             \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imageData);
             $path = $filename;
         } elseif ($request->hasFile('photo')) {
             $request->validate(['photo' => 'required|image|max:5120']);
-            $path = $request->file('photo')->store('student-photos/' . date('Y-m'), 'public');
+            $fname = $student->student_id_number . '_' . preg_replace('/[^a-zA-Z0-9]/', '_', $student->full_name) . '.' . $request->file('photo')->getClientOriginalExtension();
+            $path = $request->file('photo')->storeAs('student-photos/' . date('Y-m'), $fname, 'public');
         } else {
             return back()->with('error', 'Rasm tanlanmadi');
         }
@@ -256,6 +257,23 @@ class TeacherMainController extends Controller
         ]);
 
         return back()->with('success', 'Rasm yuklandi');
+    }
+
+    public function deleteStudentPhoto(Request $request, Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403);
+        }
+
+        $photo = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
+        if ($photo) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($photo->photo_path);
+            $photo->delete();
+        }
+
+        return back()->with('success', 'Rasm o\'chirildi');
     }
 
     private function studentsAdmin(Request $request)

@@ -217,6 +217,12 @@
                     @csrf
                     <input type="file" id="photo-input" name="photo" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)">
                     <input type="hidden" id="photo-compressed" name="photo_base64" value="">
+                    <div id="photo-delete-wrap" style="display:none;margin-bottom:8px;">
+                        <button type="button" onclick="deletePhoto()"
+                                style="width:100%;padding:10px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:600;border:1px solid #fecaca;border-radius:10px;cursor:pointer;">
+                            O'chirish
+                        </button>
+                    </div>
                     <button type="button" id="photo-capture-btn" onclick="document.getElementById('photo-input').click()"
                             style="width:100%;padding:12px;background:linear-gradient(135deg,#2b5ea7,#3b82f6);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
                         <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
@@ -234,7 +240,20 @@
         var MAX_SIZE = 1024; // max width/height px
         var MAX_BYTES = 1024 * 1024; // 1MB
 
+        var currentStudentId = null;
+
+        function deletePhoto() {
+            if (!confirm('Rasmni o\'chirmoqchimisiz?')) return;
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/teacher/students/' + currentStudentId + '/delete-photo';
+            form.innerHTML = '@csrf @method("DELETE")';
+            document.body.appendChild(form);
+            form.submit();
+        }
+
         function openPhotoModal(studentId, name, idNumber, groupName, photoUrl) {
+            currentStudentId = studentId;
             document.getElementById('modal-name').textContent = name;
             document.getElementById('modal-info').textContent = idNumber + ' · ' + groupName;
             document.getElementById('photo-upload-form').action = '/teacher/students/' + studentId + '/upload-photo';
@@ -249,12 +268,14 @@
                 frame.style.borderStyle = 'solid';
                 frame.style.borderColor = '#3b82f6';
                 document.getElementById('photo-btn-text').textContent = 'Qayta yuklash';
+                document.getElementById('photo-delete-wrap').style.display = 'block';
             } else {
                 img.style.display = 'none';
                 noPhoto.style.display = 'block';
                 frame.style.borderStyle = 'dashed';
                 frame.style.borderColor = '#cbd5e1';
                 document.getElementById('photo-btn-text').textContent = 'Rasmga olish';
+                document.getElementById('photo-delete-wrap').style.display = 'none';
             }
             document.getElementById('photo-save-btn').style.display = 'none';
             document.getElementById('photo-input').value = '';

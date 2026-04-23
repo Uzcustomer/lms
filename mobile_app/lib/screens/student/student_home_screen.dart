@@ -7,6 +7,7 @@ import 'library_webview_screen.dart';
 import 'gpa_calculator_screen.dart';
 import 'student_rating_screen.dart';
 import 'chat_contacts_screen.dart';
+import 'attendance_stats_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
@@ -247,6 +248,20 @@ class _UsefulModalState extends State<_UsefulModal>
             context,
             MaterialPageRoute(
                 builder: (_) => const ExamScheduleScreen()),
+          );
+        },
+      ),
+      _ModalServiceItem(
+        icon: Icons.bar_chart_rounded,
+        title: 'Davomat statistikasi',
+        subtitle: 'Fanlardagi davomat va baholar jadvali',
+        color: const Color(0xFF43A047),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const AttendanceStatsScreen()),
           );
         },
       ),

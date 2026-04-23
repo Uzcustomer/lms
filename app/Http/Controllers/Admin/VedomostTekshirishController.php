@@ -473,7 +473,11 @@ class VedomostTekshirishController extends Controller
 
             $students = Student::where('group_id', $groupHemisId)->orderBy('full_name')->get();
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
-            if (empty($studentHemisIds)) continue;
+            if (empty($studentHemisIds)) {
+                $students = Student::where('group_id', $group->group_hemis_id)->orderBy('full_name')->get();
+                $studentHemisIds = $students->pluck('hemis_id')->toArray();
+                if (empty($studentHemisIds)) continue;
+            }
 
             // Education year (schedules dan — hisobot qilinayotgan joriy yil)
             $scheduleYearRow = DB::table('schedules')

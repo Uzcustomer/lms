@@ -28,10 +28,10 @@
         }
         .back-btn:hover { background: #dbeafe; }
 
-        .student-list { margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); }
+        .student-list { margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px; }
         .student-item {
             display: flex; align-items: center; gap: 10px; padding: 12px 14px;
-            background: #fff; border: 1px solid #f1f5f9; transition: all 0.15s; text-decoration: none;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; transition: all 0.15s;
         }
         .student-item:hover { background: #f0f7ff; }
         .student-avatar {
@@ -70,8 +70,9 @@
             .group-name { font-size: 13px; }
             .group-count { font-size: 11px; }
             .group-badge { font-size: 11px; padding: 3px 8px; }
-            .student-list { grid-template-columns: 1fr; }
-            .student-item { padding: 8px 10px; gap: 8px; }
+            .tutor-container { padding: 0; }
+            .student-list { grid-template-columns: 1fr; gap: 4px; padding: 4px; }
+            .student-item { padding: 6px 8px; gap: 6px; border-radius: 8px; }
             .student-avatar, .student-avatar img { width: 28px; height: 28px; font-size: 11px; }
             .student-name { font-size: 12px; }
             .student-id { font-size: 9px; }
@@ -146,7 +147,7 @@
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div class="student-list">
                         @forelse($students as $index => $student)
-                            <a href="{{ route('teacher.students.show', $student) }}" class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}">
+                            <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}">
                                 <div style="font-size:12px;color:#94a3b8;width:24px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
                                 @if($student->image)
                                     <div class="student-avatar"><img src="{{ $student->image }}" alt=""></div>
@@ -172,7 +173,7 @@
                                         <span class="student-status" style="background:#fef3c7;color:#92400e;">{{ $student->student_status_name }}</span>
                                     @endif
                                 </div>
-                            </a>
+                            </div>
                         @empty
                             <div class="empty-state">
                                 <p style="font-size:14px;">Bu guruhda talabalar topilmadi</p>

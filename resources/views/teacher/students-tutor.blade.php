@@ -28,27 +28,24 @@
         }
         .back-btn:hover { background: #dbeafe; }
 
-        .student-list { margin-top: 8px; }
+        .student-list { margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); }
         .student-item {
-            display: flex; align-items: center; gap: 12px; padding: 14px 16px;
-            background: #fff; border-bottom: 1px solid #f1f5f9; transition: all 0.15s;
+            display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+            background: #fff; border: 1px solid #f1f5f9; transition: all 0.15s; text-decoration: none;
         }
-        .student-item:first-child { border-radius: 12px 12px 0 0; }
-        .student-item:last-child { border-bottom: none; border-radius: 0 0 12px 12px; }
-        .student-item:only-child { border-radius: 12px; }
-        .student-item:hover { background: #f8fafc; }
+        .student-item:hover { background: #f0f7ff; }
         .student-avatar {
-            width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 15px; font-weight: 700; color: #fff; flex-shrink: 0;
+            width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0;
             background: linear-gradient(135deg, #94a3b8, #64748b);
         }
-        .student-avatar img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; }
-        .student-name { font-size: 14px; font-weight: 600; color: #1e293b; }
-        .student-id { font-size: 11px; color: #94a3b8; font-family: monospace; }
-        .student-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .student-avatar img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #e2e8f0; }
+        .student-name { font-size: 13px; font-weight: 600; color: #1e293b; }
+        .student-id { font-size: 10px; color: #94a3b8; font-family: monospace; }
+        .student-meta { font-size: 10px; color: #64748b; margin-top: 1px; }
         .student-right { margin-left: auto; text-align: right; flex-shrink: 0; }
-        .student-gpa { font-size: 13px; font-weight: 700; }
-        .student-status { font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+        .student-gpa { font-size: 12px; font-weight: 700; }
+        .student-status { font-size: 9px; padding: 2px 6px; border-radius: 5px; font-weight: 600; }
 
         .search-box {
             width: 100%; padding: 10px 14px 10px 38px; border: 1.5px solid #e2e8f0; border-radius: 12px;
@@ -61,12 +58,28 @@
         .empty-state { text-align: center; padding: 40px 20px; color: #94a3b8; }
         .empty-state svg { width: 48px; height: 48px; margin: 0 auto 12px; color: #cbd5e1; }
 
+        @media (max-width: 1024px) {
+            .student-list { grid-template-columns: repeat(2, 1fr); }
+        }
         @media (max-width: 640px) {
-            .tutor-container { padding: 12px; }
-            .group-grid { grid-template-columns: 1fr; gap: 8px; }
-            .group-card { padding: 14px; }
-            .student-item { padding: 12px; gap: 10px; }
-            .student-item .student-meta-desktop { display: none; }
+            .tutor-container { padding: 8px; }
+            .group-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+            .group-card { padding: 10px 12px; gap: 10px; }
+            .group-icon { width: 34px; height: 34px; border-radius: 10px; }
+            .group-icon svg { width: 18px; height: 18px; }
+            .group-name { font-size: 13px; }
+            .group-count { font-size: 11px; }
+            .group-badge { font-size: 11px; padding: 3px 8px; }
+            .student-list { grid-template-columns: 1fr; }
+            .student-item { padding: 8px 10px; gap: 8px; }
+            .student-avatar, .student-avatar img { width: 28px; height: 28px; font-size: 11px; }
+            .student-name { font-size: 12px; }
+            .student-id { font-size: 9px; }
+            .student-meta { font-size: 9px; }
+            .student-gpa { font-size: 11px; }
+            .student-status { font-size: 8px; padding: 1px 5px; }
+            .search-box { padding: 8px 12px 8px 34px; font-size: 13px; border-radius: 10px; }
+            .back-btn { padding: 6px 12px; font-size: 12px; }
         }
     </style>
 

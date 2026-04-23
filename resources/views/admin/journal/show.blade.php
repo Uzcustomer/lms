@@ -843,7 +843,7 @@
         $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
         $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
         $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
-        $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+        $canAdminEditExam = false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -1490,7 +1490,28 @@
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                                 $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                             @endphp
-                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
+                                                            @php
+                                                                $retakeTooltip = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . round($grade, 0);
+                                                                if ($retakeSababli) {
+                                                                    $retakeTooltip .= ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)';
+                                                                }
+                                                                if (isset($absenceData)) {
+                                                                    if (!empty($absenceData['retake_graded_at'])) {
+                                                                        $retakeTooltip .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                    }
+                                                                    $graderName = null;
+                                                                    if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                        $graderName = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                    } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                        $graderName = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                    }
+                                                                    if ($graderName) {
+                                                                        $retakeTooltip .= "\nBaho qo'ydi: " . $graderName;
+                                                                    }
+                                                                    $retakeTooltip .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
+                                                                }
+                                                            @endphp
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>
@@ -1565,8 +1586,25 @@
                                                             @php
                                                                 $retakeVal = round($absenceData['retake_grade'], 0);
                                                                 $retakeSababli = !empty($absenceData['retake_was_sababli']);
+                                                                $retakeTooltip2 = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . $retakeVal;
+                                                                if ($retakeSababli) {
+                                                                    $retakeTooltip2 .= ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)';
+                                                                }
+                                                                if (!empty($absenceData['retake_graded_at'])) {
+                                                                    $retakeTooltip2 .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                }
+                                                                $graderName2 = null;
+                                                                if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                    $graderName2 = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                    $graderName2 = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                }
+                                                                if ($graderName2) {
+                                                                    $retakeTooltip2 .= "\nBaho qo'ydi: " . $graderName2;
+                                                                }
+                                                                $retakeTooltip2 .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
                                                             @endphp
-                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip2 }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -3089,8 +3127,9 @@
             }
         }
 
-        // Admin/Superadmin: OSKI/Test baho kiritish (YN qulfidan qat'iy nazar)
+        // OSKI/Test baho kiritish vaqtinchalik yopilgan
         function editExamGrade(cell, studentHemisId, typeCode, currentValue) {
+            return;
             if (cell.querySelector('input')) return;
             var typeNames = {101: 'OSKI', 102: 'Test'};
             var original = cell.innerHTML;
@@ -4612,10 +4651,13 @@
             .then(({ok, data}) => {
                 if (ok && data.success) {
                     const notif = document.createElement('div');
-                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#3b82f6; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
                     notif.textContent = data.message;
                     document.body.appendChild(notif);
-                    setTimeout(() => location.reload(), 2000);
+                    setTimeout(() => notif.remove(), 4000);
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    btn.style.opacity = '1';
                 } else {
                     alert(data.message || 'Natijalarni yuklashda xatolik yuz berdi');
                     btn.disabled = false;
@@ -4774,19 +4816,7 @@
             });
         }
 
-        // Sahifa yuklanganda — agar OSKI/Test sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish
-        @php
-            $autoFetchEs = $examSchedule ?? null;
-            $autoFetchOskiPassed = $autoFetchEs && $autoFetchEs->oski_date && $autoFetchEs->oski_date->isPast();
-            $autoFetchTestPassed = $autoFetchEs && $autoFetchEs->test_date && $autoFetchEs->test_date->isPast();
-            $autoFetchAnyPassed = $autoFetchOskiPassed || $autoFetchTestPassed;
-        @endphp
-        @if(isset($ynSubmission) && $ynSubmission && $autoFetchAnyPassed && !$ynSubmission->results_fetched)
-        document.addEventListener('DOMContentLoaded', function() {
-            // Avtomatik natijalarni tortish
-            fetchYnResults();
-        });
-        @endif
+        // Auto-fetch o'chirilgan — foydalanuvchi o'zi tugmani bosadi yoki Diagnostika orqali yuklaydi
     </script>
 
     {{-- Sababli baho kiritish modal oynasi --}}

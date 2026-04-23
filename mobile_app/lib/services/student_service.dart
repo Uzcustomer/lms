@@ -58,6 +58,14 @@ class StudentService {
     return await _api.get(ApiConfig.studentContract);
   }
 
+  Future<Map<String, dynamic>> getExamSchedule() async {
+    return await _api.get(ApiConfig.studentExamSchedule);
+  }
+
+  Future<Map<String, dynamic>> getRating({String filter = 'group'}) async {
+    return await _api.get(ApiConfig.studentRating, queryParams: {'filter': filter});
+  }
+
   // Absence excuse methods
   Future<Map<String, dynamic>> getExcuseReasons() async {
     return await _api.get(ApiConfig.studentExcuseReasons);
@@ -122,6 +130,35 @@ class StudentService {
       fields,
       fileBytes: fileBytes,
       fileName: fileName,
+    );
+  }
+
+  // Chat methods
+  Future<Map<String, dynamic>> getChatContacts() async {
+    return await _api.get(ApiConfig.chatContacts);
+  }
+
+  Future<Map<String, dynamic>> getChatMessages(int contactId) async {
+    return await _api.get('${ApiConfig.chatMessages}/$contactId');
+  }
+
+  Future<Map<String, dynamic>> sendChatMessage(int receiverId, String message) async {
+    return await _api.post(
+      ApiConfig.chatSend,
+      {'receiver_id': receiverId, 'message': message},
+      auth: true,
+    );
+  }
+
+  Future<Map<String, dynamic>> getGroupMessages() async {
+    return await _api.get(ApiConfig.chatGroup);
+  }
+
+  Future<Map<String, dynamic>> sendGroupMessage(String message) async {
+    return await _api.post(
+      ApiConfig.chatGroupSend,
+      {'message': message},
+      auth: true,
     );
   }
 }

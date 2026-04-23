@@ -750,27 +750,100 @@ class ReportController extends Controller
 
     public function lessonAssignmentData(Request $request)
     {
-        // Excel export — darhol background job'ga yuborish (og'ir query'siz)
         if ($request->get('export') === 'excel') {
             return $this->startLessonAssignmentExport($request);
         }
 
-        try {
-            return $this->lessonAssignmentDataInner($request);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('[lessonAssignmentData] ' . $e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'params' => $request->all(),
-                'trace' => mb_substr($e->getTraceAsString(), 0, 2000),
-            ]);
+        $calcKey = 'report_calc_' . auth()->id();
 
-            return response()->json([
-                'error' => true,
-                'message' => $e->getMessage(),
-                'file' => basename($e->getFile()) . ':' . $e->getLine(),
-            ], 500);
+        $existing = \Illuminate\Support\Facades\Cache::get($calcKey);
+        if ($existing && ($existing['status'] ?? '') === 'running') {
+            return response()->json(['queued' => true, 'message' => 'Allaqachon hisoblanmoqda.']);
         }
+
+        $filters = $request->all();
+        $dekanFacultyIds = get_dekan_faculty_ids();
+        if (!empty($dekanFacultyIds) && empty($filters['faculty'])) {
+            $filters['dekan_faculty_ids'] = $dekanFacultyIds;
+        }
+
+        \Illuminate\Support\Facades\Cache::put($calcKey, [
+            'status' => 'running',
+            'message' => 'Hisoblanmoqda...',
+        ], 600);
+
+        \App\Jobs\CalculateLessonAssignmentJob::dispatch($filters, $calcKey);
+
+        return response()->json(['queued' => true, 'message' => 'Hisoblash boshlandi.']);
+    }
+
+    public function lessonAssignmentCalcStatus()
+    {
+        $calcKey = 'report_calc_' . auth()->id();
+        $data = \Illuminate\Support\Facades\Cache::get($calcKey);
+
+        if (!$data) {
+            return response()->json(['status' => 'none']);
+        }
+
+        if (($data['status'] ?? '') === 'done') {
+            return response()->json(['status' => 'done']);
+        }
+
+        return response()->json($data);
+    }
+
+    public function lessonAssignmentCalcResults(Request $request)
+    {
+        $calcKey = 'report_calc_' . auth()->id();
+        $data = \Illuminate\Support\Facades\Cache::get($calcKey);
+
+        if (!$data || ($data['status'] ?? '') !== 'done') {
+            return response()->json(['data' => [], 'total' => 0]);
+        }
+
+        $results = $data['results'] ?? [];
+
+        if ($request->filled('status_filter')) {
+            $results = array_values(array_filter($results, function ($r) use ($request) {
+                return match ($request->status_filter) {
+                    'any_missing' => !$r['has_attendance'] || $r['has_grades'] === false,
+                    'attendance_missing' => !$r['has_attendance'],
+                    'grade_missing' => $r['has_grades'] === false,
+                    'both_missing' => !$r['has_attendance'] && $r['has_grades'] === false,
+                    'all_done' => $r['has_attendance'] && $r['has_grades'] !== false,
+                    default => true,
+                };
+            }));
+        }
+
+        $sortColumn = $request->get('sort', 'lesson_date');
+        $sortDirection = $request->get('direction', 'desc');
+        usort($results, function ($a, $b) use ($sortColumn, $sortDirection) {
+            $valA = $a[$sortColumn] ?? '';
+            $valB = $b[$sortColumn] ?? '';
+            $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+            return $sortDirection === 'desc' ? -$cmp : $cmp;
+        });
+
+        $page = $request->get('page', 1);
+        $perPage = $request->get('per_page', 50);
+        $total = count($results);
+        $offset = ($page - 1) * $perPage;
+        $pageData = array_slice($results, $offset, $perPage);
+
+        foreach ($pageData as $i => &$item) {
+            $item['row_num'] = $offset + $i + 1;
+        }
+        unset($item);
+
+        return response()->json([
+            'data' => $pageData,
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => (int) $page,
+            'last_page' => ceil($total / $perPage),
+        ]);
     }
 
     private function lessonAssignmentDataInner(Request $request)
@@ -906,6 +979,7 @@ class ReportController extends Controller
             ->whereNull('deleted_at')
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
+            ->whereIn('subject_id', $subjectIds)
             ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->where('load', '>', 0)
             ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
@@ -927,6 +1001,7 @@ class ReportController extends Controller
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
+            ->whereIn('sg.subject_id', $subjectIds)
             ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
             ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
             ->select(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
@@ -1690,7 +1765,6 @@ class ReportController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->where('g.department_active', true)
             ->where('g.active', true)
-            ->where('c.current', true)
             ->where(function ($q) {
                 $q->where('cs.is_active', true)->orWhereNull('cs.is_active');
             });

@@ -669,16 +669,34 @@ class YnQaytnomaController extends Controller
                     );
                 }
 
+                $entrySemesterCode = $entry['semester']->code ?? null;
+
+                $excludedAttendanceCodes = [99, 100, 101, 102];
+                $nonAuditoriumCodes = ['17'];
+                $entryAuditoriumHours = 0;
+                if (is_array($entrySubject->subject_details)) {
+                    foreach ($entrySubject->subject_details as $detail) {
+                        $trainingCode = (string) (($detail['trainingType'] ?? [])['code'] ?? '');
+                        if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                            $entryAuditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($entryAuditoriumHours <= 0) {
+                    $entryAuditoriumHours = (float) ($entrySubject->total_acload ?: 1);
+                }
+
                 foreach ($entryStudents as $student) {
                     $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
 
                     $qoldirgan = (int) Attendance::where('group_id', $entryGroup->group_hemis_id)
                         ->where('subject_id', $entrySubject->subject_id)
                         ->where('student_hemis_id', $student->hemis_id)
+                        ->when($entrySemesterCode, fn($q) => $q->where('semester_code', $entrySemesterCode))
+                        ->whereNotIn('training_type_code', $excludedAttendanceCodes)
                         ->sum('absent_off');
 
-                    $totalAcload = $entrySubject->total_acload ?: 1;
-                    $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
+                    $qoldiq = round($qoldirgan * 100 / $entryAuditoriumHours, 2);
 
                     // Kontrakt qarzdorligi tekshiruvi
                     $contract = ContractList::where('student_hemis_id', $student->hemis_id)
@@ -710,7 +728,7 @@ class YnQaytnomaController extends Controller
                         $mtFailed = true;
                         $holat = 'X';
                     }
-                    if ($qoldiq > 25) {
+                    if ($qoldiq >= 25) {
                         $davomatFailed = true;
                         $holat = 'X';
                     }

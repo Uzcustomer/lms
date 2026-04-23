@@ -100,12 +100,12 @@ class StudentGradeObserver
     }
 
     /**
-     * Admin Telegram chatiga (kechqurungi xabar boradigan group) baho o'zgarishi haqida xabar yuborish
+     * Admin Telegram chatiga (TELEGRAM_CHAT_ID) baho o'zgarishi haqida xabar yuborish
      */
     private function sendAdminNotification(string $action, StudentGrade $grade, array $changedFields = []): void
     {
         try {
-            $chatId = config('services.telegram.attendance_group_id');
+            $chatId = config('services.telegram.chat_id');
             if (empty($chatId)) {
                 return;
             }

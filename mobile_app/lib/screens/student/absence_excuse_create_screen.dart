@@ -70,6 +70,40 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       ),
     );
     if (result != null && mounted) {
+      final daysSinceEnd = DateTime.now().difference(result.end).inDays;
+      if (daysSinceEnd > 10) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            icon: const Icon(Icons.warning_amber_rounded, color: AppTheme.errorColor, size: 48),
+            title: const Text(
+              'Muddat tugagan',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+            ),
+            content: const Text(
+              'Sababli ariza topshirish muddati tugagan. Ariza faqat 10 kun ichida topshirilishi kerak.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14),
+            ),
+            actions: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Tushunarli'),
+                ),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
       setState(() {
         _startDate = result.start;
         _endDate = result.end;

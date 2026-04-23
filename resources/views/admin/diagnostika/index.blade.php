@@ -146,6 +146,8 @@
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; }
         .badge-grade { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; font-weight: 800; min-width: 32px; text-align: center; }
+        .editable-grade { cursor: pointer; transition: all .15s; }
+        .editable-grade:hover { background: #bfdbfe; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.2); }
         .badge-oski { background: #fce7f3; color: #9d174d; border: 1px solid #fbcfe8; font-weight: 800; min-width: 32px; text-align: center; }
         .text-cell { font-size: 12px; font-weight: 500; line-height: 1.35; display: block; }
         .text-emerald { color: #047857; }
@@ -689,7 +691,7 @@
                 html += '<td><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;">' + esc(r.fan_id || '-') + '</span></td>';
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
-                html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
                 html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa, r.id) + '</td>';
                 html += '</tr>';
@@ -870,6 +872,58 @@
                 clearTimeout(filterTimer);
                 filterTimer = setTimeout(function() { applyColumnFilters(); }, 300);
             });
+
+            // BAHO TAHRIRLASH
+            window.editGrade = function(el, id) {
+                var currentGrade = el.textContent.trim();
+                var td = el.parentNode;
+                var input = document.createElement('input');
+                input.type = 'number';
+                input.min = '0';
+                input.max = '100';
+                input.value = currentGrade;
+                input.style.cssText = 'width:60px;padding:4px 6px;font-size:13px;font-weight:700;text-align:center;border:2px solid #3b82f6;border-radius:6px;outline:none;';
+                input.className = 'grade-edit-input';
+                td.innerHTML = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                function saveGrade() {
+                    var newGrade = parseInt(input.value);
+                    if (isNaN(newGrade) || newGrade < 0 || newGrade > 100) {
+                        alert('Baho 0 dan 100 gacha bo\'lishi kerak!');
+                        input.focus();
+                        return;
+                    }
+                    // allData ni yangilash
+                    var row = allData.find(function(r) { return r.id === id; });
+                    if (row) row.grade = newGrade;
+
+                    // DB ga saqlash
+                    $.ajax({
+                        url: '{{ route($routePrefix . ".quiz-results.update-grade") }}',
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        data: { id: id, grade: newGrade },
+                        success: function() {
+                            td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + newGrade + '</span>';
+                        },
+                        error: function() {
+                            alert('Saqlashda xatolik!');
+                            td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + currentGrade + '</span>';
+                        }
+                    });
+                }
+
+                input.addEventListener('blur', saveGrade);
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); saveGrade(); }
+                    if (e.key === 'Escape') {
+                        td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + currentGrade + '</span>';
+                    }
+                });
+            };
 
             // SISTEMAGA YUKLASH
             $('#btn-upload').on('click', function() {

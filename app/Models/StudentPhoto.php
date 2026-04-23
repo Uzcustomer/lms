@@ -17,6 +17,6 @@ class StudentPhoto extends Model
 
     public function getPhotoUrlAttribute(): string
     {
-        return asset('storage/' . $this->photo_path);
+        return asset($this->photo_path);
     }
 }

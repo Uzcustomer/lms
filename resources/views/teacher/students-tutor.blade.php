@@ -151,7 +151,7 @@
                                 $studentPhoto = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
                             @endphp
                             <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}"
-                                 onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset('storage/' . $studentPhoto->photo_path) : '') }})"
+                                 onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }})"
                                  style="cursor:pointer;">
                                 <div style="font-size:10px;color:#b0b8c4;width:16px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
                                 @if($student->image)
@@ -237,8 +237,8 @@
     </div>
 
     <script>
-        var MAX_SIZE = 1024; // max width/height px
-        var MAX_BYTES = 1024 * 1024; // 1MB
+        var MAX_SIZE = 800; // max width/height px
+        var MAX_BYTES = 500 * 1024; // 500KB
 
         var currentStudentId = null;
 
@@ -302,7 +302,7 @@
                     canvas.width = w;
                     canvas.height = h;
                     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    var quality = 0.85;
+                    var quality = 0.7;
                     var dataUrl = canvas.toDataURL('image/jpeg', quality);
                     while (dataUrl.length > MAX_BYTES * 1.37 && quality > 0.3) {
                         quality -= 0.1;

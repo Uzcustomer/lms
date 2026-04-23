@@ -232,21 +232,23 @@ class TeacherMainController extends Controller
             abort(403);
         }
 
+        $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
+        $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
+        $fname = $student->student_id_number . '_' . $safeName . '.jpg';
+        $dir = public_path('uploads/student-photos/' . date('Y-m'));
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        $fullPath = $dir . '/' . $fname;
+        $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
+
         $base64 = $request->input('photo_base64');
-        if ($base64 && preg_match('/^data:image\/(\w+);base64,/', $base64, $matches)) {
-            $ext = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
+        if ($base64 && preg_match('/^data:image\/\w+;base64,/', $base64)) {
             $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $base64));
-            $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
-            $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
-            $filename = 'student-photos/' . date('Y-m') . '/' . $student->student_id_number . '_' . $safeName . '.jpg';
-            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $imageData);
-            $path = $filename;
+            file_put_contents($fullPath, $imageData);
         } elseif ($request->hasFile('photo')) {
             $request->validate(['photo' => 'required|image|max:5120']);
-            $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
-            $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
-            $fname = $student->student_id_number . '_' . $safeName . '.jpg';
-            $path = $request->file('photo')->storeAs('student-photos/' . date('Y-m'), $fname, 'public');
+            $request->file('photo')->move($dir, $fname);
         } else {
             return back()->with('error', 'Rasm tanlanmadi');
         }
@@ -273,7 +275,10 @@ class TeacherMainController extends Controller
 
         $photo = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
         if ($photo) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($photo->photo_path);
+            $filePath = public_path($photo->photo_path);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
             $photo->delete();
         }
 

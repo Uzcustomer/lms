@@ -204,7 +204,15 @@
                 <button onclick="closePhotoModal()" style="width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:18px;color:#64748b;">&times;</button>
             </div>
             <div style="padding:20px;text-align:center;">
-                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f8fafc;">
+                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f8fafc;position:relative;">
+                    {{-- Sariq qolip (guide overlay) --}}
+                    <svg id="photo-guide" viewBox="0 0 300 400" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;">
+                        <ellipse cx="150" cy="140" rx="65" ry="80" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" opacity="0.8"/>
+                        <path d="M85 220 Q85 280 60 320 Q55 330 70 335 L150 360 L230 335 Q245 330 240 320 Q215 280 215 220" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" opacity="0.6"/>
+                        <line x1="150" y1="30" x2="150" y2="60" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
+                        <line x1="150" y1="370" x2="150" y2="390" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
+                        <text x="150" y="395" text-anchor="middle" font-size="11" fill="#f59e0b" opacity="0.7" font-weight="600">Bosh va yelkalarni moslang</text>
+                    </svg>
                     <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;">
                         <svg style="width:48px;height:48px;margin:0 auto 8px;color:#cbd5e1;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
                         Rasm yuklanmagan
@@ -259,10 +267,12 @@
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
             var frame = document.getElementById('modal-photo-frame');
+            var guide = document.getElementById('photo-guide');
             if (photoUrl) {
                 img.src = photoUrl;
                 img.style.display = 'block';
                 noPhoto.style.display = 'none';
+                guide.style.display = 'none';
                 frame.style.borderStyle = 'solid';
                 frame.style.borderColor = '#3b82f6';
                 document.getElementById('photo-btn-text').textContent = 'Qayta yuklash';
@@ -270,6 +280,7 @@
             } else {
                 img.style.display = 'none';
                 noPhoto.style.display = 'block';
+                guide.style.display = 'block';
                 frame.style.borderStyle = 'dashed';
                 frame.style.borderColor = '#cbd5e1';
                 document.getElementById('photo-btn-text').textContent = 'Rasmga olish';
@@ -307,6 +318,8 @@
                         previewImg.src = URL.createObjectURL(blob);
                         previewImg.style.display = 'block';
                         document.getElementById('modal-no-photo').style.display = 'none';
+                        document.getElementById('photo-guide').style.display = 'block';
+                        document.getElementById('photo-guide').style.opacity = '0.5';
                         document.getElementById('photo-save-btn').style.display = 'block';
                         document.getElementById('photo-btn-text').textContent = 'Boshqa rasm';
                         document.getElementById('modal-photo-frame').style.borderStyle = 'solid';

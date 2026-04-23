@@ -836,6 +836,12 @@
         $isRegistrator = is_active_registrator();
         $isOqituvchi = is_active_oqituvchi();
         $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
+        $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
+        $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
+        $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+        $pastLessonDates = array_values(array_filter($jbLessonDates, fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d') <= $todayStr));
+        $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
+        $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
         $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
         $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
     @endphp

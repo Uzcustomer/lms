@@ -154,9 +154,7 @@
                                  onclick="openPhotoModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}', '{{ $student->group_name }}', '{{ $studentPhoto ? asset('storage/' . $studentPhoto->photo_path) : '' }}')"
                                  style="cursor:pointer;">
                                 <div style="font-size:10px;color:#b0b8c4;width:16px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
-                                @if($studentPhoto)
-                                    <div class="student-avatar"><img src="{{ asset('storage/' . $studentPhoto->photo_path) }}" alt=""></div>
-                                @elseif($student->image)
+                                @if($student->image)
                                     <div class="student-avatar"><img src="{{ $student->image }}" alt=""></div>
                                 @else
                                     <div class="student-avatar">{{ mb_substr($student->full_name, 0, 1) }}</div>
@@ -218,10 +216,11 @@
                 <form id="photo-upload-form" method="POST" enctype="multipart/form-data">
                     @csrf
                     <input type="file" id="photo-input" name="photo" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)">
-                    <button type="button" onclick="document.getElementById('photo-input').click()"
+                    <input type="hidden" id="photo-compressed" name="photo_base64" value="">
+                    <button type="button" id="photo-capture-btn" onclick="document.getElementById('photo-input').click()"
                             style="width:100%;padding:12px;background:linear-gradient(135deg,#2b5ea7,#3b82f6);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
                         <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-                        Rasmga olish
+                        <span id="photo-btn-text">Rasmga olish</span>
                     </button>
                     <button type="submit" id="photo-save-btn" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
                         Saqlash
@@ -232,6 +231,9 @@
     </div>
 
     <script>
+        var MAX_SIZE = 1024; // max width/height px
+        var MAX_BYTES = 1024 * 1024; // 1MB
+
         function openPhotoModal(studentId, name, idNumber, groupName, photoUrl) {
             document.getElementById('modal-name').textContent = name;
             document.getElementById('modal-info').textContent = idNumber + ' · ' + groupName;
@@ -239,38 +241,72 @@
 
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
+            var frame = document.getElementById('modal-photo-frame');
             if (photoUrl) {
                 img.src = photoUrl;
                 img.style.display = 'block';
                 noPhoto.style.display = 'none';
+                frame.style.borderStyle = 'solid';
+                frame.style.borderColor = '#3b82f6';
+                document.getElementById('photo-btn-text').textContent = 'Qayta yuklash';
             } else {
                 img.style.display = 'none';
                 noPhoto.style.display = 'block';
+                frame.style.borderStyle = 'dashed';
+                frame.style.borderColor = '#cbd5e1';
+                document.getElementById('photo-btn-text').textContent = 'Rasmga olish';
             }
             document.getElementById('photo-save-btn').style.display = 'none';
             document.getElementById('photo-input').value = '';
+            document.getElementById('photo-compressed').value = '';
 
-            var modal = document.getElementById('photo-modal');
-            modal.style.display = 'flex';
+            document.getElementById('photo-modal').style.display = 'flex';
         }
 
         function closePhotoModal() {
             document.getElementById('photo-modal').style.display = 'none';
         }
 
+        function compressImage(file, callback) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var img = new Image();
+                img.onload = function() {
+                    var canvas = document.createElement('canvas');
+                    var w = img.width, h = img.height;
+                    if (w > MAX_SIZE || h > MAX_SIZE) {
+                        if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+                        else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    var quality = 0.85;
+                    var dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    while (dataUrl.length > MAX_BYTES * 1.37 && quality > 0.3) {
+                        quality -= 0.1;
+                        dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    }
+                    callback(dataUrl);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
         function previewPhoto(input) {
             if (input.files && input.files[0]) {
-                var reader = new FileReader();
-                reader.onload = function(e) {
+                compressImage(input.files[0], function(dataUrl) {
                     var img = document.getElementById('modal-photo-img');
-                    img.src = e.target.result;
+                    img.src = dataUrl;
                     img.style.display = 'block';
                     document.getElementById('modal-no-photo').style.display = 'none';
                     document.getElementById('photo-save-btn').style.display = 'block';
+                    document.getElementById('photo-btn-text').textContent = 'Boshqa rasm tanlash';
                     document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                     document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
-                };
-                reader.readAsDataURL(input.files[0]);
+                    document.getElementById('photo-compressed').value = dataUrl;
+                });
             }
         }
 

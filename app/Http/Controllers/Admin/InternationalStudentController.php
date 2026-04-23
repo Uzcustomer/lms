@@ -651,6 +651,7 @@ class InternationalStudentController extends Controller
 
             $section->addText("Surxondaryo viloyati IIB Migratsiya va fuqarolikni", ['bold' => true, 'size' => 11], ['alignment' => Jc::END]);
             $section->addText("rasmiylashtirish boshqarmasi boshlig'iga", ['bold' => true, 'size' => 11], ['alignment' => Jc::END]);
+            $section->addTextBreak(1);
             $section->addText('TALABNOMA', ['bold' => true, 'size' => 14], ['alignment' => Jc::CENTER]);
 
             $bodyRun = $section->addTextRun(['alignment' => Jc::BOTH]);

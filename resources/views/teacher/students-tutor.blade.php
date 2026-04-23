@@ -197,14 +197,11 @@
     <div id="camera-fullscreen" style="display:none;position:fixed;inset:0;z-index:99999;background:#000;">
         <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;"></video>
         <svg viewBox="0 0 300 400" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
-            <ellipse cx="150" cy="125" rx="55" ry="68" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.9"/>
-            <path d="M130 192 L130 215 Q130 225 120 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
-            <path d="M170 192 L170 215 Q170 225 180 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
-            <path d="M120 228 Q90 235 60 260 Q45 275 40 310 L40 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
-            <path d="M180 228 Q210 235 240 260 Q255 275 260 310 L260 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
-            <line x1="40" y1="360" x2="260" y2="360" stroke="#f59e0b" stroke-width="1.5" opacity="0.4"/>
-            <line x1="120" y1="115" x2="140" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
-            <line x1="160" y1="115" x2="180" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
+            <ellipse cx="150" cy="130" rx="52" ry="65" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.9"/>
+            <path d="M130 194 L130 210 Q130 220 118 225" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
+            <path d="M170 194 L170 210 Q170 220 182 225" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
+            <path d="M118 225 Q80 240 45 270 Q25 290 15 330 L10 400" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.5"/>
+            <path d="M182 225 Q220 240 255 270 Q275 290 285 330 L290 400" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.5"/>
             <text x="150" y="388" text-anchor="middle" font-size="12" fill="#fbbf24" font-weight="600">Bosh va yelkalarni moslang</text>
         </svg>
         <div style="position:absolute;bottom:0;left:0;right:0;padding:20px;display:flex;align-items:center;justify-content:center;gap:16px;background:linear-gradient(transparent,rgba(0,0,0,0.7));">
@@ -264,7 +261,7 @@
     </div>
 
     <script>
-        var MAX_SIZE = 1600;
+        var MAX_SIZE = 1200;
         var currentStudentId = null;
         var currentBlob = null;
         var uploadActionUrl = '';
@@ -322,7 +319,7 @@
                 document.getElementById('photo-capture-btn').style.display = 'none';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                 document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
-            }, 'image/jpeg', 0.95);
+            }, 'image/jpeg', 0.92);
         }
 
         function deletePhoto() {

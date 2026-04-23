@@ -332,8 +332,17 @@
     P._updateHeader = function() {
         var midY = this.body.scrollTop + (VISIBLE_ROWS * ROW_H) / 2;
         var idx = Math.max(0, Math.min(Math.floor(midY / ROW_H), this.weeks.length - 1));
-        var thu = this.weeks[idx][3];
-        this.monthLabel.textContent = MONTHS[thu.getMonth()] + ' ' + thu.getFullYear();
+        var wk = this.weeks[idx];
+        // Hafta ichidagi eng ko'p uchraydigan oyni topish
+        var mc = {};
+        for (var i = 0; i < 7; i++) {
+            var k = wk[i].getMonth() + '-' + wk[i].getFullYear();
+            mc[k] = (mc[k] || 0) + 1;
+        }
+        var best = null, bestC = 0;
+        for (var key in mc) { if (mc[key] > bestC) { bestC = mc[key]; best = key; } }
+        var p = best.split('-');
+        this.monthLabel.textContent = MONTHS[parseInt(p[0])] + ' ' + p[1];
     };
 
     /** Dasturiy ravishda sanani o'rnatish */

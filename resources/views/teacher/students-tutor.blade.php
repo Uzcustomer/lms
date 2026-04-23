@@ -247,9 +247,9 @@
                         <span id="photo-btn-text">Rasmga olish</span>
                     </button>
                     {{-- Tushirish (kamera ochiq) --}}
-                    <button type="button" id="photo-snap-btn" onclick="snapPhoto()" disabled style="display:none;width:100%;padding:14px;background:#94a3b8;color:#fff;font-size:15px;font-weight:700;border:none;border-radius:50px;cursor:not-allowed;align-items:center;justify-content:center;gap:8px;transition:all 0.3s;">
+                    <button type="button" id="photo-snap-btn" onclick="snapPhoto()" style="display:none;width:100%;padding:14px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:15px;font-weight:700;border:none;border-radius:50px;cursor:pointer;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(5,150,105,0.4);">
                         <svg style="width:22px;height:22px;" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
-                        <span id="snap-btn-text">Yuzni qolipga moslang</span>
+                        Tushirish
                     </button>
                     {{-- Saqlash --}}
                     <button type="button" id="photo-save-btn" onclick="uploadPhoto()" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
@@ -265,35 +265,25 @@
     </div>
 
     <script>
-        var MAX_SIZE = 1200;
+        var MAX_SIZE = 1600;
         var currentStudentId = null;
         var currentBlob = null;
         var uploadActionUrl = '';
         var cameraStream = null;
 
         function stopCamera() {
-            if (faceCheckInterval) { clearInterval(faceCheckInterval); faceCheckInterval = null; }
             if (cameraStream) {
                 cameraStream.getTracks().forEach(function(t) { t.stop(); });
                 cameraStream = null;
             }
             document.getElementById('camera-video').style.display = 'none';
-            var guideEl = document.getElementById('photo-guide');
-            guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#f59e0b'); });
-            var gt = document.getElementById('guide-text');
-            if (gt) { gt.textContent = 'Yuzni qolipga moslang'; gt.setAttribute('fill', '#fbbf24'); }
         }
-
-        var faceDetector = null;
-        var faceCheckInterval = null;
-        try { faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }); } catch(e) {}
 
         function startCamera() {
             var video = document.getElementById('camera-video');
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
             var guide = document.getElementById('photo-guide');
-            var snapBtn = document.getElementById('photo-snap-btn');
 
             img.style.display = 'none';
             noPhoto.style.display = 'none';
@@ -303,81 +293,19 @@
             document.getElementById('photo-retake-btn').style.display = 'none';
             document.getElementById('photo-capture-btn').style.display = 'none';
             document.getElementById('modal-photo-frame').style.background = '#000';
-            snapBtn.disabled = true;
-            snapBtn.style.background = '#94a3b8';
-            snapBtn.style.cursor = 'not-allowed';
-            document.getElementById('snap-btn-text').textContent = 'Yuzni qolipga moslang';
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 853 } }, audio: false })
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1200 }, height: { ideal: 1600 } }, audio: false })
                 .then(function(stream) {
                     cameraStream = stream;
                     video.srcObject = stream;
                     video.style.display = 'block';
-                    video.style.transform = 'scaleX(-1)';
-                    snapBtn.style.display = 'flex';
-
-                    if (faceCheckInterval) clearInterval(faceCheckInterval);
-                    faceCheckInterval = setInterval(function() { checkFace(video, snapBtn); }, 500);
+                    video.style.transform = '';
+                    document.getElementById('photo-snap-btn').style.display = 'flex';
                 })
                 .catch(function(err) {
                     alert('Kamera ochilmadi: ' + err.message);
                     document.getElementById('photo-capture-btn').style.display = 'flex';
                 });
-        }
-
-        function checkFace(video, snapBtn) {
-            if (!video.videoWidth) return;
-
-            if (faceDetector) {
-                faceDetector.detect(video).then(function(faces) {
-                    var guideText = document.getElementById('guide-text');
-                    var guideEl = document.getElementById('photo-guide');
-                    if (faces.length > 0) {
-                        var face = faces[0].boundingBox;
-                        var vw = video.videoWidth, vh = video.videoHeight;
-                        var cx = (face.x + face.width / 2) / vw;
-                        var cy = (face.y + face.height / 2) / vh;
-                        var faceRatio = face.width / vw;
-
-                        var inGuide = cx > 0.3 && cx < 0.7 && cy > 0.15 && cy < 0.55 && faceRatio > 0.15 && faceRatio < 0.55;
-
-                        if (inGuide) {
-                            snapBtn.disabled = false;
-                            snapBtn.style.background = 'linear-gradient(135deg,#059669,#10b981)';
-                            snapBtn.style.cursor = 'pointer';
-                            snapBtn.style.boxShadow = '0 4px 16px rgba(5,150,105,0.4)';
-                            document.getElementById('snap-btn-text').textContent = 'Tushirish';
-                            guideText.textContent = 'Tayyor!';
-                            guideText.setAttribute('fill', '#22c55e');
-                            guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#22c55e'); });
-                        } else {
-                            snapBtn.disabled = true;
-                            snapBtn.style.background = '#ef4444';
-                            snapBtn.style.cursor = 'not-allowed';
-                            snapBtn.style.boxShadow = 'none';
-                            document.getElementById('snap-btn-text').textContent = 'Qolipga moslang';
-                            guideText.textContent = 'Qolipdan chiqib ketyapsiz';
-                            guideText.setAttribute('fill', '#ef4444');
-                            guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#ef4444'); });
-                        }
-                    } else {
-                        snapBtn.disabled = true;
-                        snapBtn.style.background = '#94a3b8';
-                        snapBtn.style.cursor = 'not-allowed';
-                        snapBtn.style.boxShadow = 'none';
-                        document.getElementById('snap-btn-text').textContent = 'Yuz topilmadi';
-                        guideText.textContent = 'Yuzingizni ko\'rsating';
-                        guideText.setAttribute('fill', '#f59e0b');
-                        guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#f59e0b'); });
-                    }
-                }).catch(function() {});
-            } else {
-                snapBtn.disabled = false;
-                snapBtn.style.background = 'linear-gradient(135deg,#059669,#10b981)';
-                snapBtn.style.cursor = 'pointer';
-                snapBtn.style.boxShadow = '0 4px 16px rgba(5,150,105,0.4)';
-                document.getElementById('snap-btn-text').textContent = 'Tushirish';
-            }
         }
 
         function snapPhoto() {
@@ -405,7 +333,7 @@
                 document.getElementById('photo-retake-btn').style.display = 'block';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                 document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
-            }, 'image/jpeg', 0.92);
+            }, 'image/jpeg', 0.95);
         }
 
         function deletePhoto() {

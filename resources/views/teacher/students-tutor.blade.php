@@ -213,10 +213,7 @@
                 </div>
             </div>
             <div style="padding:0 20px 20px;">
-                <form id="photo-upload-form" method="POST" enctype="multipart/form-data">
-                    @csrf
-                    <input type="file" id="photo-input" name="photo" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)">
-                    <input type="hidden" id="photo-compressed" name="photo_base64" value="">
+                    <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none;" onchange="previewPhoto(this)">
                     <div id="photo-delete-wrap" style="display:none;margin-bottom:8px;">
                         <button type="button" onclick="deletePhoto()"
                                 style="width:100%;padding:10px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:600;border:1px solid #fecaca;border-radius:10px;cursor:pointer;">
@@ -228,19 +225,19 @@
                         <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
                         <span id="photo-btn-text">Rasmga olish</span>
                     </button>
-                    <button type="submit" id="photo-save-btn" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
+                    <button type="button" id="photo-save-btn" onclick="uploadPhoto()" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
                         Saqlash
                     </button>
-                </form>
+                    <div id="photo-progress" style="display:none;margin-top:8px;text-align:center;font-size:12px;color:#64748b;">Yuklanmoqda...</div>
             </div>
         </div>
     </div>
 
     <script>
-        var MAX_SIZE = 800; // max width/height px
-        var MAX_BYTES = 500 * 1024; // 500KB
-
+        var MAX_SIZE = 800;
         var currentStudentId = null;
+        var currentBlob = null;
+        var uploadActionUrl = '';
 
         function deletePhoto() {
             if (!confirm('Rasmni o\'chirmoqchimisiz?')) return;
@@ -254,9 +251,10 @@
 
         function openPhotoModal(studentId, name, idNumber, groupName, photoUrl) {
             currentStudentId = studentId;
+            currentBlob = null;
+            uploadActionUrl = '/teacher/students/' + studentId + '/upload-photo';
             document.getElementById('modal-name').textContent = name;
             document.getElementById('modal-info').textContent = idNumber + ' · ' + groupName;
-            document.getElementById('photo-upload-form').action = '/teacher/students/' + studentId + '/upload-photo';
 
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
@@ -278,8 +276,8 @@
                 document.getElementById('photo-delete-wrap').style.display = 'none';
             }
             document.getElementById('photo-save-btn').style.display = 'none';
+            document.getElementById('photo-progress').style.display = 'none';
             document.getElementById('photo-input').value = '';
-            document.getElementById('photo-compressed').value = '';
 
             document.getElementById('photo-modal').style.display = 'flex';
         }
@@ -288,7 +286,9 @@
             document.getElementById('photo-modal').style.display = 'none';
         }
 
-        function compressImage(file, callback) {
+        function previewPhoto(input) {
+            if (!input.files || !input.files[0]) return;
+            var file = input.files[0];
             var reader = new FileReader();
             reader.onload = function(e) {
                 var img = new Image();
@@ -299,36 +299,40 @@
                         if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
                         else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
                     }
-                    canvas.width = w;
-                    canvas.height = h;
+                    canvas.width = w; canvas.height = h;
                     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    var quality = 0.7;
-                    var dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    while (dataUrl.length > MAX_BYTES * 1.37 && quality > 0.3) {
-                        quality -= 0.1;
-                        dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    }
-                    callback(dataUrl);
+                    canvas.toBlob(function(blob) {
+                        currentBlob = blob;
+                        var previewImg = document.getElementById('modal-photo-img');
+                        previewImg.src = URL.createObjectURL(blob);
+                        previewImg.style.display = 'block';
+                        document.getElementById('modal-no-photo').style.display = 'none';
+                        document.getElementById('photo-save-btn').style.display = 'block';
+                        document.getElementById('photo-btn-text').textContent = 'Boshqa rasm';
+                        document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
+                        document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+                    }, 'image/jpeg', 0.8);
                 };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }
 
-        function previewPhoto(input) {
-            if (input.files && input.files[0]) {
-                compressImage(input.files[0], function(dataUrl) {
-                    var img = document.getElementById('modal-photo-img');
-                    img.src = dataUrl;
-                    img.style.display = 'block';
-                    document.getElementById('modal-no-photo').style.display = 'none';
-                    document.getElementById('photo-save-btn').style.display = 'block';
-                    document.getElementById('photo-btn-text').textContent = 'Boshqa rasm tanlash';
-                    document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
-                    document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
-                    document.getElementById('photo-compressed').value = dataUrl;
-                });
-            }
+        function uploadPhoto() {
+            if (!currentBlob) return;
+            var btn = document.getElementById('photo-save-btn');
+            var prog = document.getElementById('photo-progress');
+            btn.style.display = 'none';
+            prog.style.display = 'block';
+            prog.textContent = 'Yuklanmoqda...';
+
+            var fd = new FormData();
+            fd.append('photo', currentBlob, 'photo.jpg');
+            fd.append('_token', '{{ csrf_token() }}');
+
+            fetch(uploadActionUrl, { method: 'POST', body: fd })
+                .then(function(r) { if (r.ok) { window.location.reload(); } else { throw new Error('Server xatosi'); } })
+                .catch(function(err) { prog.textContent = 'Xatolik: ' + err.message; btn.style.display = 'block'; });
         }
 
         document.getElementById('photo-modal').addEventListener('click', function(e) {

@@ -243,19 +243,10 @@ class TeacherMainController extends Controller
             $fullPath = $dir . '/' . $fname;
             $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
 
-            $base64 = $request->input('photo_base64');
-            if ($base64 && preg_match('/^data:image\/\w+;base64,/', $base64)) {
-                $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $base64));
-                if (!$imageData) {
-                    return back()->with('error', 'Rasm decode qilinmadi');
-                }
-                file_put_contents($fullPath, $imageData);
-            } elseif ($request->hasFile('photo')) {
-                $request->validate(['photo' => 'required|image|max:5120']);
-                $request->file('photo')->move($dir, $fname);
-            } else {
+            if (!$request->hasFile('photo')) {
                 return back()->with('error', 'Rasm tanlanmadi');
             }
+            $request->file('photo')->move($dir, $fname);
 
             \App\Models\StudentPhoto::create([
                 'student_id_number' => $student->student_id_number,

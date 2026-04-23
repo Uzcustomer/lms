@@ -193,8 +193,31 @@
         @endif
     </div>
 
+    {{-- Fullscreen Camera --}}
+    <div id="camera-fullscreen" style="display:none;position:fixed;inset:0;z-index:99999;background:#000;">
+        <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;"></video>
+        <svg viewBox="0 0 300 400" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
+            <ellipse cx="150" cy="125" rx="55" ry="68" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.9"/>
+            <path d="M130 192 L130 215 Q130 225 120 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
+            <path d="M170 192 L170 215 Q170 225 180 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
+            <path d="M120 228 Q90 235 60 260 Q45 275 40 310 L40 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
+            <path d="M180 228 Q210 235 240 260 Q255 275 260 310 L260 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
+            <line x1="40" y1="360" x2="260" y2="360" stroke="#f59e0b" stroke-width="1.5" opacity="0.4"/>
+            <line x1="120" y1="115" x2="140" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
+            <line x1="160" y1="115" x2="180" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
+            <text x="150" y="388" text-anchor="middle" font-size="12" fill="#fbbf24" font-weight="600">Bosh va yelkalarni moslang</text>
+        </svg>
+        <div style="position:absolute;bottom:0;left:0;right:0;padding:20px;display:flex;align-items:center;justify-content:center;gap:16px;background:linear-gradient(transparent,rgba(0,0,0,0.7));">
+            <button type="button" onclick="closeCameraFullscreen()" style="width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.5);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(4px);">&times;</button>
+            <button type="button" onclick="snapPhoto()" style="width:72px;height:72px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.5);cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+                <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#059669,#10b981);margin:auto;"></div>
+            </button>
+            <div style="width:50px;"></div>
+        </div>
+    </div>
+
     {{-- Photo Modal --}}
-    <div id="photo-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;padding:16px;">
+    <div id="photo-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px;">
         <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
             <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
                 <div>
@@ -204,26 +227,7 @@
                 <button onclick="closePhotoModal()" style="width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:18px;color:#64748b;">&times;</button>
             </div>
             <div style="padding:20px;text-align:center;">
-                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000;position:relative;">
-                    {{-- Sariq qolip --}}
-                    <svg id="photo-guide" viewBox="0 0 300 400" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;">
-                        {{-- Bosh --}}
-                        <ellipse cx="150" cy="125" rx="55" ry="68" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.9"/>
-                        {{-- Bo'yin --}}
-                        <path d="M130 192 L130 215 Q130 225 120 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
-                        <path d="M170 192 L170 215 Q170 225 180 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
-                        {{-- Yelkalar --}}
-                        <path d="M120 228 Q90 235 60 260 Q45 275 40 310 L40 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
-                        <path d="M180 228 Q210 235 240 260 Q255 275 260 310 L260 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
-                        {{-- Pastki chiziq --}}
-                        <line x1="40" y1="360" x2="260" y2="360" stroke="#f59e0b" stroke-width="1.5" opacity="0.4"/>
-                        {{-- Ko'z chiziqlari (yo'naltirish uchun) --}}
-                        <line x1="120" y1="115" x2="140" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
-                        <line x1="160" y1="115" x2="180" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
-                        <text id="guide-text" x="150" y="390" text-anchor="middle" font-size="11" fill="#fbbf24" font-weight="600">Yuzni qolipga moslang</text>
-                    </svg>
-                    {{-- Live kamera --}}
-                    <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;transform:scaleX(-1);"></video>
+                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#1e293b;position:relative;">
                     {{-- Placeholder --}}
                     <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;z-index:1;">
                         <svg style="width:48px;height:48px;margin:0 auto 8px;color:#475569;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
@@ -246,13 +250,8 @@
                         <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
                         <span id="photo-btn-text">Rasmga olish</span>
                     </button>
-                    {{-- Tushirish (kamera ochiq) --}}
-                    <button type="button" id="photo-snap-btn" onclick="snapPhoto()" style="display:none;width:100%;padding:14px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:15px;font-weight:700;border:none;border-radius:50px;cursor:pointer;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(5,150,105,0.4);">
-                        <svg style="width:22px;height:22px;" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
-                        Tushirish
-                    </button>
                     {{-- Saqlash --}}
-                    <button type="button" id="photo-save-btn" onclick="uploadPhoto()" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
+                    <button type="button" id="photo-save-btn" onclick="uploadPhoto()" style="display:none;width:100%;padding:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
                         Saqlash
                     </button>
                     {{-- Qayta tushirish --}}
@@ -280,32 +279,23 @@
         }
 
         function startCamera() {
+            document.getElementById('camera-fullscreen').style.display = 'block';
             var video = document.getElementById('camera-video');
-            var img = document.getElementById('modal-photo-img');
-            var noPhoto = document.getElementById('modal-no-photo');
-            var guide = document.getElementById('photo-guide');
 
-            img.style.display = 'none';
-            noPhoto.style.display = 'none';
-            guide.style.display = 'block';
-            guide.style.opacity = '1';
-            document.getElementById('photo-save-btn').style.display = 'none';
-            document.getElementById('photo-retake-btn').style.display = 'none';
-            document.getElementById('photo-capture-btn').style.display = 'none';
-            document.getElementById('modal-photo-frame').style.background = '#000';
-
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1200 }, height: { ideal: 1600 } }, audio: false })
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1600 }, height: { ideal: 2100 } }, audio: false })
                 .then(function(stream) {
                     cameraStream = stream;
                     video.srcObject = stream;
-                    video.style.display = 'block';
-                    video.style.transform = '';
-                    document.getElementById('photo-snap-btn').style.display = 'flex';
                 })
                 .catch(function(err) {
                     alert('Kamera ochilmadi: ' + err.message);
-                    document.getElementById('photo-capture-btn').style.display = 'flex';
+                    closeCameraFullscreen();
                 });
+        }
+
+        function closeCameraFullscreen() {
+            stopCamera();
+            document.getElementById('camera-fullscreen').style.display = 'none';
         }
 
         function snapPhoto() {
@@ -317,20 +307,19 @@
                 else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
             }
             canvas.width = w; canvas.height = h;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, w, h);
+            canvas.getContext('2d').drawImage(video, 0, 0, w, h);
 
-            stopCamera();
-            document.getElementById('photo-snap-btn').style.display = 'none';
+            closeCameraFullscreen();
 
             canvas.toBlob(function(blob) {
                 currentBlob = blob;
                 var img = document.getElementById('modal-photo-img');
                 img.src = URL.createObjectURL(blob);
                 img.style.display = 'block';
-                document.getElementById('photo-guide').style.opacity = '0.4';
+                document.getElementById('modal-no-photo').style.display = 'none';
                 document.getElementById('photo-save-btn').style.display = 'block';
                 document.getElementById('photo-retake-btn').style.display = 'block';
+                document.getElementById('photo-capture-btn').style.display = 'none';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                 document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
             }, 'image/jpeg', 0.95);
@@ -353,21 +342,16 @@
             document.getElementById('modal-name').textContent = name;
             document.getElementById('modal-info').textContent = idNumber + ' · ' + groupName;
 
-            stopCamera();
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
             var frame = document.getElementById('modal-photo-frame');
-            var guide = document.getElementById('photo-guide');
 
-            document.getElementById('photo-snap-btn').style.display = 'none';
             document.getElementById('photo-retake-btn').style.display = 'none';
-            frame.style.background = '#000';
 
             if (photoUrl) {
                 img.src = photoUrl;
                 img.style.display = 'block';
                 noPhoto.style.display = 'none';
-                guide.style.display = 'none';
                 frame.style.borderStyle = 'solid';
                 frame.style.borderColor = '#3b82f6';
                 document.getElementById('photo-btn-text').textContent = 'Qayta tushirish';
@@ -376,11 +360,8 @@
             } else {
                 img.style.display = 'none';
                 noPhoto.style.display = 'block';
-                guide.style.display = 'block';
-                guide.style.opacity = '1';
                 frame.style.borderStyle = 'dashed';
                 frame.style.borderColor = '#cbd5e1';
-                frame.style.background = '#1e293b';
                 document.getElementById('photo-btn-text').textContent = 'Kamerani ochish';
                 document.getElementById('photo-capture-btn').style.display = 'flex';
                 document.getElementById('photo-delete-wrap').style.display = 'none';

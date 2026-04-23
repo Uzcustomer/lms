@@ -147,6 +147,45 @@ class VedomostTekshirishController extends Controller
             ->orderBy('g.name')->orderBy('cs.subject_name')
             ->distinct()->get();
 
+        // Fallback: agar asosiy query bo'sh qaytarsa va guruh tanlangan bo'lsa,
+        // schedules jadvalidan fan/semester ma'lumotlarini olish
+        if ($rows->isEmpty() && $request->filled('group_ids')) {
+            $fallbackGroupIds = (array) $request->group_ids;
+            $fallbackGroups = Group::whereIn('id', $fallbackGroupIds)->get();
+            $fallbackRows = collect();
+            foreach ($fallbackGroups as $fg) {
+                $schedSubjects = DB::table('schedules')
+                    ->where('group_id', $fg->group_hemis_id)
+                    ->where('education_year_current', true)
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('lesson_date')
+                    ->select('subject_id', 'subject_name', 'semester_code')
+                    ->distinct()
+                    ->get();
+                $dep = Department::where('department_hemis_id', $fg->department_hemis_id)->first();
+                $sp = \App\Models\Specialty::where('specialty_hemis_id', $fg->specialty_hemis_id)->first();
+                foreach ($schedSubjects as $ss) {
+                    if ($request->filled('subject_ids') && !in_array($ss->subject_id, (array) $request->subject_ids)) continue;
+                    if ($request->filled('semester_code') && $ss->semester_code != $request->semester_code) continue;
+                    $fallbackRows->push((object) [
+                        'group_pk' => $fg->id,
+                        'group_hemis_id' => $fg->group_hemis_id,
+                        'group_name' => $fg->name,
+                        'specialty_name' => $sp->name ?? '',
+                        'subject_id' => $ss->subject_id,
+                        'subject_name' => $ss->subject_name,
+                        'credit' => null,
+                        'semester_code' => $ss->semester_code,
+                        'semester_name' => '',
+                        'level_code' => '',
+                        'level_name' => '',
+                        'faculty_name' => $dep->name ?? '',
+                    ]);
+                }
+            }
+            $rows = $fallbackRows;
+        }
+
         if ($rows->isEmpty()) {
             return response()->json([]);
         }

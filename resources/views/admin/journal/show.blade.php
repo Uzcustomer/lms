@@ -832,7 +832,7 @@
     </style>
 
     @php
-        $isDekan = is_active_dekan();
+        $isDekan = is_active_dekan() || (session('active_role') === 'tyutor');
         $isRegistrator = is_active_registrator();
         $isOqituvchi = is_active_oqituvchi();
         $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');

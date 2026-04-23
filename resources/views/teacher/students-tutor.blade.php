@@ -207,9 +207,20 @@
                 <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000;position:relative;">
                     {{-- Sariq qolip --}}
                     <svg id="photo-guide" viewBox="0 0 300 400" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;">
-                        <ellipse cx="150" cy="130" rx="60" ry="75" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="8 4" opacity="0.9"/>
-                        <path d="M90 205 Q90 260 68 300 Q63 310 76 314 L150 340 L224 314 Q237 310 232 300 Q210 260 210 205" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 4" opacity="0.7"/>
-                        <text x="150" y="380" text-anchor="middle" font-size="12" fill="#fbbf24" font-weight="600">Moslang va tushiring</text>
+                        {{-- Bosh --}}
+                        <ellipse cx="150" cy="125" rx="55" ry="68" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.9"/>
+                        {{-- Bo'yin --}}
+                        <path d="M130 192 L130 215 Q130 225 120 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
+                        <path d="M170 192 L170 215 Q170 225 180 228" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
+                        {{-- Yelkalar --}}
+                        <path d="M120 228 Q90 235 60 260 Q45 275 40 310 L40 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
+                        <path d="M180 228 Q210 235 240 260 Q255 275 260 310 L260 360" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.6"/>
+                        {{-- Pastki chiziq --}}
+                        <line x1="40" y1="360" x2="260" y2="360" stroke="#f59e0b" stroke-width="1.5" opacity="0.4"/>
+                        {{-- Ko'z chiziqlari (yo'naltirish uchun) --}}
+                        <line x1="120" y1="115" x2="140" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
+                        <line x1="160" y1="115" x2="180" y2="115" stroke="#f59e0b" stroke-width="1" opacity="0.4"/>
+                        <text id="guide-text" x="150" y="390" text-anchor="middle" font-size="11" fill="#fbbf24" font-weight="600">Yuzni qolipga moslang</text>
                     </svg>
                     {{-- Live kamera --}}
                     <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none;transform:scaleX(-1);"></video>
@@ -236,9 +247,9 @@
                         <span id="photo-btn-text">Rasmga olish</span>
                     </button>
                     {{-- Tushirish (kamera ochiq) --}}
-                    <button type="button" id="photo-snap-btn" onclick="snapPhoto()" style="display:none;width:100%;padding:14px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-size:15px;font-weight:700;border:none;border-radius:50px;cursor:pointer;display:none;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 16px rgba(220,38,38,0.4);">
+                    <button type="button" id="photo-snap-btn" onclick="snapPhoto()" disabled style="display:none;width:100%;padding:14px;background:#94a3b8;color:#fff;font-size:15px;font-weight:700;border:none;border-radius:50px;cursor:not-allowed;align-items:center;justify-content:center;gap:8px;transition:all 0.3s;">
                         <svg style="width:22px;height:22px;" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
-                        Tushirish
+                        <span id="snap-btn-text">Yuzni qolipga moslang</span>
                     </button>
                     {{-- Saqlash --}}
                     <button type="button" id="photo-save-btn" onclick="uploadPhoto()" style="display:none;width:100%;padding:12px;margin-top:8px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;">
@@ -261,18 +272,28 @@
         var cameraStream = null;
 
         function stopCamera() {
+            if (faceCheckInterval) { clearInterval(faceCheckInterval); faceCheckInterval = null; }
             if (cameraStream) {
                 cameraStream.getTracks().forEach(function(t) { t.stop(); });
                 cameraStream = null;
             }
             document.getElementById('camera-video').style.display = 'none';
+            var guideEl = document.getElementById('photo-guide');
+            guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#f59e0b'); });
+            var gt = document.getElementById('guide-text');
+            if (gt) { gt.textContent = 'Yuzni qolipga moslang'; gt.setAttribute('fill', '#fbbf24'); }
         }
+
+        var faceDetector = null;
+        var faceCheckInterval = null;
+        try { faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }); } catch(e) {}
 
         function startCamera() {
             var video = document.getElementById('camera-video');
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
             var guide = document.getElementById('photo-guide');
+            var snapBtn = document.getElementById('photo-snap-btn');
 
             img.style.display = 'none';
             noPhoto.style.display = 'none';
@@ -282,6 +303,10 @@
             document.getElementById('photo-retake-btn').style.display = 'none';
             document.getElementById('photo-capture-btn').style.display = 'none';
             document.getElementById('modal-photo-frame').style.background = '#000';
+            snapBtn.disabled = true;
+            snapBtn.style.background = '#94a3b8';
+            snapBtn.style.cursor = 'not-allowed';
+            document.getElementById('snap-btn-text').textContent = 'Yuzni qolipga moslang';
 
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 800 }, height: { ideal: 1067 } }, audio: false })
                 .then(function(stream) {
@@ -289,12 +314,70 @@
                     video.srcObject = stream;
                     video.style.display = 'block';
                     video.style.transform = '';
-                    document.getElementById('photo-snap-btn').style.display = 'flex';
+                    snapBtn.style.display = 'flex';
+
+                    if (faceCheckInterval) clearInterval(faceCheckInterval);
+                    faceCheckInterval = setInterval(function() { checkFace(video, snapBtn); }, 500);
                 })
                 .catch(function(err) {
                     alert('Kamera ochilmadi: ' + err.message);
                     document.getElementById('photo-capture-btn').style.display = 'flex';
                 });
+        }
+
+        function checkFace(video, snapBtn) {
+            if (!video.videoWidth) return;
+
+            if (faceDetector) {
+                faceDetector.detect(video).then(function(faces) {
+                    var guideText = document.getElementById('guide-text');
+                    var guideEl = document.getElementById('photo-guide');
+                    if (faces.length > 0) {
+                        var face = faces[0].boundingBox;
+                        var vw = video.videoWidth, vh = video.videoHeight;
+                        var cx = (face.x + face.width / 2) / vw;
+                        var cy = (face.y + face.height / 2) / vh;
+                        var faceRatio = face.width / vw;
+
+                        var inGuide = cx > 0.3 && cx < 0.7 && cy > 0.15 && cy < 0.55 && faceRatio > 0.15 && faceRatio < 0.55;
+
+                        if (inGuide) {
+                            snapBtn.disabled = false;
+                            snapBtn.style.background = 'linear-gradient(135deg,#059669,#10b981)';
+                            snapBtn.style.cursor = 'pointer';
+                            snapBtn.style.boxShadow = '0 4px 16px rgba(5,150,105,0.4)';
+                            document.getElementById('snap-btn-text').textContent = 'Tushirish';
+                            guideText.textContent = 'Tayyor!';
+                            guideText.setAttribute('fill', '#22c55e');
+                            guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#22c55e'); });
+                        } else {
+                            snapBtn.disabled = true;
+                            snapBtn.style.background = '#ef4444';
+                            snapBtn.style.cursor = 'not-allowed';
+                            snapBtn.style.boxShadow = 'none';
+                            document.getElementById('snap-btn-text').textContent = 'Qolipga moslang';
+                            guideText.textContent = 'Qolipdan chiqib ketyapsiz';
+                            guideText.setAttribute('fill', '#ef4444');
+                            guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#ef4444'); });
+                        }
+                    } else {
+                        snapBtn.disabled = true;
+                        snapBtn.style.background = '#94a3b8';
+                        snapBtn.style.cursor = 'not-allowed';
+                        snapBtn.style.boxShadow = 'none';
+                        document.getElementById('snap-btn-text').textContent = 'Yuz topilmadi';
+                        guideText.textContent = 'Yuzingizni ko\'rsating';
+                        guideText.setAttribute('fill', '#f59e0b');
+                        guideEl.querySelectorAll('ellipse,path,line').forEach(function(el) { el.setAttribute('stroke', '#f59e0b'); });
+                    }
+                }).catch(function() {});
+            } else {
+                snapBtn.disabled = false;
+                snapBtn.style.background = 'linear-gradient(135deg,#059669,#10b981)';
+                snapBtn.style.cursor = 'pointer';
+                snapBtn.style.boxShadow = '0 4px 16px rgba(5,150,105,0.4)';
+                document.getElementById('snap-btn-text').textContent = 'Tushirish';
+            }
         }
 
         function snapPhoto() {

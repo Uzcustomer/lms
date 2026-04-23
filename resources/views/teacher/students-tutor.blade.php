@@ -153,7 +153,7 @@
                             <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}"
                                  onclick="openPhotoModal('{{ $student->id }}', '{{ addslashes($student->full_name) }}', '{{ $student->student_id_number }}', '{{ $student->group_name }}', '{{ $studentPhoto ? asset('storage/' . $studentPhoto->photo_path) : '' }}')"
                                  style="cursor:pointer;">
-                                <div style="font-size:12px;color:#94a3b8;width:24px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
+                                <div style="font-size:10px;color:#b0b8c4;width:16px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
                                 @if($studentPhoto)
                                     <div class="student-avatar"><img src="{{ asset('storage/' . $studentPhoto->photo_path) }}" alt=""></div>
                                 @elseif($student->image)
@@ -169,11 +169,6 @@
                                     </div>
                                 </div>
                                 <div class="student-right">
-                                    @if($student->avg_gpa)
-                                        <div class="student-gpa" style="color:{{ $student->avg_gpa >= 3.5 ? '#16a34a' : ($student->avg_gpa >= 2.5 ? '#ca8a04' : '#dc2626') }};">
-                                            {{ number_format($student->avg_gpa, 2) }}
-                                        </div>
-                                    @endif
                                     @if($studentPhoto)
                                         <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                     @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')

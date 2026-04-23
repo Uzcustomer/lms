@@ -856,6 +856,14 @@ class JournalController extends Controller
             ->orderBy('full_name')
             ->get();
 
+        if ($students->isEmpty()) {
+            $students = DB::table('students')
+                ->where('group_id', $group->group_hemis_id)
+                ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
+                ->orderBy('full_name')
+                ->get();
+        }
+
         // Get other averages (ON, OSKI, Test, Quiz) with status-based grade calculation
         // Filter by education_year_code to exclude old education year data
         // OSKI/Test (101,102) uchun semester_code filtrini yumshatish — diagnostika boshqa semester bilan saqlagan bo'lishi mumkin

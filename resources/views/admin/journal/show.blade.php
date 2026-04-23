@@ -835,6 +835,7 @@
         $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
         $isOqituvchi = is_active_oqituvchi();
+        $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
         $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
         $canAdminEditExam = false;
     @endphp

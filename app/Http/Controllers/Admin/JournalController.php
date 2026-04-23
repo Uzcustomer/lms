@@ -2330,6 +2330,11 @@ class JournalController extends Controller
             ->exists();
 
         if ($ynLocked) {
+            // Admin/superadmin uchun toggle ON bo'lsa — YN lock'dan o'tkazish
+            $adminMtToggle = $isAdminRole && Setting::get('feature_admin_mt_grade', '0') === '1';
+            if ($adminMtToggle) {
+                // Ruxsat — davom etadi
+            } else {
             // Sababli ariza orqali MT bahosi: tasdiqlangan sababli + MT makeup turi
             // mavjud bo'lsa va deadline ichida (yoki admin) bo'lsa — ruxsat
             $sababliMtAllowed = false;
@@ -2368,6 +2373,7 @@ class JournalController extends Controller
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
                     'yn_locked' => true,
                 ], 403);
+            }
             }
         }
 

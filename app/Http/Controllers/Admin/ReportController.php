@@ -108,9 +108,15 @@ class ReportController extends Controller
         $dateFrom = $request->filled('date_from') ? $request->date_from : null;
         $dateTo = $request->filled('date_to') ? $request->date_to : null;
 
+        // JN (= JB) training turlari: Ma'ruza/MT/ON/OSKI/Test/Quiz kodlari chiqarib tashlanadi.
+        // Jurnal bilan bir xil: whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103]).
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
         // 1-QADAM: Barcha schedule yozuvlarini olish (pairs_per_day hisoblash uchun)
         $scheduleQuery = DB::table('schedules as sch')
+            ->whereNull('sch.deleted_at')
             ->whereNotIn('sch.training_type_name', $excludedNames)
+            ->whereNotIn('sch.training_type_code', $excludedTrainingCodes)
             ->whereNotNull('sch.lesson_date')
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
 
@@ -128,6 +134,7 @@ class ReportController extends Controller
                 });
             if ($request->get('current_semester', '1') == '1') {
                 $scheduleQuery->where('sem.current', true);
+                $scheduleQuery->where('sch.education_year_current', true);
             }
             if ($request->filled('level_code')) {
                 $scheduleQuery->where('sem.level_code', $request->level_code);
@@ -255,12 +262,16 @@ class ReportController extends Controller
             }
         }
 
-        // 3-QADAM: student_grades dan baholarni olish (lesson_pair_code bilan)
+        // 3-QADAM: student_grades dan baholarni olish (lesson_pair_code bilan).
+        // ON/OSKI/Test/Quiz kodlari (100, 101, 102, 103) chiqarib tashlanadi — jurnaldagi JB filtriga mos.
+        // Ma'ruza (11) va MT (99) baho sifatida kelishi mumkin, ammo ular keyinroq
+        // schedule'dagi (sana+juftlik) to'plamiga mos kelmagani uchun avtomatik chetlashtiriladi.
         $gradesQuery = DB::table('student_grades')
+            ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
-            ->whereNotIn('training_type_name', $excludedNames)
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->where(function ($q) {
                 $q->whereNotNull('grade')->orWhereNotNull('retake_grade');
             })
@@ -275,12 +286,29 @@ class ReportController extends Controller
             $gradesQuery->where('lesson_date', '<=', $dateTo);
         }
 
-        // 4-QADAM: Jurnal formulasi bo'yicha hisoblash
-        // a) Baho date_pair larini columns ga birlashtirish (jurnal kabi fallback)
-        // b) Baholarni kun bo'yicha guruhlash
+        // 4-QADAM: Jurnal formulasi bo'yicha hisoblash.
+        // Jurnal yondashuvi: columns — faqat schedule'dan. Baholar schedule'dagi
+        // (sana+juftlik) to'plamiga mos kelsa hisobga olinadi (JournalController.php:635).
         $cutoffDate = $dateTo ?? Carbon::now('Asia/Tashkent')->format('Y-m-d');
 
-        $gradesByDay = [];      // [student|subject|date] => [grade1, ...]
+        // pairs_per_day va lesson_dates ni schedule columns dan hisoblash
+        $pairsPerDay = [];   // [combo_key|date] => juftliklar soni
+        $lessonDates = [];   // [combo_key] => [date1, date2, ...]
+
+        foreach ($columns as $comboKey => $datePairs) {
+            $datesSet = [];
+            foreach ($datePairs as $datePair => $v) {
+                $dateKey = substr($datePair, 0, 10);
+                $ppdKey = $comboKey . '|' . $dateKey;
+                $pairsPerDay[$ppdKey] = ($pairsPerDay[$ppdKey] ?? 0) + 1;
+                $datesSet[$dateKey] = true;
+            }
+            $dates = array_keys($datesSet);
+            sort($dates);
+            $lessonDates[$comboKey] = $dates;
+        }
+
+        $gradesByDay = [];      // [student|subject|date] => [pair_code => grade]
         $studentSubjects = [];  // [student|subject] => info
 
         foreach ($gradesQuery->cursor() as $g) {
@@ -294,9 +322,13 @@ class ReportController extends Controller
             $dateKey = substr($g->lesson_date, 0, 10);
             if ($dateKey < $minDate) continue;
 
-            // Baho date_pair ni columns ga birlashtirish (jurnal fallback logikasi)
+            // Baho faqat schedule'dagi (sana+juftlik) juftligiga mos kelsa qabul qilinadi.
+            // Bu jurnal bilan bir xil xulq-atvor — MT/Ma'ruza/boshqa training type grade'lari
+            // JN to'plamiga kirmaydi, noma'lum juftlik kodlari ham e'tiborga olinmaydi.
             $datePairKey = $dateKey . '_' . $g->lesson_pair_code;
-            $columns[$comboKey][$datePairKey] = true;
+            if (!isset($columns[$comboKey][$datePairKey])) {
+                continue;
+            }
 
             // Baholarni kun bo'yicha guruhlash (pair_code bo'yicha — jurnal kabi deduplikatsiya)
             $gradeKey = $g->student_hemis_id . '|' . $g->subject_id . '|' . $dateKey;
@@ -315,23 +347,6 @@ class ReportController extends Controller
                     'combo_key' => $comboKey,
                 ];
             }
-        }
-
-        // pairs_per_day va lesson_dates ni yakuniy columns dan hisoblash
-        $pairsPerDay = [];   // [combo_key|date] => juftliklar soni
-        $lessonDates = [];   // [combo_key] => [date1, date2, ...]
-
-        foreach ($columns as $comboKey => $datePairs) {
-            $datesSet = [];
-            foreach ($datePairs as $datePair => $v) {
-                $dateKey = substr($datePair, 0, 10);
-                $ppdKey = $comboKey . '|' . $dateKey;
-                $pairsPerDay[$ppdKey] = ($pairsPerDay[$ppdKey] ?? 0) + 1;
-                $datesSet[$dateKey] = true;
-            }
-            $dates = array_keys($datesSet);
-            sort($dates);
-            $lessonDates[$comboKey] = $dates;
         }
 
         // 5-QADAM: Kunlik o'rtachalar → yakuniy o'rtacha (jurnal formulasi)

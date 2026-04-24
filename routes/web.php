@@ -638,6 +638,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
         });
 
+        Route::prefix('student-photos')->name('student-photos.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'index'])->name('index');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'reject'])->name('reject');
+        });
+
         // Diagnostika sahifasi (yangi dizayn)
         Route::prefix('diagnostika')->name('diagnostika.')->group(function () {
             Route::get('/', [QuizResultController::class, 'diagnostikaPage'])->name('index');

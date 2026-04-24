@@ -87,7 +87,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                       style: TextStyle(color: sub, fontSize: 15)))
               : Column(
                   children: [
-                    _buildSubjectSelector(isDark, txt, sub),
+                    _buildSubjectDropdown(isDark, txt, sub),
                     if (_selectedSubjectId != null)
                       Expanded(
                         child: _loadingGrades
@@ -101,8 +101,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.touch_app_outlined,
-                                  size: 48,
-                                  color: sub.withOpacity(0.5)),
+                                  size: 48, color: sub.withOpacity(0.5)),
                               const SizedBox(height: 12),
                               Text('Fanni tanlang',
                                   style: TextStyle(
@@ -118,97 +117,78 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     );
   }
 
-  Widget _buildSubjectSelector(bool isDark, Color txt, Color sub) {
+  Widget _buildSubjectDropdown(bool isDark, Color txt, Color sub) {
+    final cardBg = isDark ? AppTheme.darkCard : Colors.white;
+    final borderColor = isDark ? Colors.white12 : Colors.grey.shade300;
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: _subjects.map<Widget>((s) {
+      margin: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: _selectedSubjectId,
+          hint: Text('Fanni tanlang',
+              style: TextStyle(color: sub, fontSize: 14)),
+          isExpanded: true,
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: sub),
+          dropdownColor: cardBg,
+          borderRadius: BorderRadius.circular(14),
+          style: TextStyle(fontSize: 14, color: txt),
+          items: _subjects.map<DropdownMenuItem<int>>((s) {
             final id = s['subject_id'] as int? ?? 0;
             final name = s['subject_name']?.toString() ?? '';
-            final isSelected = _selectedSubjectId == id;
             final davPercent = _toDouble(s['dav_percent']);
             final hasAbsence = davPercent > 0;
 
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    setState(() {
-                      _selectedSubjectId = id;
-                      _selectedSubjectName = name;
-                    });
-                    _loadGrades(id);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      gradient: isSelected
-                          ? const LinearGradient(
-                              colors: [Color(0xFF4A6CF7), Color(0xFF6C63FF)])
-                          : null,
-                      color: isSelected
-                          ? null
-                          : isDark
-                              ? AppTheme.darkCard
-                              : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: isSelected
-                          ? null
-                          : Border.all(
-                              color: hasAbsence
-                                  ? AppTheme.errorColor.withOpacity(0.3)
-                                  : isDark
-                                      ? Colors.white12
-                                      : Colors.grey.shade300),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF4A6CF7).withOpacity(0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              )
-                            ]
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          name.length > 25
-                              ? '${name.substring(0, 25)}...'
-                              : name,
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight:
-                                isSelected ? FontWeight.w600 : FontWeight.w500,
-                            color: isSelected ? Colors.white : txt,
-                          ),
-                        ),
-                        if (hasAbsence) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(
-                              color: AppTheme.errorColor,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+            return DropdownMenuItem<int>(
+              value: id,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: _selectedSubjectId == id
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: txt)),
                   ),
-                ),
+                  if (hasAbsence)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.errorColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('${davPercent.toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.errorColor)),
+                    ),
+                ],
               ),
             );
           }).toList(),
+          onChanged: (id) {
+            if (id == null) return;
+            final s = _subjects.firstWhere(
+                (s) => (s['subject_id'] as int? ?? 0) == id,
+                orElse: () => null);
+            setState(() {
+              _selectedSubjectId = id;
+              _selectedSubjectName = s?['subject_name']?.toString() ?? '';
+            });
+            _loadGrades(id);
+          },
         ),
       ),
     );
@@ -216,17 +196,17 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
 
   Widget _buildGradeTable(bool isDark, Color txt, Color sub) {
     final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
-    final headerBg = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5F7FA);
     final cellBg = isDark ? AppTheme.darkCard : Colors.white;
 
-    final processedRows = _buildRows();
+    final dayRows = _buildDayRows();
 
-    if (processedRows.isEmpty) {
+    if (dayRows.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.event_note_outlined, size: 48, color: sub.withOpacity(0.5)),
+            Icon(Icons.event_note_outlined,
+                size: 48, color: sub.withOpacity(0.5)),
             const SizedBox(height: 12),
             Text('Ma\'lumot topilmadi',
                 style: TextStyle(color: sub, fontSize: 14)),
@@ -235,23 +215,29 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       );
     }
 
-    final absentCount =
-        processedRows.where((r) => r['type'] == 'absent').length;
-    final retakeCount =
-        processedRows.where((r) => r['type'] == 'retake').length;
-    final totalLessons = processedRows.length;
-    final attendedCount = totalLessons - absentCount;
+    int totalPairs = 0;
+    int absentPairs = 0;
+    int retakePairs = 0;
+    for (final day in dayRows) {
+      final pairs = day['pairs'] as List<Map<String, dynamic>>;
+      for (final p in pairs) {
+        totalPairs++;
+        if (p['type'] == 'absent') absentPairs++;
+        if (p['type'] == 'retake') retakePairs++;
+      }
+    }
+    final attendedPairs = totalPairs - absentPairs;
 
     return Column(
       children: [
         _buildStatsRow(
-            totalLessons, attendedCount, absentCount, retakeCount, isDark, txt),
+            totalPairs, attendedPairs, absentPairs, retakePairs, isDark, txt),
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
-            itemCount: processedRows.length,
-            itemBuilder: (_, i) => _buildRow(
-                processedRows[i], i, borderColor, headerBg, cellBg, txt, sub, isDark),
+            itemCount: dayRows.length,
+            itemBuilder: (_, i) =>
+                _buildDayRow(dayRows[i], borderColor, cellBg, txt, sub, isDark),
           ),
         ),
       ],
@@ -272,7 +258,10 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [percentColor.withOpacity(0.1), percentColor.withOpacity(0.05)],
+          colors: [
+            percentColor.withOpacity(0.1),
+            percentColor.withOpacity(0.05)
+          ],
         ),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: percentColor.withOpacity(0.2)),
@@ -309,17 +298,15 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Row(
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
                   children: [
                     _statChip('Jami', '$total', Colors.blueGrey),
-                    const SizedBox(width: 8),
                     _statChip('Bor', '$attended', AppTheme.successColor),
-                    const SizedBox(width: 8),
                     _statChip('NB', '$absent', AppTheme.errorColor),
-                    if (retake > 0) ...[
-                      const SizedBox(width: 8),
+                    if (retake > 0)
                       _statChip('Retake', '$retake', AppTheme.warningColor),
-                    ],
                   ],
                 ),
               ],
@@ -343,7 +330,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     );
   }
 
-  List<Map<String, dynamic>> _buildRows() {
+  List<Map<String, dynamic>> _buildDayRows() {
     final gradeMap = <String, List<Map<String, dynamic>>>{};
 
     for (final g in _grades) {
@@ -354,7 +341,9 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       if (ttCode == 99 || ttCode == 100 || ttCode == 101 || ttCode == 102) {
         continue;
       }
-      gradeMap.putIfAbsent(dateKey, () => []).add(Map<String, dynamic>.from(g));
+      gradeMap
+          .putIfAbsent(dateKey, () => [])
+          .add(Map<String, dynamic>.from(g));
     }
 
     final dateSet = <String>{};
@@ -372,84 +361,84 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     }
 
     final sortedDates = dateSet.toList()..sort();
-    final rows = <Map<String, dynamic>>[];
+    final dayRows = <Map<String, dynamic>>[];
 
     for (final dateKey in sortedDates) {
       final dayGrades = gradeMap[dateKey];
+      final pairs = <Map<String, dynamic>>[];
+
       if (dayGrades == null || dayGrades.isEmpty) {
-        rows.add({
-          'date': dateKey,
+        pairs.add({
           'type': 'no_data',
           'grade': null,
           'retake_grade': null,
-          'training_type': '',
           'pair': '',
         });
-        continue;
-      }
+      } else {
+        for (final g in dayGrades) {
+          final reason = g['reason']?.toString();
+          final status = g['status']?.toString();
+          final grade = g['grade'];
+          final retakeGrade = g['retake_grade'];
 
-      for (final g in dayGrades) {
-        final reason = g['reason']?.toString();
-        final status = g['status']?.toString();
-        final grade = g['grade'];
-        final retakeGrade = g['retake_grade'];
-
-        String type;
-        if (reason == 'absent' && (grade == null || grade == 0)) {
-          if (retakeGrade != null && retakeGrade is num && retakeGrade > 0) {
-            type = 'retake';
+          String type;
+          if (reason == 'absent' && (grade == null || grade == 0)) {
+            if (retakeGrade != null && retakeGrade is num && retakeGrade > 0) {
+              type = 'retake';
+            } else {
+              type = 'absent';
+            }
+          } else if (status == 'pending') {
+            type = 'pending';
           } else {
-            type = 'absent';
+            type = 'graded';
           }
-        } else if (status == 'pending') {
-          type = 'pending';
-        } else {
-          type = 'graded';
-        }
 
-        rows.add({
-          'date': dateKey,
-          'type': type,
-          'grade': grade,
-          'retake_grade': retakeGrade,
-          'training_type': g['training_type_name']?.toString() ?? '',
-          'pair': g['lesson_pair_name']?.toString() ?? '',
-          'start_time': g['lesson_pair_start_time']?.toString() ?? '',
-        });
+          pairs.add({
+            'type': type,
+            'grade': grade,
+            'retake_grade': retakeGrade,
+            'pair': g['lesson_pair_name']?.toString() ?? '',
+          });
+        }
       }
+
+      dayRows.add({'date': dateKey, 'pairs': pairs});
     }
 
-    return rows;
+    return dayRows;
   }
 
-  Widget _buildRow(Map<String, dynamic> row, int index, Color borderColor,
-      Color headerBg, Color cellBg, Color txt, Color sub, bool isDark) {
-    final dateKey = row['date'] as String;
-    final type = row['type'] as String;
-    final grade = row['grade'];
-    final retakeGrade = row['retake_grade'];
-    final pair = row['pair'] as String;
-    final startTime = row['start_time']?.toString() ?? '';
-    final trainingType = row['training_type'] as String;
+  Widget _buildDayRow(Map<String, dynamic> day, Color borderColor,
+      Color cellBg, Color txt, Color sub, bool isDark) {
+    final dateKey = day['date'] as String;
+    final pairs = day['pairs'] as List<Map<String, dynamic>>;
+
+    final hasAbsent = pairs.any((p) => p['type'] == 'absent');
+    final hasRetake = pairs.any((p) => p['type'] == 'retake');
 
     String dateStr;
+    String weekDay;
     try {
       final dt = DateTime.parse(dateKey);
       dateStr =
           '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}';
+      const days = ['Du', 'Se', 'Cho', 'Pa', 'Ju', 'Sha', 'Ya'];
+      weekDay = days[dt.weekday - 1];
     } catch (_) {
       dateStr = dateKey;
+      weekDay = '';
     }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: cellBg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: type == 'absent'
+          color: hasAbsent
               ? AppTheme.errorColor.withOpacity(0.3)
-              : type == 'retake'
+              : hasRetake
                   ? AppTheme.warningColor.withOpacity(0.3)
                   : borderColor,
         ),
@@ -459,7 +448,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
         child: Row(
           children: [
             SizedBox(
-              width: 44,
+              width: 42,
               child: Column(
                 children: [
                   Text(dateStr,
@@ -467,151 +456,127 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: txt)),
-                  if (startTime.isNotEmpty)
-                    Text(startTime,
-                        style: TextStyle(fontSize: 10, color: sub)),
+                  Text(weekDay,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: sub)),
                 ],
               ),
             ),
             Container(
               width: 1,
-              height: 36,
+              height: 40,
               margin: const EdgeInsets.symmetric(horizontal: 10),
               color: borderColor,
             ),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    trainingType.isNotEmpty ? trainingType : '—',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        color: txt),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (pair.isNotEmpty)
-                    Text('$pair-para',
-                        style: TextStyle(fontSize: 10.5, color: sub)),
-                ],
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: pairs.map((p) {
+                  final pairLabel = p['pair']?.toString() ?? '';
+                  return _buildPairCell(
+                      p['type'] as String,
+                      p['grade'],
+                      p['retake_grade'],
+                      pairLabel,
+                      isDark,
+                      txt,
+                      sub);
+                }).toList(),
               ),
             ),
-            const SizedBox(width: 8),
-            _buildGradeCell(type, grade, retakeGrade, isDark),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGradeCell(
-      String type, dynamic grade, dynamic retakeGrade, bool isDark) {
+  Widget _buildPairCell(String type, dynamic grade, dynamic retakeGrade,
+      String pairLabel, bool isDark, Color txt, Color sub) {
     if (type == 'retake') {
-      return SizedBox(
-        width: 48,
-        height: 48,
-        child: CustomPaint(
-          painter: _DiagonalCellPainter(
-            nbText: 'NB',
-            gradeText: retakeGrade is num
-                ? (retakeGrade % 1 == 0
-                    ? retakeGrade.toInt().toString()
-                    : retakeGrade.toStringAsFixed(1))
-                : retakeGrade?.toString() ?? '',
-            isDark: isDark,
+      return Column(
+        children: [
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: CustomPaint(
+              painter: _DiagonalCellPainter(
+                nbText: 'NB',
+                gradeText: retakeGrade is num
+                    ? (retakeGrade % 1 == 0
+                        ? retakeGrade.toInt().toString()
+                        : retakeGrade.toStringAsFixed(1))
+                    : retakeGrade?.toString() ?? '',
+                isDark: isDark,
+              ),
+            ),
           ),
-        ),
+          if (pairLabel.isNotEmpty)
+            Text(pairLabel,
+                style: TextStyle(fontSize: 9, color: sub)),
+        ],
       );
     }
+
+    Color bgColor;
+    Color borderCol;
+    String displayText;
+    Color textColor;
 
     if (type == 'absent') {
-      return Container(
-        width: 48,
-        height: 36,
-        decoration: BoxDecoration(
-          color: AppTheme.errorColor.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppTheme.errorColor.withOpacity(0.3)),
-        ),
-        alignment: Alignment.center,
-        child: const Text('NB',
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.errorColor)),
-      );
+      bgColor = AppTheme.errorColor.withOpacity(0.1);
+      borderCol = AppTheme.errorColor.withOpacity(0.3);
+      displayText = 'NB';
+      textColor = AppTheme.errorColor;
+    } else if (type == 'pending' || type == 'no_data') {
+      bgColor = Colors.grey.withOpacity(0.08);
+      borderCol = Colors.grey.withOpacity(0.2);
+      displayText = '—';
+      textColor = sub;
+    } else {
+      final gradeVal = grade is num
+          ? grade.toDouble()
+          : double.tryParse(grade?.toString() ?? '') ?? 0;
+      final gradeColor = gradeVal >= 86
+          ? AppTheme.successColor
+          : gradeVal >= 71
+              ? const Color(0xFF1E88E5)
+              : gradeVal >= 56
+                  ? AppTheme.warningColor
+                  : gradeVal > 0
+                      ? AppTheme.errorColor
+                      : sub;
+      bgColor = gradeColor.withOpacity(0.1);
+      borderCol = gradeColor.withOpacity(0.3);
+      displayText = gradeVal % 1 == 0
+          ? gradeVal.toInt().toString()
+          : gradeVal.toStringAsFixed(1);
+      textColor = gradeColor;
     }
 
-    if (type == 'pending') {
-      return Container(
-        width: 48,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
+    return Column(
+      children: [
+        Container(
+          width: 48,
+          height: 36,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: borderCol),
+          ),
+          alignment: Alignment.center,
+          child: Text(displayText,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: textColor)),
         ),
-        alignment: Alignment.center,
-        child: Text('—',
-            style: TextStyle(
-                fontSize: 14,
-                color: isDark
-                    ? AppTheme.darkTextSecondary
-                    : AppTheme.textSecondary)),
-      );
-    }
-
-    if (type == 'no_data') {
-      return Container(
-        width: 48,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: Text('-',
-            style: TextStyle(
-                fontSize: 14,
-                color: isDark
-                    ? AppTheme.darkTextSecondary
-                    : AppTheme.textSecondary)),
-      );
-    }
-
-    final gradeVal =
-        grade is num ? grade.toDouble() : double.tryParse(grade?.toString() ?? '') ?? 0;
-    final gradeColor = gradeVal >= 86
-        ? AppTheme.successColor
-        : gradeVal >= 71
-            ? const Color(0xFF1E88E5)
-            : gradeVal >= 56
-                ? AppTheme.warningColor
-                : gradeVal > 0
-                    ? AppTheme.errorColor
-                    : (isDark
-                        ? AppTheme.darkTextSecondary
-                        : AppTheme.textSecondary);
-
-    final displayText = gradeVal % 1 == 0
-        ? gradeVal.toInt().toString()
-        : gradeVal.toStringAsFixed(1);
-
-    return Container(
-      width: 48,
-      height: 36,
-      decoration: BoxDecoration(
-        color: gradeColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: gradeColor.withOpacity(0.3)),
-      ),
-      alignment: Alignment.center,
-      child: Text(displayText,
-          style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: gradeColor)),
+        if (pairLabel.isNotEmpty)
+          Text(pairLabel,
+              style: TextStyle(fontSize: 9, color: sub)),
+      ],
     );
   }
 
@@ -670,9 +635,7 @@ class _DiagonalCellPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
     nbPainter.paint(
-        canvas,
-        Offset(
-            size.width * 0.08, size.height * 0.55));
+        canvas, Offset(size.width * 0.08, size.height * 0.55));
 
     final gradePainter = TextPainter(
       text: TextSpan(
@@ -687,8 +650,7 @@ class _DiagonalCellPainter extends CustomPainter {
     )..layout();
     gradePainter.paint(
         canvas,
-        Offset(
-            size.width - gradePainter.width - size.width * 0.1,
+        Offset(size.width - gradePainter.width - size.width * 0.1,
             size.height * 0.08));
 
     canvas.restore();

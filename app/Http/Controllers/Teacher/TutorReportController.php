@@ -46,7 +46,7 @@ class TutorReportController extends Controller
     {
         $groupIds = $this->getTutorGroupIds();
         if (empty($groupIds)) {
-            abort(403, 'Sizga biriktirilgan guruhlar yo\'q.');
+            return [];
         }
         if ($request->filled('group')) {
             $selected = $request->group;
@@ -96,6 +96,10 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
+
+        if (empty($groupIds)) {
+            return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
+        }
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 

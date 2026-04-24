@@ -305,14 +305,31 @@
             </svg>
             YN kunini belgilash
         </a>
-        @elseif(!$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi', 'oqituvchi', 'fan_masuli']))
+        @elseif($hasActiveRole('oqituvchi'))
+        {{-- O'qituvchi uchun JN o'zlashtirish --}}
+        <div class="sidebar-section">Hisobotlar</div>
+        <a href="{{ $r('admin.reports.jn', 'teacher.reports.jn') }}"
+           class="sidebar-link {{ $isActive('admin.reports.jn', 'teacher.reports.jn') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            JN o'zlashtirish
+        </a>
+        @elseif(!$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         @php
             $isTutorWithGroups = $hasActiveRole('tyutor') && auth()->guard('teacher')->check() && auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0;
         @endphp
 
         @if($isTutorWithGroups)
-        {{-- Tyutor uchun Hisobotlar bo'limi olib tashlandi --}}
+        <div class="sidebar-section">Hisobotlar</div>
+        <a href="{{ $r('admin.reports.jn', 'teacher.reports.jn') }}"
+           class="sidebar-link {{ $isActive('admin.reports.jn', 'teacher.reports.jn') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            JN o'zlashtirish
+        </a>
         @else
         <div class="sidebar-section">Qo'shimcha</div>
 
@@ -459,6 +476,15 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path>
             </svg>
             Face ID Test
+        </a>
+
+        <a href="{{ route('admin.student-photos.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.student-photos.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h3l2-2h4l2 2h3a2 2 0 012 2v11a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            Talaba rasmlari
         </a>
         @endif
 

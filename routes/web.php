@@ -642,6 +642,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'index'])->name('index');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'reject'])->name('reject');
+            Route::post('/{id}/check-similarity', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'checkSimilarity'])->name('check-similarity');
         });
 
         // Diagnostika sahifasi (yangi dizayn)

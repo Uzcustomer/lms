@@ -45,6 +45,12 @@
 
                 <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:12px;">
                     <span class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ count($results ?? []) }} ta yozuv</span>
+                    @if(!empty($results))
+                        <button type="button" class="btn-excel" onclick="downloadExcel()">
+                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Excel
+                        </button>
+                    @endif
                 </div>
 
                 <div style="max-height:calc(100vh - 300px);overflow-y:auto;overflow-x:auto;">
@@ -91,7 +97,7 @@
 
     @include('teacher.reports.partials.report-styles')
     <script>
-        function applyFilter() {
+        function getParams() {
             var group = document.getElementById('group-select').value;
             var filter = document.getElementById('filter-select').value;
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
@@ -99,7 +105,16 @@
             if (group) params.push('group=' + encodeURIComponent(group));
             if (filter) params.push('filter=' + encodeURIComponent(filter));
             if (cs === '0') params.push('current_semester=0');
+            return params;
+        }
+        function applyFilter() {
+            var params = getParams();
             window.location.href = '{{ route("teacher.reports.jn") }}' + (params.length ? '?' + params.join('&') : '');
+        }
+        function downloadExcel() {
+            var params = getParams();
+            params.push('export=excel');
+            window.location.href = '{{ route("teacher.reports.jn") }}' + '?' + params.join('&');
         }
     </script>
 </x-teacher-app-layout>

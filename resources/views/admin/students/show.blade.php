@@ -294,6 +294,43 @@
 
                             {{-- TAB 5: FAYLLAR --}}
                             <div id="ptab-content-fayllar" class="sp-content" style="display:none;">
+                            {{-- Tyutor tomonidan yuklangan rasm --}}
+                            @php
+                                $tutorPhoto = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)
+                                    ->latest()
+                                    ->first();
+                            @endphp
+                            <div class="mt-6 p-4 rounded-lg" style="background: linear-gradient(135deg, #dbeafe, #eff6ff); border: 1px solid #93c5fd;">
+                                <h4 class="font-semibold text-base mb-3 border-b pb-2" style="color: #1e40af;">Talaba rasmi (tyutor tomonidan)</h4>
+                                @if($tutorPhoto)
+                                    <div class="flex items-start gap-4">
+                                        <img src="{{ url($tutorPhoto->photo_path) }}" alt="Talaba rasmi"
+                                             style="width:120px;height:160px;object-fit:cover;border-radius:8px;border:2px solid #3b82f6;">
+                                        <div class="flex-1 text-sm" style="color:#1e40af;">
+                                            <div class="mb-2"><strong>Holati:</strong> <span style="color:#059669;font-weight:700;">Ha, yuklangan</span></div>
+                                            <div class="mb-2"><strong>Yuklagan:</strong> {{ $tutorPhoto->uploaded_by }}</div>
+                                            <div class="mb-2"><strong>Sana:</strong> {{ $tutorPhoto->created_at->format('d.m.Y H:i') }}</div>
+                                            <div class="mb-2"><strong>URL:</strong>
+                                                <a href="{{ url($tutorPhoto->photo_path) }}" target="_blank"
+                                                   style="color:#2563eb;text-decoration:underline;word-break:break-all;font-size:11px;">
+                                                    {{ url($tutorPhoto->photo_path) }}
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="flex items-center gap-3">
+                                        <div style="width:60px;height:60px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;">
+                                            <svg style="width:32px;height:32px;color:#94a3b8;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                                        </div>
+                                        <div class="text-sm" style="color:#64748b;">
+                                            <div><strong>Holati:</strong> <span style="color:#dc2626;font-weight:700;">Yo'q</span></div>
+                                            <div class="text-xs mt-1">Tyutor tomonidan rasm hali yuklanmagan</div>
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
+
                             @if($canUploadFiles)
                             <div class="mt-6 p-4 rounded-lg" style="background: linear-gradient(135deg, #fef3c7, #fffbeb); border: 1px solid #fbbf24;">
                                 <h4 class="font-semibold text-base mb-3 border-b pb-2" style="color: #92400e;">Fayllar</h4>

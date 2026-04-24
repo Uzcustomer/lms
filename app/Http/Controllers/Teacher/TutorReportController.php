@@ -19,6 +19,8 @@ class TutorReportController extends Controller
     private function getTutorGroupIds()
     {
         $teacher = auth()->guard('teacher')->user();
+        if (!$teacher) return [];
+
         $groupIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
 
         if (empty($groupIds)) {
@@ -36,6 +38,8 @@ class TutorReportController extends Controller
     private function getTutorGroups()
     {
         $teacher = auth()->guard('teacher')->user();
+        if (!$teacher) return collect();
+
         $groups = $teacher->groups()->where('active', true)->orderBy('name')->get();
 
         if ($groups->isEmpty()) {
@@ -111,6 +115,10 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
+
+        if (empty($groupIds)) {
+            return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
+        }
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
 

@@ -89,6 +89,67 @@
                 }
                 this.bulk.phase = 'done';
             },
+            review: {
+                open: false, mode: 'approve', phase: 'confirm',
+                ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
+                reason: '', cancel: false, errors: [],
+            },
+            async openReview(mode) {
+                this.review = {
+                    open: true, mode: mode, phase: 'confirm',
+                    ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
+                    reason: '', cancel: false, errors: [],
+                };
+                const params = new URLSearchParams(new FormData(document.getElementById('sp-filter-form')));
+                try {
+                    const res = await fetch(`/admin/student-photos/pending-ids?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json();
+                    this.review.ids = data.ids || [];
+                    this.review.total = this.review.ids.length;
+                } catch (e) {
+                    this.review.errors.push('Ro\'yxatni olishda xatolik: ' + e.message);
+                }
+            },
+            async runReview() {
+                if (this.review.mode === 'reject' && !this.review.reason.trim()) {
+                    this.review.errors.push('Rad etish sababi kiritilishi shart.');
+                    return;
+                }
+                this.review.phase = 'running';
+                const endpoint = this.review.mode === 'approve' ? 'approve' : 'reject';
+                const csrf = document.querySelector('meta[name=csrf-token]').content;
+                for (let i = 0; i < this.review.ids.length; i++) {
+                    if (this.review.cancel) break;
+                    const id = this.review.ids[i];
+                    try {
+                        const body = new URLSearchParams();
+                        body.append('_token', csrf);
+                        if (this.review.mode === 'reject') {
+                            body.append('rejection_reason', this.review.reason);
+                        }
+                        const res = await fetch(`/admin/student-photos/${id}/${endpoint}`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': csrf,
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: body,
+                        });
+                        if (res.ok) { this.review.succeeded++; }
+                        else {
+                            this.review.failed++;
+                            const err = await res.json().catch(() => ({}));
+                            this.review.errors.push(`#${id}: ${err.message || err.error || ('HTTP ' + res.status)}`);
+                        }
+                    } catch (e) {
+                        this.review.failed++;
+                        this.review.errors.push(`#${id}: ${e.message}`);
+                    }
+                    this.review.processed = i + 1;
+                }
+                this.review.phase = 'done';
+            },
         }">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
 
@@ -206,6 +267,14 @@
                                 <option value="unchecked" {{ request('similarity') == 'unchecked' ? 'selected' : '' }}>Tekshirilmagan</option>
                             </select>
                         </div>
+                        <div class="filter-item" style="min-width: 110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> AI min %</label>
+                            <input type="number" name="min_similarity" value="{{ request('min_similarity') }}" min="0" max="100" step="0.1" placeholder="0" class="sp-text-input" />
+                        </div>
+                        <div class="filter-item" style="min-width: 110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> AI max %</label>
+                            <input type="number" name="max_similarity" value="{{ request('max_similarity') }}" min="0" max="100" step="0.1" placeholder="100" class="sp-text-input" />
+                        </div>
                         <div class="filter-item" style="min-width: 140px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanadan</label>
                             <input type="date" name="date_from" value="{{ request('date_from') }}" class="sp-text-input" />
@@ -214,13 +283,21 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanagacha</label>
                             <input type="date" name="date_to" value="{{ request('date_to') }}" class="sp-text-input" />
                         </div>
-                        <div class="filter-item" style="min-width: 280px;">
+                        <div class="filter-item" style="flex: 1; min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:6px;flex-wrap:wrap;">
                                 <a href="{{ route('admin.student-photos.index') }}" class="btn-clear">Tozalash</a>
-                                <button type="button" @click="openBulk()" class="btn-bulk">
+                                <button type="button" @click="openBulk()" class="btn-bulk" title="Filtr bo'yicha rasmlarni AI bilan tekshirish">
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
                                     AI bulk
+                                </button>
+                                <button type="button" @click="openReview('approve')" class="btn-approve" title="Filtrdagi pending rasmlarni hammasini tasdiqlash">
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Bulk qabul
+                                </button>
+                                <button type="button" @click="openReview('reject')" class="btn-reject" title="Filtrdagi pending rasmlarni hammasini rad etish">
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    Bulk rad
                                 </button>
                                 <button type="submit" class="btn-calc">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
@@ -246,7 +323,8 @@
                                     <th class="px-3 py-2 text-left font-medium text-gray-600">Guruh</th>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">Rasm</th>
                                     <th class="px-3 py-2 text-left font-medium text-gray-600">Tyutor</th>
-                                    <th class="px-3 py-2 text-center font-medium text-gray-600">Tekshirish natijasi</th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600">AI %</th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600">Solishtirish</th>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">Ruxsat</th>
                                 </tr>
                             </thead>
@@ -274,6 +352,21 @@
                                         </td>
                                         <td class="px-3 py-2 text-gray-700">{{ $photo->uploaded_by }}</td>
                                         <td class="px-3 py-2 text-center">
+                                            @if($photo->similarity_score !== null)
+                                                @php
+                                                    $pct = (float) $photo->similarity_score;
+                                                    $cls = $photo->similarity_status === 'match'
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : ($photo->similarity_status === 'mismatch' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700');
+                                                @endphp
+                                                <span class="inline-block px-2 py-1 rounded text-sm font-semibold {{ $cls }}">
+                                                    {{ number_format($pct, 1) }}%
+                                                </span>
+                                            @else
+                                                <span class="text-xs text-gray-400">—</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
                                             @php
                                                 $existingSimilarity = $photo->similarity_score !== null ? [
                                                     'similarity_percent' => (float) $photo->similarity_score,
@@ -291,17 +384,6 @@
                                                 </button>
                                             @else
                                                 <span class="text-xs text-gray-400">Profil rasmi yo'q</span>
-                                            @endif
-                                            @if($photo->similarity_score !== null)
-                                                <div class="mt-1 text-xs">
-                                                    @if($photo->similarity_status === 'match')
-                                                        <span class="inline-block px-2 py-0.5 rounded bg-green-100 text-green-800">O'xshash ({{ $photo->similarity_score }}%)</span>
-                                                    @elseif($photo->similarity_status === 'mismatch')
-                                                        <span class="inline-block px-2 py-0.5 rounded bg-red-100 text-red-800">Farqli ({{ $photo->similarity_score }}%)</span>
-                                                    @else
-                                                        <span class="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700">{{ $photo->similarity_score }}%</span>
-                                                    @endif
-                                                </div>
                                             @endif
                                         </td>
                                         <td class="px-3 py-2 text-center">
@@ -338,7 +420,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="11" class="px-3 py-8 text-center text-gray-500">Ma'lumot topilmadi</td>
+                                        <td colspan="12" class="px-3 py-8 text-center text-gray-500">Ma'lumot topilmadi</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -463,6 +545,130 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        {{-- Bulk qabul / rad etish modali --}}
+        <div x-show="review.open" x-cloak x-transition.opacity
+             class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+             @click.self="if (review.phase !== 'running') review.open = false">
+            <div class="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            <span x-show="review.mode === 'approve'">Bulk qabul qilish</span>
+                            <span x-show="review.mode === 'reject'">Bulk rad etish</span>
+                        </h3>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                            Filtrdagi barcha <strong>kutilmoqda</strong> holatidagi rasmlarga qo'llanadi.
+                            Tyutor'larga Telegram orqali xabar yuboriladi.
+                        </p>
+                    </div>
+                    <button type="button" @click="if (review.phase !== 'running') review.open = false"
+                            class="text-gray-400 hover:text-gray-700" :class="review.phase === 'running' ? 'opacity-40 cursor-not-allowed' : ''">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                {{-- Confirm phase --}}
+                <template x-if="review.phase === 'confirm'">
+                    <div>
+                        <template x-if="review.total === 0">
+                            <div class="rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 text-sm">
+                                Hozirgi filtr bo'yicha "kutilmoqda" holatidagi rasm topilmadi. Filtrni tekshiring.
+                            </div>
+                        </template>
+                        <template x-if="review.total > 0">
+                            <div class="space-y-4">
+                                <div class="rounded-md px-4 py-3 text-sm border"
+                                     :class="review.mode === 'approve' ? 'bg-green-50 border-green-200 text-green-900' : 'bg-red-50 border-red-200 text-red-900'">
+                                    <strong x-text="review.total"></strong> ta rasm
+                                    <span x-show="review.mode === 'approve'">tasdiqlanadi</span>
+                                    <span x-show="review.mode === 'reject'">rad etiladi</span>.
+                                    Har bir rasm uchun tyutor'ga avtomat Telegram xabari yuboriladi.
+                                </div>
+
+                                <template x-if="review.mode === 'reject'">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Rad etish sababi (hammasiga bir xil qo'llanadi)</label>
+                                        <textarea x-model="review.reason" rows="3" maxlength="500"
+                                                  class="w-full rounded-md border-gray-300 shadow-sm text-sm"
+                                                  placeholder="Masalan: Rasm standartlariga javob bermaydi — tirsakdan yuqori, oq xalatda qayta yuklang"></textarea>
+                                    </div>
+                                </template>
+
+                                <div class="flex justify-end gap-2 pt-2">
+                                    <button type="button" @click="review.open = false"
+                                            class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
+                                        Bekor qilish
+                                    </button>
+                                    <button type="button" @click="runReview()"
+                                            :class="review.mode === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'"
+                                            class="px-4 py-2 text-white text-sm font-semibold rounded-md">
+                                        <span x-show="review.mode === 'approve'">Tasdiqlashni boshlash</span>
+                                        <span x-show="review.mode === 'reject'">Rad etishni boshlash</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                {{-- Running phase --}}
+                <template x-if="review.phase === 'running'">
+                    <div class="space-y-4">
+                        <div class="text-sm text-gray-700">
+                            Jarayonda: <span class="font-semibold" x-text="review.processed + ' / ' + review.total"></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                            <div class="h-3 transition-all duration-200"
+                                 :class="review.mode === 'approve' ? 'bg-green-600' : 'bg-red-600'"
+                                 :style="`width: ${review.total ? (review.processed / review.total * 100) : 0}%`"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-600">
+                            <span>
+                                <span class="text-green-700">✓ <span x-text="review.succeeded"></span></span>
+                                &nbsp;·&nbsp;
+                                <span class="text-red-700">✗ <span x-text="review.failed"></span></span>
+                            </span>
+                            <button type="button" @click="review.cancel = true"
+                                    :disabled="review.cancel"
+                                    class="px-3 py-1 bg-gray-100 text-gray-700 text-xs rounded-md hover:bg-gray-200 disabled:opacity-60">
+                                <span x-text="review.cancel ? 'To\'xtatilmoqda...' : 'To\'xtatish'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                {{-- Done phase --}}
+                <template x-if="review.phase === 'done'">
+                    <div class="space-y-4">
+                        <div class="rounded-md bg-green-50 border border-green-200 text-green-900 px-4 py-3 text-sm">
+                            Jarayon yakunlandi. <strong x-text="review.succeeded"></strong> ta muvaffaqiyatli,
+                            <strong x-text="review.failed"></strong> ta xatolik.
+                        </div>
+                        <template x-if="review.errors.length > 0">
+                            <details class="rounded-md bg-red-50 border border-red-200 text-red-800 px-4 py-2 text-xs">
+                                <summary class="cursor-pointer font-semibold">Xatoliklar (<span x-text="review.errors.length"></span>)</summary>
+                                <ul class="mt-2 space-y-0.5 max-h-40 overflow-y-auto">
+                                    <template x-for="err in review.errors" :key="err">
+                                        <li x-text="err"></li>
+                                    </template>
+                                </ul>
+                            </details>
+                        </template>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="review.open = false"
+                                    class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
+                                Yopish
+                            </button>
+                            <button type="button" @click="location.reload()"
+                                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">
+                                Sahifani yangilash
+                            </button>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -620,6 +826,12 @@
 
         .btn-bulk { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: linear-gradient(135deg, #6366f1, #818cf8); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(99,102,241,0.3); height: 36px; }
         .btn-bulk:hover { background: linear-gradient(135deg, #4f46e5, #6366f1); box-shadow: 0 4px 12px rgba(99,102,241,0.4); transform: translateY(-1px); }
+
+        .btn-approve { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
+        .btn-approve:hover { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
+
+        .btn-reject { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(220,38,38,0.3); height: 36px; }
+        .btn-reject:hover { background: linear-gradient(135deg, #b91c1c, #dc2626); box-shadow: 0 4px 12px rgba(220,38,38,0.4); transform: translateY(-1px); }
 
         .btn-clear { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; height: 36px; text-decoration: none; }
         .btn-clear:hover { background: #e2e8f0; }

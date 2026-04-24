@@ -83,6 +83,26 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             $query->where('education_type_code', $this->filters['education_type']);
         }
 
+        if (!empty($this->filters['country'])) {
+            $query->where('country_name', $this->filters['country']);
+        }
+
+        if (!empty($this->filters['has_files'])) {
+            if ($this->filters['has_files'] === 'yes') {
+                $query->whereHas('files');
+            } elseif ($this->filters['has_files'] === 'no') {
+                $query->whereDoesntHave('files');
+            }
+        }
+
+        if (!empty($this->filters['has_admission_data'])) {
+            if ($this->filters['has_admission_data'] === 'yes') {
+                $query->whereHas('admissionData');
+            } elseif ($this->filters['has_admission_data'] === 'no') {
+                $query->whereDoesntHave('admissionData');
+            }
+        }
+
         return $query->orderBy('department_name')->orderBy('group_name')->orderBy('full_name');
     }
 

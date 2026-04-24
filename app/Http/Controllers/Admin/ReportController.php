@@ -101,7 +101,7 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         // Sana oralig'i filtri
         $dateFrom = $request->filled('date_from') ? $request->date_from : null;
@@ -109,7 +109,7 @@ class ReportController extends Controller
 
         // 1-QADAM: Barcha schedule yozuvlarini olish (pairs_per_day hisoblash uchun)
         $scheduleQuery = DB::table('schedules as sch')
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
 
@@ -255,7 +255,7 @@ class ReportController extends Controller
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
-            ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotIn('training_type_name', $excludedNames)
             ->where(function ($q) {
                 $q->whereNotNull('grade')->orWhereNotNull('retake_grade');
             })

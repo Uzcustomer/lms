@@ -105,7 +105,7 @@ class TutorReportController extends Controller
                 return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
             }
 
-            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
             $currentSemester = $request->get('current_semester', '1') == '1';
 
             $scheduleQuery = DB::table('schedules as sch')
@@ -115,7 +115,7 @@ class TutorReportController extends Controller
                         ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
                 })
                 ->whereIn('sch.group_id', $groupIds)
-                ->whereNotIn('sch.training_type_code', $excludedCodes)
+                ->whereNotIn('sch.training_type_name', $excludedNames)
                 ->whereNotNull('sch.lesson_date')
                 ->where('sch.education_year_current', true);
 
@@ -145,7 +145,7 @@ class TutorReportController extends Controller
                 ->whereIn('student_hemis_id', $studentHemisIds)
                 ->whereIn('subject_id', $validSubjectIds)
                 ->whereIn('semester_code', $validSemesterCodes)
-                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotIn('training_type_name', $excludedNames)
                 ->whereNotNull('lesson_date')
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade', 'status', 'reason',
                     'lesson_date', 'lesson_pair_code');
@@ -338,7 +338,7 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         // Schedule kombinatsiyalarini olish (joriy semestr)
         $scheduleCombos = DB::table('schedules as sch')
@@ -348,7 +348,7 @@ class TutorReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
             })
             ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->where('sem.current', true)
             ->where('sch.education_year_current', true)
@@ -446,7 +446,7 @@ class TutorReportController extends Controller
                 ->whereIn('student_hemis_id', $hemisChunk)
                 ->whereIn('subject_id', $validSubjectIds)
                 ->whereIn('semester_code', $validSemesterCodes)
-                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotIn('training_type_name', $excludedNames)
                 ->whereNotNull('lesson_date')
                 ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                 ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
@@ -617,7 +617,7 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
         $scoreLimit = (int) $request->get('score_limit', 90);
 
         // Fanlar ro'yxatini olish
@@ -628,7 +628,7 @@ class TutorReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
             })
             ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->where('sem.current', true)
             ->where('sch.education_year_current', true)
@@ -649,7 +649,7 @@ class TutorReportController extends Controller
         $grades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
-            ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotIn('training_type_name', $excludedNames)
             ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason', 'lesson_date')
             ->get();
 
@@ -728,7 +728,7 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         // Schedule yozuvlarini olish (o'tgan kunlar uchun)
         $schedules = DB::table('schedules as sch')
@@ -738,7 +738,7 @@ class TutorReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
             })
             ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->where('sem.current', true)
@@ -763,7 +763,7 @@ class TutorReportController extends Controller
         $existingGrades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $students->pluck('hemis_id')->toArray())
             ->whereIn('subject_id', $subjectIds)
-            ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotIn('training_type_name', $excludedNames)
             ->select('student_hemis_id', 'subject_id', DB::raw('DATE(lesson_date) as lesson_date'))
             ->distinct()
             ->get();

@@ -907,6 +907,8 @@ class ReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->where('sch.training_type_code', '!=', 11)
+            ->whereRaw("sch.subject_name NOT LIKE '%amaliyoti'")
             ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');

@@ -289,14 +289,32 @@
             reader.onload = function(e) {
                 var tempImg = new Image();
                 tempImg.onload = function() {
-                    var canvas = document.createElement('canvas');
-                    var w = tempImg.width, h = tempImg.height;
-                    if (w > MAX_SIZE || h > MAX_SIZE) {
-                        if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
-                        else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+                    // 3:4 aspect ratio qirqish (modal ramkaga mos)
+                    var targetRatio = 3 / 4;
+                    var srcW = tempImg.width, srcH = tempImg.height;
+                    var srcRatio = srcW / srcH;
+                    var cropW, cropH, cropX, cropY;
+                    if (srcRatio > targetRatio) {
+                        // kengroq — chap/o'ng qirqiladi
+                        cropH = srcH;
+                        cropW = Math.round(srcH * targetRatio);
+                        cropX = Math.round((srcW - cropW) / 2);
+                        cropY = 0;
+                    } else {
+                        // balandroq — yuqori/pastdan qirqiladi (asosan yuqoridan oz)
+                        cropW = srcW;
+                        cropH = Math.round(srcW / targetRatio);
+                        cropX = 0;
+                        cropY = Math.round((srcH - cropH) / 3); // yuqoridan ozroq, pastdan ko'proq (yuz markazda qoladi)
                     }
-                    canvas.width = w; canvas.height = h;
-                    canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+
+                    var outW = Math.min(cropW, MAX_SIZE * 3 / 4 | 0);
+                    var outH = Math.round(outW / targetRatio);
+                    if (outH > MAX_SIZE) { outH = MAX_SIZE; outW = Math.round(outH * targetRatio); }
+
+                    var canvas = document.createElement('canvas');
+                    canvas.width = outW; canvas.height = outH;
+                    canvas.getContext('2d').drawImage(tempImg, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
                     canvas.toBlob(function(blob) {
                         currentBlob = blob;
                         var img = document.getElementById('modal-photo-img');

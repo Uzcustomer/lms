@@ -25,18 +25,29 @@ class CheckVisaExpiryCommand extends Command
             })
             ->get();
 
+        // Staff uchun guruhlangan Telegram xabarlari:
+        // $groups[$level][$type][] = ['line' => '...', 'firm' => '...']
+        $groups = [
+            'danger'  => ['registratsiya' => [], 'visa' => []],
+            'warning' => ['registratsiya' => [], 'visa' => []],
+            'info'    => ['registratsiya' => [], 'visa' => []],
+        ];
+
         $sent = 0;
 
         foreach ($visaInfos as $info) {
             $student = $info->student;
             if (!$student) continue;
 
-            $sent += $this->checkRegistration($info, $student, $telegram);
-            $sent += $this->checkVisa($info, $student, $telegram);
+            $sent += $this->checkRegistration($info, $student, $telegram, $groups);
+            $sent += $this->checkVisa($info, $student, $telegram, $groups);
             $sent += $this->checkPassportHandover($info, $student, $telegram);
         }
 
-        $this->info("Viza va registratsiya tekshiruvi tugadi. {$sent} ta bildirishnoma yuborildi.");
+        // Staff, firma javobgarlari va obunachilarga holat bo'yicha bitta xabar
+        $this->dispatchGroupedTelegramMessages($groups, $telegram);
+
+        $this->info("Viza va registratsiya tekshiruvi tugadi. {$sent} ta talaba bo'yicha bildirishnoma yuborildi.");
 
         return self::SUCCESS;
     }
@@ -47,7 +58,7 @@ class CheckVisaExpiryCommand extends Command
             || str_contains(strtolower($student->citizenship_name ?? ''), 'orijiy');
     }
 
-    private function checkRegistration(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
+    private function checkRegistration(StudentVisaInfo $info, Student $student, TelegramService $telegram, array &$groups): int
     {
         $daysLeft = $info->registrationDaysLeft();
         if ($daysLeft === null || $daysLeft > 7) return 0;
@@ -75,18 +86,26 @@ class CheckVisaExpiryCommand extends Command
                 : "{$emoji} Registratsiya muddati tugashiga {$daysLeft} kun qoldi. Muddatini uzaytiring.";
         }
 
-        // Talabaga bildirishnoma
+        // Talabaning o'ziga shaxsiy xabar (shaxsiy xabarlar o'z holatida qoladi)
         $this->notifyStudent($student, $telegram, $message, $level, 'registratsiya');
 
-        // Registrator guruhiga va firma javobgariga ham yuborish (barcha darajalar)
-        $staffMsg = "{$emoji} {$student->full_name} ({$student->group_name}) — ";
-        $staffMsg .= $daysLeft <= 0 ? "registratsiya muddati TUGAGAN!" : "registratsiya muddati tugashiga {$daysLeft} kun qoldi!";
-        $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
+        // Staff uchun sayt bildirishnomasi (har bir talaba uchun alohida yozuv qoladi)
+        $staffLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — ";
+        $staffLine .= $daysLeft <= 0 ? "registratsiya muddati TUGAGAN" : "registratsiya muddati tugashiga {$daysLeft} kun qoldi";
+        $this->createSiteNotificationsForStaff($info, "{$emoji} {$staffLine}");
+
+        // Telegram uchun guruhga qo'shamiz (yuborish handle() oxirida bo'ladi)
+        $groupLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — ";
+        $groupLine .= $daysLeft <= 0 ? "muddati TUGAGAN" : "{$daysLeft} kun qoldi";
+        $groups[$level]['registratsiya'][] = [
+            'line' => $groupLine,
+            'firm' => $info->firm,
+        ];
 
         return 1;
     }
 
-    private function checkVisa(StudentVisaInfo $info, Student $student, TelegramService $telegram): int
+    private function checkVisa(StudentVisaInfo $info, Student $student, TelegramService $telegram, array &$groups): int
     {
         $daysLeft = $info->visaDaysLeft();
         if ($daysLeft === null || $daysLeft > 30) return 0;
@@ -116,10 +135,18 @@ class CheckVisaExpiryCommand extends Command
 
         $this->notifyStudent($student, $telegram, $message, $level, 'visa');
 
-        // Registrator guruhiga va firma javobgariga ham yuborish (barcha darajalar)
-        $staffMsg = "{$emoji} {$student->full_name} ({$student->group_name}) — ";
-        $staffMsg .= $daysLeft <= 0 ? "viza muddati TUGAGAN!" : "viza muddati tugashiga {$daysLeft} kun qoldi!";
-        $this->notifyFirmAndRegistrar($info, $telegram, $staffMsg);
+        // Staff uchun sayt bildirishnomasi
+        $staffLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — ";
+        $staffLine .= $daysLeft <= 0 ? "viza muddati TUGAGAN" : "viza muddati tugashiga {$daysLeft} kun qoldi";
+        $this->createSiteNotificationsForStaff($info, "{$emoji} {$staffLine}");
+
+        // Telegram uchun guruhga qo'shamiz
+        $groupLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — ";
+        $groupLine .= $daysLeft <= 0 ? "muddati TUGAGAN" : "{$daysLeft} kun qoldi";
+        $groups[$level]['visa'][] = [
+            'line' => $groupLine,
+            'firm' => $info->firm,
+        ];
 
         return 1;
     }
@@ -162,12 +189,11 @@ class CheckVisaExpiryCommand extends Command
     }
 
     /**
-     * Firma javobgariga va registrator ofisi xodimlariga xabar yuborish.
+     * Registrator ofisi, firma javobgari va obunachilar uchun sayt bildirishnomasi
+     * (Telegram bu yerda yuborilmaydi — u handle() oxirida guruhlangan holda jo'natiladi).
      */
-    private function notifyFirmAndRegistrar(StudentVisaInfo $info, TelegramService $telegram, string $message): void
+    private function createSiteNotificationsForStaff(StudentVisaInfo $info, string $message): void
     {
-
-        // Registrator ofisi xodimlariga sayt bildirishnomasi
         $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))->get();
         foreach ($registrarUsers as $regUser) {
             \App\Models\Notification::create([
@@ -184,18 +210,10 @@ class CheckVisaExpiryCommand extends Command
             ]);
         }
 
-        // Firma javobgariga (assigned_firm bo'yicha) — User va Teacher jadvallaridan
         if ($info->firm) {
-            // User jadvalidan
             $firmUsers = User::where('assigned_firm', $info->firm)
                 ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
                 ->get();
-
-            // Teacher jadvalidan
-            $firmTeachers = \App\Models\Teacher::where('assigned_firm', $info->firm)
-                ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
-                ->get();
-
             foreach ($firmUsers as $firmUser) {
                 \App\Models\Notification::create([
                     'sender_id' => null,
@@ -209,38 +227,126 @@ class CheckVisaExpiryCommand extends Command
                     'is_draft' => false,
                     'sent_at' => now(),
                 ]);
-
-                if ($firmUser->telegram_chat_id) {
-                    $telegram->sendToUser($firmUser->telegram_chat_id, $message);
-                }
-            }
-
-            // Teacher firmalardan Telegram xabar
-            foreach ($firmTeachers as $firmTeacher) {
-                if ($firmTeacher->telegram_chat_id) {
-                    $telegram->sendToUser($firmTeacher->telegram_chat_id, $message);
-                }
             }
         }
 
-        // Obunachilarga ham yuborish
         if (\Schema::hasTable('visa_notification_subscribers')) {
             $subscribers = \DB::table('visa_notification_subscribers')->get();
             foreach ($subscribers as $sub) {
-                // Sayt bildirishnomasi
                 \App\Models\Notification::create([
-                    'sender_id' => null, 'sender_type' => null,
+                    'sender_id' => null,
+                    'sender_type' => null,
                     'recipient_id' => $sub->subscribable_id,
                     'recipient_type' => $sub->subscribable_type,
                     'subject' => 'Viza/Registratsiya ogohlantirish',
-                    'body' => $message, 'type' => 'alert',
-                    'is_read' => false, 'is_draft' => false, 'sent_at' => now(),
+                    'body' => $message,
+                    'type' => 'alert',
+                    'is_read' => false,
+                    'is_draft' => false,
+                    'sent_at' => now(),
                 ]);
-                // Telegram
-                if ($sub->telegram_chat_id) {
-                    $telegram->sendToUser($sub->telegram_chat_id, $message);
+            }
+        }
+    }
+
+    /**
+     * Staff (registrator ofisi, firma javobgarlari, obunachilar)ga holat bo'yicha
+     * guruhlangan Telegram xabarlarini yuborish. Har bir holat uchun bitta xabar.
+     */
+    private function dispatchGroupedTelegramMessages(array $groups, TelegramService $telegram): void
+    {
+        $emojis = ['danger' => '🔴', 'warning' => '🟡', 'info' => '🟢'];
+        $titles = [
+            'danger'  => 'Shoshilinch — muddat tugagan yoki juda yaqin',
+            'warning' => 'Ogohlantirish — muddat yaqin',
+            'info'    => 'Eslatma — muddat yaqinlashmoqda',
+        ];
+
+        foreach ($groups as $level => $typesData) {
+            if (empty($typesData['registratsiya']) && empty($typesData['visa'])) {
+                continue;
+            }
+
+            // Registrator ofisi va obunachilar uchun umumiy xabar (barcha talabalar)
+            $overall = $this->buildGroupMessage($typesData, $emojis[$level], $titles[$level]);
+
+            $registrarUsers = User::whereHas('roles', fn($q) => $q->where('name', 'registrator_ofisi'))
+                ->whereNotNull('telegram_chat_id')
+                ->get();
+            foreach ($registrarUsers as $regUser) {
+                $telegram->sendToUser($regUser->telegram_chat_id, $overall);
+            }
+
+            if (\Schema::hasTable('visa_notification_subscribers')) {
+                $subscribers = \DB::table('visa_notification_subscribers')
+                    ->whereNotNull('telegram_chat_id')
+                    ->get();
+                foreach ($subscribers as $sub) {
+                    $telegram->sendToUser($sub->telegram_chat_id, $overall);
+                }
+            }
+
+            // Firma javobgarlariga faqat o'z firmasi talabalari haqidagi xabar
+            $byFirm = [];
+            foreach (['registratsiya', 'visa'] as $type) {
+                foreach ($typesData[$type] as $entry) {
+                    $firm = $entry['firm'];
+                    if ($firm) {
+                        $byFirm[$firm][$type][] = $entry;
+                    }
+                }
+            }
+
+            foreach ($byFirm as $firm => $firmTypesData) {
+                $firmTypesData = [
+                    'registratsiya' => $firmTypesData['registratsiya'] ?? [],
+                    'visa'          => $firmTypesData['visa'] ?? [],
+                ];
+                $firmMsg = $this->buildGroupMessage(
+                    $firmTypesData,
+                    $emojis[$level],
+                    $titles[$level] . " — {$firm}"
+                );
+
+                $firmUsers = User::where('assigned_firm', $firm)
+                    ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
+                    ->whereNotNull('telegram_chat_id')
+                    ->get();
+                foreach ($firmUsers as $firmUser) {
+                    $telegram->sendToUser($firmUser->telegram_chat_id, $firmMsg);
+                }
+
+                $firmTeachers = \App\Models\Teacher::where('assigned_firm', $firm)
+                    ->whereHas('roles', fn($q) => $q->where('name', 'javobgar_firma'))
+                    ->whereNotNull('telegram_chat_id')
+                    ->get();
+                foreach ($firmTeachers as $firmTeacher) {
+                    $telegram->sendToUser($firmTeacher->telegram_chat_id, $firmMsg);
                 }
             }
         }
+    }
+
+    private function buildGroupMessage(array $typesData, string $emoji, string $title): string
+    {
+        $lines = ["{$emoji} <b>{$title}</b>"];
+
+        if (!empty($typesData['registratsiya'])) {
+            $lines[] = '';
+            $lines[] = '<b>Registratsiya:</b>';
+            foreach ($typesData['registratsiya'] as $entry) {
+                $lines[] = '• ' . $entry['line'];
+            }
+        }
+
+        if (!empty($typesData['visa'])) {
+            $lines[] = '';
+            $lines[] = '<b>Viza:</b>';
+            foreach ($typesData['visa'] as $entry) {
+                $lines[] = '• ' . $entry['line'];
+            }
+        }
+
+        return implode("\n", $lines);
     }
 }

@@ -3594,24 +3594,23 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Semestr bo'yicha filtrlash (joriy semestr orqali guruh aniqlanadi)
+        // Semestr bo'yicha filtrlash
         if ($request->filled('semester_code')) {
-            $currentSemesterHemisIds = DB::table('curriculum_weeks')
-                ->select('semester_hemis_id')
-                ->groupBy('semester_hemis_id')
-                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
-                ->pluck('semester_hemis_id');
-            $curriculaIds = Semester::where('code', $request->semester_code)
-                ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
-                ->pluck('curriculum_hemis_id');
+            $semesterQuery = Semester::where('code', $request->semester_code);
+            if ($request->get('current_semester') == '1') {
+                $semesterQuery->where('current', true);
+            }
+            $curriculaIds = $semesterQuery->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Kurs bo'yicha filtrlash (joriy semestr orqali guruh kursini aniqlash)
+        // Kurs bo'yicha filtrlash
         if ($request->filled('level_code')) {
-            $curriculaIds = Semester::where('level_code', $request->level_code)
-                ->where('current', true)
-                ->pluck('curriculum_hemis_id');
+            $semesterQuery = Semester::where('level_code', $request->level_code);
+            if ($request->get('current_semester') == '1') {
+                $semesterQuery->where('current', true);
+            }
+            $curriculaIds = $semesterQuery->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 

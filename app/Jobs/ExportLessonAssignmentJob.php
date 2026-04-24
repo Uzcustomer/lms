@@ -76,7 +76,7 @@ class ExportLessonAssignmentJob implements ShouldQueue
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         $scheduleQuery = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')

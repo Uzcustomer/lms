@@ -217,6 +217,10 @@ class TutorReportController extends Controller
 
             $results = array_values($results);
 
+            if ($request->get('export') === 'excel') {
+                return $this->exportJnExcel($results);
+            }
+
             return view('teacher.reports.jn', compact('tutorGroups', 'results'));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('Tutor JN report error: ' . $e->getMessage(), [
@@ -226,6 +230,62 @@ class TutorReportController extends Controller
             ]);
             return response('JN o\'zlashtirish hisobotini yuklashda xatolik: ' . $e->getMessage(), 500);
         }
+    }
+
+    private function exportJnExcel(array $data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('JN hisobot');
+
+        $headers = ['#', 'Guruh', 'Semestr', 'Fan', 'Talaba FISH', 'Talaba ID', "O'rtacha baho", 'Darslar soni'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1a3268']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle("A1:{$colLetter}1")->applyFromArray($headerStyle);
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['group_name']);
+            $sheet->setCellValue([3, $row], $r['semester_name'] ?? '-');
+            $sheet->setCellValue([4, $row], $r['subject_name']);
+            $sheet->setCellValue([5, $row], $r['student_name']);
+            $sheet->setCellValue([6, $row], $r['student_id']);
+            $sheet->setCellValue([7, $row], $r['avg_grade']);
+            $sheet->setCellValue([8, $row], $r['grade_count']);
+        }
+
+        $widths = [5, 15, 12, 35, 30, 15, 14, 12];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:{$colLetter}{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
+
+        $fileName = 'JN_hisobot_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'jn_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     /**

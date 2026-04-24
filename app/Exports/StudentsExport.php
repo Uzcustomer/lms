@@ -33,7 +33,7 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
     protected function getAdmissionInfo(?int $studentId): array
     {
         if (!$studentId) {
-            return ['', ''];
+            return ['Yo\'q', ''];
         }
 
         if ($this->admissionCache === null) {
@@ -51,7 +51,7 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
 
         $files = $this->admissionCache[$studentId] ?? [];
         if (empty($files)) {
-            return ['', ''];
+            return ['Yo\'q', ''];
         }
 
         $urls = [];

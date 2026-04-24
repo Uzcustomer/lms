@@ -639,7 +639,7 @@ class ReportController extends Controller
     {
         $date = $request->get('date', now()->format('Y-m-d'));
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
@@ -696,8 +696,8 @@ class ReportController extends Controller
         foreach ($schedules as $sch) {
             $hasAC = isset($acRecords[$sch->schedule_hemis_id]);
             $acLoad = $hasAC ? $acRecords[$sch->schedule_hemis_id]->load : null;
-            // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
-            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            // Faqat amaliy mashg'ulotlar uchun baho tekshiriladi
+            $skipGradeCheck = in_array($sch->training_type_name, $gradeExcludedNames);
             $hasGrade = $skipGradeCheck ? null : isset($gradeRecords[$sch->schedule_hemis_id]);
 
             $rows[] = [
@@ -884,8 +884,8 @@ class ReportController extends Controller
         }
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
-        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        // Baho faqat amaliy mashg'ulotlar uchun tekshiriladi (jurnal JB tabi bilan bir xil)
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
@@ -1083,8 +1083,8 @@ class ReportController extends Controller
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
                    || isset($attendanceByKey[$attKey]);
 
-            // Baho: fanga biriktirilgan talabalar soni va baho qo'yilmaganlar soni
-            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            // Baho: faqat amaliy mashg'ulotlar uchun tekshiriladi
+            $skipGradeCheck = in_array($sch->training_type_name, $gradeExcludedNames);
             // Fanga biriktirilgan talabalar soni (student_subjects — semestr bo'yicha), topilmasa guruh soni
             $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
             $totalStudents = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
@@ -6712,7 +6712,7 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
-        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         // 1-QADAM: Asosiy jadval so'rovi (filtrlar bilan)
         $scheduleQuery = DB::table('schedules as sch')
@@ -6721,7 +6721,7 @@ class ReportController extends Controller
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
-            ->whereNotIn('sch.training_type_code', $gradeExcludedTypes)
+            ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->where('sch.education_year_current', true)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')

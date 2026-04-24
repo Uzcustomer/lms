@@ -234,7 +234,15 @@
                 error: function(xhr) {
                     $('#loading-state').hide();
                     $('#btn-calculate').prop('disabled', false).css('opacity', '1');
-                    $('#empty-state').show().find('p:first').text("Xatolik yuz berdi. Qayta urinib ko'ring.");
+                    var errMsg = 'Xatolik yuz berdi.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errMsg += ' ' + xhr.responseJSON.message;
+                    } else if (xhr.status === 500) {
+                        errMsg += ' Server xatosi (500). Filtrlarni o\'zgartiring.';
+                    } else if (xhr.status === 0) {
+                        errMsg += ' Server javob bermadi (timeout).';
+                    }
+                    $('#empty-state').show().find('p:first').text(errMsg);
                 }
             });
         }

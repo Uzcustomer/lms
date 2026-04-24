@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
+use App\Models\StudentPhoto;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\Exportable;
@@ -21,10 +22,34 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
     protected array $filters;
 
     protected ?array $tutorCache = null;
+    protected ?array $photoCache = null;
 
     public function __construct(array $filters = [])
     {
         $this->filters = $filters;
+    }
+
+    protected function getPhotoInfo(?string $studentIdNumber): array
+    {
+        if (!$studentIdNumber) {
+            return ['', ''];
+        }
+
+        if ($this->photoCache === null) {
+            $this->photoCache = StudentPhoto::orderByDesc('id')
+                ->get()
+                ->groupBy('student_id_number')
+                ->map(fn($items) => $items->first())
+                ->toArray();
+        }
+
+        $photo = $this->photoCache[$studentIdNumber] ?? null;
+        if (!$photo) {
+            return ['Yo\'q', ''];
+        }
+
+        $url = url($photo['photo_path'] ?? '');
+        return ['Ha', $url];
     }
 
     protected function getTutorName(?string $groupHemisId): string
@@ -145,6 +170,7 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             $backOffice?->teacher?->full_name ?? '',
             $backOffice?->started_at ? $backOffice->started_at->format('d.m.Y') : '',
             $this->getTutorName($student->group_id),
+            ...($this->getPhotoInfo($student->student_id_number)),
         ];
     }
 
@@ -200,6 +226,8 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             'Back ofis xodimi',
             'Back ofis boshlanish sanasi',
             'Tyutor',
+            'Rasm yuklangan',
+            'Rasm URL',
         ];
     }
 

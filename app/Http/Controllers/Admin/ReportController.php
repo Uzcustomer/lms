@@ -102,7 +102,7 @@ class ReportController extends Controller
         }
 
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // Sana oralig'i filtri
         $dateFrom = $request->filled('date_from') ? $request->date_from : null;
@@ -645,7 +645,7 @@ class ReportController extends Controller
         $date = $request->get('date', now()->format('Y-m-d'));
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
@@ -897,7 +897,7 @@ class ReportController extends Controller
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
@@ -6745,7 +6745,7 @@ class ReportController extends Controller
             ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
 
         // Baho qo'yilmaydigan fanlarni chiqarish (masalan, O'quv amaliyoti)
-        $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
         foreach ($excludedPatterns as $pattern) {
             $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
         }

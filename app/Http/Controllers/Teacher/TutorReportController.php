@@ -106,7 +106,7 @@ class TutorReportController extends Controller
             }
 
             $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-            $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+            $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
             $currentSemester = $request->get('current_semester', '1') == '1';
 
             $scheduleQuery = DB::table('schedules as sch')
@@ -344,7 +344,7 @@ class TutorReportController extends Controller
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // Schedule kombinatsiyalarini olish (joriy semestr)
         $scheduleCombos = DB::table('schedules as sch')
@@ -630,7 +630,7 @@ class TutorReportController extends Controller
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
         $scoreLimit = (int) $request->get('score_limit', 90);
 
         // Fanlar ro'yxatini olish
@@ -748,7 +748,7 @@ class TutorReportController extends Controller
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
-        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // Schedule yozuvlarini olish (o'tgan kunlar uchun)
         $schedules = DB::table('schedules as sch')

@@ -202,21 +202,25 @@ class StudentPhotoReportController extends Controller
         // Scope to photos missing specific check(s). Accepts `missing=similarity`,
         // `missing=quality`, `missing=similarity,quality` (either missing), or the
         // legacy `only_unchecked=1` flag which maps to missing similarity.
-        $missing = array_filter(explode(',', (string) $request->get('missing', '')));
-        if ($request->boolean('only_unchecked') && empty($missing)) {
-            $missing = ['similarity'];
-        }
-        $wantSim = in_array('similarity', $missing, true);
-        $wantQual = in_array('quality', $missing, true);
-        if ($wantSim && $wantQual) {
-            $query->where(function ($q) {
-                $q->whereNull('student_photos.similarity_checked_at')
-                  ->orWhereNull('student_photos.quality_checked_at');
-            });
-        } elseif ($wantSim) {
-            $query->whereNull('student_photos.similarity_checked_at');
-        } elseif ($wantQual) {
-            $query->whereNull('student_photos.quality_checked_at');
+        // When `rerun=1` is passed we ignore the missing filter entirely so
+        // the caller can re-analyze everything matching the page filters.
+        if (!$request->boolean('rerun')) {
+            $missing = array_filter(explode(',', (string) $request->get('missing', '')));
+            if ($request->boolean('only_unchecked') && empty($missing)) {
+                $missing = ['similarity'];
+            }
+            $wantSim = in_array('similarity', $missing, true);
+            $wantQual = in_array('quality', $missing, true);
+            if ($wantSim && $wantQual) {
+                $query->where(function ($q) {
+                    $q->whereNull('student_photos.similarity_checked_at')
+                      ->orWhereNull('student_photos.quality_checked_at');
+                });
+            } elseif ($wantSim) {
+                $query->whereNull('student_photos.similarity_checked_at');
+            } elseif ($wantQual) {
+                $query->whereNull('student_photos.quality_checked_at');
+            }
         }
 
         // Safety cap to avoid runaway browser loops

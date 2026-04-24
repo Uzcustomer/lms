@@ -655,6 +655,7 @@ class ReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->where(function ($q) {
@@ -895,7 +896,6 @@ class ReportController extends Controller
         }
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        // Baho faqat amaliy mashg'ulotlar uchun tekshiriladi (jurnal JB tabi bilan bir xil)
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
         $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
@@ -907,6 +907,7 @@ class ReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
 

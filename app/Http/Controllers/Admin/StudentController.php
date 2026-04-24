@@ -1250,6 +1250,7 @@ class StudentController extends Controller
         $filters = $request->only([
             'student_id_number', 'full_name', 'level_code', 'semester_code',
             'department', 'specialty', 'group', 'education_type',
+            'country', 'has_files', 'has_admission_data',
         ]);
         $filename = 'talabalar_' . now()->format('Y-m-d_H-i') . '.xlsx';
         return Excel::download(new StudentsExport($filters), $filename);

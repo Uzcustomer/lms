@@ -292,7 +292,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     return Stack(
       children: [
-        // Dark blue curved background
         Container(
           width: double.infinity,
           padding: EdgeInsets.only(
@@ -300,53 +299,97 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             bottom: 200,
           ),
           decoration: const BoxDecoration(
-            color: AppTheme.primaryColor,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.primaryColor,
+                Color(0xFF1A237E),
+              ],
+            ),
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(30),
               bottomRight: Radius.circular(30),
             ),
           ),
-          child: Column(
+          child: Stack(
             children: [
-              // Top bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.account_balance, color: Colors.white, size: 28),
-                        const SizedBox(width: 10),
-                        Text(
-                          l.appTitle,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
-                          onPressed: () {},
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.settings, color: Colors.white, size: 24),
-                          onPressed: () => _showSettingsSheet(context),
-                        ),
-                      ],
-                    ),
-                  ],
+              Positioned(
+                right: -30,
+                top: -30,
+                child: Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.06),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // Profile photo
-              _buildProfileAvatar(imageUrl, fullName),
+              Positioned(
+                left: -20,
+                bottom: 40,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.04),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 60,
+                bottom: -20,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.05),
+                  ),
+                ),
+              ),
+              Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.account_balance, color: Colors.white, size: 28),
+                            const SizedBox(width: 10),
+                            Text(
+                              l.appTitle,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
+                              onPressed: () {},
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.settings, color: Colors.white, size: 24),
+                              onPressed: () => _showSettingsSheet(context),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildProfileAvatar(imageUrl, fullName),
+                ],
+              ),
             ],
           ),
         ),

@@ -155,9 +155,9 @@ class StudentUsefulScreen extends StatelessWidget {
             sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.92,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 1.15,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) => _buildCard(
@@ -177,89 +177,80 @@ class StudentUsefulScreen extends StatelessWidget {
 
     return Material(
       color: cardBg,
-      borderRadius: BorderRadius.circular(18),
-      elevation: isDark ? 0 : 2,
-      shadowColor: item.gradient[0].withOpacity(0.15),
+      borderRadius: BorderRadius.circular(14),
+      elevation: isDark ? 0 : 1.5,
+      shadowColor: item.gradient[0].withOpacity(0.12),
       child: InkWell(
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => item.screen),
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isDark
                   ? item.gradient[0].withOpacity(0.15)
                   : item.gradient[0].withOpacity(0.08),
             ),
           ),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: item.gradient,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: item.gradient[0].withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: item.gradient,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: item.gradient[0].withOpacity(0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                child: Icon(item.icon, color: Colors.white, size: 26),
+                    child: Icon(item.icon, color: Colors.white, size: 20),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: item.gradient[0].withOpacity(0.5),
+                  ),
+                ],
               ),
               const Spacer(),
               Text(
                 item.title,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: txt,
                   height: 1.2,
                 ),
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 item.subtitle,
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: sub,
-                  height: 1.3,
+                  height: 1.2,
                 ),
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Spacer(),
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: item.gradient[0].withOpacity(isDark ? 0.15 : 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 16,
-                      color: item.gradient[0],
-                    ),
-                  ),
-                ],
               ),
             ],
           ),

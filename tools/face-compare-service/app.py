@@ -15,7 +15,7 @@ from deepface import DeepFace
 import logging
 import os
 import io
-import urllib.request
+import requests
 import numpy as np
 import cv2
 from PIL import Image
@@ -91,12 +91,20 @@ def compare(req: CompareRequest):
 # ──────────────────────────── /quality-check ─────────────────────────
 
 def _load_image_bgr(src: str) -> np.ndarray:
-    """Load an image from a URL or local path into a BGR OpenCV array."""
+    """Load an image from a URL or local path into a BGR OpenCV array.
+
+    Uses `requests` so non-ASCII URLs (e.g. paths containing O'G'LI style
+    apostrophes or Cyrillic filenames) are handled cleanly.
+    """
     if src.startswith(("http://", "https://")):
-        req = urllib.request.Request(src, headers={"User-Agent": "lms-quality/1.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = resp.read()
-        pil = Image.open(io.BytesIO(data)).convert("RGB")
+        resp = requests.get(
+            src,
+            headers={"User-Agent": "lms-quality/1.0"},
+            timeout=30,
+            verify=False,
+        )
+        resp.raise_for_status()
+        pil = Image.open(io.BytesIO(resp.content)).convert("RGB")
     else:
         pil = Image.open(src).convert("RGB")
     rgb = np.array(pil)

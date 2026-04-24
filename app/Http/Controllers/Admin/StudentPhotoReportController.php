@@ -143,6 +143,12 @@ class StudentPhotoReportController extends Controller
         if ($has('max_similarity')) {
             $query->where('student_photos.similarity_score', '<=', (float) $request->max_similarity);
         }
+        if ($has('similarity_op') && $request->filled('similarity_value')) {
+            $op = $this->normalizeOp($request->similarity_op);
+            if ($op) {
+                $query->where('student_photos.similarity_score', $op, (float) $request->similarity_value);
+            }
+        }
         if ($has('quality')) {
             if ($request->quality === 'passed') {
                 $query->where('student_photos.quality_passed', true);
@@ -158,8 +164,20 @@ class StudentPhotoReportController extends Controller
         if ($has('max_quality')) {
             $query->where('student_photos.quality_score', '<=', (float) $request->max_quality);
         }
+        if ($has('quality_op') && $request->filled('quality_value')) {
+            $op = $this->normalizeOp($request->quality_op);
+            if ($op) {
+                $query->where('student_photos.quality_score', $op, (float) $request->quality_value);
+            }
+        }
 
         return $query;
+    }
+
+    protected function normalizeOp(?string $op): ?string
+    {
+        $map = ['>' => '>', '>=' => '>=', '<' => '<', '<=' => '<=', '=' => '='];
+        return $map[$op] ?? null;
     }
 
     /**

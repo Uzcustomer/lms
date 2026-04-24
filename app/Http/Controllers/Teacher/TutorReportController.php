@@ -13,54 +13,35 @@ use Illuminate\Support\Facades\DB;
 
 class TutorReportController extends Controller
 {
-    /**
-     * Tyutor guruhlarining hemis_id larini olish
-     */
     private function getTutorGroupIds()
     {
         $teacher = auth()->guard('teacher')->user();
-        if (!$teacher) return [];
 
-        $groupIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        $tutorGroupIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
 
-        if (empty($groupIds)) {
-            $groupIds = DB::table('schedules')
-                ->where('employee_id', $teacher->hemis_id)
-                ->whereNotNull('group_id')
-                ->distinct()
-                ->pluck('group_id')
-                ->toArray();
-        }
+        $scheduleGroupIds = DB::table('schedules')
+            ->where('employee_id', $teacher->hemis_id)
+            ->where('education_year_current', true)
+            ->whereNotNull('lesson_date')
+            ->pluck('group_id')
+            ->unique()
+            ->toArray();
 
-        return $groupIds;
+        return array_values(array_unique(array_merge($tutorGroupIds, $scheduleGroupIds)));
     }
 
     private function getTutorGroups()
     {
-        $teacher = auth()->guard('teacher')->user();
-        if (!$teacher) return collect();
-
-        $groups = $teacher->groups()->where('active', true)->orderBy('name')->get();
-
-        if ($groups->isEmpty()) {
-            $groupHemisIds = DB::table('schedules')
-                ->where('employee_id', $teacher->hemis_id)
-                ->whereNotNull('group_id')
-                ->distinct()
-                ->pluck('group_id')
-                ->toArray();
-            $groups = \App\Models\Group::whereIn('group_hemis_id', $groupHemisIds)
-                ->where('active', true)
-                ->orderBy('name')
-                ->get();
+        $groupIds = $this->getTutorGroupIds();
+        if (empty($groupIds)) {
+            return collect();
         }
-
-        return $groups;
+        return \App\Models\Group::whereIn('group_hemis_id', $groupIds)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
     }
 
-    /**
-     * Guruh filtri qo'llangan group_ids
-     */
     private function getFilteredGroupIds(Request $request)
     {
         $groupIds = $this->getTutorGroupIds();

@@ -241,6 +241,13 @@
                             O'chirish
                         </button>
                     </div>
+                    {{-- Rasm yuklash (fayldan) --}}
+                    <input type="file" id="photo-file-input" accept="image/*" style="display:none;" onchange="handleFileUpload(this)">
+                    <button type="button" id="photo-file-btn" onclick="document.getElementById('photo-file-input').click()"
+                            style="width:100%;padding:12px;margin-bottom:8px;background:#f1f5f9;color:#334155;font-size:14px;font-weight:600;border:1px solid #cbd5e1;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+                        <svg style="width:20px;height:20px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                        Rasm yuklash
+                    </button>
                     {{-- Kamera ochish --}}
                     <button type="button" id="photo-capture-btn" onclick="startCamera()"
                             style="width:100%;padding:12px;background:linear-gradient(135deg,#2b5ea7,#3b82f6);color:#fff;font-size:14px;font-weight:600;border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
@@ -273,6 +280,41 @@
                 cameraStream = null;
             }
             document.getElementById('camera-video').style.display = 'none';
+        }
+
+        function handleFileUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            var file = input.files[0];
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var tempImg = new Image();
+                tempImg.onload = function() {
+                    var canvas = document.createElement('canvas');
+                    var w = tempImg.width, h = tempImg.height;
+                    if (w > MAX_SIZE || h > MAX_SIZE) {
+                        if (w > h) { h = Math.round(h * MAX_SIZE / w); w = MAX_SIZE; }
+                        else { w = Math.round(w * MAX_SIZE / h); h = MAX_SIZE; }
+                    }
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+                    canvas.toBlob(function(blob) {
+                        currentBlob = blob;
+                        var img = document.getElementById('modal-photo-img');
+                        img.src = URL.createObjectURL(blob);
+                        img.style.display = 'block';
+                        document.getElementById('modal-no-photo').style.display = 'none';
+                        document.getElementById('photo-save-btn').style.display = 'block';
+                        document.getElementById('photo-retake-btn').style.display = 'block';
+                        document.getElementById('photo-capture-btn').style.display = 'none';
+                        document.getElementById('photo-file-btn').style.display = 'none';
+                        document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
+                        document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+                    }, 'image/jpeg', 0.92);
+                };
+                tempImg.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
         }
 
         function startCamera() {
@@ -317,6 +359,7 @@
                 document.getElementById('photo-save-btn').style.display = 'block';
                 document.getElementById('photo-retake-btn').style.display = 'block';
                 document.getElementById('photo-capture-btn').style.display = 'none';
+                document.getElementById('photo-file-btn').style.display = 'none';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                 document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
             }, 'image/jpeg', 0.92);
@@ -353,6 +396,7 @@
                 frame.style.borderColor = '#3b82f6';
                 document.getElementById('photo-btn-text').textContent = 'Qayta tushirish';
                 document.getElementById('photo-capture-btn').style.display = 'flex';
+                document.getElementById('photo-file-btn').style.display = 'flex';
                 document.getElementById('photo-delete-wrap').style.display = 'block';
             } else {
                 img.style.display = 'none';
@@ -361,6 +405,7 @@
                 frame.style.borderColor = '#cbd5e1';
                 document.getElementById('photo-btn-text').textContent = 'Kamerani ochish';
                 document.getElementById('photo-capture-btn').style.display = 'flex';
+                document.getElementById('photo-file-btn').style.display = 'flex';
                 document.getElementById('photo-delete-wrap').style.display = 'none';
             }
             document.getElementById('photo-save-btn').style.display = 'none';

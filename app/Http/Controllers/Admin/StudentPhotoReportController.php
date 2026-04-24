@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\StudentPhoto;
+use App\Models\Teacher;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -69,7 +71,27 @@ class StudentPhotoReportController extends Controller
             $query->where('student_photos.created_at', '<=', $request->date_to . ' 23:59:59');
         }
 
-        $photos = $query->paginate(30)->withQueryString();
+        if ($request->filled('similarity')) {
+            if ($request->similarity === 'match') {
+                $query->where('student_photos.similarity_status', 'match');
+            } elseif ($request->similarity === 'mismatch') {
+                $query->where('student_photos.similarity_status', 'mismatch');
+            } elseif ($request->similarity === 'unchecked') {
+                $query->whereNull('student_photos.similarity_checked_at');
+            }
+        }
+
+        if ($request->filled('min_similarity')) {
+            $query->where('student_photos.similarity_score', '>=', (float) $request->min_similarity);
+        }
+        if ($request->filled('max_similarity')) {
+            $query->where('student_photos.similarity_score', '<=', (float) $request->max_similarity);
+        }
+
+        $perPage = (int) $request->get('per_page', 30);
+        $perPage = in_array($perPage, [10, 25, 30, 50, 100, 200]) ? $perPage : 30;
+
+        $photos = $query->paginate($perPage)->withQueryString();
 
         $stats = [
             'total' => StudentPhoto::count(),
@@ -96,9 +118,90 @@ class StudentPhotoReportController extends Controller
             ->orderBy('level_name')
             ->pluck('level_name');
 
+        $groups = Student::select('group_name')
+            ->whereNotNull('group_name')
+            ->distinct()
+            ->orderBy('group_name')
+            ->pluck('group_name');
+
+        $tutors = StudentPhoto::select('uploaded_by')
+            ->whereNotNull('uploaded_by')
+            ->distinct()
+            ->orderBy('uploaded_by')
+            ->pluck('uploaded_by');
+
         return view('admin.student-photos.index', compact(
-            'photos', 'stats', 'departments', 'specialties', 'levels'
+            'photos', 'stats', 'departments', 'specialties', 'levels', 'groups', 'tutors'
         ));
+    }
+
+    public function pendingIds(Request $request)
+    {
+        $query = StudentPhoto::query()
+            ->leftJoin('students', 'students.student_id_number', '=', 'student_photos.student_id_number')
+            ->select('student_photos.id')
+            ->where('student_photos.status', StudentPhoto::STATUS_PENDING);
+
+        if ($request->filled('search')) {
+            $needle = trim($request->search);
+            $query->where(function ($q) use ($needle) {
+                $q->where('student_photos.full_name', 'like', "%{$needle}%")
+                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
+            });
+        }
+
+        if ($request->filled('department')) {
+            $query->where('students.department_name', $request->department);
+        }
+
+        if ($request->filled('specialty')) {
+            $query->where('students.specialty_name', $request->specialty);
+        }
+
+        if ($request->filled('level')) {
+            $query->where('students.level_name', $request->level);
+        }
+
+        if ($request->filled('group')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('students.group_name', $request->group)
+                  ->orWhere('student_photos.group_name', $request->group);
+            });
+        }
+
+        if ($request->filled('tutor')) {
+            $query->where('student_photos.uploaded_by', $request->tutor);
+        }
+
+        if ($request->filled('date_from')) {
+            $query->where('student_photos.created_at', '>=', $request->date_from . ' 00:00:00');
+        }
+
+        if ($request->filled('date_to')) {
+            $query->where('student_photos.created_at', '<=', $request->date_to . ' 23:59:59');
+        }
+
+        if ($request->filled('min_similarity')) {
+            $query->where('student_photos.similarity_score', '>=', (float) $request->min_similarity);
+        }
+        if ($request->filled('max_similarity')) {
+            $query->where('student_photos.similarity_score', '<=', (float) $request->max_similarity);
+        }
+
+        // For bulk AI, restrict to photos not yet checked
+        if ($request->boolean('only_unchecked')) {
+            $query->whereNull('student_photos.similarity_checked_at');
+        }
+
+        // Safety cap to avoid runaway browser loops
+        $ids = $query->orderBy('student_photos.id')
+            ->limit(500)
+            ->pluck('student_photos.id');
+
+        return response()->json([
+            'ids' => $ids,
+            'count' => $ids->count(),
+        ]);
     }
 
     public function approve(Request $request, $id)
@@ -106,7 +209,7 @@ class StudentPhotoReportController extends Controller
         $photo = StudentPhoto::findOrFail($id);
 
         if (!$photo->isPending()) {
-            return back()->with('error', 'Bu rasm allaqachon ko\'rib chiqilgan.');
+            return $this->reviewResponse($request, false, 'Bu rasm allaqachon ko\'rib chiqilgan.');
         }
 
         $user = Auth::user();
@@ -117,7 +220,9 @@ class StudentPhotoReportController extends Controller
             'rejection_reason' => null,
         ]);
 
-        return back()->with('success', 'Rasm tasdiqlandi.');
+        $this->notifyTutor($photo, true);
+
+        return $this->reviewResponse($request, true, 'Rasm tasdiqlandi.');
     }
 
     public function reject(Request $request, $id)
@@ -129,7 +234,7 @@ class StudentPhotoReportController extends Controller
         $photo = StudentPhoto::findOrFail($id);
 
         if (!$photo->isPending()) {
-            return back()->with('error', 'Bu rasm allaqachon ko\'rib chiqilgan.');
+            return $this->reviewResponse($request, false, 'Bu rasm allaqachon ko\'rib chiqilgan.');
         }
 
         $user = Auth::user();
@@ -140,7 +245,55 @@ class StudentPhotoReportController extends Controller
             'rejection_reason' => $request->rejection_reason,
         ]);
 
-        return back()->with('success', 'Rasm rad etildi.');
+        $this->notifyTutor($photo, false, $request->rejection_reason);
+
+        return $this->reviewResponse($request, true, 'Rasm rad etildi.');
+    }
+
+    protected function reviewResponse(Request $request, bool $ok, string $message)
+    {
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json(['ok' => $ok, 'message' => $message], $ok ? 200 : 422);
+        }
+        return back()->with($ok ? 'success' : 'error', $message);
+    }
+
+    protected function notifyTutor(StudentPhoto $photo, bool $approved, ?string $reason = null): void
+    {
+        $teacher = null;
+        if ($photo->uploaded_by_teacher_id) {
+            $teacher = Teacher::find($photo->uploaded_by_teacher_id);
+        }
+        if (!$teacher && $photo->uploaded_by) {
+            $teacher = Teacher::where('full_name', $photo->uploaded_by)->first();
+        }
+
+        if (!$teacher || empty($teacher->telegram_chat_id)) {
+            return;
+        }
+
+        if ($approved) {
+            $text = "✅ Talaba rasmi qabul qilindi\n\n"
+                  . "Talaba: {$photo->full_name}\n"
+                  . "Guruh: " . ($photo->group_name ?: '—') . "\n\n"
+                  . "Admin tomonidan tasdiqlandi.";
+        } else {
+            $text = "❌ Talaba rasmi rad etildi\n\n"
+                  . "Talaba: {$photo->full_name}\n"
+                  . "Guruh: " . ($photo->group_name ?: '—') . "\n"
+                  . "Sabab: " . ($reason ?: 'Standartlarga mos emas') . "\n\n"
+                  . "Iltimos, talaba rasmi standartlarga (tirsakdan yuqori, oq xalatda, oq fonda) mos ravishda qayta yuklang.";
+        }
+
+        try {
+            app(TelegramService::class)->sendAndGetId((string) $teacher->telegram_chat_id, $text);
+        } catch (\Throwable $e) {
+            Log::warning('Tyutorga telegram bildirish yuborilmadi', [
+                'photo_id' => $photo->id,
+                'teacher_id' => $teacher->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function checkSimilarity(Request $request, $id)

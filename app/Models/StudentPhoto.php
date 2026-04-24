@@ -16,6 +16,7 @@ class StudentPhoto extends Model
         'group_name',
         'semester_name',
         'uploaded_by',
+        'uploaded_by_teacher_id',
         'photo_path',
         'status',
         'reviewed_by_name',
@@ -40,6 +41,11 @@ class StudentPhoto extends Model
     public function student()
     {
         return $this->belongsTo(Student::class, 'student_id_number', 'student_id_number');
+    }
+
+    public function uploader()
+    {
+        return $this->belongsTo(Teacher::class, 'uploaded_by_teacher_id');
     }
 
     public function isPending(): bool

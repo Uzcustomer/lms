@@ -254,6 +254,7 @@ class TeacherMainController extends Controller
                 'group_name' => $student->group_name,
                 'semester_name' => $student->semester_name,
                 'uploaded_by' => $teacher->full_name ?? $teacher->short_name ?? 'Tyutor',
+                'uploaded_by_teacher_id' => $teacher->id,
                 'photo_path' => $path,
             ]);
 

@@ -640,6 +640,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::prefix('student-photos')->name('student-photos.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'index'])->name('index');
+            Route::get('/pending-ids', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'pendingIds'])->name('pending-ids');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'reject'])->name('reject');
             Route::post('/{id}/check-similarity', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'checkSimilarity'])->name('check-similarity');

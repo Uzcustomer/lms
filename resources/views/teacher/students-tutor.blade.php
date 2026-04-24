@@ -81,6 +81,9 @@
             .student-status { font-size: 8px; padding: 1px 5px; }
             .search-box { padding: 8px 12px 8px 34px; font-size: 13px; border-radius: 10px; }
             .back-btn { padding: 6px 12px; font-size: 12px; }
+            .photo-modal-box { max-width: 400px !important; }
+            #modal-photo-frame { min-height: 300px !important; max-height: 60vh !important; }
+            #modal-photo-img { max-height: 60vh !important; }
         }
     </style>
 
@@ -215,7 +218,7 @@
 
     {{-- Photo Modal --}}
     <div id="photo-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px;">
-        <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+        <div class="photo-modal-box" style="background:#fff;border-radius:16px;width:100%;max-width:640px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
             <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
                 <div>
                     <div id="modal-name" style="font-size:15px;font-weight:700;color:#1e293b;"></div>
@@ -224,14 +227,14 @@
                 <button onclick="closePhotoModal()" style="width:32px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:18px;color:#64748b;">&times;</button>
             </div>
             <div style="padding:20px;text-align:center;">
-                <div id="modal-photo-frame" style="width:100%;aspect-ratio:3/4;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#1e293b;position:relative;">
+                <div id="modal-photo-frame" style="width:100%;min-height:400px;max-height:70vh;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#1e293b;position:relative;">
                     {{-- Placeholder --}}
                     <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;z-index:1;">
                         <svg style="width:48px;height:48px;margin:0 auto 8px;color:#475569;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
                         Rasm yuklanmagan
                     </div>
                     {{-- Tushirilgan rasm --}}
-                    <img id="modal-photo-img" style="width:100%;height:100%;object-fit:cover;display:none;z-index:1;" alt="">
+                    <img id="modal-photo-img" style="max-width:100%;max-height:70vh;width:auto;height:auto;object-fit:contain;display:none;z-index:1;" alt="">
                 </div>
             </div>
             <div style="padding:0 20px 20px;">

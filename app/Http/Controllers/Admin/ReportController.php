@@ -92,6 +92,7 @@ class ReportController extends Controller
      */
     public function jnReportData(Request $request)
     {
+        try {
         // Dekan uchun fakultet majburiy filtr
         $dekanFacultyIds = get_dekan_faculty_ids();
         if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
@@ -428,6 +429,10 @@ class ReportController extends Controller
             'current_page' => (int) $page,
             'last_page' => ceil($total / $perPage),
         ]);
+        } catch (\Throwable $e) {
+            \Log::error('JN Report error: ' . $e->getMessage(), ['file' => $e->getFile() . ':' . $e->getLine()]);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**

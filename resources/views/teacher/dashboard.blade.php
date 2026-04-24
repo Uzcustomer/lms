@@ -493,8 +493,13 @@
             margin-top: 4px;
         }
         @media (max-width: 768px) {
-            .stat-card { padding: 14px; }
-            .stat-number { font-size: 24px; }
+            .stat-card { padding: 12px; }
+            .stat-number { font-size: 20px; }
+            .stat-label { font-size: 10px; }
+            div[style*="grid-template-columns: repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+            div[style*="grid-template-columns: repeat(3"] { grid-template-columns: 1fr !important; gap: 8px !important; }
+            div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; gap: 10px !important; }
+            .max-w-full { padding-left: 8px !important; padding-right: 8px !important; }
         }
     </style>
 </x-teacher-app-layout>

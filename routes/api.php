@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
+use App\Http\Controllers\Api\V1\ChatApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -46,6 +47,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
             Route::get('/contract', [StudentApiController::class, 'contract']);
+            Route::get('/exam-schedule', [StudentApiController::class, 'examSchedule']);
+            Route::get('/rating', [StudentApiController::class, 'studentRating']);
 
             // Profile completion
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);
@@ -60,6 +63,15 @@ Route::prefix('v1')->group(function () {
             Route::post('/excuses/missed-assessments', [AbsenceExcuseApiController::class, 'missedAssessments']);
             Route::get('/excuses/{id}/download', [AbsenceExcuseApiController::class, 'download']);
             Route::get('/excuses/{id}/download-pdf', [AbsenceExcuseApiController::class, 'downloadPdf']);
+        });
+
+        // ── Chat endpoints ───────────────────────────────
+        Route::prefix('chat')->group(function () {
+            Route::get('/contacts', [ChatApiController::class, 'contacts']);
+            Route::get('/messages/{contactId}', [ChatApiController::class, 'messages']);
+            Route::post('/send', [ChatApiController::class, 'send']);
+            Route::get('/group', [ChatApiController::class, 'groupMessages']);
+            Route::post('/group/send', [ChatApiController::class, 'groupSend']);
         });
 
         // ── Teacher endpoints ─────────────────────────────

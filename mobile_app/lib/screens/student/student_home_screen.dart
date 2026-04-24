@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'student_dashboard_screen.dart';
+import 'student_exam_schedule_screen.dart';
+import 'library_webview_screen.dart';
+import 'gpa_calculator_screen.dart';
+import 'student_rating_screen.dart';
+import 'chat_contacts_screen.dart';
+import 'attendance_stats_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
@@ -179,7 +185,6 @@ class _UsefulModalState extends State<_UsefulModal>
   late AnimationController _animController;
   late Animation<Offset> _slideAnim;
   late Animation<double> _fadeAnim;
-
   @override
   void initState() {
     super.initState();
@@ -233,28 +238,88 @@ class _UsefulModalState extends State<_UsefulModal>
         },
       ),
       _ModalServiceItem(
+        icon: Icons.event_note_rounded,
+        title: 'Imtihon sanalari',
+        subtitle: 'OSKI va Test kunlari kalendarda',
+        color: const Color(0xFFE53935),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const ExamScheduleScreen()),
+          );
+        },
+      ),
+      _ModalServiceItem(
+        icon: Icons.bar_chart_rounded,
+        title: 'Davomat statistikasi',
+        subtitle: 'Fanlardagi davomat va baholar jadvali',
+        color: const Color(0xFF43A047),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const AttendanceStatsScreen()),
+          );
+        },
+      ),
+      _ModalServiceItem(
         icon: Icons.calculate_outlined,
         title: 'GPA Kalkulyator',
         subtitle: 'GPA ni hisoblash va prognoz qilish',
         color: const Color(0xFF26A69A),
-        onTap: () {},
-        comingSoon: true,
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const GpaCalculatorScreen()),
+          );
+        },
       ),
       _ModalServiceItem(
-        icon: Icons.smart_toy_outlined,
-        title: 'AI Yordamchi',
-        subtitle: 'Sun\'iy intellekt bilan suhbat',
+        icon: Icons.leaderboard_rounded,
+        title: 'Talabalar reytingi',
+        subtitle: 'Guruh va yo\'nalish bo\'yicha reyting',
         color: const Color(0xFF7C4DFF),
-        onTap: () {},
-        comingSoon: true,
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const StudentRatingScreen()),
+          );
+        },
+      ),
+      _ModalServiceItem(
+        icon: Icons.chat_rounded,
+        title: 'Guruh chati',
+        subtitle: 'Guruhingiz a\'zolari bilan yozishing',
+        color: const Color(0xFF00BCD4),
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const ChatContactsScreen()),
+          );
+        },
       ),
       _ModalServiceItem(
         icon: Icons.library_books_outlined,
         title: 'Kutubxona',
         subtitle: 'Elektron darsliklar va resurslar',
         color: const Color(0xFFFF6D00),
-        onTap: () {},
-        comingSoon: true,
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => const LibraryWebViewScreen()),
+          );
+        },
       ),
     ];
 

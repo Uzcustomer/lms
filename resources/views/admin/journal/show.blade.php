@@ -832,8 +832,16 @@
     </style>
 
     @php
-        $isDekan = is_active_dekan();
+        $isDekan = is_active_dekan() || (session('active_role') === 'tyutor');
         $isRegistrator = is_active_registrator();
+        $isOqituvchi = is_active_oqituvchi();
+        $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
+        $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
+        $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
+        $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+        $pastLessonDates = array_values(array_filter($jbLessonDates, fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d') <= $todayStr));
+        $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
+        $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
         $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
         $canAdminEditExam = false;
     @endphp
@@ -2090,7 +2098,7 @@
                                                 }
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
-                                            $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                            $isAdminMt = (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false) && \App\Models\Setting::get('feature_admin_mt_grade', '0') === '1';
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
 
                                             // Sababli ariza orqali MT bahosi: talaba uchun tasdiqlangan
@@ -2118,12 +2126,12 @@
                                                 && (!$mtSababliDeadlinePassed || $isAdminMt);
 
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? !$mtSababliCanGrade
+                                                ? ($isAdminMt ? false : !$mtSababliCanGrade)
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
                                             // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
-                                            if ($isYnSubmittedMt && !$mtSababliCanGrade) {
+                                            if ($isYnSubmittedMt && !$mtSababliCanGrade && !$isAdminMt) {
                                                 $canRegrade = false;
                                             }
 

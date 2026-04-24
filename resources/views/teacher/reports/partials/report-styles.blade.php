@@ -47,4 +47,15 @@
     .student-name-cell { display: flex; align-items: center; gap: 8px; }
     .student-name-cell a { color: #1e40af; font-weight: 700; text-decoration: none; }
     .student-name-cell a:hover { color: #2b5ea7; text-decoration: underline; }
+
+    .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); }
+    .btn-excel:hover { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
+
+    .toggle-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 0; height: 36px; user-select: none; }
+    .toggle-track { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; transition: background 0.25s; flex-shrink: 0; }
+    .toggle-switch.active .toggle-track { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); }
+    .toggle-thumb { width: 18px; height: 18px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+    .toggle-switch.active .toggle-thumb { transform: translateX(18px); }
+    .toggle-label { font-size: 12px; font-weight: 600; color: #94a3b8; transition: color 0.25s; white-space: nowrap; }
+    .toggle-switch.active .toggle-label { color: #1e3a5f; }
 </style>

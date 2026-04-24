@@ -217,7 +217,72 @@ class TeacherMainController extends Controller
                 ->get();
         }
 
-        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory'));
+        $photo = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)
+            ->latest()
+            ->first();
+
+        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'photo'));
+    }
+
+    public function uploadStudentPhoto(Request $request, Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403);
+        }
+
+        try {
+            $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
+            $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
+            $fname = $student->student_id_number . '_' . $safeName . '.jpg';
+            $dir = public_path('uploads/student-photos/' . date('Y-m'));
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $fullPath = $dir . '/' . $fname;
+            $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
+
+            if (!$request->hasFile('photo')) {
+                return back()->with('error', 'Rasm tanlanmadi');
+            }
+            $request->file('photo')->move($dir, $fname);
+
+            \App\Models\StudentPhoto::create([
+                'student_id_number' => $student->student_id_number,
+                'full_name' => $student->full_name,
+                'group_name' => $student->group_name,
+                'semester_name' => $student->semester_name,
+                'uploaded_by' => $teacher->full_name ?? $teacher->short_name ?? 'Tyutor',
+                'uploaded_by_teacher_id' => $teacher->id,
+                'photo_path' => $path,
+            ]);
+
+            return back()->with('success', 'Rasm yuklandi');
+        } catch (\Throwable $e) {
+            \Log::error('Student photo upload error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return back()->with('error', 'Xatolik: ' . $e->getMessage());
+        }
+    }
+
+    public function deleteStudentPhoto(Request $request, Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403);
+        }
+
+        $photo = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
+        if ($photo) {
+            $filePath = public_path($photo->photo_path);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+            $photo->delete();
+        }
+
+        return back()->with('success', 'Rasm o\'chirildi');
     }
 
     private function studentsAdmin(Request $request)

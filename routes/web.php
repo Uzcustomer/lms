@@ -395,6 +395,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{studentContract}/review', [AdminStudentContractController::class, 'review'])->name('review');
             Route::post('/{studentContract}/approve', [AdminStudentContractController::class, 'approve'])->name('approve');
             Route::post('/{studentContract}/reject', [AdminStudentContractController::class, 'reject'])->name('reject');
+            Route::delete('/{studentContract}', [AdminStudentContractController::class, 'destroy'])->name('destroy');
             Route::get('/{studentContract}/download', [AdminStudentContractController::class, 'download'])->name('download');
             Route::post('/{studentContract}/regenerate', [AdminStudentContractController::class, 'regenerate'])->name('regenerate');
         });
@@ -635,6 +636,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::prefix('grade-history')->name('grade-history.')->group(function () {
             Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
+        });
+
+        Route::prefix('student-photos')->name('student-photos.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'index'])->name('index');
+            Route::get('/pending-ids', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'pendingIds'])->name('pending-ids');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'reject'])->name('reject');
+            Route::post('/{id}/check-similarity', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'checkSimilarity'])->name('check-similarity');
         });
 
         // Diagnostika sahifasi (yangi dizayn)
@@ -975,6 +984,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
 
         Route::get('/students', [TeacherMainController::class, 'students'])->name('students');
         Route::get('/students/{student}', [TeacherMainController::class, 'showStudent'])->name('students.show');
+        Route::post('/students/{student}/upload-photo', [TeacherMainController::class, 'uploadStudentPhoto'])->name('students.upload-photo');
+        Route::delete('/students/{student}/delete-photo', [TeacherMainController::class, 'deleteStudentPhoto'])->name('students.delete-photo');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
 
         // Tyutor hisobotlari

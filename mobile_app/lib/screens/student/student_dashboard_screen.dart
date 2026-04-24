@@ -50,11 +50,26 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   void _parseSchedule(Map<String, dynamic>? schedule) {
-    if (schedule == null) return;
+    if (schedule == null) {
+      debugPrint('[SCHEDULE] schedule is null');
+      return;
+    }
     try {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      debugPrint('[SCHEDULE] today=$today');
       final scheduleList = schedule['schedule'];
-      if (scheduleList == null || scheduleList is! List) return;
+      if (scheduleList == null || scheduleList is! List) {
+        debugPrint('[SCHEDULE] scheduleList is null or not List, keys=${schedule.keys.toList()}');
+        return;
+      }
+      debugPrint('[SCHEDULE] days count=${scheduleList.length}');
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        final d = day['date']?.toString() ?? '?';
+        final les = day['lessons'];
+        final count = (les is List) ? les.length : 0;
+        debugPrint('[SCHEDULE] day=$d lessons=$count');
+      }
 
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;
@@ -71,24 +86,36 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       }
 
       setState(() => _todayLessons = []);
+      final todayDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      // Collect future days with lessons, then sort to find nearest
+      final futureDays = <Map<String, dynamic>>[];
       for (final day in scheduleList) {
         if (day is! Map<String, dynamic>) continue;
         final dateStr = day['date']?.toString() ?? '';
         if (dateStr.isEmpty) continue;
         final dayDate = DateTime.tryParse(dateStr);
-        if (dayDate == null || !dayDate.isAfter(DateTime.now())) continue;
+        if (dayDate == null) continue;
+        final dayOnly = DateTime(dayDate.year, dayDate.month, dayDate.day);
+        if (!dayOnly.isAfter(todayDate)) continue;
         final lessons = day['lessons'];
         if (lessons is! List || lessons.isEmpty) continue;
-        final firstLesson = lessons.first;
-        if (firstLesson is! Map<String, dynamic>) continue;
-        setState(() {
-          _nextDayLesson = {
-            ...firstLesson,
-            '_date': dateStr,
-            '_day_date': dayDate,
-          };
-        });
-        return;
+        futureDays.add(day);
+      }
+      if (futureDays.isNotEmpty) {
+        futureDays.sort((a, b) => a['date'].toString().compareTo(b['date'].toString()));
+        final nearest = futureDays.first;
+        final firstLesson = (nearest['lessons'] as List).first;
+        if (firstLesson is Map<String, dynamic>) {
+          final dStr = nearest['date'].toString();
+          setState(() {
+            _nextDayLesson = {
+              ...firstLesson,
+              '_date': dStr,
+              '_day_date': DateTime.parse(dStr),
+            };
+          });
+          return;
+        }
       }
       setState(() => _nextDayLesson = null);
     } catch (_) {}

@@ -829,7 +829,6 @@ class JournalController extends Controller
             // student_subjects da ma'lumot bor — faqat fanga biriktirilgan talabalarni ko'rsatish
             $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
-                    // Fanga biriktirilgan faol talabalar
                     ->where(function ($q) use ($subjectId, $semesterCode) {
                         $q->where(function ($q2) {
                             $q2->where('student_status_code', '!=', '60')
@@ -843,7 +842,6 @@ class JournalController extends Controller
                                 ->where('student_subjects.semester_id', $semesterCode);
                         });
                     })
-                    // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
                     ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
                         $sub->select(DB::raw(1))
                             ->from('student_grades')
@@ -854,7 +852,7 @@ class JournalController extends Controller
                     });
             });
         } else {
-            // student_subjects da ma'lumot yo'q — eski logika (guruhdagi barcha talabalar)
+            // student_subjects da ma'lumot yo'q — eski logika
             $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
                     ->where(function ($q) {
@@ -877,6 +875,14 @@ class JournalController extends Controller
             ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
             ->orderBy('full_name')
             ->get();
+
+        if ($students->isEmpty()) {
+            $students = DB::table('students')
+                ->where('group_id', $group->group_hemis_id)
+                ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
+                ->orderBy('full_name')
+                ->get();
+        }
 
         // Get other averages (ON, OSKI, Test, Quiz) with status-based grade calculation
         // Filter by education_year_code to exclude old education year data
@@ -2324,6 +2330,11 @@ class JournalController extends Controller
             ->exists();
 
         if ($ynLocked) {
+            // Admin/superadmin uchun toggle ON bo'lsa — YN lock'dan o'tkazish
+            $adminMtToggle = $isAdminRole && Setting::get('feature_admin_mt_grade', '0') === '1';
+            if ($adminMtToggle) {
+                // Ruxsat — davom etadi
+            } else {
             // Sababli ariza orqali MT bahosi: tasdiqlangan sababli + MT makeup turi
             // mavjud bo'lsa va deadline ichida (yoki admin) bo'lsa — ruxsat
             $sababliMtAllowed = false;
@@ -2362,6 +2373,7 @@ class JournalController extends Controller
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
                     'yn_locked' => true,
                 ], 403);
+            }
             }
         }
 
@@ -3582,25 +3594,34 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Semestr bo'yicha filtrlash (joriy semestr orqali guruh aniqlanadi)
-        if ($request->filled('semester_code')) {
-            $currentSemesterHemisIds = DB::table('curriculum_weeks')
-                ->select('semester_hemis_id')
-                ->groupBy('semester_hemis_id')
-                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
-                ->pluck('semester_hemis_id');
-            $curriculaIds = Semester::where('code', $request->semester_code)
-                ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
-                ->pluck('curriculum_hemis_id');
-            $query->whereIn('curriculum_hemis_id', $curriculaIds);
-        }
+        // Semester + level filtrlari: schedules jadvalidan haqiqiy dars mavjud guruhlarni olish
+        if ($request->filled('semester_code') || $request->filled('level_code')) {
+            $semesterFilter = Semester::query();
+            if ($request->filled('semester_code')) {
+                $semesterFilter->where('code', $request->semester_code);
+            }
+            if ($request->filled('level_code')) {
+                $semesterFilter->where('level_code', $request->level_code);
+            }
+            if ($request->get('current_semester') == '1') {
+                $semesterFilter->where('current', true);
+            }
+            $curriculaIds = $semesterFilter->pluck('curriculum_hemis_id')->unique()->toArray();
 
-        // Kurs bo'yicha filtrlash (joriy semestr orqali guruh kursini aniqlash)
-        if ($request->filled('level_code')) {
-            $curriculaIds = Semester::where('level_code', $request->level_code)
-                ->where('current', true)
-                ->pluck('curriculum_hemis_id');
-            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+            // Agar semester jadvalidan topilmasa — schedules orqali fallback
+            if (empty($curriculaIds) && $request->filled('semester_code')) {
+                $groupHemisIdsFromSchedule = DB::table('schedules')
+                    ->where('semester_code', $request->semester_code)
+                    ->whereNull('deleted_at')
+                    ->pluck('group_id')
+                    ->unique()
+                    ->toArray();
+                if (!empty($groupHemisIdsFromSchedule)) {
+                    $query->whereIn('group_hemis_id', $groupHemisIdsFromSchedule);
+                }
+            } else {
+                $query->whereIn('curriculum_hemis_id', $curriculaIds);
+            }
         }
 
         // Fan bo'yicha filtrlash

@@ -4,6 +4,7 @@ namespace App\Exports;
 
 use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
+use App\Models\StudentPhoto;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\Exportable;
@@ -21,10 +22,67 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
     protected array $filters;
 
     protected ?array $tutorCache = null;
+    protected ?array $photoCache = null;
+    protected ?array $admissionCache = null;
 
     public function __construct(array $filters = [])
     {
         $this->filters = $filters;
+    }
+
+    protected function getAdmissionInfo(?int $studentId): array
+    {
+        if (!$studentId) {
+            return ['Yo\'q', ''];
+        }
+
+        if ($this->admissionCache === null) {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+                $this->admissionCache = [];
+            } else {
+                $this->admissionCache = DB::table('student_files')
+                    ->orderBy('id')
+                    ->get()
+                    ->groupBy('student_id')
+                    ->map(fn($items) => $items->toArray())
+                    ->toArray();
+            }
+        }
+
+        $files = $this->admissionCache[$studentId] ?? [];
+        if (empty($files)) {
+            return ['Yo\'q', ''];
+        }
+
+        $urls = [];
+        foreach ($files as $f) {
+            $urls[] = url('storage/' . $f->path);
+        }
+
+        return ['Ha', implode("\n", $urls)];
+    }
+
+    protected function getPhotoInfo(?string $studentIdNumber): array
+    {
+        if (!$studentIdNumber) {
+            return ['', ''];
+        }
+
+        if ($this->photoCache === null) {
+            $this->photoCache = StudentPhoto::orderByDesc('id')
+                ->get()
+                ->groupBy('student_id_number')
+                ->map(fn($items) => $items->first())
+                ->toArray();
+        }
+
+        $photo = $this->photoCache[$studentIdNumber] ?? null;
+        if (!$photo) {
+            return ['Yo\'q', ''];
+        }
+
+        $url = url($photo['photo_path'] ?? '');
+        return ['Ha', $url];
     }
 
     protected function getTutorName(?string $groupHemisId): string
@@ -81,6 +139,26 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
 
         if (!empty($this->filters['education_type'])) {
             $query->where('education_type_code', $this->filters['education_type']);
+        }
+
+        if (!empty($this->filters['country'])) {
+            $query->where('country_name', $this->filters['country']);
+        }
+
+        if (!empty($this->filters['has_files'])) {
+            if ($this->filters['has_files'] === 'yes') {
+                $query->whereHas('files');
+            } elseif ($this->filters['has_files'] === 'no') {
+                $query->whereDoesntHave('files');
+            }
+        }
+
+        if (!empty($this->filters['has_admission_data'])) {
+            if ($this->filters['has_admission_data'] === 'yes') {
+                $query->whereHas('admissionData');
+            } elseif ($this->filters['has_admission_data'] === 'no') {
+                $query->whereDoesntHave('admissionData');
+            }
         }
 
         return $query->orderBy('department_name')->orderBy('group_name')->orderBy('full_name');
@@ -145,6 +223,8 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             $backOffice?->teacher?->full_name ?? '',
             $backOffice?->started_at ? $backOffice->started_at->format('d.m.Y') : '',
             $this->getTutorName($student->group_id),
+            ...($this->getPhotoInfo($student->student_id_number)),
+            ...($this->getAdmissionInfo($student->id)),
         ];
     }
 
@@ -200,6 +280,10 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             'Back ofis xodimi',
             'Back ofis boshlanish sanasi',
             'Tyutor',
+            'Rasm yuklangan',
+            'Rasm URL',
+            'Qabul hujjati',
+            'Qabul hujjati URL',
         ];
     }
 

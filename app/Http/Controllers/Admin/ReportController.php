@@ -92,13 +92,17 @@ class ReportController extends Controller
      */
     public function jnReportData(Request $request)
     {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(180);
+        try {
         // Dekan uchun fakultet majburiy filtr
         $dekanFacultyIds = get_dekan_faculty_ids();
         if (!empty($dekanFacultyIds) && !$request->filled('faculty')) {
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // Sana oralig'i filtri
         $dateFrom = $request->filled('date_from') ? $request->date_from : null;
@@ -106,18 +110,28 @@ class ReportController extends Controller
 
         // 1-QADAM: Barcha schedule yozuvlarini olish (pairs_per_day hisoblash uchun)
         $scheduleQuery = DB::table('schedules as sch')
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
 
-        if ($request->get('current_semester', '1') == '1') {
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $needsJoin = $request->get('current_semester', '1') == '1' || $request->filled('level_code');
+        if ($needsJoin) {
             $scheduleQuery
                 ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
                 ->join('semesters as sem', function ($join) {
                     $join->on('sem.code', '=', 'sch.semester_code')
                         ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
-                })
-                ->where('sem.current', true);
+                });
+            if ($request->get('current_semester', '1') == '1') {
+                $scheduleQuery->where('sem.current', true);
+            }
+            if ($request->filled('level_code')) {
+                $scheduleQuery->where('sem.level_code', $request->level_code);
+            }
         }
 
         if ($request->filled('semester_code')) {
@@ -128,6 +142,14 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.subject_id', $request->subject);
         }
 
+        if ($request->filled('group')) {
+            // group param — Group.id, convert to group_hemis_id
+            $groupHemisId = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+            if ($groupHemisId) {
+                $scheduleQuery->where('sch.group_id', $groupHemisId);
+            }
+        }
+
         // Sana oralig'i bo'yicha dars jadvalini filtrlash
         if ($dateFrom) {
             $scheduleQuery->where('sch.lesson_date', '>=', $dateFrom);
@@ -136,26 +158,33 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.lesson_date', '<=', $dateTo);
         }
 
-        $scheduleRows = $scheduleQuery->get();
-
-        if ($scheduleRows->isEmpty()) {
-            return response()->json(['data' => [], 'total' => 0]);
-        }
-
-        // Schedule ma'lumotlarini tayyorlash: columns, minDates
+        // Schedule ma'lumotlarini tayyorlash: columns, minDates (memory-efficient cursor)
         $columns = [];    // [combo_key][date_pair] = true
         $minDates = [];   // [combo_key] = eng kichik sana
+        $scheduleGroupIds = [];
+        $scheduleSubjectIds = [];
+        $scheduleSemesterCodes = [];
+        $hasAny = false;
 
-        foreach ($scheduleRows as $row) {
+        foreach ($scheduleQuery->cursor() as $row) {
+            $hasAny = true;
             $dateKey = substr($row->lesson_date, 0, 10);
             $comboKey = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
             $datePairKey = $dateKey . '_' . $row->lesson_pair_code;
+
+            $scheduleGroupIds[$row->group_id] = true;
+            $scheduleSubjectIds[$row->subject_id] = true;
+            $scheduleSemesterCodes[$row->semester_code] = true;
 
             $columns[$comboKey][$datePairKey] = true;
 
             if (!isset($minDates[$comboKey]) || $dateKey < $minDates[$comboKey]) {
                 $minDates[$comboKey] = $dateKey;
             }
+        }
+
+        if (!$hasAny) {
+            return response()->json(['data' => [], 'total' => 0]);
         }
 
         // 2-QADAM: Talabalar ro'yxatini tayyorlash (filtrlar bilan)
@@ -174,7 +203,10 @@ class ReportController extends Controller
             $studentQuery->where('s.level_code', $request->level_code);
         }
         if ($request->filled('group')) {
-            $studentQuery->where('s.group_id', $request->group);
+            $groupHemisIdForStudents = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+            if ($groupHemisIdForStudents) {
+                $studentQuery->where('s.group_id', $groupHemisIdForStudents);
+            }
         }
 
         $selectedEducationType = $request->get('education_type');
@@ -199,8 +231,8 @@ class ReportController extends Controller
                 ->toArray();
         }
 
-        $scheduleGroupIds = $scheduleRows->pluck('group_id')->unique()->toArray();
-        $studentQuery->whereIn('s.group_id', $scheduleGroupIds);
+        $scheduleGroupIdsList = array_keys($scheduleGroupIds);
+        $studentQuery->whereIn('s.group_id', $scheduleGroupIdsList);
         $students = $studentQuery->get();
 
         if ($students->isEmpty()) {
@@ -213,8 +245,8 @@ class ReportController extends Controller
         }
         $studentHemisIds = array_keys($studentGroupMap);
 
-        $validSubjectIds = $scheduleRows->pluck('subject_id')->unique()->toArray();
-        $validSemesterCodes = $scheduleRows->pluck('semester_code')->unique()->toArray();
+        $validSubjectIds = array_keys($scheduleSubjectIds);
+        $validSemesterCodes = array_keys($scheduleSemesterCodes);
 
         if ($allowedSubjectIds !== null) {
             $validSubjectIds = array_intersect($validSubjectIds, $allowedSubjectIds);
@@ -228,7 +260,7 @@ class ReportController extends Controller
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
             ->whereIn('semester_code', $validSemesterCodes)
-            ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotIn('training_type_name', $excludedNames)
             ->where(function ($q) {
                 $q->whereNotNull('grade')->orWhereNotNull('retake_grade');
             })
@@ -243,8 +275,6 @@ class ReportController extends Controller
             $gradesQuery->where('lesson_date', '<=', $dateTo);
         }
 
-        $gradesRaw = $gradesQuery->get();
-
         // 4-QADAM: Jurnal formulasi bo'yicha hisoblash
         // a) Baho date_pair larini columns ga birlashtirish (jurnal kabi fallback)
         // b) Baholarni kun bo'yicha guruhlash
@@ -253,7 +283,7 @@ class ReportController extends Controller
         $gradesByDay = [];      // [student|subject|date] => [grade1, ...]
         $studentSubjects = [];  // [student|subject] => info
 
-        foreach ($gradesRaw as $g) {
+        foreach ($gradesQuery->cursor() as $g) {
             $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
             if (!$groupId) continue;
 
@@ -428,6 +458,10 @@ class ReportController extends Controller
             'current_page' => (int) $page,
             'last_page' => ceil($total / $perPage),
         ]);
+        } catch (\Throwable $e) {
+            \Log::error('JN Report error: ' . $e->getMessage(), ['file' => $e->getFile() . ':' . $e->getLine()]);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -610,7 +644,8 @@ class ReportController extends Controller
     {
         $date = $request->get('date', now()->format('Y-m-d'));
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
@@ -620,14 +655,20 @@ class ReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->where(function ($q) {
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');
             })
-            ->whereRaw('DATE(sch.lesson_date) = ?', [$date])
-            ->select(
+            ->whereRaw('DATE(sch.lesson_date) = ?', [$date]);
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $schedules->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $schedules = $schedules->select(
                 'sch.schedule_hemis_id',
                 'sch.employee_id',
                 'sch.employee_name',
@@ -667,8 +708,8 @@ class ReportController extends Controller
         foreach ($schedules as $sch) {
             $hasAC = isset($acRecords[$sch->schedule_hemis_id]);
             $acLoad = $hasAC ? $acRecords[$sch->schedule_hemis_id]->load : null;
-            // Ma'ruza va boshqa maxsus turlarga baho talab qilinmaydi
-            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            // Faqat amaliy mashg'ulotlar uchun baho tekshiriladi
+            $skipGradeCheck = in_array($sch->training_type_name, $gradeExcludedNames);
             $hasGrade = $skipGradeCheck ? null : isset($gradeRecords[$sch->schedule_hemis_id]);
 
             $rows[] = [
@@ -855,8 +896,8 @@ class ReportController extends Controller
         }
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        // Bu turlarga faqat davomat tekshiriladi, baho tekshirilmaydi (ma'ruza va h.k.)
-        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
@@ -868,8 +909,13 @@ class ReportController extends Controller
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->where('sch.training_type_code', '!=', 11)
             ->whereRaw("sch.subject_name NOT LIKE '%amaliyoti'")
+            ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
 
         // Joriy semestr filtri (LEFT JOIN bo'lgani uchun semester topilmagan yozuvlarni ham qo'shamiz)
         if ($request->get('current_semester', '1') == '1') {
@@ -1056,8 +1102,8 @@ class ReportController extends Controller
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
                    || isset($attendanceByKey[$attKey]);
 
-            // Baho: fanga biriktirilgan talabalar soni va baho qo'yilmaganlar soni
-            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
+            // Baho: faqat amaliy mashg'ulotlar uchun tekshiriladi
+            $skipGradeCheck = in_array($sch->training_type_name, $gradeExcludedNames);
             // Fanga biriktirilgan talabalar soni (student_subjects — semestr bo'yicha), topilmasa guruh soni
             $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
             $totalStudents = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
@@ -3791,7 +3837,10 @@ class ReportController extends Controller
             $studentQuery->where('s.level_code', $request->level_code);
         }
         if ($request->filled('group')) {
-            $studentQuery->where('s.group_id', $request->group);
+            $groupHemisIdForStudents = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+            if ($groupHemisIdForStudents) {
+                $studentQuery->where('s.group_id', $groupHemisIdForStudents);
+            }
         }
 
         $selectedEducationType = $request->get('education_type');
@@ -6682,7 +6731,7 @@ class ReportController extends Controller
             $request->merge(['faculty' => $dekanFacultyIds[0]]);
         }
 
-        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         // 1-QADAM: Asosiy jadval so'rovi (filtrlar bilan)
         $scheduleQuery = DB::table('schedules as sch')
@@ -6691,14 +6740,14 @@ class ReportController extends Controller
                 $join->on('sem.code', '=', 'sch.semester_code')
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
-            ->whereNotIn('sch.training_type_code', $gradeExcludedTypes)
+            ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->where('sch.education_year_current', true)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
 
         // Baho qo'yilmaydigan fanlarni chiqarish (masalan, O'quv amaliyoti)
-        $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+        $excludedPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
         foreach ($excludedPatterns as $pattern) {
             $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
         }

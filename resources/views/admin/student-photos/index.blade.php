@@ -212,7 +212,9 @@
                     return;
                 }
                 this.review.phase = 'running';
-                const endpoint = this.review.mode === 'approve' ? 'approve' : 'reject';
+                const endpoint = this.review.mode === 'approve' ? 'approve'
+                                : this.review.mode === 'revert' ? 'revert'
+                                : 'reject';
                 const csrf = document.querySelector('meta[name=csrf-token]').content;
                 for (let i = 0; i < this.review.ids.length; i++) {
                     if (this.review.cancel) break;
@@ -398,7 +400,42 @@
                     </div>
                 </form>
 
-                <div class="p-6">
+                {{-- Bulk amallar toolbar --}}
+                <div class="px-6 pt-4 pb-2 border-t border-gray-100 bg-gray-50 flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-bold uppercase text-gray-500">Bulk amallar:</span>
+                    <span class="text-sm text-gray-700">
+                        <strong x-text="selected.length"></strong> ta tanlangan
+                    </span>
+                    <div class="flex gap-2 ml-auto flex-wrap">
+                        <button type="button" @click="openBulk()" :disabled="selected.length === 0"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                            AI tahlil
+                        </button>
+                        <button type="button" @click="openReview('approve')" :disabled="selected.length === 0"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            Bulk qabul
+                        </button>
+                        <button type="button" @click="openReview('reject')" :disabled="selected.length === 0"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            Bulk rad
+                        </button>
+                        <button type="button" @click="openReview('revert')" :disabled="selected.length === 0"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-md hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Tasdiqlangan/rad etilgan rasmlarni 'kutilmoqda' holatiga qaytarish">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                            Qaytarish
+                        </button>
+                        <button type="button" x-show="selected.length > 0" @click="clearSelection()"
+                                class="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+                            Tanlovni tozalash
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-6 pt-3">
                     {{-- Jadval --}}
                     <div class="overflow-x-auto">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -780,6 +817,12 @@
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 Rad
             </button>
+            <button type="button" @click="openReview('revert')"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-full hover:bg-orange-600"
+                    title="Kutilmoqda holatiga qaytarish">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                Qaytarish
+            </button>
             <button type="button" @click="clearSelection()"
                     class="inline-flex items-center px-2 py-1.5 text-gray-500 hover:text-gray-700"
                     title="Tanlovni tozalash">
@@ -797,9 +840,11 @@
                         <h3 class="text-lg font-semibold text-gray-900">
                             <span x-show="review.mode === 'approve'">Bulk qabul qilish</span>
                             <span x-show="review.mode === 'reject'">Bulk rad etish</span>
+                            <span x-show="review.mode === 'revert'">Bulk qaytarish</span>
                         </h3>
                         <p class="text-xs text-gray-500 mt-0.5">
-                            Filtrdagi barcha <strong>kutilmoqda</strong> holatidagi rasmlarga qo'llanadi.
+                            <span x-show="review.mode !== 'revert'">Tanlangan <strong>kutilmoqda</strong> holatidagi rasmlarga qo'llanadi.</span>
+                            <span x-show="review.mode === 'revert'">Tasdiqlangan/rad etilgan rasmlar <strong>kutilmoqda</strong> holatiga qaytariladi (xato tasdiq/rad bekor qilinadi).</span>
                             Tyutor'larga Telegram orqali xabar yuboriladi.
                         </p>
                     </div>
@@ -820,10 +865,13 @@
                         <template x-if="review.total > 0">
                             <div class="space-y-4">
                                 <div class="rounded-md px-4 py-3 text-sm border"
-                                     :class="review.mode === 'approve' ? 'bg-green-50 border-green-200 text-green-900' : 'bg-red-50 border-red-200 text-red-900'">
+                                     :class="review.mode === 'approve' ? 'bg-green-50 border-green-200 text-green-900'
+                                          : review.mode === 'revert' ? 'bg-orange-50 border-orange-200 text-orange-900'
+                                          : 'bg-red-50 border-red-200 text-red-900'">
                                     <strong x-text="review.total"></strong> ta rasm
                                     <span x-show="review.mode === 'approve'">tasdiqlanadi</span>
-                                    <span x-show="review.mode === 'reject'">rad etiladi</span>.
+                                    <span x-show="review.mode === 'reject'">rad etiladi</span>
+                                    <span x-show="review.mode === 'revert'">kutilmoqda holatiga qaytariladi</span>.
                                     Har bir rasm uchun tyutor'ga avtomat Telegram xabari yuboriladi.
                                 </div>
 
@@ -842,10 +890,13 @@
                                         Bekor qilish
                                     </button>
                                     <button type="button" @click="runReview()"
-                                            :class="review.mode === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'"
+                                            :class="review.mode === 'approve' ? 'bg-green-600 hover:bg-green-700'
+                                                 : review.mode === 'revert' ? 'bg-orange-500 hover:bg-orange-600'
+                                                 : 'bg-red-600 hover:bg-red-700'"
                                             class="px-4 py-2 text-white text-sm font-semibold rounded-md">
                                         <span x-show="review.mode === 'approve'">Tasdiqlashni boshlash</span>
                                         <span x-show="review.mode === 'reject'">Rad etishni boshlash</span>
+                                        <span x-show="review.mode === 'revert'">Qaytarishni boshlash</span>
                                     </button>
                                 </div>
                             </div>
@@ -861,7 +912,7 @@
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
                             <div class="h-3 transition-all duration-200"
-                                 :class="review.mode === 'approve' ? 'bg-green-600' : 'bg-red-600'"
+                                 :class="review.mode === 'approve' ? 'bg-green-600' : review.mode === 'revert' ? 'bg-orange-500' : 'bg-red-600'"
                                  :style="`width: ${review.total ? (review.processed / review.total * 100) : 0}%`"></div>
                         </div>
                         <div class="flex justify-between text-xs text-gray-600">

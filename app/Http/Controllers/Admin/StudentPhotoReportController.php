@@ -310,6 +310,27 @@ class StudentPhotoReportController extends Controller
         return $this->reviewResponse($request, true, 'Rasm rad etildi.');
     }
 
+    public function revert(Request $request, $id)
+    {
+        $photo = StudentPhoto::findOrFail($id);
+
+        if ($photo->isPending()) {
+            return $this->reviewResponse($request, false, 'Bu rasm allaqachon kutilmoqda holatida.');
+        }
+
+        $prevStatus = $photo->status;
+        $photo->update([
+            'status' => StudentPhoto::STATUS_PENDING,
+            'reviewed_by_name' => null,
+            'reviewed_at' => null,
+            'rejection_reason' => null,
+        ]);
+
+        $this->notifyTutorCorrection($photo, $prevStatus);
+
+        return $this->reviewResponse($request, true, 'Rasm kutilmoqda holatiga qaytarildi.');
+    }
+
     protected function reviewResponse(Request $request, bool $ok, string $message)
     {
         if ($request->expectsJson() || $request->ajax()) {
@@ -349,6 +370,37 @@ class StudentPhotoReportController extends Controller
             app(TelegramService::class)->sendAndGetId((string) $teacher->telegram_chat_id, $text);
         } catch (\Throwable $e) {
             Log::warning('Tyutorga telegram bildirish yuborilmadi', [
+                'photo_id' => $photo->id,
+                'teacher_id' => $teacher->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    protected function notifyTutorCorrection(StudentPhoto $photo, string $prevStatus): void
+    {
+        $teacher = null;
+        if ($photo->uploaded_by_teacher_id) {
+            $teacher = Teacher::find($photo->uploaded_by_teacher_id);
+        }
+        if (!$teacher && $photo->uploaded_by) {
+            $teacher = Teacher::where('full_name', $photo->uploaded_by)->first();
+        }
+        if (!$teacher || empty($teacher->telegram_chat_id)) {
+            return;
+        }
+
+        $prevLabel = $prevStatus === 'rejected' ? 'rad etilgan' : 'tasdiqlangan';
+        $text = "⚠️ Xato bildirishnoma tuzatilmoqda\n\n"
+              . "Talaba: {$photo->full_name}\n"
+              . "Guruh: " . ($photo->group_name ?: '—') . "\n\n"
+              . "Oldingi \"{$prevLabel}\" xabari noto'g'ri edi — rasm qayta ko'rib chiqilmoqda. "
+              . "Yangi qaror chiqarilganda xabar yuboriladi.";
+
+        try {
+            app(TelegramService::class)->sendAndGetId((string) $teacher->telegram_chat_id, $text);
+        } catch (\Throwable $e) {
+            Log::warning('Tyutorga tuzatish bildirishi yuborilmadi', [
                 'photo_id' => $photo->id,
                 'teacher_id' => $teacher->id,
                 'error' => $e->getMessage(),

@@ -315,38 +315,50 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           child: Stack(
             children: [
               Positioned(
-                right: -30,
-                top: -30,
+                right: -40,
+                top: -40,
                 child: Container(
-                  width: 140,
-                  height: 140,
+                  width: 200,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.12),
+                        Colors.white.withOpacity(0.04),
+                        Colors.white.withOpacity(0.0),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: -10,
+                top: -10,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.white.withOpacity(0.08),
+                        Colors.white.withOpacity(0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 20,
+                top: 10,
+                child: Container(
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white.withOpacity(0.06),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: -20,
-                bottom: 40,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.04),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 60,
-                bottom: -20,
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.05),
                   ),
                 ),
               ),

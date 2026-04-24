@@ -157,7 +157,7 @@ class StudentUsefulScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
-                childAspectRatio: 1.15,
+                childAspectRatio: 1.7,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) => _buildCard(
@@ -195,62 +195,61 @@ class StudentUsefulScreen extends StatelessWidget {
                   : item.gradient[0].withOpacity(0.08),
             ),
           ),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: item.gradient,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: item.gradient[0].withOpacity(0.25),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: item.gradient,
+                  ),
+                  borderRadius: BorderRadius.circular(11),
+                  boxShadow: [
+                    BoxShadow(
+                      color: item.gradient[0].withOpacity(0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
-                    child: Icon(item.icon, color: Colors.white, size: 20),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 14,
-                    color: item.gradient[0].withOpacity(0.5),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                item.title,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: txt,
-                  height: 1.2,
+                  ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                child: Icon(item.icon, color: Colors.white, size: 19),
               ),
-              const SizedBox(height: 2),
-              Text(
-                item.subtitle,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: sub,
-                  height: 1.2,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: txt,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      item.subtitle,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        color: sub,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 12,
+                color: sub.withOpacity(0.5),
               ),
             ],
           ),

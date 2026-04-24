@@ -106,8 +106,8 @@ class TutorReportController extends Controller
             }
 
             $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+            $currentSemester = $request->get('current_semester', '1') == '1';
 
-            // Schedule dan barcha fanlarni olish (joriy semestr)
             $scheduleQuery = DB::table('schedules as sch')
                 ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
                 ->join('semesters as sem', function ($join) {
@@ -117,8 +117,13 @@ class TutorReportController extends Controller
                 ->whereIn('sch.group_id', $groupIds)
                 ->whereNotIn('sch.training_type_code', $excludedCodes)
                 ->whereNotNull('sch.lesson_date')
-                ->where('sem.current', true)
-                ->where('sch.education_year_current', true)
+                ->where('sch.education_year_current', true);
+
+            if ($currentSemester) {
+                $scheduleQuery->where('sem.current', true);
+            }
+
+            $scheduleQuery = $scheduleQuery
                 ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
                 ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
                 ->get();

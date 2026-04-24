@@ -69,7 +69,20 @@ class StudentPhotoReportController extends Controller
             $query->where('student_photos.created_at', '<=', $request->date_to . ' 23:59:59');
         }
 
-        $photos = $query->paginate(30)->withQueryString();
+        if ($request->filled('similarity')) {
+            if ($request->similarity === 'match') {
+                $query->where('student_photos.similarity_status', 'match');
+            } elseif ($request->similarity === 'mismatch') {
+                $query->where('student_photos.similarity_status', 'mismatch');
+            } elseif ($request->similarity === 'unchecked') {
+                $query->whereNull('student_photos.similarity_checked_at');
+            }
+        }
+
+        $perPage = (int) $request->get('per_page', 30);
+        $perPage = in_array($perPage, [10, 25, 30, 50, 100, 200]) ? $perPage : 30;
+
+        $photos = $query->paginate($perPage)->withQueryString();
 
         $stats = [
             'total' => StudentPhoto::count(),
@@ -96,9 +109,87 @@ class StudentPhotoReportController extends Controller
             ->orderBy('level_name')
             ->pluck('level_name');
 
+        $groups = Student::select('group_name')
+            ->whereNotNull('group_name')
+            ->distinct()
+            ->orderBy('group_name')
+            ->pluck('group_name');
+
+        $tutors = StudentPhoto::select('uploaded_by')
+            ->whereNotNull('uploaded_by')
+            ->distinct()
+            ->orderBy('uploaded_by')
+            ->pluck('uploaded_by');
+
         return view('admin.student-photos.index', compact(
-            'photos', 'stats', 'departments', 'specialties', 'levels'
+            'photos', 'stats', 'departments', 'specialties', 'levels', 'groups', 'tutors'
         ));
+    }
+
+    public function pendingIds(Request $request)
+    {
+        $query = StudentPhoto::query()
+            ->leftJoin('students', 'students.student_id_number', '=', 'student_photos.student_id_number')
+            ->select('student_photos.id');
+
+        if ($request->filled('status')) {
+            $query->where('student_photos.status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $needle = trim($request->search);
+            $query->where(function ($q) use ($needle) {
+                $q->where('student_photos.full_name', 'like', "%{$needle}%")
+                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
+            });
+        }
+
+        if ($request->filled('department')) {
+            $query->where('students.department_name', $request->department);
+        }
+
+        if ($request->filled('specialty')) {
+            $query->where('students.specialty_name', $request->specialty);
+        }
+
+        if ($request->filled('level')) {
+            $query->where('students.level_name', $request->level);
+        }
+
+        if ($request->filled('group')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('students.group_name', $request->group)
+                  ->orWhere('student_photos.group_name', $request->group);
+            });
+        }
+
+        if ($request->filled('tutor')) {
+            $query->where('student_photos.uploaded_by', $request->tutor);
+        }
+
+        if ($request->filled('date_from')) {
+            $query->where('student_photos.created_at', '>=', $request->date_from . ' 00:00:00');
+        }
+
+        if ($request->filled('date_to')) {
+            $query->where('student_photos.created_at', '<=', $request->date_to . ' 23:59:59');
+        }
+
+        // For bulk AI, default to only photos not yet checked
+        $onlyUnchecked = $request->boolean('only_unchecked', true);
+        if ($onlyUnchecked) {
+            $query->whereNull('student_photos.similarity_checked_at');
+        }
+
+        // Safety cap to avoid runaway browser loops
+        $ids = $query->orderBy('student_photos.id')
+            ->limit(500)
+            ->pluck('student_photos.id');
+
+        return response()->json([
+            'ids' => $ids,
+            'count' => $ids->count(),
+        ]);
     }
 
     public function approve(Request $request, $id)

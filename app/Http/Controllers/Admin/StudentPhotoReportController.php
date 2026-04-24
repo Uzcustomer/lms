@@ -16,7 +16,7 @@ class StudentPhotoReportController extends Controller
 {
     public function index(Request $request)
     {
-        $photos = $this->applyFilters($this->baseQuery(), $request)
+        $photosQuery = $this->applyFilters($this->baseQuery(), $request)
             ->select([
                 'student_photos.*',
                 'students.image as student_profile_image',
@@ -24,8 +24,11 @@ class StudentPhotoReportController extends Controller
                 'students.specialty_name as specialty_name',
                 'students.level_name as level_name',
                 'students.group_name as student_group_name',
-            ])
-            ->orderByDesc('student_photos.created_at')
+            ]);
+
+        $this->applySort($photosQuery, $request);
+
+        $photos = $photosQuery
             ->paginate($this->perPage($request))
             ->withQueryString();
 
@@ -59,6 +62,33 @@ class StudentPhotoReportController extends Controller
     {
         $perPage = (int) $request->get('per_page', 30);
         return in_array($perPage, [10, 25, 30, 50, 100, 200]) ? $perPage : 30;
+    }
+
+    protected function applySort($query, Request $request): void
+    {
+        $allowed = [
+            'id' => 'student_photos.id',
+            'full_name' => 'student_photos.full_name',
+            'student_id_number' => 'student_photos.student_id_number',
+            'department_name' => 'students.department_name',
+            'specialty_name' => 'students.specialty_name',
+            'level_name' => 'students.level_name',
+            'group_name' => 'students.group_name',
+            'uploaded_by' => 'student_photos.uploaded_by',
+            'similarity_score' => 'student_photos.similarity_score',
+            'quality_score' => 'student_photos.quality_score',
+            'status' => 'student_photos.status',
+            'created_at' => 'student_photos.created_at',
+        ];
+
+        $sort = $request->get('sort');
+        $dir = strtolower($request->get('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if ($sort && isset($allowed[$sort])) {
+            $query->orderBy($allowed[$sort], $dir);
+        } else {
+            $query->orderByDesc('student_photos.created_at');
+        }
     }
 
     /**

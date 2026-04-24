@@ -10,19 +10,45 @@
             compare: {
                 open: false, profile: '', uploaded: '', title: '',
                 photoId: null, loading: false, result: null, error: null,
+                quality: null, qualityLoading: false, qualityError: null,
             },
             reject: { open: false, id: null, name: '' },
             bulk: {
                 open: false, phase: 'confirm', // confirm | running | done
                 ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
                 currentName: '', cancel: false, errors: [],
+                runQuality: true,
             },
             openLightbox(src, alt) { this.lightbox = { open: true, src, alt }; },
-            openCompare(photoId, profile, uploaded, title, existing) {
+            openCompare(photoId, profile, uploaded, title, existing, existingQuality) {
                 this.compare = {
                     open: true, profile, uploaded, title,
                     photoId, loading: false, result: existing || null, error: null,
+                    quality: existingQuality || null, qualityLoading: false, qualityError: null,
                 };
+            },
+            async runQualityCheck() {
+                this.compare.qualityLoading = true;
+                this.compare.qualityError = null;
+                try {
+                    const res = await fetch(`/admin/student-photos/${this.compare.photoId}/check-quality`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                            'Accept': 'application/json',
+                        },
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        this.compare.qualityError = data.error || 'Nomaʼlum xatolik';
+                    } else {
+                        this.compare.quality = data;
+                    }
+                } catch (e) {
+                    this.compare.qualityError = e.message;
+                } finally {
+                    this.compare.qualityLoading = false;
+                }
             },
             openReject(id, name) { this.reject = { open: true, id, name }; },
             async runSimilarityCheck() {
@@ -49,7 +75,11 @@
                 }
             },
             async openBulk() {
-                this.bulk = { open: true, phase: 'confirm', ids: [], total: 0, processed: 0, succeeded: 0, failed: 0, currentName: '', cancel: false, errors: [] };
+                this.bulk = {
+                    open: true, phase: 'confirm', ids: [], total: 0, processed: 0,
+                    succeeded: 0, failed: 0, currentName: '', cancel: false, errors: [],
+                    runQuality: true,
+                };
                 const params = new URLSearchParams(new FormData(document.getElementById('sp-filter-form')));
                 params.set('only_unchecked', '1');
                 try {
@@ -63,24 +93,34 @@
             },
             async runBulk() {
                 this.bulk.phase = 'running';
+                const csrf = document.querySelector('meta[name=csrf-token]').content;
                 for (let i = 0; i < this.bulk.ids.length; i++) {
                     if (this.bulk.cancel) break;
                     const id = this.bulk.ids[i];
                     this.bulk.currentName = `#${id} (${i + 1}/${this.bulk.total})`;
+                    let okOne = false;
                     try {
-                        const res = await fetch(`/admin/student-photos/${id}/check-similarity`, {
+                        const r1 = await fetch(`/admin/student-photos/${id}/check-similarity`, {
                             method: 'POST',
-                            headers: {
-                                'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
-                                'Accept': 'application/json',
-                            },
+                            headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
                         });
-                        if (res.ok) { this.bulk.succeeded++; }
+                        if (r1.ok) { okOne = true; }
                         else {
-                            this.bulk.failed++;
-                            const err = await res.json().catch(() => ({}));
-                            this.bulk.errors.push(`#${id}: ${err.error || ('HTTP ' + res.status)}`);
+                            const err = await r1.json().catch(() => ({}));
+                            this.bulk.errors.push(`#${id} (similarity): ${err.error || ('HTTP ' + r1.status)}`);
                         }
+                        if (this.bulk.runQuality) {
+                            const r2 = await fetch(`/admin/student-photos/${id}/check-quality`, {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                            });
+                            if (!r2.ok) {
+                                okOne = false;
+                                const err = await r2.json().catch(() => ({}));
+                                this.bulk.errors.push(`#${id} (quality): ${err.error || ('HTTP ' + r2.status)}`);
+                            }
+                        }
+                        if (okOne) { this.bulk.succeeded++; } else { this.bulk.failed++; }
                     } catch (e) {
                         this.bulk.failed++;
                         this.bulk.errors.push(`#${id}: ${e.message}`);
@@ -275,6 +315,19 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> AI max %</label>
                             <input type="number" name="max_similarity" value="{{ request('max_similarity') }}" min="0" max="100" step="0.1" placeholder="100" class="sp-text-input" />
                         </div>
+                        <div class="filter-item" style="min-width: 150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Sifat holati</label>
+                            <select name="quality" class="select2-sp" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="passed" {{ request('quality') == 'passed' ? 'selected' : '' }}>Maqbul</option>
+                                <option value="failed" {{ request('quality') == 'failed' ? 'selected' : '' }}>Xato</option>
+                                <option value="unchecked" {{ request('quality') == 'unchecked' ? 'selected' : '' }}>Tekshirilmagan</option>
+                            </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 110px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Sifat min %</label>
+                            <input type="number" name="min_quality" value="{{ request('min_quality') }}" min="0" max="100" step="0.1" placeholder="0" class="sp-text-input" />
+                        </div>
                         <div class="filter-item" style="flex: 1; min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -312,6 +365,7 @@
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">Rasm</th>
                                     <th class="px-3 py-2 text-left font-medium text-gray-600">Tyutor</th>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">AI %</th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600">Sifat</th>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">Solishtirish</th>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">Ruxsat</th>
                                 </tr>
@@ -355,6 +409,28 @@
                                             @endif
                                         </td>
                                         <td class="px-3 py-2 text-center">
+                                            @if($photo->quality_score !== null)
+                                                @php
+                                                    $qscore = (float) $photo->quality_score;
+                                                    $qcls = $photo->quality_passed
+                                                        ? 'bg-green-100 text-green-800'
+                                                        : 'bg-red-100 text-red-800';
+                                                    $qissues = is_array($photo->quality_issues) ? $photo->quality_issues : [];
+                                                @endphp
+                                                <span class="inline-block px-2 py-1 rounded text-sm font-semibold {{ $qcls }}"
+                                                      title="{{ implode(' · ', $qissues) }}">
+                                                    {{ number_format($qscore, 0) }}%
+                                                </span>
+                                                @if(!empty($qissues))
+                                                    <div class="text-[10px] text-red-700 mt-0.5 max-w-[160px] truncate" title="{{ implode(' · ', $qissues) }}">
+                                                        {{ $qissues[0] }}
+                                                    </div>
+                                                @endif
+                                            @else
+                                                <span class="text-xs text-gray-400">—</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
                                             @php
                                                 $existingSimilarity = $photo->similarity_score !== null ? [
                                                     'similarity_percent' => (float) $photo->similarity_score,
@@ -362,16 +438,27 @@
                                                     'status' => $photo->similarity_status,
                                                     'checked_at' => optional($photo->similarity_checked_at)->toIso8601String(),
                                                 ] : null;
+                                                $existingQuality = $photo->quality_score !== null ? [
+                                                    'quality_score' => (float) $photo->quality_score,
+                                                    'passed' => (bool) $photo->quality_passed,
+                                                    'issues' => is_array($photo->quality_issues) ? $photo->quality_issues : [],
+                                                    'ok' => is_array($photo->quality_ok) ? $photo->quality_ok : [],
+                                                    'checked_at' => optional($photo->quality_checked_at)->toIso8601String(),
+                                                ] : null;
                                             @endphp
                                             @if($profileUrl)
                                                 <button type="button"
-                                                        @click="openCompare({{ $photo->id }}, '{{ $profileUrl }}', '{{ $uploadedUrl }}', {{ Js::from($photo->full_name) }}, {{ Js::from($existingSimilarity) }})"
+                                                        @click="openCompare({{ $photo->id }}, '{{ $profileUrl }}', '{{ $uploadedUrl }}', {{ Js::from($photo->full_name) }}, {{ Js::from($existingSimilarity) }}, {{ Js::from($existingQuality) }})"
                                                         class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50">
                                                     <img src="{{ $profileUrl }}" class="w-6 h-8 object-cover rounded-sm" alt="profile">
                                                     <span class="text-gray-700">Solishtirish</span>
                                                 </button>
                                             @else
-                                                <span class="text-xs text-gray-400">Profil rasmi yo'q</span>
+                                                <button type="button"
+                                                        @click="openCompare({{ $photo->id }}, '', '{{ $uploadedUrl }}', {{ Js::from($photo->full_name) }}, {{ Js::from($existingSimilarity) }}, {{ Js::from($existingQuality) }})"
+                                                        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50">
+                                                    <span class="text-gray-700">Sifat</span>
+                                                </button>
                                             @endif
                                         </td>
                                         <td class="px-3 py-2 text-center">
@@ -408,7 +495,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="12" class="px-3 py-8 text-center text-gray-500">Ma'lumot topilmadi</td>
+                                        <td colspan="13" class="px-3 py-8 text-center text-gray-500">Ma'lumot topilmadi</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -502,6 +589,63 @@
                     <template x-if="!compare.result && !compare.loading && !compare.error">
                         <div class="mt-3 text-xs text-gray-500">
                             Tugmani bosing — tahlil 2-5 soniya oladi.
+                        </div>
+                    </template>
+                </div>
+
+                {{-- AI rasm sifati tekshiruvi --}}
+                <div class="mt-5 pt-4 border-t border-gray-200">
+                    <div class="flex items-center justify-between gap-4 flex-wrap">
+                        <div class="text-sm text-gray-700">
+                            <strong>AI rasm sifati</strong> — markaz, framing, oq xalat, yoritish
+                        </div>
+                        <button type="button"
+                                @click="runQualityCheck()"
+                                :disabled="compare.qualityLoading"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-md hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                            <svg x-show="!compare.qualityLoading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            <svg x-show="compare.qualityLoading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                            <span x-text="compare.qualityLoading ? 'Tekshirilmoqda...' : (compare.quality ? 'Qayta tekshirish' : 'Sifatni tekshirish')"></span>
+                        </button>
+                    </div>
+
+                    <template x-if="compare.qualityError">
+                        <div class="mt-3 rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm" x-text="compare.qualityError"></div>
+                    </template>
+
+                    <template x-if="compare.quality">
+                        <div class="mt-3 rounded-md p-4 border"
+                             :class="compare.quality.passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="text-3xl font-bold" :class="compare.quality.passed ? 'text-green-700' : 'text-red-700'">
+                                    <span x-text="compare.quality.quality_score + '%'"></span>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-semibold" :class="compare.quality.passed ? 'text-green-800' : 'text-red-800'">
+                                        <span x-text="compare.quality.passed ? 'Maqbul — standartlarga mos' : 'Xato — standartlarga mos emas'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <template x-if="compare.quality.issues && compare.quality.issues.length > 0">
+                                <div class="mb-2">
+                                    <div class="text-xs font-bold text-red-800 mb-1">Muammolar:</div>
+                                    <ul class="text-xs text-red-700 space-y-0.5 pl-4 list-disc">
+                                        <template x-for="issue in compare.quality.issues" :key="issue">
+                                            <li x-text="issue"></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                            <template x-if="compare.quality.ok && compare.quality.ok.length > 0">
+                                <div>
+                                    <div class="text-xs font-bold text-green-800 mb-1">Muvaffaqiyatli tekshiruvlar:</div>
+                                    <ul class="text-xs text-green-700 space-y-0.5 pl-4 list-disc">
+                                        <template x-for="okItem in compare.quality.ok" :key="okItem">
+                                            <li x-text="okItem"></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
                         </div>
                     </template>
                 </div>
@@ -688,12 +832,17 @@
                             <div class="space-y-4">
                                 <div class="rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 px-4 py-3 text-sm">
                                     <strong x-text="bulk.total"></strong> ta rasm AI bilan tahlil qilinadi.
-                                    Har bir rasm 2-5 soniya oladi.
-                                    Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * 3 / 60) + ' daqiqa'"></strong>.
+                                    Har bir rasm <span x-text="bulk.runQuality ? '5-10' : '2-5'"></span> soniya oladi.
+                                    Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * (bulk.runQuality ? 7 : 3) / 60) + ' daqiqa'"></strong>.
                                 </div>
+                                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox" x-model="bulk.runQuality"
+                                           class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">
+                                    <span>Rasm sifatini ham tekshirish (markaz, framing, oq xalat, yoritish)</span>
+                                </label>
                                 <div class="text-xs text-gray-500">
-                                    Servis: <code>ArcFace</code>. Natija avtomat bazaga saqlanadi.
-                                    Tahlil chog'ida oynani yopmang.
+                                    Servislar: <code>ArcFace</code> (o'xshashlik) + OpenCV/DeepFace (sifat).
+                                    Natija avtomat bazaga saqlanadi. Tahlil chog'ida oynani yopmang.
                                 </div>
                                 <div class="flex justify-end gap-2 pt-2">
                                     <button type="button" @click="bulk.open = false"

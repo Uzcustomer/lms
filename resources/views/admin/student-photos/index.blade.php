@@ -262,26 +262,30 @@
                 </div>
             @endif
 
-            {{-- Statistika --}}
+            {{-- Statistika (bosilganda filter avtomat qo'llanadi) --}}
             <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                <div class="bg-white shadow-sm rounded-lg p-4">
+                <a href="{{ route('admin.student-photos.index') }}"
+                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-gray-50 transition border-2 {{ !request('status') ? 'border-gray-700' : 'border-transparent' }}">
                     <div class="text-sm text-gray-500">Jami rasmlar</div>
                     <div class="text-2xl font-semibold text-gray-900">{{ number_format($stats['total']) }}</div>
-                </div>
-                <div class="bg-white shadow-sm rounded-lg p-4">
+                </a>
+                <a href="{{ route('admin.student-photos.index', ['status' => 'pending']) }}"
+                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-yellow-50 transition border-2 {{ request('status') == 'pending' ? 'border-yellow-500' : 'border-transparent' }}">
                     <div class="text-sm text-gray-500">Kutilmoqda</div>
                     <div class="text-2xl font-semibold text-yellow-600">{{ number_format($stats['pending']) }}</div>
-                </div>
-                <div class="bg-white shadow-sm rounded-lg p-4">
+                </a>
+                <a href="{{ route('admin.student-photos.index', ['status' => 'approved']) }}"
+                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-green-50 transition border-2 {{ request('status') == 'approved' ? 'border-green-500' : 'border-transparent' }}">
                     <div class="text-sm text-gray-500">Tasdiqlangan</div>
                     <div class="text-2xl font-semibold text-green-600">{{ number_format($stats['approved']) }}</div>
-                </div>
-                <div class="bg-white shadow-sm rounded-lg p-4">
+                </a>
+                <a href="{{ route('admin.student-photos.index', ['status' => 'rejected']) }}"
+                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-red-50 transition border-2 {{ request('status') == 'rejected' ? 'border-red-500' : 'border-transparent' }}">
                     <div class="text-sm text-gray-500">Rad etilgan</div>
                     <div class="text-2xl font-semibold text-red-600">{{ number_format($stats['rejected']) }}</div>
-                </div>
+                </a>
                 <a href="{{ route('admin.student-photos.index', ['status' => 'no_photo']) }}"
-                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-gray-50 transition">
+                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-orange-50 transition border-2 {{ request('status') == 'no_photo' ? 'border-orange-500' : 'border-transparent' }}">
                     <div class="text-sm text-gray-500">Rasmsiz talabalar</div>
                     <div class="text-2xl font-semibold text-orange-600">{{ number_format($stats['no_photo']) }}</div>
                 </a>

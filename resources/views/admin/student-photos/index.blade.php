@@ -367,8 +367,8 @@
                         </div>
                         <div class="filter-item" style="min-width: 200px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> AI % (chegara)</label>
-                            <div style="display:flex;gap:4px;">
-                                <select name="similarity_op" class="select2-sp" style="flex:0 0 72px;">
+                            <div style="display:flex;gap:4px;align-items:stretch;">
+                                <select name="similarity_op" class="sp-op-select">
                                     <option value="">—</option>
                                     <option value=">" {{ request('similarity_op') == '>' ? 'selected' : '' }}>&gt;</option>
                                     <option value=">=" {{ request('similarity_op') == '>=' ? 'selected' : '' }}>&ge;</option>
@@ -377,7 +377,7 @@
                                 </select>
                                 <input type="number" name="similarity_value" value="{{ request('similarity_value') }}"
                                        min="0" max="100" step="0.1" placeholder="foiz"
-                                       class="sp-text-input" style="flex:1;" />
+                                       class="sp-text-input" style="flex:1;min-width:0;" />
                             </div>
                         </div>
                         <div class="filter-item" style="min-width: 150px;">
@@ -391,8 +391,8 @@
                         </div>
                         <div class="filter-item" style="min-width: 200px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Sifat % (chegara)</label>
-                            <div style="display:flex;gap:4px;">
-                                <select name="quality_op" class="select2-sp" style="flex:0 0 72px;">
+                            <div style="display:flex;gap:4px;align-items:stretch;">
+                                <select name="quality_op" class="sp-op-select">
                                     <option value="">—</option>
                                     <option value=">" {{ request('quality_op') == '>' ? 'selected' : '' }}>&gt;</option>
                                     <option value=">=" {{ request('quality_op') == '>=' ? 'selected' : '' }}>&ge;</option>
@@ -401,7 +401,7 @@
                                 </select>
                                 <input type="number" name="quality_value" value="{{ request('quality_value') }}"
                                        min="0" max="100" step="0.1" placeholder="foiz"
-                                       class="sp-text-input" style="flex:1;" />
+                                       class="sp-text-input" style="flex:1;min-width:0;" />
                             </div>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 180px;">
@@ -1125,7 +1125,7 @@
             });
 
             // Avto-submit: har qanday select o'zgarganda filtr qayta qo'llanadi
-            $('.select2-sp').on('change', function() {
+            $('.select2-sp, .sp-op-select').on('change', function() {
                 $form.trigger('submit');
             });
 
@@ -1149,6 +1149,9 @@
 
         .sp-text-input { width: 100%; height: 36px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 13px; color: #1e293b; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .sp-text-input:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+
+        .sp-op-select { width: 60px; flex: 0 0 60px; height: 36px; padding: 0 6px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 14px; font-weight: 700; color: #1e293b; text-align: center; cursor: pointer; }
+        .sp-op-select:focus { outline: none; border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
 
         .btn-calc { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }

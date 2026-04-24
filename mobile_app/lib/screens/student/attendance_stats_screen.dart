@@ -193,7 +193,8 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   }
 
   List<_DayData> _buildDays() {
-    final dayMap = <String, List<_PairGrade>>{};
+    // Key: "date|pair" → list of parsed grades for dedup
+    final rawMap = <String, List<_PairGrade>>{};
 
     for (final g in _grades) {
       final ttCode = g['training_type_code'];
@@ -235,8 +236,18 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
         type = _CellType.empty;
       }
 
+      final key = '$dateKey|$pairNum';
+      rawMap.putIfAbsent(key, () => []);
+      rawMap[key]!.add(_PairGrade(pairNum, type, value));
+    }
+
+    // Group by date, keeping one merged grade per pair
+    final dayMap = <String, List<_PairGrade>>{};
+    for (final entry in rawMap.entries) {
+      final dateKey = entry.key.split('|')[0];
+      final items = entry.value;
       dayMap.putIfAbsent(dateKey, () => []);
-      dayMap[dateKey]!.add(_PairGrade(pairNum, type, value));
+      dayMap[dateKey]!.add(_mergePairGrades(items));
     }
 
     final sorted = dayMap.keys.toList()..sort();
@@ -245,6 +256,24 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       pairs.sort((a, b) => a.pair.compareTo(b.pair));
       return _DayData(dateKey, pairs);
     }).toList();
+  }
+
+  _PairGrade _mergePairGrades(List<_PairGrade> items) {
+    final pair = items.first.pair;
+    // Priority: graded > retake > absent > empty
+    final graded = items.where((p) => p.type == _CellType.graded && p.value != null).toList();
+    if (graded.isNotEmpty) {
+      final avg = graded.map((p) => p.value!).reduce((a, b) => a + b) / graded.length;
+      return _PairGrade(pair, _CellType.graded, avg);
+    }
+    final retake = items.where((p) => p.type == _CellType.retake && p.value != null).toList();
+    if (retake.isNotEmpty) {
+      return _PairGrade(pair, _CellType.retake, retake.last.value);
+    }
+    if (items.any((p) => p.type == _CellType.absent)) {
+      return _PairGrade(pair, _CellType.absent, null);
+    }
+    return _PairGrade(pair, _CellType.empty, null);
   }
 
   Widget _buildContent(bool isDark, Color txt, Color sub) {

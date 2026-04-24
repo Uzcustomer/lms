@@ -78,17 +78,21 @@
                 this.bulk = {
                     open: true, phase: 'confirm', ids: [], total: 0, processed: 0,
                     succeeded: 0, failed: 0, currentName: '', cancel: false, errors: [],
-                    runQuality: true, runSimilarity: true,
+                    runQuality: true, runSimilarity: true, rerun: false,
                 };
                 await this.refreshBulkCount();
             },
             async refreshBulkCount() {
                 const params = new URLSearchParams(new FormData(document.getElementById('sp-filter-form')));
                 params.delete('only_unchecked');
-                const miss = [];
-                if (this.bulk.runSimilarity) miss.push('similarity');
-                if (this.bulk.runQuality) miss.push('quality');
-                params.set('missing', miss.join(','));
+                if (this.bulk.rerun) {
+                    params.set('rerun', '1');
+                } else {
+                    const miss = [];
+                    if (this.bulk.runSimilarity) miss.push('similarity');
+                    if (this.bulk.runQuality) miss.push('quality');
+                    params.set('missing', miss.join(','));
+                }
                 try {
                     const res = await fetch(`/admin/student-photos/pending-ids?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                     const data = await res.json();
@@ -451,10 +455,20 @@
                                                         : 'bg-red-100 text-red-800';
                                                     $qissues = is_array($photo->quality_issues) ? $photo->quality_issues : [];
                                                 @endphp
-                                                <span class="inline-block px-2 py-1 rounded text-sm font-semibold {{ $qcls }}"
-                                                      title="{{ implode(' · ', $qissues) }}">
-                                                    {{ number_format($qscore, 0) }}%
-                                                </span>
+                                                <div class="inline-flex items-center gap-1">
+                                                    <span class="inline-block px-2 py-1 rounded text-sm font-semibold {{ $qcls }}"
+                                                          title="{{ implode(' · ', $qissues) }}">
+                                                        {{ number_format($qscore, 0) }}%
+                                                    </span>
+                                                    <button type="button"
+                                                            @click="runRowQuality({{ $photo->id }})"
+                                                            :disabled="rowQuality.loading && rowQuality.id === {{ $photo->id }}"
+                                                            class="inline-flex items-center justify-center w-6 h-6 rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-50 hover:text-teal-700 disabled:opacity-60"
+                                                            title="Qayta tekshirish">
+                                                        <svg x-show="!(rowQuality.loading && rowQuality.id === {{ $photo->id }})" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                                        <svg x-show="rowQuality.loading && rowQuality.id === {{ $photo->id }}" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                                                    </button>
+                                                </div>
                                                 @if(!empty($qissues))
                                                     <div class="text-[10px] text-red-700 mt-0.5 max-w-[160px] truncate" title="{{ implode(' · ', $qissues) }}">
                                                         {{ $qissues[0] }}
@@ -877,6 +891,11 @@
                                     <input type="checkbox" x-model="bulk.runQuality" @change="refreshBulkCount()"
                                            class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">
                                     <span>Rasm sifati tekshiruvi (markaz, framing, oq xalat, yoritish)</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer pt-2 border-t border-gray-200">
+                                    <input type="checkbox" x-model="bulk.rerun" @change="refreshBulkCount()"
+                                           class="rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                                    <span>Qayta tekshirish (allaqachon tekshirilgan rasmlarni ham qamrab oladi)</span>
                                 </label>
                             </div>
 

@@ -98,6 +98,22 @@ class StudentController extends Controller
             $query->where('country_name', $request->country);
         }
 
+        if ($request->filled('has_files')) {
+            if ($request->has_files === 'yes') {
+                $query->whereHas('files');
+            } elseif ($request->has_files === 'no') {
+                $query->whereDoesntHave('files');
+            }
+        }
+
+        if ($request->filled('has_admission_data')) {
+            if ($request->has_admission_data === 'yes') {
+                $query->whereHas('admissionData');
+            } elseif ($request->has_admission_data === 'no') {
+                $query->whereDoesntHave('admissionData');
+            }
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->paginate($perPage)->appends($request->query());
 

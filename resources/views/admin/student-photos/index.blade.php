@@ -7,11 +7,42 @@
 
     <div class="py-6" x-data="{
             lightbox: { open: false, src: '', alt: '' },
-            compare: { open: false, profile: '', uploaded: '', title: '' },
+            compare: {
+                open: false, profile: '', uploaded: '', title: '',
+                photoId: null, loading: false, result: null, error: null,
+            },
             reject: { open: false, id: null, name: '' },
             openLightbox(src, alt) { this.lightbox = { open: true, src, alt }; },
-            openCompare(profile, uploaded, title) { this.compare = { open: true, profile, uploaded, title }; },
+            openCompare(photoId, profile, uploaded, title, existing) {
+                this.compare = {
+                    open: true, profile, uploaded, title,
+                    photoId, loading: false, result: existing || null, error: null,
+                };
+            },
             openReject(id, name) { this.reject = { open: true, id, name }; },
+            async runSimilarityCheck() {
+                this.compare.loading = true;
+                this.compare.error = null;
+                try {
+                    const res = await fetch(`/admin/student-photos/${this.compare.photoId}/check-similarity`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                            'Accept': 'application/json',
+                        },
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        this.compare.error = data.error || 'Nomaʼlum xatolik';
+                    } else {
+                        this.compare.result = data;
+                    }
+                } catch (e) {
+                    this.compare.error = e.message;
+                } finally {
+                    this.compare.loading = false;
+                }
+            },
         }">
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
 
@@ -171,9 +202,17 @@
                                         </td>
                                         <td class="px-3 py-2 text-gray-700">{{ $photo->uploaded_by }}</td>
                                         <td class="px-3 py-2 text-center">
+                                            @php
+                                                $existingSimilarity = $photo->similarity_score !== null ? [
+                                                    'similarity_percent' => (float) $photo->similarity_score,
+                                                    'match' => $photo->similarity_status === 'match',
+                                                    'status' => $photo->similarity_status,
+                                                    'checked_at' => optional($photo->similarity_checked_at)->toIso8601String(),
+                                                ] : null;
+                                            @endphp
                                             @if($profileUrl)
                                                 <button type="button"
-                                                        @click="openCompare('{{ $profileUrl }}', '{{ $uploadedUrl }}', {{ Js::from($photo->full_name) }})"
+                                                        @click="openCompare({{ $photo->id }}, '{{ $profileUrl }}', '{{ $uploadedUrl }}', {{ Js::from($photo->full_name) }}, {{ Js::from($existingSimilarity) }})"
                                                         class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-md border border-gray-300 bg-white hover:bg-gray-50">
                                                     <img src="{{ $profileUrl }}" class="w-6 h-8 object-cover rounded-sm" alt="profile">
                                                     <span class="text-gray-700">Solishtirish</span>
@@ -267,15 +306,62 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div class="text-center">
                         <div class="text-sm text-gray-500 mb-2">Profil rasmi (HEMIS)</div>
-                        <img :src="compare.profile" class="mx-auto max-h-[60vh] rounded border border-gray-200" alt="profile">
+                        <img :src="compare.profile" class="mx-auto max-h-[55vh] rounded border border-gray-200" alt="profile">
                     </div>
                     <div class="text-center">
                         <div class="text-sm text-gray-500 mb-2">Tyutor yuklagan rasm</div>
-                        <img :src="compare.uploaded" class="mx-auto max-h-[60vh] rounded border border-gray-200" alt="uploaded">
+                        <img :src="compare.uploaded" class="mx-auto max-h-[55vh] rounded border border-gray-200" alt="uploaded">
                     </div>
                 </div>
-                <div class="mt-4 text-xs text-gray-500 text-center">
-                    Ikki rasmni solishtirib, bir xil shaxsga tegishli ekanligini tasdiqlang.
+
+                {{-- AI solishtirish bo'limi --}}
+                <div class="mt-5 pt-4 border-t border-gray-200">
+                    <div class="flex items-center justify-between gap-4 flex-wrap">
+                        <div class="text-sm text-gray-700">
+                            <strong>AI yuz tahlili</strong> — ArcFace modeli ikki rasmdagi yuzni solishtiradi
+                        </div>
+                        <button type="button"
+                                @click="runSimilarityCheck()"
+                                :disabled="compare.loading"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                            <svg x-show="!compare.loading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                            <svg x-show="compare.loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                            <span x-text="compare.loading ? 'Tahlil qilinmoqda...' : (compare.result ? 'Qayta tekshirish' : 'AI bilan tekshirish')"></span>
+                        </button>
+                    </div>
+
+                    <template x-if="compare.error">
+                        <div class="mt-3 rounded-md bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm" x-text="compare.error"></div>
+                    </template>
+
+                    <template x-if="compare.result">
+                        <div class="mt-3 rounded-md p-4 border"
+                             :class="compare.result.match ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'">
+                            <div class="flex items-center gap-3">
+                                <div class="text-3xl font-bold" :class="compare.result.match ? 'text-green-700' : 'text-red-700'">
+                                    <span x-text="compare.result.similarity_percent + '%'"></span>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="font-semibold" :class="compare.result.match ? 'text-green-800' : 'text-red-800'">
+                                        <span x-text="compare.result.match ? 'O\'xshash — ehtimol bir xil shaxs' : 'Farqli — shubhali, e\'tiborga oling'"></span>
+                                    </div>
+                                    <div class="text-xs text-gray-600 mt-0.5">
+                                        Masofa: <span x-text="compare.result.distance"></span>,
+                                        chegara: <span x-text="compare.result.threshold"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-xs text-gray-500">
+                                Bu — yordamchi baho. Yakuniy qaror admin tomonidan qabul qilinadi.
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="!compare.result && !compare.loading && !compare.error">
+                        <div class="mt-3 text-xs text-gray-500">
+                            Tugmani bosing — tahlil 2-5 soniya oladi.
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>

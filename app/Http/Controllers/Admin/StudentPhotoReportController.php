@@ -7,6 +7,8 @@ use App\Models\Student;
 use App\Models\StudentPhoto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class StudentPhotoReportController extends Controller
 {
@@ -139,5 +141,74 @@ class StudentPhotoReportController extends Controller
         ]);
 
         return back()->with('success', 'Rasm rad etildi.');
+    }
+
+    public function checkSimilarity(Request $request, $id)
+    {
+        $photo = StudentPhoto::findOrFail($id);
+
+        $student = Student::where('student_id_number', $photo->student_id_number)->first();
+        if (!$student || empty($student->image)) {
+            return response()->json([
+                'error' => 'Talabaning HEMIS profil rasmi topilmadi.',
+            ], 422);
+        }
+
+        $uploadedFullPath = public_path($photo->photo_path);
+        if (!file_exists($uploadedFullPath)) {
+            return response()->json([
+                'error' => 'Yuklangan rasm fayli topilmadi.',
+            ], 422);
+        }
+
+        $serviceUrl = rtrim(config('services.face_compare.url'), '/');
+        $timeout = config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/compare', [
+                    'image1' => $student->image,
+                    'image2' => $uploadedFullPath,
+                ]);
+        } catch (\Throwable $e) {
+            Log::error('Face compare service unreachable', [
+                'photo_id' => $photo->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'error' => 'AI servisga ulanib bo\'lmadi: ' . $e->getMessage(),
+            ], 503);
+        }
+
+        if (!$response->successful()) {
+            Log::warning('Face compare service returned error', [
+                'photo_id' => $photo->id,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            return response()->json([
+                'error' => 'AI servis xatoligi: ' . ($response->json('detail') ?? $response->body()),
+            ], 502);
+        }
+
+        $data = $response->json();
+        $percent = (float) ($data['similarity_percent'] ?? 0);
+        $match = (bool) ($data['match'] ?? false);
+
+        $photo->update([
+            'similarity_score' => $percent,
+            'similarity_status' => $match ? 'match' : 'mismatch',
+            'similarity_checked_at' => now(),
+        ]);
+
+        return response()->json([
+            'similarity_percent' => $percent,
+            'distance' => $data['distance'] ?? null,
+            'threshold' => $data['threshold'] ?? null,
+            'match' => $match,
+            'status' => $match ? 'match' : 'mismatch',
+            'checked_at' => $photo->similarity_checked_at->toIso8601String(),
+        ]);
     }
 }

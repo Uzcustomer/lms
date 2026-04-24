@@ -66,4 +66,9 @@ return [
         'sync_secret' => env('MOODLE_SYNC_SECRET'),
     ],
 
+    'face_compare' => [
+        'url' => env('FACE_COMPARE_URL', 'http://127.0.0.1:5005'),
+        'timeout' => (int) env('FACE_COMPARE_TIMEOUT', 60),
+    ],
+
 ];

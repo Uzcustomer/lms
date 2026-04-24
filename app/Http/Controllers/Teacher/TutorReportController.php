@@ -94,116 +94,129 @@ class TutorReportController extends Controller
      */
     public function jnReport(Request $request)
     {
-        $tutorGroups = $this->getTutorGroups();
-        $groupIds = $this->getFilteredGroupIds($request);
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(180);
 
-        if (empty($groupIds)) {
-            return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
-        }
+        try {
+            $tutorGroups = $this->getTutorGroups();
+            $groupIds = $this->getFilteredGroupIds($request);
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
-
-        // Schedule dan barcha fanlarni olish (joriy semestr)
-        $scheduleQuery = DB::table('schedules as sch')
-            ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
-            ->join('semesters as sem', function ($join) {
-                $join->on('sem.code', '=', 'sch.semester_code')
-                    ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
-            })
-            ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
-            ->whereNotNull('sch.lesson_date')
-            ->where('sem.current', true)
-            ->where('sch.education_year_current', true)
-            ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
-            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
-            ->get();
-
-        if ($scheduleQuery->isEmpty()) {
-            return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
-        }
-
-        // Baholarni olish (admin mantiqi: status, reason, retake_grade ham)
-        $students = Student::whereIn('group_id', $groupIds)->get();
-        $studentHemisIds = $students->pluck('hemis_id')->toArray();
-        $validSubjectIds = $scheduleQuery->pluck('subject_id')->unique()->toArray();
-        $validSemesterCodes = $scheduleQuery->pluck('semester_code')->unique()->toArray();
-
-        $grades = DB::table('student_grades')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->whereIn('subject_id', $validSubjectIds)
-            ->whereIn('semester_code', $validSemesterCodes)
-            ->whereNotIn('training_type_code', $excludedCodes)
-            ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason',
-                'lesson_date', 'lesson_pair_code')
-            ->get();
-
-        // Admin mantiqi: kunlik o'rtachani pair_code bo'yicha hisoblash
-        $gradeMap = [];
-        foreach ($grades as $g) {
-            $effectiveGrade = $this->getEffectiveGradeForJn($g);
-            if ($effectiveGrade === null) continue;
-
-            $key = $g->student_hemis_id . '|' . $g->subject_id;
-            $date = substr($g->lesson_date, 0, 10);
-            $gradeMap[$key][$date][] = $effectiveGrade;
-        }
-
-        // Guruh nomi map
-        $groupNameMap = DB::table('groups')
-            ->whereIn('group_hemis_id', $groupIds)
-            ->pluck('name', 'group_hemis_id')
-            ->toArray();
-
-        // Natijalarni yig'ish
-        $results = [];
-        foreach ($scheduleQuery as $combo) {
-            $groupName = $groupNameMap[$combo->group_id] ?? $combo->group_id;
-            $groupStudents = $students->where('group_id', $combo->group_id);
-
-            foreach ($groupStudents as $student) {
-                $key = $student->hemis_id . '|' . $combo->subject_id;
-                $dailyGrades = $gradeMap[$key] ?? [];
-
-                if (empty($dailyGrades)) {
-                    $avg = null;
-                } else {
-                    $dailyAvgs = [];
-                    foreach ($dailyGrades as $dayGrades) {
-                        $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades), 0, PHP_ROUND_HALF_UP);
-                    }
-                    $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 0, PHP_ROUND_HALF_UP);
-                }
-
-                $results[] = [
-                    'group_name' => $groupName,
-                    'subject_name' => $combo->subject_name,
-                    'student_name' => $student->full_name,
-                    'student_id' => $student->student_id_number,
-                    'avg_grade' => $avg,
-                    'grade_count' => count($dailyGrades),
-                ];
+            if (empty($groupIds)) {
+                return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
             }
+
+            $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+
+            // Schedule dan barcha fanlarni olish (joriy semestr)
+            $scheduleQuery = DB::table('schedules as sch')
+                ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.code', '=', 'sch.semester_code')
+                        ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
+                })
+                ->whereIn('sch.group_id', $groupIds)
+                ->whereNotIn('sch.training_type_code', $excludedCodes)
+                ->whereNotNull('sch.lesson_date')
+                ->where('sem.current', true)
+                ->where('sch.education_year_current', true)
+                ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
+                ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
+                ->get();
+
+            if ($scheduleQuery->isEmpty()) {
+                return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
+            }
+
+            $students = Student::whereIn('group_id', $groupIds)
+                ->select('hemis_id', 'group_id', 'full_name', 'student_id_number')
+                ->get();
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+            $validSubjectIds = $scheduleQuery->pluck('subject_id')->unique()->toArray();
+            $validSemesterCodes = $scheduleQuery->pluck('semester_code')->unique()->toArray();
+
+            // Baholarni cursor bilan o'qib, kunlik o'rtacha hisoblash (memory tejash)
+            $gradeMap = [];
+            $gradesQuery = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereIn('subject_id', $validSubjectIds)
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotNull('lesson_date')
+                ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason',
+                    'lesson_date', 'lesson_pair_code');
+
+            foreach ($gradesQuery->cursor() as $g) {
+                $effectiveGrade = $this->getEffectiveGradeForJn($g);
+                if ($effectiveGrade === null) continue;
+
+                $key = $g->student_hemis_id . '|' . $g->subject_id;
+                $date = substr($g->lesson_date, 0, 10);
+                $gradeMap[$key][$date][] = $effectiveGrade;
+            }
+
+            // Guruh nomi map
+            $groupNameMap = DB::table('groups')
+                ->whereIn('group_hemis_id', $groupIds)
+                ->pluck('name', 'group_hemis_id')
+                ->toArray();
+
+            // Natijalarni yig'ish
+            $results = [];
+            foreach ($scheduleQuery as $combo) {
+                $groupName = $groupNameMap[$combo->group_id] ?? $combo->group_id;
+                $groupStudents = $students->where('group_id', $combo->group_id);
+
+                foreach ($groupStudents as $student) {
+                    $key = $student->hemis_id . '|' . $combo->subject_id;
+                    $dailyGrades = $gradeMap[$key] ?? [];
+
+                    if (empty($dailyGrades)) {
+                        $avg = null;
+                    } else {
+                        $dailyAvgs = [];
+                        foreach ($dailyGrades as $dayGrades) {
+                            $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades), 0, PHP_ROUND_HALF_UP);
+                        }
+                        $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $results[] = [
+                        'group_name' => $groupName,
+                        'subject_name' => $combo->subject_name,
+                        'student_name' => $student->full_name,
+                        'student_id' => $student->student_id_number,
+                        'avg_grade' => $avg,
+                        'grade_count' => count($dailyGrades),
+                    ];
+                }
+            }
+
+            // Filtr
+            if ($request->filled('filter') && $request->filter === 'low') {
+                $results = array_filter($results, fn($r) => $r['avg_grade'] !== null && $r['avg_grade'] < 60);
+            } elseif ($request->filled('filter') && $request->filter === 'no_grade') {
+                $results = array_filter($results, fn($r) => $r['avg_grade'] === null);
+            }
+
+            usort($results, function ($a, $b) {
+                $cmp = strcmp($a['group_name'], $b['group_name']);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp($a['subject_name'], $b['subject_name']);
+                if ($cmp !== 0) return $cmp;
+                return strcmp($a['student_name'], $b['student_name']);
+            });
+
+            $results = array_values($results);
+
+            return view('teacher.reports.jn', compact('tutorGroups', 'results'));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Tutor JN report error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response('JN o\'zlashtirish hisobotini yuklashda xatolik: ' . $e->getMessage(), 500);
         }
-
-        // Filtr
-        if ($request->filled('filter') && $request->filter === 'low') {
-            $results = array_filter($results, fn($r) => $r['avg_grade'] !== null && $r['avg_grade'] < 60);
-        } elseif ($request->filled('filter') && $request->filter === 'no_grade') {
-            $results = array_filter($results, fn($r) => $r['avg_grade'] === null);
-        }
-
-        usort($results, function ($a, $b) {
-            $cmp = strcmp($a['group_name'], $b['group_name']);
-            if ($cmp !== 0) return $cmp;
-            $cmp = strcmp($a['subject_name'], $b['subject_name']);
-            if ($cmp !== 0) return $cmp;
-            return strcmp($a['student_name'], $b['student_name']);
-        });
-
-        $results = array_values($results);
-
-        return view('teacher.reports.jn', compact('tutorGroups', 'results'));
     }
 
     /**

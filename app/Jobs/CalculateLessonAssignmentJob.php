@@ -61,7 +61,7 @@ class CalculateLessonAssignmentJob implements ShouldQueue
         $f = $this->filters;
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test", "Klinik mashg'ulot", "Klinik mashgulot"];
         $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         $scheduleQuery = DB::table('schedules as sch')

@@ -6,6 +6,41 @@
     </x-slot>
 
     <div class="py-6" x-data="{
+            selected: [],
+            toggleAllOnPage(el) {
+                const checkboxes = document.querySelectorAll('.sp-row-check');
+                if (el.checked) {
+                    checkboxes.forEach(cb => {
+                        const id = Number(cb.value);
+                        if (!this.selected.includes(id)) this.selected.push(id);
+                        cb.checked = true;
+                    });
+                } else {
+                    checkboxes.forEach(cb => { cb.checked = false; });
+                    this.selected = [];
+                }
+            },
+            async selectAllMatchingFilter() {
+                const params = new URLSearchParams(new FormData(document.getElementById('sp-filter-form')));
+                params.set('rerun', '1');
+                try {
+                    const res = await fetch(`/admin/student-photos/pending-ids?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json();
+                    this.selected = data.ids || [];
+                    document.querySelectorAll('.sp-row-check').forEach(cb => {
+                        cb.checked = this.selected.includes(Number(cb.value));
+                    });
+                    alert(`Filtr bo'yicha ${this.selected.length} ta rasm tanlandi`);
+                } catch (e) {
+                    alert('Xatolik: ' + e.message);
+                }
+            },
+            clearSelection() {
+                this.selected = [];
+                document.querySelectorAll('.sp-row-check').forEach(cb => { cb.checked = false; });
+                const all = document.getElementById('sp-select-all');
+                if (all) all.checked = false;
+            },
             lightbox: { open: false, src: '', alt: '' },
             compare: {
                 open: false, profile: '', uploaded: '', title: '',
@@ -74,33 +109,19 @@
                     this.compare.loading = false;
                 }
             },
-            async openBulk() {
+            openBulk() {
+                if (!this.selected.length) {
+                    alert('Avval pastdagi ☑ belgi bilan rasmlarni tanlang');
+                    return;
+                }
                 this.bulk = {
-                    open: true, phase: 'confirm', ids: [], total: 0, processed: 0,
-                    succeeded: 0, failed: 0, currentName: '', cancel: false, errors: [],
-                    runQuality: true, runSimilarity: true, rerun: false,
+                    open: true, phase: 'confirm',
+                    ids: [...this.selected],
+                    total: this.selected.length,
+                    processed: 0, succeeded: 0, failed: 0,
+                    currentName: '', cancel: false, errors: [],
+                    runQuality: true, runSimilarity: true,
                 };
-                await this.refreshBulkCount();
-            },
-            async refreshBulkCount() {
-                const params = new URLSearchParams(new FormData(document.getElementById('sp-filter-form')));
-                params.delete('only_unchecked');
-                if (this.bulk.rerun) {
-                    params.set('rerun', '1');
-                } else {
-                    const miss = [];
-                    if (this.bulk.runSimilarity) miss.push('similarity');
-                    if (this.bulk.runQuality) miss.push('quality');
-                    params.set('missing', miss.join(','));
-                }
-                try {
-                    const res = await fetch(`/admin/student-photos/pending-ids?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
-                    const data = await res.json();
-                    this.bulk.ids = data.ids || [];
-                    this.bulk.total = this.bulk.ids.length;
-                } catch (e) {
-                    this.bulk.errors.push('Ro\'yxatni olishda xatolik: ' + e.message);
-                }
             },
             async runBulk() {
                 this.bulk.phase = 'running';
@@ -172,21 +193,18 @@
                 ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
                 reason: '', cancel: false, errors: [],
             },
-            async openReview(mode) {
+            openReview(mode) {
+                if (!this.selected.length) {
+                    alert('Avval pastdagi ☑ belgi bilan rasmlarni tanlang');
+                    return;
+                }
                 this.review = {
                     open: true, mode: mode, phase: 'confirm',
-                    ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
+                    ids: [...this.selected],
+                    total: this.selected.length,
+                    processed: 0, succeeded: 0, failed: 0,
                     reason: '', cancel: false, errors: [],
                 };
-                const params = new URLSearchParams(new FormData(document.getElementById('sp-filter-form')));
-                try {
-                    const res = await fetch(`/admin/student-photos/pending-ids?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
-                    const data = await res.json();
-                    this.review.ids = data.ids || [];
-                    this.review.total = this.review.ids.length;
-                } catch (e) {
-                    this.review.errors.push('Ro\'yxatni olishda xatolik: ' + e.message);
-                }
             },
             async runReview() {
                 if (this.review.mode === 'reject' && !this.review.reason.trim()) {
@@ -366,21 +384,14 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Sifat min %</label>
                             <input type="number" name="min_quality" value="{{ request('min_quality') }}" min="0" max="100" step="0.1" placeholder="0" class="sp-text-input" />
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 420px;">
+                        <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:6px;flex-wrap:wrap;">
                                 <a href="{{ route('admin.student-photos.index') }}" class="btn-clear">Tozalash</a>
-                                <button type="button" @click="openBulk()" class="btn-bulk" title="Filtr bo'yicha rasmlarni AI bilan tekshirish">
-                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-                                    AI bulk
-                                </button>
-                                <button type="button" @click="openReview('approve')" class="btn-approve" title="Filtrdagi pending rasmlarni hammasini tasdiqlash">
-                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                    Bulk qabul
-                                </button>
-                                <button type="button" @click="openReview('reject')" class="btn-reject" title="Filtrdagi pending rasmlarni hammasini rad etish">
-                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                    Bulk rad
+                                <button type="button" @click="selectAllMatchingFilter()" class="btn-clear"
+                                        style="background:#eef2ff;border-color:#c7d2fe;color:#4338ca;"
+                                        title="Filtr bo'yicha barcha rasmlarni tanlash">
+                                    Filtrni tanlash
                                 </button>
                             </div>
                         </div>
@@ -393,19 +404,25 @@
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">#</th>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">FISH</th>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Talaba ID</th>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Fakultet</th>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Kurs</th>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Guruh</th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600">
+                                        <input type="checkbox" id="sp-select-all"
+                                               @click="toggleAllOnPage($event.target)"
+                                               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                               title="Sahifadagi barchasini tanlash">
+                                    </th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'id', 'dir' => (request('sort') == 'id' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">#{!! request('sort') == 'id' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'full_name', 'dir' => (request('sort') == 'full_name' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">FISH{!! request('sort') == 'full_name' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'student_id_number', 'dir' => (request('sort') == 'student_id_number' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Talaba ID{!! request('sort') == 'student_id_number' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'department_name', 'dir' => (request('sort') == 'department_name' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Fakultet{!! request('sort') == 'department_name' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'specialty_name', 'dir' => (request('sort') == 'specialty_name' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Yo'nalish{!! request('sort') == 'specialty_name' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'level_name', 'dir' => (request('sort') == 'level_name' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Kurs{!! request('sort') == 'level_name' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'group_name', 'dir' => (request('sort') == 'group_name' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Guruh{!! request('sort') == 'group_name' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">Rasm</th>
-                                    <th class="px-3 py-2 text-left font-medium text-gray-600">Tyutor</th>
-                                    <th class="px-3 py-2 text-center font-medium text-gray-600">AI %</th>
-                                    <th class="px-3 py-2 text-center font-medium text-gray-600">Sifat</th>
+                                    <th class="px-3 py-2 text-left font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'uploaded_by', 'dir' => (request('sort') == 'uploaded_by' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Tyutor{!! request('sort') == 'uploaded_by' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'similarity_score', 'dir' => (request('sort') == 'similarity_score' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">AI %{!! request('sort') == 'similarity_score' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'quality_score', 'dir' => (request('sort') == 'quality_score' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Sifat{!! request('sort') == 'quality_score' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">Solishtirish</th>
-                                    <th class="px-3 py-2 text-center font-medium text-gray-600">Ruxsat</th>
+                                    <th class="px-3 py-2 text-center font-medium text-gray-600"><a href="?{{ http_build_query(array_merge(request()->except(['sort', 'dir', 'page']), ['sort' => 'status', 'dir' => (request('sort') == 'status' && request('dir') == 'asc') ? 'desc' : 'asc'])) }}" class="sp-sort-link">Ruxsat{!! request('sort') == 'status' ? (request('dir') == 'asc' ? ' ▲' : ' ▼') : '' !!}</a></th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
@@ -415,7 +432,13 @@
                                         $uploadedUrl = asset($photo->photo_path);
                                         $profileUrl = $photo->student_profile_image ?: null;
                                     @endphp
-                                    <tr class="hover:bg-gray-50">
+                                    <tr class="hover:bg-gray-50" :class="selected.includes({{ $photo->id }}) ? 'bg-indigo-50' : ''">
+                                        <td class="px-3 py-2 text-center">
+                                            <input type="checkbox" class="sp-row-check rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                   value="{{ $photo->id }}"
+                                                   :checked="selected.includes({{ $photo->id }})"
+                                                   @change="if ($event.target.checked) { if (!selected.includes({{ $photo->id }})) selected.push({{ $photo->id }}); } else { selected = selected.filter(x => x !== {{ $photo->id }}); }">
+                                        </td>
                                         <td class="px-3 py-2 text-gray-500">{{ $photos->firstItem() + $i }}</td>
                                         <td class="px-3 py-2 font-medium text-gray-900">{{ $photo->full_name }}</td>
                                         <td class="px-3 py-2 text-gray-700">{{ $photo->student_id_number }}</td>
@@ -551,7 +574,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="13" class="px-3 py-8 text-center text-gray-500">Ma'lumot topilmadi</td>
+                                        <td colspan="14" class="px-3 py-8 text-center text-gray-500">Ma'lumot topilmadi</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -736,6 +759,34 @@
             </div>
         </div>
 
+        {{-- Floating action bar (when rows are selected) --}}
+        <div x-show="selected.length > 0" x-cloak x-transition
+             class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white shadow-2xl border border-gray-200 rounded-full px-4 py-2 flex items-center gap-2">
+            <span class="text-sm text-gray-700 pr-2">
+                <strong x-text="selected.length"></strong> ta tanlangan
+            </span>
+            <button type="button" @click="openBulk()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-full hover:bg-indigo-700">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                AI tahlil
+            </button>
+            <button type="button" @click="openReview('approve')"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-full hover:bg-green-700">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Qabul
+            </button>
+            <button type="button" @click="openReview('reject')"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-full hover:bg-red-700">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                Rad
+            </button>
+            <button type="button" @click="clearSelection()"
+                    class="inline-flex items-center px-2 py-1.5 text-gray-500 hover:text-gray-700"
+                    title="Tanlovni tozalash">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+
         {{-- Bulk qabul / rad etish modali --}}
         <div x-show="review.open" x-cloak x-transition.opacity
              class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
@@ -878,58 +929,39 @@
 
                 {{-- Confirm phase --}}
                 <template x-if="bulk.phase === 'confirm'">
-                    <div>
-                        <div class="space-y-4">
-                            <div class="space-y-2 rounded-md border border-gray-200 p-3 bg-gray-50">
-                                <div class="text-xs font-bold uppercase text-gray-500 mb-1">Qaysi tahlilni bajarish</div>
-                                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                                    <input type="checkbox" x-model="bulk.runSimilarity" @change="refreshBulkCount()"
-                                           class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                    <span>O'xshashlik tekshiruvi (ArcFace — HEMIS profili bilan solishtirish)</span>
-                                </label>
-                                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                                    <input type="checkbox" x-model="bulk.runQuality" @change="refreshBulkCount()"
-                                           class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">
-                                    <span>Rasm sifati tekshiruvi (markaz, framing, oq xalat, yoritish)</span>
-                                </label>
-                                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer pt-2 border-t border-gray-200">
-                                    <input type="checkbox" x-model="bulk.rerun" @change="refreshBulkCount()"
-                                           class="rounded border-gray-300 text-orange-600 focus:ring-orange-500">
-                                    <span>Qayta tekshirish (allaqachon tekshirilgan rasmlarni ham qamrab oladi)</span>
-                                </label>
-                            </div>
-
-                            <template x-if="bulk.total === 0">
-                                <div class="rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 text-sm">
-                                    Hozirgi filtr + tanlangan tekshiruvlar bo'yicha tekshirilmagan rasm topilmadi.
-                                    Filtrni tekshiring yoki boshqa tekshiruv turini tanlang.
-                                </div>
-                            </template>
-
-                            <template x-if="bulk.total > 0">
-                                <div class="rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 px-4 py-3 text-sm">
-                                    <strong x-text="bulk.total"></strong> ta rasm tahlil qilinadi.
-                                    Har bir rasm
-                                    <span x-text="((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 3 : 0)) + '-' + ((bulk.runSimilarity ? 5 : 0) + (bulk.runQuality ? 5 : 0))"></span>
-                                    soniya oladi.
-                                    Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * ((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 4 : 0)) / 60) + ' daqiqa'"></strong>.
-                                </div>
-                            </template>
-
-                            <div class="text-xs text-gray-500">
-                                Natija avtomat bazaga saqlanadi. Tahlil chog'ida oynani yopmang.
-                            </div>
-                            <div class="flex justify-end gap-2 pt-2">
-                                <button type="button" @click="bulk.open = false"
-                                        class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
-                                    Bekor qilish
-                                </button>
-                                <button type="button" @click="runBulk()"
-                                        :disabled="bulk.total === 0 || (!bulk.runSimilarity && !bulk.runQuality)"
-                                        class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    Boshlash
-                                </button>
-                            </div>
+                    <div class="space-y-4">
+                        <div class="rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 px-4 py-3 text-sm">
+                            <strong x-text="bulk.total"></strong> ta tanlangan rasmga tahlil qo'llanadi.
+                        </div>
+                        <div class="space-y-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+                            <div class="text-xs font-bold uppercase text-gray-500 mb-1">Qaysi tahlilni bajarish</div>
+                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" x-model="bulk.runSimilarity"
+                                       class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span>O'xshashlik tekshiruvi (ArcFace — HEMIS profili bilan solishtirish)</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" x-model="bulk.runQuality"
+                                       class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">
+                                <span>Rasm sifati tekshiruvi (markaz, framing, oq xalat, yoritish)</span>
+                            </label>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            Har bir rasm
+                            <span x-text="((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 3 : 0)) + '-' + ((bulk.runSimilarity ? 5 : 0) + (bulk.runQuality ? 5 : 0))"></span>
+                            soniya oladi. Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * ((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 4 : 0)) / 60) + ' daqiqa'"></strong>.
+                            Natija avtomat bazaga saqlanadi. Tahlil chog'ida oynani yopmang.
+                        </div>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" @click="bulk.open = false"
+                                    class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
+                                Bekor qilish
+                            </button>
+                            <button type="button" @click="runBulk()"
+                                    :disabled="!bulk.runSimilarity && !bulk.runQuality"
+                                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Boshlash
+                            </button>
                         </div>
                     </div>
                 </template>
@@ -1063,6 +1095,9 @@
 
         .btn-clear { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; height: 36px; text-decoration: none; }
         .btn-clear:hover { background: #e2e8f0; }
+
+        .sp-sort-link { color: inherit; text-decoration: none; cursor: pointer; }
+        .sp-sort-link:hover { color: #4f46e5; text-decoration: underline; }
 
         .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }

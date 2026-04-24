@@ -161,6 +161,11 @@ class StudentPhotoReportController extends Controller
             ], 422);
         }
 
+        // Face-compare service may run outside the Laravel container, so
+        // local filesystem paths don't translate. Send a URL instead and
+        // let the service download the image itself.
+        $uploadedUrl = asset($photo->photo_path);
+
         $serviceUrl = rtrim(config('services.face_compare.url'), '/');
         $timeout = config('services.face_compare.timeout', 60);
 
@@ -169,7 +174,7 @@ class StudentPhotoReportController extends Controller
                 ->acceptJson()
                 ->post($serviceUrl . '/compare', [
                     'image1' => $student->image,
-                    'image2' => $uploadedFullPath,
+                    'image2' => $uploadedUrl,
                 ]);
         } catch (\Throwable $e) {
             Log::error('Face compare service unreachable', [

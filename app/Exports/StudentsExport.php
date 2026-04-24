@@ -23,10 +23,43 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
 
     protected ?array $tutorCache = null;
     protected ?array $photoCache = null;
+    protected ?array $admissionCache = null;
 
     public function __construct(array $filters = [])
     {
         $this->filters = $filters;
+    }
+
+    protected function getAdmissionInfo(?int $studentId): array
+    {
+        if (!$studentId) {
+            return ['', ''];
+        }
+
+        if ($this->admissionCache === null) {
+            if (!\Illuminate\Support\Facades\Schema::hasTable('student_files')) {
+                $this->admissionCache = [];
+            } else {
+                $this->admissionCache = DB::table('student_files')
+                    ->orderBy('id')
+                    ->get()
+                    ->groupBy('student_id')
+                    ->map(fn($items) => $items->toArray())
+                    ->toArray();
+            }
+        }
+
+        $files = $this->admissionCache[$studentId] ?? [];
+        if (empty($files)) {
+            return ['', ''];
+        }
+
+        $urls = [];
+        foreach ($files as $f) {
+            $urls[] = url('storage/' . $f->path);
+        }
+
+        return ['Ha', implode("\n", $urls)];
     }
 
     protected function getPhotoInfo(?string $studentIdNumber): array
@@ -171,6 +204,7 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             $backOffice?->started_at ? $backOffice->started_at->format('d.m.Y') : '',
             $this->getTutorName($student->group_id),
             ...($this->getPhotoInfo($student->student_id_number)),
+            ...($this->getAdmissionInfo($student->id)),
         ];
     }
 
@@ -228,6 +262,8 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             'Tyutor',
             'Rasm yuklangan',
             'Rasm URL',
+            'Qabul hujjati',
+            'Qabul hujjati URL',
         ];
     }
 

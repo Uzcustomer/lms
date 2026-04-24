@@ -16,8 +16,7 @@ class StudentPhotoReportController extends Controller
 {
     public function index(Request $request)
     {
-        $query = StudentPhoto::query()
-            ->leftJoin('students', 'students.student_id_number', '=', 'student_photos.student_id_number')
+        $photos = $this->applyFilters($this->baseQuery(), $request)
             ->select([
                 'student_photos.*',
                 'students.image as student_profile_image',
@@ -26,72 +25,9 @@ class StudentPhotoReportController extends Controller
                 'students.level_name as level_name',
                 'students.group_name as student_group_name',
             ])
-            ->orderByDesc('student_photos.created_at');
-
-        if ($request->filled('status')) {
-            $query->where('student_photos.status', $request->status);
-        }
-
-        if ($request->filled('search')) {
-            $needle = trim($request->search);
-            $query->where(function ($q) use ($needle) {
-                $q->where('student_photos.full_name', 'like', "%{$needle}%")
-                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
-            });
-        }
-
-        if ($request->filled('department')) {
-            $query->where('students.department_name', $request->department);
-        }
-
-        if ($request->filled('specialty')) {
-            $query->where('students.specialty_name', $request->specialty);
-        }
-
-        if ($request->filled('level')) {
-            $query->where('students.level_name', $request->level);
-        }
-
-        if ($request->filled('group')) {
-            $query->where(function ($q) use ($request) {
-                $q->where('students.group_name', $request->group)
-                  ->orWhere('student_photos.group_name', $request->group);
-            });
-        }
-
-        if ($request->filled('tutor')) {
-            $query->where('student_photos.uploaded_by', 'like', '%' . $request->tutor . '%');
-        }
-
-        if ($request->filled('date_from')) {
-            $query->where('student_photos.created_at', '>=', $request->date_from . ' 00:00:00');
-        }
-
-        if ($request->filled('date_to')) {
-            $query->where('student_photos.created_at', '<=', $request->date_to . ' 23:59:59');
-        }
-
-        if ($request->filled('similarity')) {
-            if ($request->similarity === 'match') {
-                $query->where('student_photos.similarity_status', 'match');
-            } elseif ($request->similarity === 'mismatch') {
-                $query->where('student_photos.similarity_status', 'mismatch');
-            } elseif ($request->similarity === 'unchecked') {
-                $query->whereNull('student_photos.similarity_checked_at');
-            }
-        }
-
-        if ($request->filled('min_similarity')) {
-            $query->where('student_photos.similarity_score', '>=', (float) $request->min_similarity);
-        }
-        if ($request->filled('max_similarity')) {
-            $query->where('student_photos.similarity_score', '<=', (float) $request->max_similarity);
-        }
-
-        $perPage = (int) $request->get('per_page', 30);
-        $perPage = in_array($perPage, [10, 25, 30, 50, 100, 200]) ? $perPage : 30;
-
-        $photos = $query->paginate($perPage)->withQueryString();
+            ->orderByDesc('student_photos.created_at')
+            ->paginate($this->perPage($request))
+            ->withQueryString();
 
         $stats = [
             'total' => StudentPhoto::count(),
@@ -100,39 +36,99 @@ class StudentPhotoReportController extends Controller
             'rejected' => StudentPhoto::where('status', StudentPhoto::STATUS_REJECTED)->count(),
         ];
 
-        $departments = Student::select('department_name')
-            ->whereNotNull('department_name')
-            ->distinct()
-            ->orderBy('department_name')
-            ->pluck('department_name');
-
-        $specialties = Student::select('specialty_name')
-            ->whereNotNull('specialty_name')
-            ->distinct()
-            ->orderBy('specialty_name')
-            ->pluck('specialty_name');
-
-        $levels = Student::select('level_name')
-            ->whereNotNull('level_name')
-            ->distinct()
-            ->orderBy('level_name')
-            ->pluck('level_name');
-
-        $groups = Student::select('group_name')
-            ->whereNotNull('group_name')
-            ->distinct()
-            ->orderBy('group_name')
-            ->pluck('group_name');
-
-        $tutors = StudentPhoto::select('uploaded_by')
-            ->whereNotNull('uploaded_by')
-            ->distinct()
-            ->orderBy('uploaded_by')
-            ->pluck('uploaded_by');
+        // Cascading dropdowns: each list reflects values that survive ALL
+        // currently-selected filters EXCEPT the one being built.
+        $departments = $this->distinctValues($request, 'department', 'students.department_name');
+        $specialties = $this->distinctValues($request, 'specialty', 'students.specialty_name');
+        $levels = $this->distinctValues($request, 'level', 'students.level_name');
+        $groups = $this->distinctValues($request, 'group', 'students.group_name');
+        $tutors = $this->distinctValues($request, 'tutor', 'student_photos.uploaded_by');
 
         return view('admin.student-photos.index', compact(
             'photos', 'stats', 'departments', 'specialties', 'levels', 'groups', 'tutors'
         ));
+    }
+
+    protected function baseQuery()
+    {
+        return StudentPhoto::query()
+            ->leftJoin('students', 'students.student_id_number', '=', 'student_photos.student_id_number');
+    }
+
+    protected function perPage(Request $request): int
+    {
+        $perPage = (int) $request->get('per_page', 30);
+        return in_array($perPage, [10, 25, 30, 50, 100, 200]) ? $perPage : 30;
+    }
+
+    /**
+     * Apply the photo filters, optionally skipping specific ones so the
+     * caller can compute the values that would remain visible in a
+     * dropdown when that dropdown's own value is excluded.
+     */
+    protected function applyFilters($query, Request $request, array $except = [])
+    {
+        $has = fn(string $key) => !in_array($key, $except) && $request->filled($key);
+
+        if ($has('status')) {
+            $query->where('student_photos.status', $request->status);
+        }
+        if ($has('search')) {
+            $needle = trim($request->search);
+            $query->where(function ($q) use ($needle) {
+                $q->where('student_photos.full_name', 'like', "%{$needle}%")
+                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
+            });
+        }
+        if ($has('department')) {
+            $query->where('students.department_name', $request->department);
+        }
+        if ($has('specialty')) {
+            $query->where('students.specialty_name', $request->specialty);
+        }
+        if ($has('level')) {
+            $query->where('students.level_name', $request->level);
+        }
+        if ($has('group')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('students.group_name', $request->group)
+                  ->orWhere('student_photos.group_name', $request->group);
+            });
+        }
+        if ($has('tutor')) {
+            $query->where('student_photos.uploaded_by', $request->tutor);
+        }
+        if ($has('similarity')) {
+            if ($request->similarity === 'match') {
+                $query->where('student_photos.similarity_status', 'match');
+            } elseif ($request->similarity === 'mismatch') {
+                $query->where('student_photos.similarity_status', 'mismatch');
+            } elseif ($request->similarity === 'unchecked') {
+                $query->whereNull('student_photos.similarity_checked_at');
+            }
+        }
+        if ($has('min_similarity')) {
+            $query->where('student_photos.similarity_score', '>=', (float) $request->min_similarity);
+        }
+        if ($has('max_similarity')) {
+            $query->where('student_photos.similarity_score', '<=', (float) $request->max_similarity);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Distinct values for one filter column, scoped by every OTHER filter.
+     * This produces cascading dropdowns without an AJAX chain.
+     */
+    protected function distinctValues(Request $request, string $ownKey, string $column)
+    {
+        return $this->applyFilters($this->baseQuery(), $request, [$ownKey])
+            ->whereNotNull($column)
+            ->where($column, '<>', '')
+            ->distinct()
+            ->orderBy($column)
+            ->pluck($column);
     }
 
     public function pendingIds(Request $request)

@@ -275,14 +275,6 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> AI max %</label>
                             <input type="number" name="max_similarity" value="{{ request('max_similarity') }}" min="0" max="100" step="0.1" placeholder="100" class="sp-text-input" />
                         </div>
-                        <div class="filter-item" style="min-width: 140px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanadan</label>
-                            <input type="date" name="date_from" value="{{ request('date_from') }}" class="sp-text-input" />
-                        </div>
-                        <div class="filter-item" style="min-width: 140px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#e11d48;"></span> Sanagacha</label>
-                            <input type="date" name="date_to" value="{{ request('date_to') }}" class="sp-text-input" />
-                        </div>
                         <div class="filter-item" style="flex: 1; min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -298,10 +290,6 @@
                                 <button type="button" @click="openReview('reject')" class="btn-reject" title="Filtrdagi pending rasmlarni hammasini rad etish">
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                                     Bulk rad
-                                </button>
-                                <button type="submit" class="btn-calc">
-                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                                    Filtrlash
                                 </button>
                             </div>
                         </div>
@@ -799,6 +787,8 @@
             return null;
         }
         $(document).ready(function() {
+            var $form = $('#sp-filter-form');
+
             $('.select2-sp').each(function() {
                 $(this).select2({
                     theme: 'classic',
@@ -808,6 +798,20 @@
                     matcher: fuzzyMatcher
                 });
             });
+
+            // Avto-submit: har qanday select o'zgarganda filtr qayta qo'llanadi
+            $('.select2-sp').on('change', function() {
+                $form.trigger('submit');
+            });
+
+            // Raqamli inputlar (AI min/max %) — debounce bilan auto-submit
+            var numberDebounce;
+            $form.find('input[type=number]').on('input', function() {
+                clearTimeout(numberDebounce);
+                numberDebounce = setTimeout(function() { $form.trigger('submit'); }, 600);
+            });
+
+            // Matn qidiruv — Enter bosilganda submit bo'ladi (default brauzer xatti-harakati)
         });
     </script>
 

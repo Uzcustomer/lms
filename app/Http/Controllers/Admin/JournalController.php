@@ -3594,24 +3594,34 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Semestr bo'yicha filtrlash
-        if ($request->filled('semester_code')) {
-            $semesterQuery = Semester::where('code', $request->semester_code);
-            if ($request->get('current_semester') == '1') {
-                $semesterQuery->where('current', true);
+        // Semester + level filtrlari: schedules jadvalidan haqiqiy dars mavjud guruhlarni olish
+        if ($request->filled('semester_code') || $request->filled('level_code')) {
+            $semesterFilter = Semester::query();
+            if ($request->filled('semester_code')) {
+                $semesterFilter->where('code', $request->semester_code);
             }
-            $curriculaIds = $semesterQuery->pluck('curriculum_hemis_id');
-            $query->whereIn('curriculum_hemis_id', $curriculaIds);
-        }
+            if ($request->filled('level_code')) {
+                $semesterFilter->where('level_code', $request->level_code);
+            }
+            if ($request->get('current_semester') == '1') {
+                $semesterFilter->where('current', true);
+            }
+            $curriculaIds = $semesterFilter->pluck('curriculum_hemis_id')->unique()->toArray();
 
-        // Kurs bo'yicha filtrlash
-        if ($request->filled('level_code')) {
-            $semesterQuery = Semester::where('level_code', $request->level_code);
-            if ($request->get('current_semester') == '1') {
-                $semesterQuery->where('current', true);
+            // Agar semester jadvalidan topilmasa — schedules orqali fallback
+            if (empty($curriculaIds) && $request->filled('semester_code')) {
+                $groupHemisIdsFromSchedule = DB::table('schedules')
+                    ->where('semester_code', $request->semester_code)
+                    ->whereNull('deleted_at')
+                    ->pluck('group_id')
+                    ->unique()
+                    ->toArray();
+                if (!empty($groupHemisIdsFromSchedule)) {
+                    $query->whereIn('group_hemis_id', $groupHemisIdsFromSchedule);
+                }
+            } else {
+                $query->whereIn('curriculum_hemis_id', $curriculaIds);
             }
-            $curriculaIds = $semesterQuery->pluck('curriculum_hemis_id');
-            $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
         // Fan bo'yicha filtrlash

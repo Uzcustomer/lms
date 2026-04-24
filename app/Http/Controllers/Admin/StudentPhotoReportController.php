@@ -163,8 +163,8 @@ class StudentPhotoReportController extends Controller
 
     protected function perPage(Request $request): int
     {
-        $perPage = (int) $request->get('per_page', 30);
-        return in_array($perPage, [10, 25, 30, 50, 100, 200]) ? $perPage : 30;
+        $perPage = (int) $request->get('per_page', 200);
+        return in_array($perPage, [10, 25, 30, 50, 100, 200]) ? $perPage : 200;
     }
 
     protected function applySort($query, Request $request): void

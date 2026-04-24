@@ -75,7 +75,8 @@ class ExportLessonAssignmentJob implements ShouldQueue
         $filters = $this->filters;
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
-        $gradeExcludedTypes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
         $scheduleQuery = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
@@ -84,8 +85,13 @@ class ExportLessonAssignmentJob implements ShouldQueue
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
 
         if (($filters['current_semester'] ?? '1') == '1') {
             $scheduleQuery->where(function ($q) {
@@ -254,28 +260,22 @@ class ExportLessonAssignmentJob implements ShouldQueue
             $hasAtt = isset($attendanceByScheduleId[$sch->schedule_hemis_id])
                    || isset($attendanceByKey[$attKey]);
 
-            $skipGradeCheck = in_array($sch->training_type_code, $gradeExcludedTypes);
             $gsKey = $sch->group_id . '|' . $sch->subject_id . '|' . $sch->semester_code;
             $totalStudents = $subjectStudentCounts[$gsKey] ?? ($groupStudentCounts[$sch->group_id] ?? 0);
 
-            if ($skipGradeCheck) {
-                $hasGrade = null;
-                $missingGradeCount = 0;
-            } else {
-                $processedBySchedule = $processedCountByScheduleId[$sch->schedule_hemis_id] ?? 0;
-                $processedByComposite = $processedCountByKey[$gradeKey] ?? 0;
-                $processedCount = max($processedBySchedule, $processedByComposite);
+            $processedBySchedule = $processedCountByScheduleId[$sch->schedule_hemis_id] ?? 0;
+            $processedByComposite = $processedCountByKey[$gradeKey] ?? 0;
+            $processedCount = max($processedBySchedule, $processedByComposite);
 
-                if ($processedCount >= $totalStudents) {
-                    $hasGrade = true;
-                    $missingGradeCount = 0;
-                } elseif ($processedCount > 0) {
-                    $hasGrade = false;
-                    $missingGradeCount = $totalStudents - $processedCount;
-                } else {
-                    $hasGrade = false;
-                    $missingGradeCount = $totalStudents;
-                }
+            if ($processedCount >= $totalStudents) {
+                $hasGrade = true;
+                $missingGradeCount = 0;
+            } elseif ($processedCount > 0) {
+                $hasGrade = false;
+                $missingGradeCount = $totalStudents - $processedCount;
+            } else {
+                $hasGrade = false;
+                $missingGradeCount = $totalStudents;
             }
 
             if (!isset($grouped[$key])) {

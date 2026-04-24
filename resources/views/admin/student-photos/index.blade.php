@@ -365,13 +365,20 @@
                                 <option value="unchecked" {{ request('similarity') == 'unchecked' ? 'selected' : '' }}>Tekshirilmagan</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 110px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> AI min %</label>
-                            <input type="number" name="min_similarity" value="{{ request('min_similarity') }}" min="0" max="100" step="0.1" placeholder="0" class="sp-text-input" />
-                        </div>
-                        <div class="filter-item" style="min-width: 110px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> AI max %</label>
-                            <input type="number" name="max_similarity" value="{{ request('max_similarity') }}" min="0" max="100" step="0.1" placeholder="100" class="sp-text-input" />
+                        <div class="filter-item" style="min-width: 200px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#16a34a;"></span> AI % (chegara)</label>
+                            <div style="display:flex;gap:4px;">
+                                <select name="similarity_op" class="select2-sp" style="flex:0 0 72px;">
+                                    <option value="">—</option>
+                                    <option value=">" {{ request('similarity_op') == '>' ? 'selected' : '' }}>&gt;</option>
+                                    <option value=">=" {{ request('similarity_op') == '>=' ? 'selected' : '' }}>&ge;</option>
+                                    <option value="<" {{ request('similarity_op') == '<' ? 'selected' : '' }}>&lt;</option>
+                                    <option value="<=" {{ request('similarity_op') == '<=' ? 'selected' : '' }}>&le;</option>
+                                </select>
+                                <input type="number" name="similarity_value" value="{{ request('similarity_value') }}"
+                                       min="0" max="100" step="0.1" placeholder="foiz"
+                                       class="sp-text-input" style="flex:1;" />
+                            </div>
                         </div>
                         <div class="filter-item" style="min-width: 150px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Sifat holati</label>
@@ -382,9 +389,20 @@
                                 <option value="unchecked" {{ request('quality') == 'unchecked' ? 'selected' : '' }}>Tekshirilmagan</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 110px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Sifat min %</label>
-                            <input type="number" name="min_quality" value="{{ request('min_quality') }}" min="0" max="100" step="0.1" placeholder="0" class="sp-text-input" />
+                        <div class="filter-item" style="min-width: 200px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Sifat % (chegara)</label>
+                            <div style="display:flex;gap:4px;">
+                                <select name="quality_op" class="select2-sp" style="flex:0 0 72px;">
+                                    <option value="">—</option>
+                                    <option value=">" {{ request('quality_op') == '>' ? 'selected' : '' }}>&gt;</option>
+                                    <option value=">=" {{ request('quality_op') == '>=' ? 'selected' : '' }}>&ge;</option>
+                                    <option value="<" {{ request('quality_op') == '<' ? 'selected' : '' }}>&lt;</option>
+                                    <option value="<=" {{ request('quality_op') == '<=' ? 'selected' : '' }}>&le;</option>
+                                </select>
+                                <input type="number" name="quality_value" value="{{ request('quality_value') }}"
+                                       min="0" max="100" step="0.1" placeholder="foiz"
+                                       class="sp-text-input" style="flex:1;" />
+                            </div>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label">&nbsp;</label>

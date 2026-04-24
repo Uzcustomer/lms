@@ -329,6 +329,11 @@ class Student extends Authenticatable
         return $this->hasMany(\App\Models\StudentFile::class);
     }
 
+    public function admissionData()
+    {
+        return $this->hasOne(\App\Models\StudentAdmissionData::class);
+    }
+
     public function isProfileComplete(): bool
     {
         return !empty($this->phone);

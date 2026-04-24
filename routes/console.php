@@ -95,3 +95,7 @@ Schedule::command('chat:purge --days=14')->dailyAt('04:00');
 // Teacher dashboard snapshot — har kuni 05:00 da (nightly import va final retry 04:00 dan keyin).
 // Dashboardga kirganda og'ir hisob-kitob qilinmasligi uchun kechagi kun holati saqlab qo'yiladi.
 Schedule::command('teachers:build-dashboard-snapshots')->dailyAt('05:00')->withoutOverlapping(120);
+
+// Kunlik baho o'zgarishlari digesti — har kuni ertalab 08:00 da admin chatiga
+// (otrabotka baholari + o'zgartirilgan baholar jadvali; oxirgi 24 soat)
+Schedule::command('grades:send-daily-changes-digest')->dailyAt('08:00');

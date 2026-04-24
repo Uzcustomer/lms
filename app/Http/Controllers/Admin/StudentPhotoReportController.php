@@ -9,6 +9,7 @@ use App\Models\Teacher;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -16,40 +17,142 @@ class StudentPhotoReportController extends Controller
 {
     public function index(Request $request)
     {
-        $photosQuery = $this->applyFilters($this->baseQuery(), $request)
-            ->select([
-                'student_photos.*',
-                'students.image as student_profile_image',
-                'students.department_name as department_name',
-                'students.specialty_name as specialty_name',
-                'students.level_name as level_name',
-                'students.group_name as student_group_name',
-            ]);
+        $noPhoto = $request->get('status') === 'no_photo';
 
-        $this->applySort($photosQuery, $request);
+        if ($noPhoto) {
+            $photos = $this->noPhotoStudentsQuery($request)
+                ->paginate($this->perPage($request))
+                ->withQueryString();
+        } else {
+            $photosQuery = $this->applyFilters($this->baseQuery(), $request)
+                ->select([
+                    'student_photos.*',
+                    'students.image as student_profile_image',
+                    'students.department_name as department_name',
+                    'students.specialty_name as specialty_name',
+                    'students.level_name as level_name',
+                    'students.group_name as student_group_name',
+                ]);
 
-        $photos = $photosQuery
-            ->paginate($this->perPage($request))
-            ->withQueryString();
+            $this->applySort($photosQuery, $request);
+
+            $photos = $photosQuery
+                ->paginate($this->perPage($request))
+                ->withQueryString();
+        }
 
         $stats = [
             'total' => StudentPhoto::count(),
             'pending' => StudentPhoto::where('status', StudentPhoto::STATUS_PENDING)->count(),
             'approved' => StudentPhoto::where('status', StudentPhoto::STATUS_APPROVED)->count(),
             'rejected' => StudentPhoto::where('status', StudentPhoto::STATUS_REJECTED)->count(),
+            'no_photo' => Student::whereNotIn(
+                'student_id_number',
+                StudentPhoto::select('student_id_number')
+            )->count(),
         ];
 
         // Cascading dropdowns: each list reflects values that survive ALL
         // currently-selected filters EXCEPT the one being built.
-        $departments = $this->distinctValues($request, 'department', 'students.department_name');
-        $specialties = $this->distinctValues($request, 'specialty', 'students.specialty_name');
-        $levels = $this->distinctValues($request, 'level', 'students.level_name');
-        $groups = $this->distinctValues($request, 'group', 'students.group_name');
-        $tutors = $this->distinctValues($request, 'tutor', 'student_photos.uploaded_by');
+        if ($noPhoto) {
+            $departments = $this->distinctStudentValues($request, 'department', 'students.department_name');
+            $specialties = $this->distinctStudentValues($request, 'specialty', 'students.specialty_name');
+            $levels = $this->distinctStudentValues($request, 'level', 'students.level_name');
+            $groups = $this->distinctStudentValues($request, 'group', 'students.group_name');
+            $tutors = $this->distinctStudentValues($request, 'tutor', 'tutor_history.teacher_name');
+        } else {
+            $departments = $this->distinctValues($request, 'department', 'students.department_name');
+            $specialties = $this->distinctValues($request, 'specialty', 'students.specialty_name');
+            $levels = $this->distinctValues($request, 'level', 'students.level_name');
+            $groups = $this->distinctValues($request, 'group', 'students.group_name');
+            $tutors = $this->distinctValues($request, 'tutor', 'student_photos.uploaded_by');
+        }
 
         return view('admin.student-photos.index', compact(
-            'photos', 'stats', 'departments', 'specialties', 'levels', 'groups', 'tutors'
+            'photos', 'stats', 'departments', 'specialties', 'levels', 'groups', 'tutors', 'noPhoto'
         ));
+    }
+
+    protected function noPhotoStudentsQuery(Request $request)
+    {
+        $query = Student::query()
+            ->leftJoin('tutor_history', function ($join) {
+                $join->on('tutor_history.student_id', '=', 'students.id')
+                     ->whereNull('tutor_history.removed_at');
+            })
+            ->whereNotIn(
+                'students.student_id_number',
+                StudentPhoto::select('student_id_number')
+            )
+            ->select([
+                'students.id as student_pk',
+                'students.student_id_number',
+                'students.full_name',
+                'students.image as student_profile_image',
+                'students.department_name',
+                'students.specialty_name',
+                'students.level_name',
+                'students.group_name as student_group_name',
+                'tutor_history.teacher_name as uploaded_by',
+                DB::raw("'no_photo' as status"),
+            ])
+            ->orderBy('students.department_name')
+            ->orderBy('students.group_name')
+            ->orderBy('students.full_name');
+
+        $this->applyStudentFilters($query, $request);
+
+        return $query;
+    }
+
+    protected function applyStudentFilters($query, Request $request, array $except = []): void
+    {
+        $has = fn(string $key) => !in_array($key, $except) && $request->filled($key);
+
+        if ($has('search')) {
+            $needle = trim($request->search);
+            $query->where(function ($q) use ($needle) {
+                $q->where('students.full_name', 'like', "%{$needle}%")
+                  ->orWhere('students.student_id_number', 'like', "%{$needle}%");
+            });
+        }
+        if ($has('department')) {
+            $query->where('students.department_name', $request->department);
+        }
+        if ($has('specialty')) {
+            $query->where('students.specialty_name', $request->specialty);
+        }
+        if ($has('level')) {
+            $query->where('students.level_name', $request->level);
+        }
+        if ($has('group')) {
+            $query->where('students.group_name', $request->group);
+        }
+        if ($has('tutor')) {
+            $query->where('tutor_history.teacher_name', $request->tutor);
+        }
+    }
+
+    protected function distinctStudentValues(Request $request, string $ownKey, string $column)
+    {
+        $query = Student::query()
+            ->leftJoin('tutor_history', function ($join) {
+                $join->on('tutor_history.student_id', '=', 'students.id')
+                     ->whereNull('tutor_history.removed_at');
+            })
+            ->whereNotIn(
+                'students.student_id_number',
+                StudentPhoto::select('student_id_number')
+            );
+
+        $this->applyStudentFilters($query, $request, [$ownKey]);
+
+        return $query
+            ->whereNotNull($column)
+            ->where($column, '<>', '')
+            ->distinct()
+            ->orderBy($column)
+            ->pluck($column);
     }
 
     protected function baseQuery()

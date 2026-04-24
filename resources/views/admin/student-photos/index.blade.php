@@ -263,7 +263,7 @@
             @endif
 
             {{-- Statistika --}}
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                 <div class="bg-white shadow-sm rounded-lg p-4">
                     <div class="text-sm text-gray-500">Jami rasmlar</div>
                     <div class="text-2xl font-semibold text-gray-900">{{ number_format($stats['total']) }}</div>
@@ -280,6 +280,11 @@
                     <div class="text-sm text-gray-500">Rad etilgan</div>
                     <div class="text-2xl font-semibold text-red-600">{{ number_format($stats['rejected']) }}</div>
                 </div>
+                <a href="{{ route('admin.student-photos.index', ['status' => 'no_photo']) }}"
+                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-gray-50 transition">
+                    <div class="text-sm text-gray-500">Rasmsiz talabalar</div>
+                    <div class="text-2xl font-semibold text-orange-600">{{ number_format($stats['no_photo']) }}</div>
+                </a>
             </div>
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -291,13 +296,14 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Qidiruv (FISH / ID)</label>
                             <input type="text" name="search" value="{{ request('search') }}" placeholder="Ism yoki talaba ID" class="sp-text-input" />
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Holat</label>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Ruxsat holati</label>
                             <select name="status" class="select2-sp" style="width: 100%;">
                                 <option value="">Barchasi</option>
                                 <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Kutilmoqda</option>
                                 <option value="approved" {{ request('status') == 'approved' ? 'selected' : '' }}>Tasdiqlangan</option>
                                 <option value="rejected" {{ request('status') == 'rejected' ? 'selected' : '' }}>Rad etilgan</option>
+                                <option value="no_photo" {{ request('status') == 'no_photo' ? 'selected' : '' }}>Rasm yuklanmagan</option>
                             </select>
                         </div>
                         <div class="filter-item" style="flex: 1; min-width: 200px;">
@@ -482,6 +488,38 @@
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 @forelse($photos as $i => $photo)
+                                    @if($noPhoto ?? false)
+                                        <tr class="hover:bg-orange-50">
+                                            <td class="px-3 py-2 text-center">—</td>
+                                            <td class="px-3 py-2 text-gray-500">{{ $photos->firstItem() + $i }}</td>
+                                            <td class="px-3 py-2 font-medium text-gray-900">{{ $photo->full_name }}</td>
+                                            <td class="px-3 py-2 text-gray-700">{{ $photo->student_id_number }}</td>
+                                            <td class="px-3 py-2 text-gray-700">{{ $photo->department_name ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-gray-700">{{ $photo->specialty_name ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-gray-700">{{ $photo->level_name ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-gray-700">{{ $photo->student_group_name ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-center">
+                                                @if($photo->student_profile_image)
+                                                    <img src="{{ $photo->student_profile_image }}"
+                                                         alt="{{ $photo->full_name }}"
+                                                         class="inline-block w-12 h-16 object-cover rounded border border-gray-200"
+                                                         loading="lazy">
+                                                @else
+                                                    <span class="text-xs text-gray-400">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-3 py-2 text-gray-700">{{ $photo->uploaded_by ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-center text-xs text-gray-400">—</td>
+                                            <td class="px-3 py-2 text-center text-xs text-gray-400">—</td>
+                                            <td class="px-3 py-2 text-center text-xs text-gray-400">—</td>
+                                            <td class="px-3 py-2 text-center">
+                                                <span class="inline-block px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-xs font-medium">
+                                                    Rasm yuklanmagan
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        @continue
+                                    @endif
                                     @php
                                         $groupName = $photo->student_group_name ?? $photo->group_name;
                                         $uploadedUrl = asset($photo->photo_path);

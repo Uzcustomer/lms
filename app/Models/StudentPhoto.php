@@ -25,12 +25,22 @@ class StudentPhoto extends Model
         'similarity_score',
         'similarity_status',
         'similarity_checked_at',
+        'quality_score',
+        'quality_passed',
+        'quality_issues',
+        'quality_ok',
+        'quality_checked_at',
     ];
 
     protected $casts = [
         'reviewed_at' => 'datetime',
         'similarity_checked_at' => 'datetime',
         'similarity_score' => 'decimal:2',
+        'quality_score' => 'decimal:2',
+        'quality_passed' => 'boolean',
+        'quality_issues' => 'array',
+        'quality_ok' => 'array',
+        'quality_checked_at' => 'datetime',
     ];
 
     public function getPhotoUrlAttribute(): string

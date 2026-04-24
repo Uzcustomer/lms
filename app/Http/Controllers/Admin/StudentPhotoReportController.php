@@ -113,6 +113,21 @@ class StudentPhotoReportController extends Controller
         if ($has('max_similarity')) {
             $query->where('student_photos.similarity_score', '<=', (float) $request->max_similarity);
         }
+        if ($has('quality')) {
+            if ($request->quality === 'passed') {
+                $query->where('student_photos.quality_passed', true);
+            } elseif ($request->quality === 'failed') {
+                $query->where('student_photos.quality_passed', false);
+            } elseif ($request->quality === 'unchecked') {
+                $query->whereNull('student_photos.quality_checked_at');
+            }
+        }
+        if ($has('min_quality')) {
+            $query->where('student_photos.quality_score', '>=', (float) $request->min_quality);
+        }
+        if ($has('max_quality')) {
+            $query->where('student_photos.quality_score', '<=', (float) $request->max_quality);
+        }
 
         return $query;
     }
@@ -363,6 +378,67 @@ class StudentPhotoReportController extends Controller
             'match' => $match,
             'status' => $match ? 'match' : 'mismatch',
             'checked_at' => $photo->similarity_checked_at->toIso8601String(),
+        ]);
+    }
+
+    public function checkQuality(Request $request, $id)
+    {
+        $photo = StudentPhoto::findOrFail($id);
+
+        $uploadedFullPath = public_path($photo->photo_path);
+        if (!file_exists($uploadedFullPath)) {
+            return response()->json(['error' => 'Yuklangan rasm fayli topilmadi.'], 422);
+        }
+
+        $serviceUrl = rtrim(config('services.face_compare.url'), '/');
+        $timeout = config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/quality-check', [
+                    'image' => asset($photo->photo_path),
+                ]);
+        } catch (\Throwable $e) {
+            Log::error('Quality service unreachable', [
+                'photo_id' => $photo->id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['error' => 'AI servisga ulanib bo\'lmadi: ' . $e->getMessage()], 503);
+        }
+
+        if (!$response->successful()) {
+            Log::warning('Quality service returned error', [
+                'photo_id' => $photo->id,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            return response()->json([
+                'error' => 'AI servis xatoligi: ' . ($response->json('detail') ?? $response->body()),
+            ], 502);
+        }
+
+        $data = $response->json();
+        $score = (float) ($data['quality_score'] ?? 0);
+        $passed = (bool) ($data['passed'] ?? false);
+        $issues = $data['issues'] ?? [];
+        $ok = $data['ok'] ?? [];
+
+        $photo->update([
+            'quality_score' => $score,
+            'quality_passed' => $passed,
+            'quality_issues' => $issues,
+            'quality_ok' => $ok,
+            'quality_checked_at' => now(),
+        ]);
+
+        return response()->json([
+            'quality_score' => $score,
+            'passed' => $passed,
+            'issues' => $issues,
+            'ok' => $ok,
+            'metrics' => $data['metrics'] ?? null,
+            'checked_at' => $photo->quality_checked_at->toIso8601String(),
         ]);
     }
 }

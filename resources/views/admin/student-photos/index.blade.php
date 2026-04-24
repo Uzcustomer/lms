@@ -332,7 +332,7 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
                             <select name="per_page" class="select2-sp" style="width: 100%;">
                                 @foreach([10, 25, 30, 50, 100, 200] as $ps)
-                                    <option value="{{ $ps }}" {{ request('per_page', 30) == $ps ? 'selected' : '' }}>{{ $ps }}</option>
+                                    <option value="{{ $ps }}" {{ request('per_page', 200) == $ps ? 'selected' : '' }}>{{ $ps }}</option>
                                 @endforeach
                             </select>
                         </div>

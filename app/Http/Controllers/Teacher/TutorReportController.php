@@ -106,6 +106,7 @@ class TutorReportController extends Controller
             }
 
             $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+            $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
             $currentSemester = $request->get('current_semester', '1') == '1';
 
             $scheduleQuery = DB::table('schedules as sch')
@@ -118,6 +119,10 @@ class TutorReportController extends Controller
                 ->whereNotIn('sch.training_type_name', $excludedNames)
                 ->whereNotNull('sch.lesson_date')
                 ->where('sch.education_year_current', true);
+
+            foreach ($excludedSubjectPatterns as $pattern) {
+                $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
 
             if ($currentSemester) {
                 $scheduleQuery->where('sem.current', true);
@@ -339,6 +344,7 @@ class TutorReportController extends Controller
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
         // Schedule kombinatsiyalarini olish (joriy semestr)
         $scheduleCombos = DB::table('schedules as sch')
@@ -352,7 +358,13 @@ class TutorReportController extends Controller
             ->whereNotNull('sch.lesson_date')
             ->where('sem.current', true)
             ->where('sch.education_year_current', true)
-            ->whereNull('sch.deleted_at')
+            ->whereNull('sch.deleted_at');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleCombos->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $scheduleCombos = $scheduleCombos
             ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
             ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
             ->get();
@@ -618,6 +630,7 @@ class TutorReportController extends Controller
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
         $scoreLimit = (int) $request->get('score_limit', 90);
 
         // Fanlar ro'yxatini olish
@@ -631,7 +644,13 @@ class TutorReportController extends Controller
             ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->where('sem.current', true)
-            ->where('sch.education_year_current', true)
+            ->where('sch.education_year_current', true);
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleSubjects->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $scheduleSubjects = $scheduleSubjects
             ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name')
             ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name')
             ->get();
@@ -729,6 +748,7 @@ class TutorReportController extends Controller
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
         // Schedule yozuvlarini olish (o'tgan kunlar uchun)
         $schedules = DB::table('schedules as sch')
@@ -743,7 +763,13 @@ class TutorReportController extends Controller
             ->whereNull('sch.deleted_at')
             ->where('sem.current', true)
             ->where('sch.education_year_current', true)
-            ->whereRaw('DATE(sch.lesson_date) < CURDATE()')
+            ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $schedules->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $schedules = $schedules
             ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name',
                 'sch.employee_id', 'sch.employee_name',
                 DB::raw('DATE(sch.lesson_date) as lesson_date'),

@@ -102,6 +102,7 @@ class ReportController extends Controller
         }
 
         $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
         // Sana oralig'i filtri
         $dateFrom = $request->filled('date_from') ? $request->date_from : null;
@@ -112,6 +113,10 @@ class ReportController extends Controller
             ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
 
         $needsJoin = $request->get('current_semester', '1') == '1' || $request->filled('level_code');
         if ($needsJoin) {
@@ -640,6 +645,7 @@ class ReportController extends Controller
         $date = $request->get('date', now()->format('Y-m-d'));
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
         // 1. Barcha schedulelar (shu sanadagi)
         $schedules = DB::table('schedules as sch')
@@ -655,8 +661,13 @@ class ReportController extends Controller
                 $q->where('sem.current', true)
                   ->orWhereNull('sem.id');
             })
-            ->whereRaw('DATE(sch.lesson_date) = ?', [$date])
-            ->select(
+            ->whereRaw('DATE(sch.lesson_date) = ?', [$date]);
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $schedules->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $schedules = $schedules->select(
                 'sch.schedule_hemis_id',
                 'sch.employee_id',
                 'sch.employee_name',
@@ -886,6 +897,7 @@ class ReportController extends Controller
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         // Baho faqat amaliy mashg'ulotlar uchun tekshiriladi (jurnal JB tabi bilan bir xil)
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = config('app.excluded_rating_subject_patterns', []);
 
         // 1-QADAM: Jadvallardan ma'lumot olish
         $scheduleQuery = DB::table('schedules as sch')
@@ -897,6 +909,10 @@ class ReportController extends Controller
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
 
         // Joriy semestr filtri (LEFT JOIN bo'lgani uchun semester topilmagan yozuvlarni ham qo'shamiz)
         if ($request->get('current_semester', '1') == '1') {

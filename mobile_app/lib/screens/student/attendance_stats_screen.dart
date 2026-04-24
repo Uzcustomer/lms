@@ -192,11 +192,17 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     );
   }
 
+  String _extractPairNumber(String? pairName) {
+    if (pairName == null || pairName.isEmpty) return '?';
+    final match = RegExp(r'(\d+)').firstMatch(pairName);
+    return match?.group(1) ?? pairName;
+  }
+
   Widget _buildTable(bool isDark, Color txt, Color sub) {
     final filtered = <Map<String, dynamic>>[];
     for (final g in _grades) {
       final ttCode = g['training_type_code'];
-      if (ttCode == 99 || ttCode == 100 || ttCode == 101 || ttCode == 102) {
+      if (ttCode == 11 || ttCode == 99 || ttCode == 100 || ttCode == 101 || ttCode == 102) {
         continue;
       }
       filtered.add(Map<String, dynamic>.from(g));
@@ -224,7 +230,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       final dateRaw = g['lesson_date']?.toString() ?? '';
       if (dateRaw.length < 10) continue;
       final dateKey = dateRaw.substring(0, 10);
-      final pair = g['lesson_pair_name']?.toString() ?? '?';
+      final pair = _extractPairNumber(g['lesson_pair_name']?.toString());
       allPairs.add(pair);
 
       final reason = g['reason']?.toString();
@@ -411,7 +417,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
             label: SizedBox(
               width: pairColWidth,
               child: Center(
-                child: Text('$p-juft',
+                child: Text('$p-juftlik',
                     style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,

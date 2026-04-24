@@ -16,6 +16,7 @@ import logging
 import os
 import io
 import requests
+from urllib.parse import urlsplit, urlunsplit, quote
 import numpy as np
 import cv2
 from PIL import Image
@@ -93,12 +94,17 @@ def compare(req: CompareRequest):
 def _load_image_bgr(src: str) -> np.ndarray:
     """Load an image from a URL or local path into a BGR OpenCV array.
 
-    Uses `requests` so non-ASCII URLs (e.g. paths containing O'G'LI style
-    apostrophes or Cyrillic filenames) are handled cleanly.
+    Percent-encodes non-ASCII URL paths (O'G'LI-style apostrophes,
+    Cyrillic filenames) before handing off to requests, because the
+    underlying http client refuses to build requests from raw unicode.
     """
     if src.startswith(("http://", "https://")):
+        parts = urlsplit(src)
+        safe_path = quote(parts.path, safe="/%")
+        safe_query = quote(parts.query, safe="=&%")
+        url = urlunsplit((parts.scheme, parts.netloc, safe_path, safe_query, parts.fragment))
         resp = requests.get(
-            src,
+            url,
             headers={"User-Agent": "lms-quality/1.0"},
             timeout=30,
             verify=False,

@@ -78,10 +78,17 @@
                 this.bulk = {
                     open: true, phase: 'confirm', ids: [], total: 0, processed: 0,
                     succeeded: 0, failed: 0, currentName: '', cancel: false, errors: [],
-                    runQuality: true,
+                    runQuality: true, runSimilarity: true,
                 };
+                await this.refreshBulkCount();
+            },
+            async refreshBulkCount() {
                 const params = new URLSearchParams(new FormData(document.getElementById('sp-filter-form')));
-                params.set('only_unchecked', '1');
+                params.delete('only_unchecked');
+                const miss = [];
+                if (this.bulk.runSimilarity) miss.push('similarity');
+                if (this.bulk.runQuality) miss.push('quality');
+                params.set('missing', miss.join(','));
                 try {
                     const res = await fetch(`/admin/student-photos/pending-ids?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
                     const data = await res.json();
@@ -98,16 +105,18 @@
                     if (this.bulk.cancel) break;
                     const id = this.bulk.ids[i];
                     this.bulk.currentName = `#${id} (${i + 1}/${this.bulk.total})`;
-                    let okOne = false;
+                    let okOne = true;
                     try {
-                        const r1 = await fetch(`/admin/student-photos/${id}/check-similarity`, {
-                            method: 'POST',
-                            headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                        });
-                        if (r1.ok) { okOne = true; }
-                        else {
-                            const err = await r1.json().catch(() => ({}));
-                            this.bulk.errors.push(`#${id} (similarity): ${err.error || ('HTTP ' + r1.status)}`);
+                        if (this.bulk.runSimilarity) {
+                            const r1 = await fetch(`/admin/student-photos/${id}/check-similarity`, {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                            });
+                            if (!r1.ok) {
+                                okOne = false;
+                                const err = await r1.json().catch(() => ({}));
+                                this.bulk.errors.push(`#${id} (similarity): ${err.error || ('HTTP ' + r1.status)}`);
+                            }
                         }
                         if (this.bulk.runQuality) {
                             const r2 = await fetch(`/admin/student-photos/${id}/check-quality`, {
@@ -128,6 +137,31 @@
                     this.bulk.processed = i + 1;
                 }
                 this.bulk.phase = 'done';
+            },
+            rowQuality: { id: null, loading: false, error: null },
+            async runRowQuality(photoId) {
+                this.rowQuality = { id: photoId, loading: true, error: null };
+                try {
+                    const res = await fetch(`/admin/student-photos/${photoId}/check-quality`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                            'Accept': 'application/json',
+                        },
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        this.rowQuality.error = data.error || 'Xatolik';
+                        alert('Sifat tekshiruvi xato: ' + this.rowQuality.error);
+                    } else {
+                        location.reload();
+                    }
+                } catch (e) {
+                    this.rowQuality.error = e.message;
+                    alert('Xatolik: ' + e.message);
+                } finally {
+                    this.rowQuality.loading = false;
+                }
             },
             review: {
                 open: false, mode: 'approve', phase: 'confirm',
@@ -427,7 +461,15 @@
                                                     </div>
                                                 @endif
                                             @else
-                                                <span class="text-xs text-gray-400">—</span>
+                                                <button type="button"
+                                                        @click="runRowQuality({{ $photo->id }})"
+                                                        :disabled="rowQuality.loading && rowQuality.id === {{ $photo->id }}"
+                                                        class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-60"
+                                                        title="Rasm sifatini tekshirish">
+                                                    <svg x-show="!(rowQuality.loading && rowQuality.id === {{ $photo->id }})" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>
+                                                    <svg x-show="rowQuality.loading && rowQuality.id === {{ $photo->id }}" class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+                                                    Tekshirish
+                                                </button>
                                             @endif
                                         </td>
                                         <td class="px-3 py-2 text-center">
@@ -823,39 +865,53 @@
                 {{-- Confirm phase --}}
                 <template x-if="bulk.phase === 'confirm'">
                     <div>
-                        <template x-if="bulk.total === 0">
-                            <div class="rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 text-sm">
-                                Hozirgi filtr bo'yicha tekshirilmagan rasm topilmadi. Filtrni o'zgartiring yoki allaqachon tekshirilganlarni qayta tekshirish uchun "AI tekshiruvi" filtrini bo'sh qoldiring.
-                            </div>
-                        </template>
-                        <template x-if="bulk.total > 0">
-                            <div class="space-y-4">
-                                <div class="rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 px-4 py-3 text-sm">
-                                    <strong x-text="bulk.total"></strong> ta rasm AI bilan tahlil qilinadi.
-                                    Har bir rasm <span x-text="bulk.runQuality ? '5-10' : '2-5'"></span> soniya oladi.
-                                    Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * (bulk.runQuality ? 7 : 3) / 60) + ' daqiqa'"></strong>.
-                                </div>
+                        <div class="space-y-4">
+                            <div class="space-y-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+                                <div class="text-xs font-bold uppercase text-gray-500 mb-1">Qaysi tahlilni bajarish</div>
                                 <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                                    <input type="checkbox" x-model="bulk.runQuality"
-                                           class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">
-                                    <span>Rasm sifatini ham tekshirish (markaz, framing, oq xalat, yoritish)</span>
+                                    <input type="checkbox" x-model="bulk.runSimilarity" @change="refreshBulkCount()"
+                                           class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                    <span>O'xshashlik tekshiruvi (ArcFace — HEMIS profili bilan solishtirish)</span>
                                 </label>
-                                <div class="text-xs text-gray-500">
-                                    Servislar: <code>ArcFace</code> (o'xshashlik) + OpenCV/DeepFace (sifat).
-                                    Natija avtomat bazaga saqlanadi. Tahlil chog'ida oynani yopmang.
-                                </div>
-                                <div class="flex justify-end gap-2 pt-2">
-                                    <button type="button" @click="bulk.open = false"
-                                            class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
-                                        Bekor qilish
-                                    </button>
-                                    <button type="button" @click="runBulk()"
-                                            class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">
-                                        Boshlash
-                                    </button>
-                                </div>
+                                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                    <input type="checkbox" x-model="bulk.runQuality" @change="refreshBulkCount()"
+                                           class="rounded border-gray-300 text-teal-600 focus:ring-teal-500">
+                                    <span>Rasm sifati tekshiruvi (markaz, framing, oq xalat, yoritish)</span>
+                                </label>
                             </div>
-                        </template>
+
+                            <template x-if="bulk.total === 0">
+                                <div class="rounded-md bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 text-sm">
+                                    Hozirgi filtr + tanlangan tekshiruvlar bo'yicha tekshirilmagan rasm topilmadi.
+                                    Filtrni tekshiring yoki boshqa tekshiruv turini tanlang.
+                                </div>
+                            </template>
+
+                            <template x-if="bulk.total > 0">
+                                <div class="rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 px-4 py-3 text-sm">
+                                    <strong x-text="bulk.total"></strong> ta rasm tahlil qilinadi.
+                                    Har bir rasm
+                                    <span x-text="((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 3 : 0)) + '-' + ((bulk.runSimilarity ? 5 : 0) + (bulk.runQuality ? 5 : 0))"></span>
+                                    soniya oladi.
+                                    Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * ((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 4 : 0)) / 60) + ' daqiqa'"></strong>.
+                                </div>
+                            </template>
+
+                            <div class="text-xs text-gray-500">
+                                Natija avtomat bazaga saqlanadi. Tahlil chog'ida oynani yopmang.
+                            </div>
+                            <div class="flex justify-end gap-2 pt-2">
+                                <button type="button" @click="bulk.open = false"
+                                        class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
+                                    Bekor qilish
+                                </button>
+                                <button type="button" @click="runBulk()"
+                                        :disabled="bulk.total === 0 || (!bulk.runSimilarity && !bulk.runQuality)"
+                                        class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Boshlash
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </template>
 

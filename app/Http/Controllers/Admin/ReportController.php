@@ -92,6 +92,8 @@ class ReportController extends Controller
      */
     public function jnReportData(Request $request)
     {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(180);
         try {
         // Dekan uchun fakultet majburiy filtr
         $dekanFacultyIds = get_dekan_faculty_ids();
@@ -137,26 +139,33 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.lesson_date', '<=', $dateTo);
         }
 
-        $scheduleRows = $scheduleQuery->get();
-
-        if ($scheduleRows->isEmpty()) {
-            return response()->json(['data' => [], 'total' => 0]);
-        }
-
-        // Schedule ma'lumotlarini tayyorlash: columns, minDates
+        // Schedule ma'lumotlarini tayyorlash: columns, minDates (memory-efficient cursor)
         $columns = [];    // [combo_key][date_pair] = true
         $minDates = [];   // [combo_key] = eng kichik sana
+        $scheduleGroupIds = [];
+        $scheduleSubjectIds = [];
+        $scheduleSemesterCodes = [];
+        $hasAny = false;
 
-        foreach ($scheduleRows as $row) {
+        foreach ($scheduleQuery->cursor() as $row) {
+            $hasAny = true;
             $dateKey = substr($row->lesson_date, 0, 10);
             $comboKey = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
             $datePairKey = $dateKey . '_' . $row->lesson_pair_code;
+
+            $scheduleGroupIds[$row->group_id] = true;
+            $scheduleSubjectIds[$row->subject_id] = true;
+            $scheduleSemesterCodes[$row->semester_code] = true;
 
             $columns[$comboKey][$datePairKey] = true;
 
             if (!isset($minDates[$comboKey]) || $dateKey < $minDates[$comboKey]) {
                 $minDates[$comboKey] = $dateKey;
             }
+        }
+
+        if (!$hasAny) {
+            return response()->json(['data' => [], 'total' => 0]);
         }
 
         // 2-QADAM: Talabalar ro'yxatini tayyorlash (filtrlar bilan)
@@ -200,8 +209,8 @@ class ReportController extends Controller
                 ->toArray();
         }
 
-        $scheduleGroupIds = $scheduleRows->pluck('group_id')->unique()->toArray();
-        $studentQuery->whereIn('s.group_id', $scheduleGroupIds);
+        $scheduleGroupIdsList = array_keys($scheduleGroupIds);
+        $studentQuery->whereIn('s.group_id', $scheduleGroupIdsList);
         $students = $studentQuery->get();
 
         if ($students->isEmpty()) {
@@ -214,8 +223,8 @@ class ReportController extends Controller
         }
         $studentHemisIds = array_keys($studentGroupMap);
 
-        $validSubjectIds = $scheduleRows->pluck('subject_id')->unique()->toArray();
-        $validSemesterCodes = $scheduleRows->pluck('semester_code')->unique()->toArray();
+        $validSubjectIds = array_keys($scheduleSubjectIds);
+        $validSemesterCodes = array_keys($scheduleSemesterCodes);
 
         if ($allowedSubjectIds !== null) {
             $validSubjectIds = array_intersect($validSubjectIds, $allowedSubjectIds);
@@ -244,8 +253,6 @@ class ReportController extends Controller
             $gradesQuery->where('lesson_date', '<=', $dateTo);
         }
 
-        $gradesRaw = $gradesQuery->get();
-
         // 4-QADAM: Jurnal formulasi bo'yicha hisoblash
         // a) Baho date_pair larini columns ga birlashtirish (jurnal kabi fallback)
         // b) Baholarni kun bo'yicha guruhlash
@@ -254,7 +261,7 @@ class ReportController extends Controller
         $gradesByDay = [];      // [student|subject|date] => [grade1, ...]
         $studentSubjects = [];  // [student|subject] => info
 
-        foreach ($gradesRaw as $g) {
+        foreach ($gradesQuery->cursor() as $g) {
             $groupId = $studentGroupMap[$g->student_hemis_id] ?? null;
             if (!$groupId) continue;
 

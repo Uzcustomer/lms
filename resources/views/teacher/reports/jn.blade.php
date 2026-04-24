@@ -26,6 +26,13 @@
                                 <option value="no_grade" {{ request('filter') == 'no_grade' ? 'selected' : '' }}>Bahosiz</option>
                             </select>
                         </div>
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch {{ request('current_semester', '1') == '1' ? 'active' : '' }}" id="current-semester-toggle" onclick="this.classList.toggle('active')">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Joriy semestr</span>
+                            </div>
+                        </div>
                         <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label">&nbsp;</label>
                             <button type="button" class="btn-calc" onclick="applyFilter()">
@@ -46,6 +53,7 @@
                         <tr>
                             <th class="th-num">#</th>
                             <th>Guruh</th>
+                            <th>Semestr</th>
                             <th>Fan</th>
                             <th>Talaba FISH</th>
                             <th style="text-align:center;">O'rtacha baho</th>
@@ -57,6 +65,7 @@
                             <tr>
                                 <td class="td-num">{{ $i + 1 }}</td>
                                 <td><span class="badge badge-indigo">{{ $row['group_name'] }}</span></td>
+                                <td><span class="badge badge-teal">{{ $row['semester_name'] ?? '-' }}</span></td>
                                 <td><span class="text-cell text-subject">{{ $row['subject_name'] }}</span></td>
                                 <td><span class="text-cell" style="font-weight:700;color:#0f172a;">{{ $row['student_name'] }}</span></td>
                                 <td style="text-align:center;">
@@ -71,7 +80,7 @@
                                 <td style="text-align:center;font-weight:600;color:#475569;">{{ $row['grade_count'] }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3b8;font-size:14px;">Ma'lumot topilmadi</td></tr>
+                            <tr><td colspan="7" style="padding:40px;text-align:center;color:#94a3b8;font-size:14px;">Ma'lumot topilmadi</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -85,9 +94,11 @@
         function applyFilter() {
             var group = document.getElementById('group-select').value;
             var filter = document.getElementById('filter-select').value;
+            var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
             var params = [];
             if (group) params.push('group=' + encodeURIComponent(group));
             if (filter) params.push('filter=' + encodeURIComponent(filter));
+            if (cs === '0') params.push('current_semester=0');
             window.location.href = '{{ route("teacher.reports.jn") }}' + (params.length ? '?' + params.join('&') : '');
         }
     </script>

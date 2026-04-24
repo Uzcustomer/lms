@@ -282,14 +282,28 @@ def quality_check(req: QualityRequest):
         fsz = _check_face_size(bbox, w, h)
         if fsz:
             fh = fsz["face_h_ratio"]
-            if fh < 0.15:
-                issues.append(f"Yuz juda kichik (balandlikning {fh*100:.0f}% ni egallaydi)")
-                points -= 12
-            elif fh > 0.55:
-                issues.append(f"Yuz juda yaqin (balandlikning {fh*100:.0f}% ni egallaydi)")
+            if fh < 0.22:
+                issues.append(f"Yuz juda kichik — rasm tanani ortiqcha ko'rsatadi (yuz balandlikning {fh*100:.0f}%ni egallaydi; to'g'ri portretda 35–55% kerak)")
+                points -= 18
+            elif fh < 0.32:
+                issues.append(f"Framing keng — yelkalargacha qisqartiring (yuz balandlikning {fh*100:.0f}%ni egallaydi)")
+                points -= 10
+            elif fh > 0.60:
+                issues.append(f"Yuz juda yaqin (balandlikning {fh*100:.0f}%ni egallaydi)")
                 points -= 10
             else:
                 ok.append(f"Yuz hajmi mos ({fh*100:.0f}%)")
+
+        # Ramka pastki chegarasi — yuz ostida qancha joy bor?
+        fx, fy, fw, fh_px = bbox
+        face_bottom = fy + fh_px
+        face_bottom_ratio = face_bottom / h
+        if face_bottom_ratio < 0.50:
+            issues.append(f"Rasm tirsakdan pastgacha tushgan — yuz ostida tananing {(1-face_bottom_ratio)*100:.0f}%i qolgan; tepa qismidan (yelkadan yuqori) olib qisqartiring")
+            points -= 20
+        elif face_bottom_ratio < 0.60:
+            issues.append(f"Rasm biroz uzunroq — yuz ostida ortiqcha gavda ({(1-face_bottom_ratio)*100:.0f}%); yelkalarga qadar qisqartirish tavsiya etiladi")
+            points -= 10
 
     # ─── Oq xalat
     wc = _check_white_coat(img_bgr, bbox)

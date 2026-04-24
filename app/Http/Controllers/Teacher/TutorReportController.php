@@ -19,16 +19,39 @@ class TutorReportController extends Controller
     private function getTutorGroupIds()
     {
         $teacher = auth()->guard('teacher')->user();
-        return $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        $groupIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+
+        if (empty($groupIds)) {
+            $groupIds = DB::table('schedules')
+                ->where('employee_id', $teacher->hemis_id)
+                ->whereNotNull('group_id')
+                ->distinct()
+                ->pluck('group_id')
+                ->toArray();
+        }
+
+        return $groupIds;
     }
 
-    /**
-     * Tyutor guruhlarini olish (filtr uchun)
-     */
     private function getTutorGroups()
     {
         $teacher = auth()->guard('teacher')->user();
-        return $teacher->groups()->where('active', true)->orderBy('name')->get();
+        $groups = $teacher->groups()->where('active', true)->orderBy('name')->get();
+
+        if ($groups->isEmpty()) {
+            $groupHemisIds = DB::table('schedules')
+                ->where('employee_id', $teacher->hemis_id)
+                ->whereNotNull('group_id')
+                ->distinct()
+                ->pluck('group_id')
+                ->toArray();
+            $groups = \App\Models\Group::whereIn('group_hemis_id', $groupHemisIds)
+                ->where('active', true)
+                ->orderBy('name')
+                ->get();
+        }
+
+        return $groups;
     }
 
     /**
@@ -38,7 +61,7 @@ class TutorReportController extends Controller
     {
         $groupIds = $this->getTutorGroupIds();
         if (empty($groupIds)) {
-            abort(403, 'Sizga biriktirilgan guruhlar yo\'q.');
+            return [];
         }
         if ($request->filled('group')) {
             $selected = $request->group;

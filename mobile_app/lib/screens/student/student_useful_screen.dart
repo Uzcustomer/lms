@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../../providers/student_provider.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'attendance_stats_screen.dart';
@@ -16,157 +18,246 @@ class StudentUsefulScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppTheme.darkBackground : const Color(0xFFF0F4F8);
+    final bg = isDark ? AppTheme.darkBackground : const Color(0xFFF5F5F5);
     final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final statusBarH = MediaQuery.of(context).padding.top;
+
+    final provider = context.watch<StudentProvider>();
+    final fullName = provider.profile?['full_name']?.toString() ?? '';
+    final firstName = fullName.split(' ').length > 1
+        ? fullName.split(' ')[1]
+        : fullName.split(' ').first;
 
     final services = [
       _ServiceCard(
-        icon: Icons.fact_check_outlined,
-        title: 'Elektron xizmatlar',
-        subtitle: 'Sababli ariza va boshqa xizmatlar',
-        gradient: const [Color(0xFF4A6CF7), Color(0xFF6C63FF)],
-        screen: const StudentServicesScreen(),
-      ),
-      _ServiceCard(
-        icon: Icons.event_note_rounded,
-        title: 'Imtihon sanalari',
-        subtitle: 'OSKI va Test kunlari',
-        gradient: const [Color(0xFFE53935), Color(0xFFFF5252)],
-        screen: const ExamScheduleScreen(),
+        icon: Icons.calculate_outlined,
+        title: 'GPA Kalkulyator',
+        subtitle: 'GPA hisoblash va prognoz',
+        color: const Color(0xFF00897B),
+        screen: const GpaCalculatorScreen(),
       ),
       _ServiceCard(
         icon: Icons.bar_chart_rounded,
         title: 'Davomat statistikasi',
         subtitle: 'Davomat va baholar jadvali',
-        gradient: const [Color(0xFF43A047), Color(0xFF66BB6A)],
+        color: const Color(0xFF43A047),
         screen: const AttendanceStatsScreen(),
-      ),
-      _ServiceCard(
-        icon: Icons.calculate_outlined,
-        title: 'GPA Kalkulyator',
-        subtitle: 'GPA hisoblash va prognoz',
-        gradient: const [Color(0xFF00897B), Color(0xFF26A69A)],
-        screen: const GpaCalculatorScreen(),
       ),
       _ServiceCard(
         icon: Icons.leaderboard_rounded,
         title: 'Talabalar reytingi',
         subtitle: 'Guruh va yo\'nalish reytingi',
-        gradient: const [Color(0xFF7C4DFF), Color(0xFF9575CD)],
+        color: const Color(0xFF7C4DFF),
         screen: const StudentRatingScreen(),
       ),
       _ServiceCard(
         icon: Icons.chat_rounded,
         title: 'Guruh chati',
         subtitle: 'Guruh a\'zolari bilan yozishing',
-        gradient: const [Color(0xFF0097A7), Color(0xFF00BCD4)],
+        color: const Color(0xFF0097A7),
         screen: const ChatContactsScreen(),
+      ),
+      _ServiceCard(
+        icon: Icons.fact_check_outlined,
+        title: 'Elektron xizmatlar',
+        subtitle: 'Sababli ariza va boshqa xizmatlar',
+        color: const Color(0xFF4A6CF7),
+        screen: const StudentServicesScreen(),
       ),
       _ServiceCard(
         icon: Icons.library_books_outlined,
         title: 'Kutubxona',
         subtitle: 'Elektron darsliklar',
-        gradient: const [Color(0xFFE65100), Color(0xFFFF6D00)],
+        color: const Color(0xFFE65100),
         screen: const LibraryWebViewScreen(),
       ),
     ];
 
     return Scaffold(
       backgroundColor: bg,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 120,
-            floating: false,
-            pinned: true,
-            automaticallyImplyLeading: false,
-            backgroundColor: AppTheme.primaryLight,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 20, bottom: 14),
-              title: Row(
-                mainAxisSize: MainAxisSize.min,
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: statusBarH + 12),
+
+            // Header: greeting + search
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
                 children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Salom, $firstName 👋',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: sub,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          l.useful,
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: txt,
+                          ),
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.apps_rounded,
-                        color: Colors.white, size: 16),
                   ),
-                  const SizedBox(width: 10),
-                  Text(
-                    l.useful,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkCard : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: isDark
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                     ),
+                    child: Icon(Icons.search_rounded, color: sub, size: 22),
                   ),
                 ],
               ),
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.primaryLight,
-                      Color(0xFF1A237E),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Featured banner — Imtihon sanalari
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ExamScheduleScreen()),
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFE53935), Color(0xFFFF7043)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFE53935).withOpacity(0.3),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Icon(
+                          Icons.calendar_month_rounded,
+                          size: 64,
+                          color: Colors.white.withOpacity(0.2),
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'ENG MUHIM',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Imtihon sanalari',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'OSKI va Test kunlari',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.85),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              'Kirish',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFE53935),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: -20,
-                      top: -20,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 40,
-                      bottom: -30,
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.04),
-                        ),
-                      ),
-                    ),
-                  ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Services grid
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.95,
                 ),
+                itemCount: services.length,
+                itemBuilder: (_, i) =>
+                    _buildCard(context, services[i], isDark, txt, sub),
               ),
             ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(14, 16, 14, 100),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1.7,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildCard(
-                    context, services[index], isDark, txt, sub),
-                childCount: services.length,
-              ),
-            ),
-          ),
-        ],
+
+            const SizedBox(height: 100),
+          ],
+        ),
       ),
     );
   }
@@ -177,79 +268,49 @@ class StudentUsefulScreen extends StatelessWidget {
 
     return Material(
       color: cardBg,
-      borderRadius: BorderRadius.circular(14),
-      elevation: isDark ? 0 : 1.5,
-      shadowColor: item.gradient[0].withOpacity(0.12),
+      borderRadius: BorderRadius.circular(16),
+      elevation: isDark ? 0 : 1,
+      shadowColor: Colors.black.withOpacity(0.08),
       child: InkWell(
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => item.screen),
         ),
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark
-                  ? item.gradient[0].withOpacity(0.15)
-                  : item.gradient[0].withOpacity(0.08),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: item.gradient,
-                  ),
-                  borderRadius: BorderRadius.circular(11),
-                  boxShadow: [
-                    BoxShadow(
-                      color: item.gradient[0].withOpacity(0.25),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: item.color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(item.icon, color: Colors.white, size: 19),
+                child: Icon(item.icon, color: item.color, size: 24),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                        color: txt,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      item.subtitle,
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        color: sub,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+              const Spacer(),
+              Text(
+                item.title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: txt,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 12,
-                color: sub.withOpacity(0.5),
+              const SizedBox(height: 3),
+              Text(
+                item.subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: sub,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -263,14 +324,14 @@ class _ServiceCard {
   final IconData icon;
   final String title;
   final String subtitle;
-  final List<Color> gradient;
+  final Color color;
   final Widget screen;
 
   const _ServiceCard({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.gradient,
+    required this.color,
     required this.screen,
   });
 }

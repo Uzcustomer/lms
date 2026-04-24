@@ -113,14 +113,20 @@ class ReportController extends Controller
             ->whereNotNull('sch.lesson_date')
             ->select('sch.group_id', 'sch.subject_id', 'sch.semester_code', 'sch.lesson_date', 'sch.lesson_pair_code');
 
-        if ($request->get('current_semester', '1') == '1') {
+        $needsJoin = $request->get('current_semester', '1') == '1' || $request->filled('level_code');
+        if ($needsJoin) {
             $scheduleQuery
                 ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
                 ->join('semesters as sem', function ($join) {
                     $join->on('sem.code', '=', 'sch.semester_code')
                         ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
-                })
-                ->where('sem.current', true);
+                });
+            if ($request->get('current_semester', '1') == '1') {
+                $scheduleQuery->where('sem.current', true);
+            }
+            if ($request->filled('level_code')) {
+                $scheduleQuery->where('sem.level_code', $request->level_code);
+            }
         }
 
         if ($request->filled('semester_code')) {
@@ -129,6 +135,14 @@ class ReportController extends Controller
 
         if ($request->filled('subject')) {
             $scheduleQuery->where('sch.subject_id', $request->subject);
+        }
+
+        if ($request->filled('group')) {
+            // group param — Group.id, convert to group_hemis_id
+            $groupHemisId = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+            if ($groupHemisId) {
+                $scheduleQuery->where('sch.group_id', $groupHemisId);
+            }
         }
 
         // Sana oralig'i bo'yicha dars jadvalini filtrlash
@@ -184,7 +198,10 @@ class ReportController extends Controller
             $studentQuery->where('s.level_code', $request->level_code);
         }
         if ($request->filled('group')) {
-            $studentQuery->where('s.group_id', $request->group);
+            $groupHemisIdForStudents = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+            if ($groupHemisIdForStudents) {
+                $studentQuery->where('s.group_id', $groupHemisIdForStudents);
+            }
         }
 
         $selectedEducationType = $request->get('education_type');
@@ -3801,7 +3818,10 @@ class ReportController extends Controller
             $studentQuery->where('s.level_code', $request->level_code);
         }
         if ($request->filled('group')) {
-            $studentQuery->where('s.group_id', $request->group);
+            $groupHemisIdForStudents = DB::table('groups')->where('id', $request->group)->value('group_hemis_id');
+            if ($groupHemisIdForStudents) {
+                $studentQuery->where('s.group_id', $groupHemisIdForStudents);
+            }
         }
 
         $selectedEducationType = $request->get('education_type');

@@ -124,8 +124,8 @@ class TutorReportController extends Controller
             }
 
             $scheduleQuery = $scheduleQuery
-                ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
-                ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
+                ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code', 'sch.semester_name')
+                ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code', 'sch.semester_name')
                 ->get();
 
             if ($scheduleQuery->isEmpty()) {
@@ -147,14 +147,14 @@ class TutorReportController extends Controller
                 ->whereIn('semester_code', $validSemesterCodes)
                 ->whereNotIn('training_type_code', $excludedCodes)
                 ->whereNotNull('lesson_date')
-                ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason',
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade', 'status', 'reason',
                     'lesson_date', 'lesson_pair_code');
 
             foreach ($gradesQuery->cursor() as $g) {
                 $effectiveGrade = $this->getEffectiveGradeForJn($g);
                 if ($effectiveGrade === null) continue;
 
-                $key = $g->student_hemis_id . '|' . $g->subject_id;
+                $key = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
                 $date = substr($g->lesson_date, 0, 10);
                 $gradeMap[$key][$date][] = $effectiveGrade;
             }
@@ -172,7 +172,7 @@ class TutorReportController extends Controller
                 $groupStudents = $students->where('group_id', $combo->group_id);
 
                 foreach ($groupStudents as $student) {
-                    $key = $student->hemis_id . '|' . $combo->subject_id;
+                    $key = $student->hemis_id . '|' . $combo->subject_id . '|' . $combo->semester_code;
                     $dailyGrades = $gradeMap[$key] ?? [];
 
                     if (empty($dailyGrades)) {
@@ -187,6 +187,8 @@ class TutorReportController extends Controller
 
                     $results[] = [
                         'group_name' => $groupName,
+                        'semester_name' => $combo->semester_name,
+                        'semester_code' => $combo->semester_code,
                         'subject_name' => $combo->subject_name,
                         'student_name' => $student->full_name,
                         'student_id' => $student->student_id_number,
@@ -205,6 +207,8 @@ class TutorReportController extends Controller
 
             usort($results, function ($a, $b) {
                 $cmp = strcmp($a['group_name'], $b['group_name']);
+                if ($cmp !== 0) return $cmp;
+                $cmp = ((int) $b['semester_code']) <=> ((int) $a['semester_code']);
                 if ($cmp !== 0) return $cmp;
                 $cmp = strcmp($a['subject_name'], $b['subject_name']);
                 if ($cmp !== 0) return $cmp;

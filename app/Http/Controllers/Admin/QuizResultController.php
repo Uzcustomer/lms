@@ -1935,17 +1935,24 @@ class QuizResultController extends Controller
             $updates = null;
 
             if ($isNb) {
-                // NB scenario: sababli/sababsiz aniqlash
-                // Sababli (yashil NB): tasdiqlangan AbsenceExcuse bor → retake × 1.0
-                // Sababsiz (qizil NB): retake × 0.8
-                $isSababli = \App\Models\AbsenceExcuse::where('status', 'approved')
+                // NB scenario: sababli/sababsiz aniqlash (HEMIS davomat orqali, jurnal bilan bir xil)
+                // absent_on > 0 — sababli (yashil/ko'k NB) → retake × 1.0
+                // absent_on = 0 — sababsiz (qizil NB) → retake × 0.8
+                $isSababli = DB::table('attendances')
                     ->where('student_hemis_id', $student->hemis_id)
-                    ->whereDate('start_date', '<=', $targetDate)
-                    ->whereDate('end_date', '>=', $targetDate)
-                    ->whereHas('makeups', function ($q) use ($targetFanId) {
-                        $q->where('subject_id', $targetFanId);
-                    })
+                    ->where('subject_id', $targetFanId)
+                    ->whereDate('lesson_date', $targetDate)
+                    ->where('lesson_pair_code', $sg->lesson_pair_code)
+                    ->where('absent_on', '>', 0)
                     ->exists();
+
+                if (!$isSababli) {
+                    $isSababli = \App\Models\AbsenceExcuse::where('status', 'approved')
+                        ->where('student_hemis_id', $student->hemis_id)
+                        ->whereDate('start_date', '<=', $targetDate)
+                        ->whereDate('end_date', '>=', $targetDate)
+                        ->exists();
+                }
 
                 $multiplier = $isSababli ? 1.0 : 0.8;
                 $retakeValue = round($moodleGrade * $multiplier, 2);

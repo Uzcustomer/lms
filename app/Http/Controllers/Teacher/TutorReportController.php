@@ -89,46 +89,6 @@ class TutorReportController extends Controller
         return null;
     }
 
-    public function journalView()
-    {
-        $groups = $this->getTutorGroups();
-        return view('teacher.journal-view', compact('groups'));
-    }
-
-    public function journalViewSubjects(Request $request)
-    {
-        $request->validate(['group_id' => 'required']);
-        $groupHemisId = $request->group_id;
-
-        $allowedGroupIds = $this->getTutorGroupIds();
-        if (!in_array($groupHemisId, $allowedGroupIds)) {
-            return response()->json([], 403);
-        }
-
-        $group = \App\Models\Group::where('group_hemis_id', $groupHemisId)->first();
-        if (!$group) {
-            return response()->json([]);
-        }
-
-        $subjects = DB::table('curriculum_subjects as cs')
-            ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-            ->join('semesters as s', function ($join) {
-                $join->on('s.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                    ->on('s.code', '=', 'cs.semester_code');
-            })
-            ->where('c.curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('s.current', true)
-            ->select('cs.subject_id', 'cs.subject_name', 'cs.semester_code', 'cs.semester_name')
-            ->groupBy('cs.subject_id', 'cs.subject_name', 'cs.semester_code', 'cs.semester_name')
-            ->orderBy('cs.subject_name')
-            ->get();
-
-        return response()->json([
-            'group_db_id' => $group->id,
-            'subjects' => $subjects,
-        ]);
-    }
-
     /**
      * JN o'zlashtirish hisoboti (admin mantiqi bilan)
      */

@@ -154,7 +154,7 @@
                                 $studentPhoto = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
                             @endphp
                             <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}"
-                                 onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }})"
+                                 onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }}, {{ json_encode($studentPhoto->status ?? '') }}, {{ json_encode($studentPhoto->rejection_reason ?? '') }})"
                                  style="cursor:pointer;">
                                 <div style="font-size:10px;color:#b0b8c4;width:16px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
                                 @if($student->image)
@@ -169,8 +169,17 @@
                                         {{ $student->province_name ?? '' }}{{ $student->phone ? ' · ' . $student->phone : '' }}
                                     </div>
                                 </div>
-                                <div class="student-right">
-                                    @if($studentPhoto)
+                                <div class="student-right" style="text-align:right;">
+                                    @if($studentPhoto && $studentPhoto->status === 'rejected')
+                                        <span class="student-status" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;">Rad etildi</span>
+                                        @if($studentPhoto->rejection_reason)
+                                            <div style="font-size:10px;color:#991b1b;max-width:160px;margin-top:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
+                                        @endif
+                                    @elseif($studentPhoto && $studentPhoto->status === 'approved')
+                                        <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
+                                    @elseif($studentPhoto && $studentPhoto->status === 'pending')
+                                        <span class="student-status" style="background:#dbeafe;color:#1e40af;">Kutilmoqda</span>
+                                    @elseif($studentPhoto)
                                         <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                     @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Faol</span>
@@ -235,6 +244,10 @@
                     </div>
                     {{-- Tushirilgan rasm --}}
                     <img id="modal-photo-img" style="max-width:100%;max-height:70vh;width:auto;height:auto;object-fit:contain;display:none;z-index:1;" alt="">
+                </div>
+                <div id="modal-rejection-banner" style="display:none;margin-top:10px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;text-align:left;">
+                    <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:3px;">Rad etildi</div>
+                    <div id="modal-rejection-reason" style="font-size:12px;color:#991b1b;"></div>
                 </div>
             </div>
             <div style="padding:0 20px 20px;">
@@ -406,7 +419,7 @@
             form.submit();
         }
 
-        function openPhotoModal(studentId, name, idNumber, groupName, photoUrl) {
+        function openPhotoModal(studentId, name, idNumber, groupName, photoUrl, photoStatus, rejectionReason) {
             currentStudentId = studentId;
             currentBlob = null;
             uploadActionUrl = '/teacher/students/' + studentId + '/upload-photo';
@@ -416,8 +429,16 @@
             var img = document.getElementById('modal-photo-img');
             var noPhoto = document.getElementById('modal-no-photo');
             var frame = document.getElementById('modal-photo-frame');
+            var rejBanner = document.getElementById('modal-rejection-banner');
 
             document.getElementById('photo-retake-btn').style.display = 'none';
+
+            if (photoStatus === 'rejected' && rejectionReason) {
+                rejBanner.style.display = 'block';
+                document.getElementById('modal-rejection-reason').textContent = 'Sabab: ' + rejectionReason;
+            } else {
+                rejBanner.style.display = 'none';
+            }
 
             if (photoUrl) {
                 img.src = photoUrl;

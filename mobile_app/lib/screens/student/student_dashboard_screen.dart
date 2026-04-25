@@ -205,7 +205,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   end: Alignment.bottomRight,
                   colors: isDark
                       ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF3C1053)]
-                      : const [Color(0xFFFFF0E6), Color(0xFFFFD6E8), Color(0xFFE8D5F5)],
+                      : const [Color(0xFFFFF8F0), Color(0xFFFFF3E0), Color(0xFFFFECCC), Color(0xFFFFF3E0), Color(0xFFFFF8F0)],
                 ),
               ),
               child: const LoadingWidget(),
@@ -244,7 +244,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
                 colors: isDark
                     ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF150638), Color(0xFF0D0221)]
-                    : const [Color(0xFFFFF0E6), Color(0xFFFFD6E8), Color(0xFFE8D5F5), Color(0xFFD4E4FF), Color(0xFFFFF0E6)],
+                    : const [Color(0xFFFFF8F0), Color(0xFFFFF3E0), Color(0xFFFFECCC), Color(0xFFFFF3E0), Color(0xFFFFF8F0)],
               ),
             ),
             child: RefreshIndicator(

@@ -337,6 +337,10 @@
                                             <input type="checkbox" id="colFilterAll_reg_end" onchange="toggleAllColItems('reg_end', this.checked)"> <span>Barchasini tanlash</span>
                                         </label>
                                         <div class="col-filter-list" id="colFilterList_reg_end">
+                                            <label class="col-filter-item col-filter-empty-opt" data-text="kiritilmagan bo'sh empty">
+                                                <input type="checkbox" form="filterForm" name="registration_end_dates[]" value="__empty__" {{ in_array('__empty__', $selectedRegDates, true) ? 'checked' : '' }} class="col-filter-cb-reg_end">
+                                                <span><em>(Kiritilmagan)</em></span>
+                                            </label>
                                             @foreach($regEndDates as $d)
                                                 @php $val = \Illuminate\Support\Carbon::parse($d)->format('Y-m-d'); @endphp
                                                 <label class="col-filter-item" data-text="{{ \Illuminate\Support\Carbon::parse($d)->format('d.m.Y') }}">
@@ -368,6 +372,10 @@
                                             <input type="checkbox" id="colFilterAll_visa_end" onchange="toggleAllColItems('visa_end', this.checked)"> <span>Barchasini tanlash</span>
                                         </label>
                                         <div class="col-filter-list" id="colFilterList_visa_end">
+                                            <label class="col-filter-item col-filter-empty-opt" data-text="kiritilmagan bo'sh empty">
+                                                <input type="checkbox" form="filterForm" name="visa_end_dates[]" value="__empty__" {{ in_array('__empty__', $selectedVisaDates, true) ? 'checked' : '' }} class="col-filter-cb-visa_end">
+                                                <span><em>(Kiritilmagan)</em></span>
+                                            </label>
                                             @foreach($visaEndDates as $d)
                                                 @php $val = \Illuminate\Support\Carbon::parse($d)->format('Y-m-d'); @endphp
                                                 <label class="col-filter-item" data-text="{{ \Illuminate\Support\Carbon::parse($d)->format('d.m.Y') }}">
@@ -672,6 +680,9 @@
     .col-filter-item input[type="checkbox"] { accent-color:#2b5ea7; cursor:pointer; margin:0; }
     .col-filter-all { border-bottom:1px solid #e2e8f0; background:#fafbfc; font-weight:600; color:#1e293b; }
     .col-filter-empty { padding:12px; text-align:center; color:#94a3b8; font-size:12px; }
+    .col-filter-empty-opt { background:#fffbeb; border-bottom:1px dashed #fde68a; color:#92400e; }
+    .col-filter-empty-opt:hover { background:#fef3c7; }
+    .col-filter-empty-opt em { font-style:italic; }
     .col-filter-actions { display:flex; gap:6px; padding:8px; border-top:1px solid #e2e8f0; background:#f8fafc; }
     .col-filter-clear-btn, .col-filter-apply-btn { flex:1; height:30px; border:1px solid; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; }
     .col-filter-clear-btn { background:#fff; color:#64748b; border-color:#cbd5e1; }

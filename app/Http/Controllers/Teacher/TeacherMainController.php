@@ -17,7 +17,6 @@ use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
-use App\Models\TeacherDashboardSnapshot;
 use App\Models\TutorHistory;
 use App\Services\StudentGradeService;
 use Illuminate\Support\Facades\Schema;
@@ -39,57 +38,7 @@ class TeacherMainController extends Controller
     }
     public function index()
     {
-        $teacher = auth()->guard('teacher')->user();
-        $userRoles = $teacher->getRoleNames()->toArray();
-        $activeRole = session('active_role', $userRoles[0] ?? '');
-        if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
-            $activeRole = $userRoles[0];
-        }
-
-        // Dashboard ma'lumoti kunlik snapshotdan o'qiladi (teachers:build-dashboard-snapshots).
-        // Snapshot har kuni 05:00 da hisoblanadi, dashboardda kechagi kun holati ko'rsatiladi.
-        [$tutorStats, $gradingTimeStats, $workloadStats, $subjectStudents, $snapshotGeneratedAt] = $this->loadDashboardSnapshot($teacher);
-
-        return view('teacher.dashboard', compact(
-            'tutorStats', 'gradingTimeStats', 'workloadStats', 'subjectStudents', 'snapshotGeneratedAt'
-        ));
-    }
-
-    private function loadDashboardSnapshot($teacher): array
-    {
-        if (!$teacher || !$teacher->hemis_id) {
-            return [null, null, null, null, null];
-        }
-
-        $teacherSnapshot = TeacherDashboardSnapshot::forTeacher((string) $teacher->hemis_id);
-        $globalSnapshot = TeacherDashboardSnapshot::global();
-
-        $payload = $teacherSnapshot ? ($teacherSnapshot->payload ?? []) : [];
-        $tutorStats = $payload['tutor'] ?? null;
-        $gradingPerTeacher = $payload['grading'] ?? null;
-        $workloadStats = $payload['workload'] ?? null;
-        $subjectStudents = $payload['subjects'] ?? null;
-
-        $gradingTimeStats = null;
-        if ($gradingPerTeacher && $globalSnapshot) {
-            $topList = $globalSnapshot->payload['top_list'] ?? [];
-            $myHemisId = (string) $teacher->hemis_id;
-            foreach ($topList as &$row) {
-                $row['is_me'] = (string) ($row['hemis_id'] ?? '') === $myHemisId;
-            }
-            unset($row);
-
-            $gradingTimeStats = array_merge($gradingPerTeacher, [
-                'total_teachers' => $globalSnapshot->payload['total_teachers'] ?? 0,
-                'top_list' => $topList,
-            ]);
-        }
-
-        $generatedAt = $teacherSnapshot?->generated_at
-            ?? $globalSnapshot?->generated_at
-            ?? null;
-
-        return [$tutorStats, $gradingTimeStats, $workloadStats, $subjectStudents, $generatedAt];
+        return view('teacher.dashboard');
     }
 
     public function info()

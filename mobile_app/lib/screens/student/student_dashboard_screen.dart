@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:ui';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
@@ -194,11 +195,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
-            return const LoadingWidget();
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF3C1053)]
+                      : const [Color(0xFFFFB88C), Color(0xFFDE8AA0), Color(0xFFA890CA)],
+                ),
+              ),
+              child: const LoadingWidget(),
+            );
           }
 
           final data = provider.dashboard;
@@ -225,41 +236,75 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              await Future.wait([
-                provider.loadDashboard(),
-                provider.loadProfile(),
-                provider.loadContract(),
-                provider.loadSubjects(),
-              ]);
-              _loadTodaySchedule();
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
-                  _buildProfileHeader(context, data, profile, l, isDark),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildLiveClassCard(),
-                        _buildGpaRow(data, profile, l),
-                        const SizedBox(height: 16),
-                        _buildSubjectsOverview(provider.subjects, isDark, l),
-                        _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
-                        const SizedBox(height: 100),
-                      ],
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: isDark
+                    ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF0D0221)]
+                    : const [Color(0xFFFFB88C), Color(0xFFDE8AA0), Color(0xFFA890CA), Color(0xFFEDE7F6)],
+              ),
+            ),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await Future.wait([
+                  provider.loadDashboard(),
+                  provider.loadProfile(),
+                  provider.loadContract(),
+                  provider.loadSubjects(),
+                ]);
+                _loadTodaySchedule();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildProfileHeader(context, data, profile, l, isDark),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLiveClassCard(),
+                          _buildGpaRow(data, profile, l),
+                          const SizedBox(height: 16),
+                          _buildSubjectsOverview(provider.subjects, isDark, l),
+                          _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
+                          const SizedBox(height: 100),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withOpacity(0.08)
+                : Colors.white.withOpacity(0.65),
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.12)
+                  : Colors.white.withOpacity(0.8),
+            ),
+          ),
+          child: child,
+        ),
       ),
     );
   }
@@ -276,224 +321,240 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         '';
     final studentId = profile?['student_id_number']?.toString() ?? '';
     final faculty = profile?['department_name']?.toString() ?? '';
-    final specialty = profile?['specialty_name']?.toString() ?? '';
     final imageUrl = _buildImageUrl(profile?['image']?.toString());
-    // Use calculated course from backend (not level_code)
     final course = profile?['course']?.toString() ?? '';
     final yearOfEnter = profile?['year_of_enter']?.toString() ?? '';
     final educationYear = profile?['education_year_name']?.toString() ?? '';
     final semesterName = profile?['semester_name']?.toString() ?? '';
+    final paymentFormName = profile?['payment_form_name']?.toString() ?? '';
 
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
-    return Stack(
+    return Column(
       children: [
-        Container(
-          width: double.infinity,
+        // Top bar
+        Padding(
           padding: EdgeInsets.only(
-            top: statusBarHeight + 12,
-            bottom: 200,
+            top: statusBarHeight + 8,
+            left: 16,
+            right: 8,
           ),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.primaryColor,
-                Color(0xFF1A237E),
-              ],
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-          ),
-          child: Stack(
+          child: Row(
             children: [
-              Positioned(
-                right: -40,
-                top: -40,
-                child: Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        Colors.white.withOpacity(0.12),
-                        Colors.white.withOpacity(0.04),
-                        Colors.white.withOpacity(0.0),
-                      ],
-                      stops: const [0.0, 0.5, 1.0],
-                    ),
-                  ),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.home_rounded,
+                    color: isDark ? Colors.white : const Color(0xFF5C3D2E), size: 20),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                l.appTitle,
+                style: TextStyle(
+                  color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              Positioned(
-                right: -10,
-                top: -10,
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        Colors.white.withOpacity(0.08),
-                        Colors.white.withOpacity(0.0),
-                      ],
-                    ),
-                  ),
-                ),
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.notifications_outlined,
+                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                onPressed: () {},
               ),
-              Positioned(
-                right: 20,
-                top: 10,
-                child: Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.06),
-                  ),
-                ),
+              IconButton(
+                icon: Icon(Icons.settings_outlined,
+                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                onPressed: () => _showSettingsSheet(context),
               ),
-              Column(
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Glass profile card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildGlassCard(
+            isDark: isDark,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
+                  // Photo + name row
+                  Row(
+                    children: [
+                      // Avatar
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark ? Colors.white24 : Colors.white,
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: imageUrl != null && imageUrl.isNotEmpty
+                            ? ClipOval(
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  width: 64,
+                                  height: 64,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.grey[200],
+                                    child: Text(_getInitials(fullName),
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor)),
+                                  ),
+                                  errorWidget: (_, __, ___) => CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.grey[200],
+                                    child: Text(_getInitials(fullName),
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor)),
+                                  ),
+                                ),
+                              )
+                            : CircleAvatar(
+                                radius: 32,
+                                backgroundColor: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : const Color(0xFFE8D5C4),
+                                child: Text(
+                                  _getInitials(fullName),
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Name + ID + badge
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.account_balance, color: Colors.white, size: 28),
-                            const SizedBox(width: 10),
                             Text(
-                              l.appTitle,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
+                              fullName.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: textColor,
+                                letterSpacing: 0.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'ID: $studentId',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: subTextColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF43A047).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                paymentFormName.isNotEmpty
+                                    ? paymentFormName
+                                    : (faculty.isNotEmpty ? faculty : ''),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF43A047),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
-                              onPressed: () {},
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.settings, color: Colors.white, size: 24),
-                              onPressed: () => _showSettingsSheet(context),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _buildProfileAvatar(imageUrl, fullName),
-                ],
-              ),
-            ],
-          ),
-        ),
 
-        // White card
-        Container(
-          width: double.infinity,
-          margin: EdgeInsets.only(
-            top: statusBarHeight + 210,
-            left: 16,
-            right: 16,
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(20),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Text(
-                fullName,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withAlpha(20),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  studentId,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
+                  const SizedBox(height: 14),
+
+                  // Stats row pills
+                  Row(
+                    children: [
+                      _buildStatPill(yearOfEnter.isNotEmpty ? yearOfEnter : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(course.isNotEmpty ? '$course-kurs' : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(semesterName.isNotEmpty ? '$semesterName' : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(educationYear.isNotEmpty ? educationYear : '-', isDark),
+                    ],
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (faculty.isNotEmpty)
-                Text(
-                  faculty,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.warningColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              if (specialty.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  specialty,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: subTextColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 16),
-              Divider(height: 1, color: divColor),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.course, course.isNotEmpty ? '$course-kurs' : '-', subTextColor, AppTheme.successColor),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStatPill(String text, bool isDark) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withOpacity(0.08)
+              : Colors.white.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.white.withOpacity(0.9),
+          ),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
     );
   }
 

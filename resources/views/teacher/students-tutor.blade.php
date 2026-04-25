@@ -204,6 +204,58 @@
                            value="{{ request('search') }}" onkeyup="filterStudents(this.value)">
                 </div>
 
+                @if(request('photo_filter'))
+                {{-- Guruh bo'yicha guruhlangan ko'rinish --}}
+                @php
+                    $groupedStudents = $students->getCollection()->groupBy('group_name');
+                @endphp
+                @forelse($groupedStudents as $groupName => $groupStudentsList)
+                    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" style="margin-bottom:12px;">
+                        <div style="padding:10px 16px;background:linear-gradient(135deg,#1a3268,#2b5ea7);display:flex;align-items:center;justify-content:space-between;">
+                            <span style="color:#fff;font-size:13px;font-weight:700;">{{ $groupName }}</span>
+                            <span style="background:rgba(255,255,255,0.2);color:#fff;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600;">{{ $groupStudentsList->count() }}</span>
+                        </div>
+                        <div class="student-list">
+                            @foreach($groupStudentsList as $student)
+                                @php
+                                    $studentPhoto = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
+                                @endphp
+                                <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}"
+                                     onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }}, {{ json_encode($studentPhoto->status ?? '') }}, {{ json_encode($studentPhoto->rejection_reason ?? '') }})"
+                                     style="cursor:pointer;">
+                                    @if($studentPhoto && $studentPhoto->photo_path)
+                                        <div class="student-avatar"><img src="{{ asset($studentPhoto->photo_path) }}" alt="" style="object-fit:cover;width:100%;height:100%;border-radius:50%;"></div>
+                                    @elseif($student->image)
+                                        <div class="student-avatar"><img src="{{ $student->image }}" alt=""></div>
+                                    @else
+                                        <div class="student-avatar">{{ mb_substr($student->full_name, 0, 1) }}</div>
+                                    @endif
+                                    <div style="flex:1;min-width:0;">
+                                        <div class="student-name">{{ $student->full_name }}</div>
+                                        <div class="student-id">{{ $student->student_id_number }}</div>
+                                    </div>
+                                    <div class="student-right" style="text-align:right;">
+                                        @if($studentPhoto && $studentPhoto->status === 'rejected')
+                                            <span class="student-status" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;">Rad etildi</span>
+                                            @if($studentPhoto->rejection_reason)
+                                                <div style="font-size:10px;color:#991b1b;max-width:140px;margin-top:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
+                                            @endif
+                                        @elseif($studentPhoto && $studentPhoto->status === 'approved')
+                                            <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
+                                        @elseif($studentPhoto)
+                                            <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @empty
+                    <div class="empty-state"><p style="font-size:14px;">Talabalar topilmadi</p></div>
+                @endforelse
+
+                @else
+                {{-- Oddiy ro'yxat (guruh ichidan) --}}
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div class="student-list">
                         @forelse($students as $index => $student)
@@ -256,6 +308,7 @@
                         {{ $students->appends(request()->query())->links('pagination::tailwind') }}
                     </div>
                 @endif
+                @endif {{-- end photo_filter / else --}}
         </div>
         @endif
     </div>

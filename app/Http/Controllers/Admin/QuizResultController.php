@@ -1227,12 +1227,10 @@ class QuizResultController extends Controller
             return ['code' => 'no_student', 'text' => 'Talaba topilmadi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 2) JN mavzu formatini aniqlash (masalan: JN (uzb)_13_Patologik..._D_9-mavzu)
-        // Shaklda N-mavzu + quiz_type 'JN' bilan boshlanishi — mavzu retake formati
+        // 2) Mavzu formatini aniqlash (shakl: "N-mavzu")
         $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
-        $isJnType = $result->quiz_type && stripos($result->quiz_type, 'JN') === 0;
 
-        if ($isMavzuShakl && $isJnType) {
+        if ($isMavzuShakl) {
             // Baho tekshiruvi
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
                 return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];

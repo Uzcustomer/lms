@@ -832,10 +832,9 @@
     </style>
 
     @php
-        $isDekan = is_active_dekan();
+        $isDekan = is_active_dekan() || (session('active_role') === 'tyutor');
         $isRegistrator = is_active_registrator();
         $isOqituvchi = is_active_oqituvchi();
-        $isReadOnly = $isReadOnly ?? is_active_tyutor();
         $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
         $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
         $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
@@ -3490,29 +3489,15 @@
                 document.getElementById('jb-detailed-view')?.classList.remove('hidden');
                 document.getElementById('mt-compact-view')?.classList.add('hidden');
                 document.getElementById('mt-detailed-view')?.classList.remove('hidden');
-                // Batafsil: vertical va horizontal scroll table ichida
-                ['mz-detailed-view','jb-detailed-view','mt-detailed-view'].forEach(function(id) {
-                    var el = document.getElementById(id);
-                    if (el) {
-                        el.style.maxHeight = 'calc(100vh - 220px)';
-                        el.style.overflow = 'auto';
-                        el.style.position = 'relative';
-                    }
-                });
             }
         }
 
         // Sahifa yuklanishida oldingi view modeni tiklash
         (function() {
-            @if($isReadOnly ?? false)
-                localStorage.setItem('journal_view_mode', 'compact');
-                switchView('compact');
-            @else
-                var savedView = localStorage.getItem('journal_view_mode');
-                if (savedView === 'detailed') {
-                    switchView('detailed');
-                }
-            @endif
+            var savedView = localStorage.getItem('journal_view_mode');
+            if (savedView === 'detailed') {
+                switchView('detailed');
+            }
         })();
 
         // Superadmin: istalgan bahoni to'g'ridan-to'g'ri o'zgartirish
@@ -4885,24 +4870,4 @@
         </div>
     </div>
 
-    @if($isReadOnly ?? false)
-    <style>
-        [onclick*="saveRetake"], [onclick*="saveMtGrade"], [onclick*="saveExamGrade"],
-        [onclick*="openLesson"], [onclick*="closeLesson"], [onclick*="superadminEdit"],
-        [onclick*="deleteRetake"], [onclick*="createRetake"], [onclick*="saveOpenedLessonGrade"],
-        .btn-save-grade, .btn-retake, .btn-open-lesson, .btn-close-lesson,
-        button[type="submit"] { display: none !important; }
-        .grade-cell-editable { pointer-events: none !important; cursor: default !important; }
-        .grade-cell-editable:hover { background: inherit !important; }
-    </style>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('td[onclick], td[data-editable]').forEach(function(el) {
-                el.removeAttribute('onclick');
-                el.removeAttribute('data-editable');
-                el.style.cursor = 'default';
-            });
-        });
-    </script>
-    @endif
 </x-app-layout>

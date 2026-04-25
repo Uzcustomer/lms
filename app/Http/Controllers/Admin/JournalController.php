@@ -53,16 +53,9 @@ class JournalController extends Controller
 
         // O'qituvchi uchun fanga biriktirilgan cheklovi
         $isOqituvchi = is_active_oqituvchi();
-        $isTyutor = is_active_tyutor();
-        $isTeacherOrTutor = $isOqituvchi || $isTyutor;
         $teacherHemisId = null;
-        $tutorGroupIds = [];
         if ($isOqituvchi) {
             $teacherHemisId = get_teacher_hemis_id();
-        }
-        if ($isTyutor) {
-            $teacherHemisId = get_teacher_hemis_id();
-            $tutorGroupIds = get_teacher_group_hemis_ids();
         }
 
         // Get filter options for dropdowns
@@ -73,7 +66,7 @@ class JournalController extends Controller
 
         $selectedEducationType = $request->get('education_type');
         if (!$request->has('education_type')) {
-            if ($isTeacherOrTutor) {
+            if ($isOqituvchi) {
                 $selectedEducationType = null;
             } else {
                 $selectedEducationType = $educationTypes
@@ -121,7 +114,7 @@ class JournalController extends Controller
             ->whereNotNull('cs.department_id')
             ->whereNotNull('cs.department_name');
 
-        if (!$isTeacherOrTutor && $selectedEducationType) {
+        if (!$isOqituvchi && $selectedEducationType) {
             $kafedraQuery->where('c.education_type_code', $selectedEducationType);
         }
         if ($request->filled('education_year')) {
@@ -142,9 +135,6 @@ class JournalController extends Controller
                     ->where('schedules.education_year_current', true)
                     ->whereNull('schedules.deleted_at');
             });
-        }
-        if ($isTyutor && !empty($tutorGroupIds)) {
-            $kafedraQuery->whereIn('g.group_hemis_id', $tutorGroupIds);
         }
         if ($request->get('current_semester', '1') == '1') {
             $kafedraQuery->whereIn('s.semester_hemis_id', function ($sub) {
@@ -181,7 +171,7 @@ class JournalController extends Controller
             ->distinct();
 
         // Apply filters
-        if (!$isTeacherOrTutor && $selectedEducationType) {
+        if (!$isOqituvchi && $selectedEducationType) {
             $query->where('c.education_type_code', $selectedEducationType);
         }
 
@@ -211,10 +201,6 @@ class JournalController extends Controller
                     ->where('schedules.education_year_current', true)
                     ->whereNull('schedules.deleted_at');
             });
-        }
-
-        if ($isTyutor && !empty($tutorGroupIds)) {
-            $query->whereIn('g.group_hemis_id', $tutorGroupIds);
         }
 
         if ($request->filled('department')) {
@@ -275,8 +261,6 @@ class JournalController extends Controller
         $perPage = $request->get('per_page', 50);
         $journals = $query->paginate($perPage)->appends($request->query());
 
-        $isReadOnly = $isTyutor;
-
         return view('admin.journal.index', compact(
             'journals',
             'educationTypes',
@@ -287,9 +271,7 @@ class JournalController extends Controller
             'sortColumn',
             'sortDirection',
             'dekanFacultyIds',
-            'isOqituvchi',
-            'isTyutor',
-            'isReadOnly'
+            'isOqituvchi'
         ));
     }
 
@@ -310,8 +292,6 @@ class JournalController extends Controller
 
     private function showJournal(Request $request, $groupId, $subjectId, $semesterCode)
     {
-        $isReadOnly = is_active_tyutor();
-
         $group = Group::find($groupId);
         if (!$group) {
             abort(404, "Guruh topilmadi (ID: {$groupId})");
@@ -337,13 +317,6 @@ class JournalController extends Controller
                 }
             } else {
                 abort(403, "O'qituvchi ma'lumotlari topilmadi.");
-            }
-        }
-
-        if (is_active_tyutor()) {
-            $tutorGroupIds = get_teacher_group_hemis_ids();
-            if (!in_array($group->group_hemis_id, $tutorGroupIds)) {
-                abort(403, "Sizga bu guruh bo'yicha jurnal ko'rish huquqi yo'q.");
             }
         }
 
@@ -1471,11 +1444,8 @@ class JournalController extends Controller
             'levelDeadline',
             'approvedExcuses',
             'excuseGradeSnapshots',
-            'excuseOpenedDatesPerStudent',
-            'isReadOnly'
+            'excuseOpenedDatesPerStudent'
         ));
-
-        // Note: $isReadOnly is set near top of showJournal if needed
     }
 
     /**

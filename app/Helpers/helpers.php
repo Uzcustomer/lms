@@ -186,53 +186,6 @@ if (!function_exists('is_active_oqituvchi')) {
     }
 }
 
-if (!function_exists('is_active_tyutor')) {
-    function is_active_tyutor(): bool
-    {
-        $webUser = auth()->guard('web')->user();
-        if ($webUser) {
-            $roles = $webUser->getRoleNames()->toArray();
-            $activeRole = session('active_role', $roles[0] ?? '');
-            return $activeRole === 'tyutor';
-        }
-
-        if (auth()->guard('teacher')->check()) {
-            $teacher = auth()->guard('teacher')->user();
-            $roles = $teacher->getRoleNames()->toArray();
-            $activeRole = session('active_role', $roles[0] ?? '');
-            return $activeRole === 'tyutor';
-        }
-
-        return false;
-    }
-}
-
-if (!function_exists('get_teacher_group_hemis_ids')) {
-    function get_teacher_group_hemis_ids(): array
-    {
-        $teacherHemisId = get_teacher_hemis_id();
-        $teacher = auth()->guard('teacher')->user();
-
-        $tutorGroupIds = [];
-        if ($teacher) {
-            $tutorGroupIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
-        }
-
-        $scheduleGroupIds = [];
-        if ($teacherHemisId) {
-            $scheduleGroupIds = \Illuminate\Support\Facades\DB::table('schedules')
-                ->where('employee_id', $teacherHemisId)
-                ->where('education_year_current', true)
-                ->whereNotNull('lesson_date')
-                ->pluck('group_id')
-                ->unique()
-                ->toArray();
-        }
-
-        return array_values(array_unique(array_merge($tutorGroupIds, $scheduleGroupIds)));
-    }
-}
-
 if (!function_exists('get_teacher_hemis_id')) {
     /**
      * Joriy foydalanuvchining HEMIS ID sini olish (Teacher model uchun).

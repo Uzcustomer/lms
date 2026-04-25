@@ -990,10 +990,6 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::delete('/students/{student}/delete-photo', [TeacherMainController::class, 'deleteStudentPhoto'])->name('students.delete-photo');
         Route::get('/student/{studentId}/subject/{subjectId}', [TeacherMainController::class, 'studentDetails'])->name('student.details');
 
-        // Jurnalni ko'rish (tyutor/teacher — faqat o'qish)
-        Route::get('/journal-view', [TutorReportController::class, 'journalView'])->name('journal-view');
-        Route::get('/journal-view/subjects', [TutorReportController::class, 'journalViewSubjects'])->name('journal-view.subjects');
-
         // Tyutor hisobotlari
         Route::get('/reports/jn', [TutorReportController::class, 'jnReport'])->name('reports.jn');
         Route::get('/reports/absence-74', [TutorReportController::class, 'absenceReport74'])->name('reports.absence-74');

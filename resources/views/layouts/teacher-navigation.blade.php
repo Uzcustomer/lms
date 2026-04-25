@@ -33,24 +33,13 @@
                     </x-nav-link>
                 </div>
                 @endif
-                @php
-                    $teacherUser = auth()->guard('teacher')->user();
-                    $isTyutorOrOqituvchi = $teacherUser && (
-                        in_array($navActiveRole, ['tyutor', 'oqituvchi'])
-                        || ($teacherUser->hasAnyRole(['tyutor', 'oqituvchi']) && !$teacherUser->hasAnyRole(['superadmin', 'admin', 'kichik_admin', 'inspeksiya', 'oquv_prorektori', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'buxgalteriya', 'manaviyat', 'dekan', 'kafedra_mudiri', 'fan_masuli', 'test_markazi']))
-                    );
-                @endphp
+                @if($navActiveRole !== 'tyutor')
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    @if($isTyutorOrOqituvchi)
-                        <x-nav-link :href="route('teacher.journal-view')" :active="request()->routeIs('teacher.journal-view*') || request()->routeIs('admin.journal.show')">
-                            {{ __("Jurnalni ko'rish") }}
-                        </x-nav-link>
-                    @else
-                        <x-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
-                            {{ __('Jurnal') }}
-                        </x-nav-link>
-                    @endif
+                    <x-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
+                        {{ __('Jurnal') }}
+                    </x-nav-link>
                 </div>
+                @endif
                 @php
                     $hasTutorGroups = auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0;
                     if (!$hasTutorGroups) {
@@ -519,12 +508,10 @@
                     {{ __('Baholar') }}
                 </x-responsive-nav-link>
                 @endif
-                @if($isTyutorOrOqituvchi ?? false)
-                    <x-responsive-nav-link :href="route('teacher.journal-view')">Jurnalni ko'rish</x-responsive-nav-link>
-                @else
-                    <x-responsive-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
-                        {{ __('Jurnal') }}
-                    </x-responsive-nav-link>
+                @if($navActiveRole !== 'tyutor')
+                <x-responsive-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
+                    {{ __('Jurnal') }}
+                </x-responsive-nav-link>
                 @endif
                 @if($hasTutorGroups ?? false)
                     <x-responsive-nav-link :href="route('teacher.reports.jn')">JN o'zlashtirish</x-responsive-nav-link>

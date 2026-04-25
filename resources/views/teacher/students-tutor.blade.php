@@ -6,6 +6,12 @@
     <style>
         .tutor-container { max-width: 100%; margin: 0 auto; padding: 16px; }
         .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .photo-stat-card {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 14px 10px; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px;
+            text-decoration: none; transition: all 0.2s; text-align: center;
+        }
+        .photo-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         .group-card {
             display: flex; align-items: center; gap: 14px; padding: 16px 18px;
             background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px;
@@ -71,6 +77,9 @@
             .group-count { font-size: 11px; }
             .group-badge { font-size: 11px; padding: 3px 8px; }
             .tutor-container { padding: 0; }
+            .photo-stat-card { grid-template-columns: 1fr; }
+            .photo-stat-card div:first-child { font-size: 18px !important; }
+            .photo-stat-card div:last-child { font-size: 10px !important; }
             .student-list { grid-template-columns: 1fr; gap: 4px; padding: 4px; }
             .student-item { padding: 6px 8px; gap: 6px; border-radius: 8px; }
             .student-avatar, .student-avatar img { width: 28px; height: 28px; font-size: 11px; }
@@ -82,8 +91,22 @@
             .search-box { padding: 8px 12px 8px 34px; font-size: 13px; border-radius: 10px; }
             .back-btn { padding: 6px 12px; font-size: 12px; }
             .photo-modal-box { max-width: 400px !important; }
-            #modal-photo-frame { min-height: 300px !important; max-height: 60vh !important; }
-            #modal-photo-img { max-height: 60vh !important; }
+            .photo-modal-box > div:first-child { padding: 10px 14px !important; }
+            .photo-modal-box > div:first-child #modal-name { font-size: 13px !important; }
+            .photo-modal-box > div:first-child #modal-info { font-size: 10px !important; margin-top: 1px !important; }
+            .photo-modal-box > div:nth-child(2) { padding: 10px !important; }
+            #modal-photo-frame { min-height: 200px !important; max-height: 45vh !important; border-radius: 8px !important; }
+            #modal-photo-img { max-height: 45vh !important; }
+            #modal-rejection-banner { margin-top: 6px !important; padding: 6px 10px !important; }
+            #modal-rejection-banner div:first-child { font-size: 10px !important; margin-bottom: 1px !important; }
+            #modal-rejection-banner #modal-rejection-reason { font-size: 10px !important; }
+            .photo-modal-box > div:last-child { padding: 0 10px 10px !important; }
+            .photo-modal-box #photo-delete-wrap button { padding: 7px !important; font-size: 11px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-file-btn { padding: 8px !important; font-size: 12px !important; margin-bottom: 5px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-capture-btn { padding: 8px !important; font-size: 12px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-save-btn { padding: 8px !important; font-size: 12px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-retake-btn { padding: 6px !important; font-size: 11px !important; margin-top: 4px !important; }
+            #photo-modal { padding: 8px !important; }
         }
     </style>
 
@@ -92,6 +115,26 @@
         {{-- Guruhni tanlash ko'rinishi --}}
         @if(!request('group'))
         <div>
+            @if(!$tutorGroups->isEmpty() && isset($photoStats))
+            <div style="margin-bottom:16px;">
+                <h3 style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:10px;">Talaba rasmlari</h3>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                    <a href="{{ route('teacher.students', ['photo_filter' => 'has_photo']) }}" class="photo-stat-card" style="border-color:#bfdbfe;">
+                        <div style="font-size:22px;font-weight:800;color:#1e40af;">{{ $photoStats['has_photo'] }}</div>
+                        <div style="font-size:11px;color:#3b82f6;font-weight:600;">Rasm bor</div>
+                    </a>
+                    <a href="{{ route('teacher.students', ['photo_filter' => 'approved']) }}" class="photo-stat-card" style="border-color:#a7f3d0;">
+                        <div style="font-size:22px;font-weight:800;color:#166534;">{{ $photoStats['approved'] }}</div>
+                        <div style="font-size:11px;color:#16a34a;font-weight:600;">Tasdiqlangan</div>
+                    </a>
+                    <a href="{{ route('teacher.students', ['photo_filter' => 'rejected']) }}" class="photo-stat-card" style="border-color:#fecaca;">
+                        <div style="font-size:22px;font-weight:800;color:#dc2626;">{{ $photoStats['rejected'] }}</div>
+                        <div style="font-size:11px;color:#dc2626;font-weight:600;">Rad etilgan</div>
+                    </a>
+                </div>
+            </div>
+            @endif
+
             <div style="margin-bottom: 16px;">
                 <h3 style="font-size: 16px; font-weight: 700; color: #1e293b;">Guruhlaringiz</h3>
                 <p style="font-size: 13px; color: #64748b;">Talabalarni ko'rish uchun guruhni tanlang</p>
@@ -120,6 +163,7 @@
                     <p style="font-size: 14px; font-weight: 600;">Sizga biriktirilgan guruhlar yo'q</p>
                 </div>
             @endif
+
         </div>
 
         @else
@@ -177,8 +221,6 @@
                                         @endif
                                     @elseif($studentPhoto && $studentPhoto->status === 'approved')
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
-                                    @elseif($studentPhoto && $studentPhoto->status === 'pending')
-                                        <span class="student-status" style="background:#dbeafe;color:#1e40af;">Kutilmoqda</span>
                                     @elseif($studentPhoto)
                                         <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                     @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')
@@ -289,6 +331,7 @@
         var currentBlob = null;
         var uploadActionUrl = '';
         var cameraStream = null;
+        var isPhotoFilterView = {{ request('photo_filter') ? 'true' : 'false' }};
 
         function stopCamera() {
             if (cameraStream) {
@@ -447,17 +490,17 @@
                 frame.style.borderStyle = 'solid';
                 frame.style.borderColor = '#3b82f6';
                 document.getElementById('photo-btn-text').textContent = 'Qayta tushirish';
-                document.getElementById('photo-capture-btn').style.display = 'flex';
-                document.getElementById('photo-file-btn').style.display = 'flex';
-                document.getElementById('photo-delete-wrap').style.display = 'block';
+                document.getElementById('photo-capture-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
+                document.getElementById('photo-file-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
+                document.getElementById('photo-delete-wrap').style.display = isPhotoFilterView ? 'none' : 'block';
             } else {
                 img.style.display = 'none';
                 noPhoto.style.display = 'block';
                 frame.style.borderStyle = 'dashed';
                 frame.style.borderColor = '#cbd5e1';
                 document.getElementById('photo-btn-text').textContent = 'Kamerani ochish';
-                document.getElementById('photo-capture-btn').style.display = 'flex';
-                document.getElementById('photo-file-btn').style.display = 'flex';
+                document.getElementById('photo-capture-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
+                document.getElementById('photo-file-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
                 document.getElementById('photo-delete-wrap').style.display = 'none';
             }
             document.getElementById('photo-save-btn').style.display = 'none';

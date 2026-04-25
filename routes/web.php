@@ -992,6 +992,12 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
 
         // Tyutor hisobotlari
         Route::get('/reports/jn', [TutorReportController::class, 'jnReport'])->name('reports.jn');
+        Route::get('/reports/jn/data', [TutorReportController::class, 'jnReportData'])->name('reports.jn.data');
+        Route::get('/reports/jn/specialties', [TutorReportController::class, 'jnGetSpecialties'])->name('reports.jn.specialties');
+        Route::get('/reports/jn/subjects', [TutorReportController::class, 'jnGetSubjects'])->name('reports.jn.subjects');
+        Route::get('/reports/jn/groups', [TutorReportController::class, 'jnGetGroups'])->name('reports.jn.groups');
+        Route::get('/reports/jn/level-codes', [TutorReportController::class, 'jnGetLevelCodes'])->name('reports.jn.level-codes');
+        Route::get('/reports/jn/semesters', [TutorReportController::class, 'jnGetSemesters'])->name('reports.jn.semesters');
         Route::get('/reports/absence-74', [TutorReportController::class, 'absenceReport74'])->name('reports.absence-74');
         Route::get('/reports/absence-25', [TutorReportController::class, 'absenceReport25'])->name('reports.absence-25');
         Route::get('/reports/debtors', [TutorReportController::class, 'debtorsReport'])->name('reports.debtors');

@@ -222,11 +222,11 @@ class TeacherMainController extends Controller
             abort(403);
         }
 
-        $photo = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
-        if ($photo) {
+        $photos = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->get();
+        foreach ($photos as $photo) {
             $filePath = public_path($photo->photo_path);
             if (file_exists($filePath)) {
-                unlink($filePath);
+                @unlink($filePath);
             }
             $photo->delete();
         }

@@ -177,8 +177,6 @@
                                         @endif
                                     @elseif($studentPhoto && $studentPhoto->status === 'approved')
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
-                                    @elseif($studentPhoto && $studentPhoto->status === 'pending')
-                                        <span class="student-status" style="background:#dbeafe;color:#1e40af;">Kutilmoqda</span>
                                     @elseif($studentPhoto)
                                         <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                     @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')

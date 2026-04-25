@@ -1037,17 +1037,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final isContract = paymentFormName.toLowerCase().contains('kontrakt') ||
         paymentFormName.toLowerCase().contains('shartnoma') ||
         (profile?['payment_form_code']?.toString() ?? '') == '12';
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
     final summary = contractData?['summary'] as Map<String, dynamic>?;
     final totalAmount = (summary?['total_amount'] ?? 0).toDouble();
     final paidAmount = (summary?['paid_amount'] ?? 0).toDouble();
     final remainingAmount = (summary?['remaining_amount'] ?? 0).toDouble();
     final progress = totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
-
-    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

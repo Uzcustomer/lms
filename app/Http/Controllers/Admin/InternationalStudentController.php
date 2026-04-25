@@ -111,18 +111,38 @@ class InternationalStudentController extends Controller
             });
         }
 
-        // Excel-style ustun filtri: aniq tanlangan sanalar
+        // Excel-style ustun filtri: aniq tanlangan sanalar (yoki "__empty__" - kiritilmaganlar)
         if ($request->filled('visa_end_dates')) {
-            $dates = array_filter((array) $request->visa_end_dates);
-            if (!empty($dates)) {
-                $query->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $dates));
+            $values = array_values(array_filter((array) $request->visa_end_dates, fn($v) => $v !== null && $v !== ''));
+            $includeEmpty = in_array('__empty__', $values, true);
+            $actualDates = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
+            if ($includeEmpty || !empty($actualDates)) {
+                $query->where(function ($outer) use ($includeEmpty, $actualDates) {
+                    if (!empty($actualDates)) {
+                        $outer->whereHas('visaInfo', fn($q) => $q->whereIn('visa_end_date', $actualDates));
+                    }
+                    if ($includeEmpty) {
+                        $outer->orWhereDoesntHave('visaInfo')
+                              ->orWhereHas('visaInfo', fn($q) => $q->whereNull('visa_end_date'));
+                    }
+                });
             }
         }
 
         if ($request->filled('registration_end_dates')) {
-            $dates = array_filter((array) $request->registration_end_dates);
-            if (!empty($dates)) {
-                $query->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $dates));
+            $values = array_values(array_filter((array) $request->registration_end_dates, fn($v) => $v !== null && $v !== ''));
+            $includeEmpty = in_array('__empty__', $values, true);
+            $actualDates = array_values(array_filter($values, fn($v) => $v !== '__empty__'));
+            if ($includeEmpty || !empty($actualDates)) {
+                $query->where(function ($outer) use ($includeEmpty, $actualDates) {
+                    if (!empty($actualDates)) {
+                        $outer->whereHas('visaInfo', fn($q) => $q->whereIn('registration_end_date', $actualDates));
+                    }
+                    if ($includeEmpty) {
+                        $outer->orWhereDoesntHave('visaInfo')
+                              ->orWhereHas('visaInfo', fn($q) => $q->whereNull('registration_end_date'));
+                    }
+                });
             }
         }
 

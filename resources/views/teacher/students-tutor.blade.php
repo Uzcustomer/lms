@@ -82,8 +82,22 @@
             .search-box { padding: 8px 12px 8px 34px; font-size: 13px; border-radius: 10px; }
             .back-btn { padding: 6px 12px; font-size: 12px; }
             .photo-modal-box { max-width: 400px !important; }
-            #modal-photo-frame { min-height: 300px !important; max-height: 60vh !important; }
-            #modal-photo-img { max-height: 60vh !important; }
+            .photo-modal-box > div:first-child { padding: 10px 14px !important; }
+            .photo-modal-box > div:first-child #modal-name { font-size: 13px !important; }
+            .photo-modal-box > div:first-child #modal-info { font-size: 10px !important; margin-top: 1px !important; }
+            .photo-modal-box > div:nth-child(2) { padding: 10px !important; }
+            #modal-photo-frame { min-height: 200px !important; max-height: 45vh !important; border-radius: 8px !important; }
+            #modal-photo-img { max-height: 45vh !important; }
+            #modal-rejection-banner { margin-top: 6px !important; padding: 6px 10px !important; }
+            #modal-rejection-banner div:first-child { font-size: 10px !important; margin-bottom: 1px !important; }
+            #modal-rejection-banner #modal-rejection-reason { font-size: 10px !important; }
+            .photo-modal-box > div:last-child { padding: 0 10px 10px !important; }
+            .photo-modal-box #photo-delete-wrap button { padding: 7px !important; font-size: 11px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-file-btn { padding: 8px !important; font-size: 12px !important; margin-bottom: 5px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-capture-btn { padding: 8px !important; font-size: 12px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-save-btn { padding: 8px !important; font-size: 12px !important; border-radius: 8px !important; }
+            .photo-modal-box #photo-retake-btn { padding: 6px !important; font-size: 11px !important; margin-top: 4px !important; }
+            #photo-modal { padding: 8px !important; }
         }
     </style>
 

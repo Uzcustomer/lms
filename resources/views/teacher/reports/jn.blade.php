@@ -75,18 +75,13 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
                             <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 220px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Kafedra</label>
-                            <select id="department" class="select2" style="width: 100%;">
-                                <option value="">Barchasi</option>
-                                @foreach($kafedras as $kafedra)
-                                    <option value="{{ $kafedra->department_id }}">{{ $kafedra->department_name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
                         <div class="filter-item" style="flex: 1; min-width: 280px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#0f172a;"></span> Fan</label>
                             <select id="subject" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="flex: 1; min-width: 250px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> Talaba FISH</label>
+                            <input type="text" id="student_name" class="date-input" placeholder="Talaba ismini kiriting" autocomplete="off" />
                         </div>
                         <div class="filter-item" style="min-width: 290px;">
                             <label class="filter-label">&nbsp;</label>

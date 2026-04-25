@@ -33,8 +33,8 @@
             level_code: $('#level_code').val() || '',
             semester_code: $('#semester_code').val() || '',
             group: $('#group').val() || '',
-            department: $('#department').val() || '',
             subject: $('#subject').val() || '',
+            student_name: $('#student_name').val() || '',
             current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
             per_page: $('#per_page').val() || 50,
             sort: currentSort,
@@ -178,7 +178,7 @@
                 education_type: $('#education_type').val() || '',
                 faculty_id: $('#faculty').val() || '',
                 specialty_id: $('#specialty').val() || '',
-                department_id: $('#department').val() || '',
+                group_id: $('#group').val() || '',
                 level_code: $('#level_code').val() || '',
                 semester_code: $('#semester_code').val() || '',
                 subject_id: $('#subject').val() || '',
@@ -193,18 +193,17 @@
         function rSubj() { rd('#subject'); pdu('{{ route("teacher.reports.jn.subjects") }}', fp(), '#subject'); }
         function rGrp() { rd('#group'); pd('{{ route("teacher.reports.jn.groups") }}', fp(), '#group'); }
 
-        $('#education_type').change(function() { rSpec(); rSubj(); rGrp(); });
-        $('#faculty').change(function() { rSpec(); rSubj(); rGrp(); });
-        $('#department').change(function() { rSubj(); rGrp(); });
-        $('#specialty').change(function() { rGrp(); });
-        $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("teacher.reports.jn.semesters") }}', {level_code:lc}, '#semester_code'); rSubj(); rGrp(); });
-        $('#semester_code').change(function() { rSubj(); rGrp(); });
-        $('#subject').change(function() { rGrp(); });
+        $('#education_type').change(function() { rSpec(); rGrp(); rSubj(); });
+        $('#faculty').change(function() { rSpec(); rGrp(); rSubj(); });
+        $('#specialty').change(function() { rGrp(); rSubj(); });
+        $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("teacher.reports.jn.semesters") }}', {level_code:lc}, '#semester_code'); rGrp(); rSubj(); });
+        $('#semester_code').change(function() { rGrp(); rSubj(); });
+        $('#group').change(function() { rSubj(); });
 
         pdu('{{ route("teacher.reports.jn.specialties") }}', fp(), '#specialty');
         pd('{{ route("teacher.reports.jn.level-codes") }}', {}, '#level_code');
         pd('{{ route("teacher.reports.jn.semesters") }}', {}, '#semester_code');
-        pdu('{{ route("teacher.reports.jn.subjects") }}', fp(), '#subject');
         pd('{{ route("teacher.reports.jn.groups") }}', fp(), '#group');
+        pdu('{{ route("teacher.reports.jn.subjects") }}', fp(), '#subject');
     });
 </script>

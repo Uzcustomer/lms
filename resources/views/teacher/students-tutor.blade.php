@@ -169,9 +169,12 @@
                                         {{ $student->province_name ?? '' }}{{ $student->phone ? ' · ' . $student->phone : '' }}
                                     </div>
                                 </div>
-                                <div class="student-right">
+                                <div class="student-right" style="text-align:right;">
                                     @if($studentPhoto && $studentPhoto->status === 'rejected')
-                                        <span class="student-status" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;" title="{{ $studentPhoto->rejection_reason }}">Rad etildi</span>
+                                        <span class="student-status" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;">Rad etildi</span>
+                                        @if($studentPhoto->rejection_reason)
+                                            <div style="font-size:10px;color:#991b1b;max-width:160px;margin-top:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
+                                        @endif
                                     @elseif($studentPhoto && $studentPhoto->status === 'approved')
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
                                     @elseif($studentPhoto && $studentPhoto->status === 'pending')

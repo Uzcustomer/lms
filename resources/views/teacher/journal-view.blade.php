@@ -16,7 +16,7 @@
                         <span class="ml-auto jv-badge">{{ count($groups ?? []) }} ta</span>
                     </div>
                 </div>
-                <div class="p-5">
+                <div class="p-2 sm:p-5">
                     @if(empty($groups) || count($groups) === 0)
                         <div class="py-8 text-center text-gray-400 text-sm">Sizga biriktirilgan guruhlar yo'q</div>
                     @else
@@ -46,7 +46,7 @@
                     </div>
                 </div>
 
-                <div class="p-5">
+                <div class="p-2 sm:p-5">
                     <div id="subjects-loading" style="display:none;" class="py-12 text-center">
                         <div class="inline-block w-8 h-8 border-3 border-gray-200 border-t-blue-600 rounded-full animate-spin"></div>
                         <p class="text-gray-500 text-sm mt-3">Fanlar yuklanmoqda...</p>

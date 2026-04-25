@@ -3490,15 +3490,25 @@
                 document.getElementById('jb-detailed-view')?.classList.remove('hidden');
                 document.getElementById('mt-compact-view')?.classList.add('hidden');
                 document.getElementById('mt-detailed-view')?.classList.remove('hidden');
+                // Batafsil: max-height olib tashlanadi, table balandligi talaba soniga moslashadi
+                ['mz-detailed-view','jb-detailed-view','mt-detailed-view'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) { el.style.maxHeight = 'none'; el.style.overflowX = 'auto'; }
+                });
             }
         }
 
         // Sahifa yuklanishida oldingi view modeni tiklash
         (function() {
-            var savedView = localStorage.getItem('journal_view_mode');
-            if (savedView === 'detailed') {
-                switchView('detailed');
-            }
+            @if($isReadOnly ?? false)
+                localStorage.setItem('journal_view_mode', 'compact');
+                switchView('compact');
+            @else
+                var savedView = localStorage.getItem('journal_view_mode');
+                if (savedView === 'detailed') {
+                    switchView('detailed');
+                }
+            @endif
         })();
 
         // Superadmin: istalgan bahoni to'g'ridan-to'g'ri o'zgartirish

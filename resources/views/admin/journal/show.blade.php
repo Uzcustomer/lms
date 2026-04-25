@@ -3490,10 +3490,14 @@
                 document.getElementById('jb-detailed-view')?.classList.remove('hidden');
                 document.getElementById('mt-compact-view')?.classList.add('hidden');
                 document.getElementById('mt-detailed-view')?.classList.remove('hidden');
-                // Batafsil: max-height olib tashlanadi, table balandligi talaba soniga moslashadi
+                // Batafsil: vertical va horizontal scroll table ichida
                 ['mz-detailed-view','jb-detailed-view','mt-detailed-view'].forEach(function(id) {
                     var el = document.getElementById(id);
-                    if (el) { el.style.maxHeight = 'none'; el.style.overflowX = 'auto'; }
+                    if (el) {
+                        el.style.maxHeight = 'calc(100vh - 220px)';
+                        el.style.overflow = 'auto';
+                        el.style.position = 'relative';
+                    }
                 });
             }
         }

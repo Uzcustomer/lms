@@ -3,8 +3,8 @@
         <h2 class="text-xl font-semibold leading-tight text-gray-800">Jurnalni ko'rish</h2>
     </x-slot>
 
-    <div class="py-6">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="py-2 sm:py-6">
+        <div class="max-w-5xl mx-auto px-2 sm:px-6 lg:px-8">
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
                 <div class="jv-header">

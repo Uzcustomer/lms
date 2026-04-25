@@ -86,6 +86,10 @@ Schedule::command('visa:check-expiry')->dailyAt('09:00');
 // HEMIS exam grades sync — baholarni HEMIS dan tortib hemis_exam_grades jadvaliga saqlash (har kuni 03:00 da)
 Schedule::command('hemis:sync-exam-grades')->dailyAt('03:00')->withoutOverlapping(120);
 
+// O'qituvchi dashbordi statistikasi — joriy semestr bo'yicha har kuni 03:00 da
+// hisoblanadi va keshga yoziladi. Sahifaning o'zi faqat keshdan o'qiydi.
+Schedule::command('dashboard:teacher-stats')->dailyAt('03:00')->withoutOverlapping(60);
+
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)
 

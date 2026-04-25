@@ -2485,6 +2485,19 @@ class ReportController extends Controller
                 }
             }
 
+            // Har bir hafta uchun: shu haftada HEMIS jadvalda dars qo'yilgan barcha sanalar
+            // (har qanday dars turi bo'yicha). Orphan KTR soatini bu sanalarga ulash uchun ishlatiladi.
+            $weekToHemisDates = [];
+            foreach ($hemisLessonsByType as $codeAny => $listAny) {
+                foreach ($listAny as $lessonAny) {
+                    $dAny = substr((string) ($lessonAny['date'] ?? ''), 0, 10);
+                    if ($dAny === '') continue;
+                    $wAny = $lessonAny['week'] ?? $resolveWeekFromDate($dAny);
+                    if ($wAny === null) continue;
+                    $weekToHemisDates[$wAny][$dAny] = true;
+                }
+            }
+
             // Har bir dars turi uchun darslar ro'yxati (sana bo'yicha, HEMIS darslari + KTR-only haftalar)
             $lessonsByType = [];
             foreach ($trainingTypes as $code => $info) {
@@ -2510,22 +2523,43 @@ class ReportController extends Controller
                     if ($w !== null) $hemisWeeksSet[$w] = true;
                 }
 
-                // HEMIS darsi yo'q, lekin KTR rejasida soat bor haftalar uchun alohida qator
-                // (Aks holda Jami satridagi KTR yig'indisi qatorlardagi yig'indidan ko'p bo'lib chalkashlik tug'diradi)
+                // KTR rejada bor, lekin HEMIS'da shu turdagi dars qo'yilmagan haftalar.
+                // Avval shu haftada boshqa dars turi sanasiga ulanadi (yangi qator yaratilmaydi).
+                // Agar haftada hech qaysi turda dars yo'q bo'lsa — haftaning boshlanish sanasi bilan
+                // alohida "KTR rejada" qatori chiqariladi.
                 if ($ktrExists) {
                     foreach ($ktrWeeks as $w => $wd) {
                         if (empty($wd[$code])) continue;
                         if (isset($hemisWeeksSet[$w])) continue;
-                        $weekDate = $weekStartByIdx[$w] ?? '';
-                        if ($weekDate === '' || isset($hemisDatesSet[$weekDate])) continue;
-                        $list[] = [
-                            'date' => $weekDate,
-                            'hemis' => 0,
-                            'ktr' => (int) $wd[$code],
-                            'marked' => 0,
-                            'ktr_only' => true,
-                        ];
-                        $hemisDatesSet[$weekDate] = true;
+
+                        $borrowedDate = null;
+                        foreach (array_keys($weekToHemisDates[$w] ?? []) as $candDate) {
+                            if (!isset($hemisDatesSet[$candDate])) {
+                                $borrowedDate = $candDate;
+                                break;
+                            }
+                        }
+
+                        if ($borrowedDate !== null) {
+                            $list[] = [
+                                'date' => $borrowedDate,
+                                'hemis' => 0,
+                                'ktr' => (int) $wd[$code],
+                                'marked' => 0,
+                            ];
+                            $hemisDatesSet[$borrowedDate] = true;
+                        } else {
+                            $weekDate = $weekStartByIdx[$w] ?? '';
+                            if ($weekDate === '' || isset($hemisDatesSet[$weekDate])) continue;
+                            $list[] = [
+                                'date' => $weekDate,
+                                'hemis' => 0,
+                                'ktr' => (int) $wd[$code],
+                                'marked' => 0,
+                                'ktr_only' => true,
+                            ];
+                            $hemisDatesSet[$weekDate] = true;
+                        }
                     }
                 }
 

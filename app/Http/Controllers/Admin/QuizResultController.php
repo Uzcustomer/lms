@@ -2172,7 +2172,9 @@ class QuizResultController extends Controller
         foreach ($groups as &$g) {
             $qt = $g['quiz_type'] ?? '';
             $sh = $g['shakl'] ?? '';
-            if (in_array($qt, $oskiTypes) || mb_strtolower($sh) === 'oski' || stripos($qt, 'OSKI') !== false) {
+            if (preg_match('/^\d+-mavzu$/i', $sh)) {
+                $g['yn_turi'] = 'jn_mavzu';
+            } elseif (in_array($qt, $oskiTypes) || mb_strtolower($sh) === 'oski' || stripos($qt, 'OSKI') !== false) {
                 $g['yn_turi'] = 'oski';
             } elseif (in_array($qt, $testTypes) || stripos(mb_strtolower($sh), 'test') !== false || stripos($qt, 'test') !== false) {
                 $g['yn_turi'] = 'test';

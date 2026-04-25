@@ -1052,7 +1052,9 @@
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
                     html += '<td>';
-                    if (g.yn_turi) {
+                    if (g.yn_turi === 'jn_mavzu') {
+                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background:#fef3c7;color:#92400e;">JN mavzu</span>';
+                    } else if (g.yn_turi) {
                         html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;' + (g.yn_turi === 'oski' ? 'background:#dbeafe;color:#1e40af;' : 'background:#d1fae5;color:#065f46;') + '">' + (g.yn_turi === 'oski' ? 'OSKI' : 'Test') + '</span>';
                     } else {
                         html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;background:#fef2f2;">';

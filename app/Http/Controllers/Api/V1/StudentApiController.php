@@ -717,6 +717,7 @@ class StudentApiController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
             ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotNull('lesson_date')
             ->min('lesson_date');
@@ -726,6 +727,7 @@ class StudentApiController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
             ->whereNotNull('lesson_date')
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                 $q2->where('education_year_code', $educationYearCode);
                 if ($minScheduleDate !== null) {

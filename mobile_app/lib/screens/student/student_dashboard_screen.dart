@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:ui';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
@@ -194,11 +195,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
-            return const LoadingWidget();
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF3C1053)]
+                      : const [Color(0xFFFFCBA4), Color(0xFFFF9AC9), Color(0xFFBB8FCE)],
+                ),
+              ),
+              child: const LoadingWidget(),
+            );
           }
 
           final data = provider.dashboard;
@@ -225,41 +236,76 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              await Future.wait([
-                provider.loadDashboard(),
-                provider.loadProfile(),
-                provider.loadContract(),
-                provider.loadSubjects(),
-              ]);
-              _loadTodaySchedule();
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
-                  _buildProfileHeader(context, data, profile, l, isDark),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildLiveClassCard(),
-                        _buildGpaRow(data, profile, l),
-                        const SizedBox(height: 16),
-                        _buildSubjectsOverview(provider.subjects, isDark, l),
-                        _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
-                        const SizedBox(height: 100),
-                      ],
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0.0, 0.3, 0.6, 1.0],
+                colors: isDark
+                    ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF0D0221)]
+                    : const [Color(0xFFFFCBA4), Color(0xFFFF9AC9), Color(0xFFBB8FCE), Color(0xFFD7BDE2)],
+              ),
+            ),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await Future.wait([
+                  provider.loadDashboard(),
+                  provider.loadProfile(),
+                  provider.loadContract(),
+                  provider.loadSubjects(),
+                ]);
+                _loadTodaySchedule();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildProfileHeader(context, data, profile, l, isDark),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLiveClassCard(),
+                          _buildGpaRow(data, profile, l),
+                          const SizedBox(height: 16),
+                          _buildSubjectsOverview(provider.subjects, isDark, l),
+                          _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
+                          const SizedBox(height: 100),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20}) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withOpacity(0.08)
+                : Colors.white.withOpacity(0.65),
+            borderRadius: BorderRadius.circular(borderRadius),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.12)
+                  : Colors.white.withOpacity(0.8),
+            ),
+          ),
+          child: child,
+        ),
       ),
     );
   }
@@ -276,169 +322,240 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         '';
     final studentId = profile?['student_id_number']?.toString() ?? '';
     final faculty = profile?['department_name']?.toString() ?? '';
-    final specialty = profile?['specialty_name']?.toString() ?? '';
     final imageUrl = _buildImageUrl(profile?['image']?.toString());
-    // Use calculated course from backend (not level_code)
     final course = profile?['course']?.toString() ?? '';
     final yearOfEnter = profile?['year_of_enter']?.toString() ?? '';
     final educationYear = profile?['education_year_name']?.toString() ?? '';
     final semesterName = profile?['semester_name']?.toString() ?? '';
+    final paymentFormName = profile?['payment_form_name']?.toString() ?? '';
 
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
-    return Stack(
+    return Column(
       children: [
-        // Dark blue curved background
-        Container(
-          width: double.infinity,
+        // Top bar
+        Padding(
           padding: EdgeInsets.only(
-            top: statusBarHeight + 12,
-            bottom: 200,
+            top: statusBarHeight + 8,
+            left: 16,
+            right: 8,
           ),
-          decoration: const BoxDecoration(
-            color: AppTheme.primaryColor,
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-          ),
-          child: Column(
+          child: Row(
             children: [
-              // Top bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.account_balance, color: Colors.white, size: 28),
-                        const SizedBox(width: 10),
-                        Text(
-                          l.appTitle,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
-                          onPressed: () {},
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.settings, color: Colors.white, size: 24),
-                          onPressed: () => _showSettingsSheet(context),
-                        ),
-                      ],
-                    ),
-                  ],
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.home_rounded,
+                    color: isDark ? Colors.white : const Color(0xFF5C3D2E), size: 20),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                l.appTitle,
+                style: TextStyle(
+                  color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 16),
-
-              // Profile photo
-              _buildProfileAvatar(imageUrl, fullName),
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.notifications_outlined,
+                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                onPressed: () {},
+              ),
+              IconButton(
+                icon: Icon(Icons.settings_outlined,
+                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                onPressed: () => _showSettingsSheet(context),
+              ),
             ],
           ),
         ),
 
-        // White card
-        Container(
-          width: double.infinity,
-          margin: EdgeInsets.only(
-            top: statusBarHeight + 210,
-            left: 16,
-            right: 16,
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(20),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Text(
-                fullName,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withAlpha(20),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  studentId,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (faculty.isNotEmpty)
-                Text(
-                  faculty,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.warningColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              if (specialty.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  specialty,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: subTextColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 16),
-              Divider(height: 1, color: divColor),
-              const SizedBox(height: 12),
-              Row(
+        const SizedBox(height: 16),
+
+        // Glass profile card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildGlassCard(
+            isDark: isDark,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.course, course.isNotEmpty ? '$course-kurs' : '-', subTextColor, AppTheme.successColor),
+                  // Photo + name row
+                  Row(
+                    children: [
+                      // Avatar
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark ? Colors.white24 : Colors.white,
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: imageUrl != null && imageUrl.isNotEmpty
+                            ? ClipOval(
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  width: 64,
+                                  height: 64,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.grey[200],
+                                    child: Text(_getInitials(fullName),
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor)),
+                                  ),
+                                  errorWidget: (_, __, ___) => CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.grey[200],
+                                    child: Text(_getInitials(fullName),
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor)),
+                                  ),
+                                ),
+                              )
+                            : CircleAvatar(
+                                radius: 32,
+                                backgroundColor: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : const Color(0xFFE8D5C4),
+                                child: Text(
+                                  _getInitials(fullName),
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Name + ID + badge
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              fullName.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: textColor,
+                                letterSpacing: 0.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'ID: $studentId',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: subTextColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF43A047).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                paymentFormName.isNotEmpty
+                                    ? paymentFormName
+                                    : (faculty.isNotEmpty ? faculty : ''),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF43A047),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Stats row pills
+                  Row(
+                    children: [
+                      _buildStatPill(yearOfEnter.isNotEmpty ? yearOfEnter : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(course.isNotEmpty ? '$course-kurs' : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(semesterName.isNotEmpty ? '$semesterName' : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(educationYear.isNotEmpty ? educationYear : '-', isDark),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStatPill(String text, bool isDark) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withOpacity(0.08)
+              : Colors.white.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.white.withOpacity(0.9),
+          ),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
     );
   }
 
@@ -806,7 +923,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     if (items.isEmpty) return const SizedBox.shrink();
 
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -814,9 +932,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         Text(
           'Fanlar',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
             color: textColor,
+            letterSpacing: 0.3,
           ),
         ),
         const SizedBox(height: 10),
@@ -829,143 +948,76 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           if (jn == null) {
             jnColor = AppTheme.textSecondary;
           } else if (jn >= 71) {
-            jnColor = const Color(0xFF43A047);
+            jnColor = const Color(0xFF4A6CF7);
           } else if (jn >= 56) {
             jnColor = const Color(0xFFFFA726);
           } else {
             jnColor = const Color(0xFFE53935);
           }
 
-          Color attColor;
-          if (att >= 80) {
-            attColor = const Color(0xFF43A047);
-          } else if (att >= 60) {
-            attColor = const Color(0xFFFFA726);
-          } else {
-            attColor = const Color(0xFFE53935);
-          }
-
           return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkCard : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(isDark ? 25 : 10),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildGlassCard(
+              isDark: isDark,
+              borderRadius: 16,
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Row(
-                      children: [
-                        // JN circular indicator
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: jn != null ? (jn / 100).clamp(0.0, 1.0) : 0),
-                          duration: Duration(milliseconds: 900 + index * 100),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, animVal, _) {
-                            return SizedBox(
-                              width: 50,
-                              height: 50,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  CircularProgressIndicator(
-                                    value: animVal,
-                                    strokeWidth: 4,
-                                    backgroundColor: isDark
-                                        ? Colors.white.withAlpha(15)
-                                        : jnColor.withAlpha(30),
-                                    valueColor: AlwaysStoppedAnimation(jnColor),
-                                  ),
-                                  Text(
-                                    jn != null ? jn.round().toString() : '-',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: jnColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: jnColor.withOpacity(isDark ? 0.2 : 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          jn != null ? jn.round().toString() : '-',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: jnColor,
+                          ),
                         ),
-                        const SizedBox(width: 12),
-                        // Subject name + attendance bar
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['name'] as String,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: textColor,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
                             children: [
+                              Icon(Icons.access_time_rounded,
+                                  size: 12, color: subTextColor),
+                              const SizedBox(width: 3),
                               Text(
-                                item['name'] as String,
+                                '${att.round()}% · ${item['absent']}/${item['total']} soat',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : AppTheme.textPrimary,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0, end: att / 100),
-                                duration: Duration(milliseconds: 1000 + index * 80),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, animVal, _) {
-                                  return ClipRRect(
-                                    borderRadius: BorderRadius.circular(5),
-                                    child: LinearProgressIndicator(
-                                      value: animVal,
-                                      minHeight: 5,
-                                      backgroundColor: isDark
-                                          ? Colors.white.withAlpha(15)
-                                          : attColor.withAlpha(30),
-                                      valueColor: AlwaysStoppedAnimation(attColor),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                'Davomat: ${item['absent']}/${item['total']} soat',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: isDark ? Colors.white.withAlpha(120) : Colors.grey[600],
+                                  fontSize: 11,
+                                  color: subTextColor,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Attendance percentage
-                        Column(
-                          children: [
-                            Text(
-                              '${att.round()}%',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: attColor,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Icon(
-                              att >= 80 ? Icons.check_circle_outline : Icons.warning_amber_rounded,
-                              size: 14,
-                              color: attColor,
-                            ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
             ),
           );
         }),
@@ -986,9 +1038,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final isContract = paymentFormName.toLowerCase().contains('kontrakt') ||
         paymentFormName.toLowerCase().contains('shartnoma') ||
         (profile?['payment_form_code']?.toString() ?? '') == '12';
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
     final summary = contractData?['summary'] as Map<String, dynamic>?;
     final totalAmount = (summary?['total_amount'] ?? 0).toDouble();
@@ -1001,26 +1052,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       children: [
         Text(
           l.tuitionFee,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: textColor,
+            letterSpacing: 0.3,
+          ),
         ),
         const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(isDark ? 40 : 12),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
+        _buildGlassCard(
+          isDark: isDark,
+          borderRadius: 16,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Payment form badge
@@ -1144,14 +1189,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ],
           ),
         ),
+        ),
         // Contract list section
         if (isContract && contractList != null && contractList.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(
             l.contractList,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+              letterSpacing: 0.3,
+            ),
           ),
           const SizedBox(height: 12),
           ...contractList.map((contract) {
@@ -1163,22 +1212,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             final educYear = c['education_year']?.toString() ?? '';
             final isPaid = cStatus == 'paid';
 
-            return Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(isDark ? 30 : 8),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildGlassCard(
+                isDark: isDark,
+                borderRadius: 14,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Education year & status row
@@ -1239,6 +1280,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   ),
                 ],
               ),
+            ),
+            ),
             );
           }),
         ],
@@ -1596,6 +1639,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
     final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
 
@@ -1607,9 +1651,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             value: gpa,
             maxValue: 5.0,
             displayText: gpa.toStringAsFixed(2),
-            ringColor: const Color(0xFF7C4DFF),
-            gradientColors: [const Color(0xFFEDE7F6), const Color(0xFFD1C4E9)],
-            darkGradientColors: [const Color(0xFF1A1030), const Color(0xFF2D1B69)],
+            ringColor: const Color(0xFF43A047),
+            isDark: isDark,
           ),
         ),
         const SizedBox(width: 12),
@@ -1619,9 +1662,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             value: avgGrade,
             maxValue: 100.0,
             displayText: avgGrade.toStringAsFixed(1),
-            ringColor: const Color(0xFFFF6D00),
-            gradientColors: [const Color(0xFFFFF3E0), const Color(0xFFFFE0B2)],
-            darkGradientColors: [const Color(0xFF1A1508), const Color(0xFF3D2B10)],
+            ringColor: const Color(0xFFFFC107),
+            isDark: isDark,
           ),
         ),
       ],
@@ -1634,32 +1676,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     required double maxValue,
     required String displayText,
     required Color ringColor,
-    required List<Color> gradientColors,
-    required List<Color> darkGradientColors,
+    required bool isDark,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
-    final subTextColor = isDark ? Colors.white.withAlpha(150) : Colors.grey[600]!;
-    final trackColor = isDark ? Colors.white.withAlpha(20) : ringColor.withAlpha(25);
+    final subTextColor = isDark ? Colors.white70 : Colors.grey[600]!;
+    final trackColor = isDark ? Colors.white.withOpacity(0.08) : ringColor.withOpacity(0.12);
     final percent = (value / maxValue).clamp(0.0, 1.0);
-    final percentText = '${(percent * 100).round()}%';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: ringColor.withAlpha(isDark ? 25 : 35),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-      child: Center(
+    return _buildGlassCard(
+      isDark: isDark,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: percent),
@@ -1667,30 +1695,30 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               curve: Curves.easeOutCubic,
               builder: (context, animVal, _) {
                 return SizedBox(
-                  width: 130,
-                  height: 130,
+                  width: 110,
+                  height: 110,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       SizedBox(
-                        width: 130,
-                        height: 130,
+                        width: 110,
+                        height: 110,
                         child: PieChart(
                           PieChartData(
                             startDegreeOffset: -90,
                             sectionsSpace: 0,
-                            centerSpaceRadius: 46,
+                            centerSpaceRadius: 38,
                             sections: [
                               PieChartSectionData(
                                 value: animVal * maxValue,
                                 color: ringColor,
-                                radius: 16,
+                                radius: 14,
                                 showTitle: false,
                               ),
                               PieChartSectionData(
                                 value: maxValue - (animVal * maxValue),
                                 color: trackColor,
-                                radius: 16,
+                                radius: 14,
                                 showTitle: false,
                               ),
                             ],
@@ -1703,17 +1731,17 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           Text(
                             displayText,
                             style: TextStyle(
-                              fontSize: 26,
+                              fontSize: 24,
                               fontWeight: FontWeight.w800,
                               color: ringColor,
                             ),
                           ),
                           Text(
-                            percentText,
+                            '/ ${maxValue % 1 == 0 ? maxValue.toInt() : maxValue}',
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: ringColor.withAlpha(150),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: subTextColor,
                             ),
                           ),
                         ],
@@ -1723,23 +1751,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 );
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               label,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: textColor,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '$displayText / ${maxValue.toInt()}',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: subTextColor,
               ),
               textAlign: TextAlign.center,
             ),

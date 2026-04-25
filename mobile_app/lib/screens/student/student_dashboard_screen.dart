@@ -1712,6 +1712,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
     final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
 
@@ -1723,9 +1724,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             value: gpa,
             maxValue: 5.0,
             displayText: gpa.toStringAsFixed(2),
-            ringColor: const Color(0xFF7C4DFF),
-            gradientColors: [const Color(0xFFEDE7F6), const Color(0xFFD1C4E9)],
-            darkGradientColors: [const Color(0xFF1A1030), const Color(0xFF2D1B69)],
+            ringColor: const Color(0xFF43A047),
+            isDark: isDark,
           ),
         ),
         const SizedBox(width: 12),
@@ -1735,9 +1735,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             value: avgGrade,
             maxValue: 100.0,
             displayText: avgGrade.toStringAsFixed(1),
-            ringColor: const Color(0xFFFF6D00),
-            gradientColors: [const Color(0xFFFFF3E0), const Color(0xFFFFE0B2)],
-            darkGradientColors: [const Color(0xFF1A1508), const Color(0xFF3D2B10)],
+            ringColor: const Color(0xFFFFC107),
+            isDark: isDark,
           ),
         ),
       ],
@@ -1750,32 +1749,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     required double maxValue,
     required String displayText,
     required Color ringColor,
-    required List<Color> gradientColors,
-    required List<Color> darkGradientColors,
+    required bool isDark,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
-    final subTextColor = isDark ? Colors.white.withAlpha(150) : Colors.grey[600]!;
-    final trackColor = isDark ? Colors.white.withAlpha(20) : ringColor.withAlpha(25);
+    final subTextColor = isDark ? Colors.white70 : Colors.grey[600]!;
+    final trackColor = isDark ? Colors.white.withOpacity(0.08) : ringColor.withOpacity(0.12);
     final percent = (value / maxValue).clamp(0.0, 1.0);
-    final percentText = '${(percent * 100).round()}%';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: ringColor.withAlpha(isDark ? 25 : 35),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-      child: Center(
+    return _buildGlassCard(
+      isDark: isDark,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: percent),
@@ -1783,30 +1768,30 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               curve: Curves.easeOutCubic,
               builder: (context, animVal, _) {
                 return SizedBox(
-                  width: 130,
-                  height: 130,
+                  width: 110,
+                  height: 110,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       SizedBox(
-                        width: 130,
-                        height: 130,
+                        width: 110,
+                        height: 110,
                         child: PieChart(
                           PieChartData(
                             startDegreeOffset: -90,
                             sectionsSpace: 0,
-                            centerSpaceRadius: 46,
+                            centerSpaceRadius: 38,
                             sections: [
                               PieChartSectionData(
                                 value: animVal * maxValue,
                                 color: ringColor,
-                                radius: 16,
+                                radius: 14,
                                 showTitle: false,
                               ),
                               PieChartSectionData(
                                 value: maxValue - (animVal * maxValue),
                                 color: trackColor,
-                                radius: 16,
+                                radius: 14,
                                 showTitle: false,
                               ),
                             ],
@@ -1819,17 +1804,17 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           Text(
                             displayText,
                             style: TextStyle(
-                              fontSize: 26,
+                              fontSize: 24,
                               fontWeight: FontWeight.w800,
                               color: ringColor,
                             ),
                           ),
                           Text(
-                            percentText,
+                            '/ ${maxValue % 1 == 0 ? maxValue.toInt() : maxValue}',
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: ringColor.withAlpha(150),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: subTextColor,
                             ),
                           ),
                         ],
@@ -1839,23 +1824,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 );
               },
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               label,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: textColor,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '$displayText / ${maxValue.toInt()}',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: subTextColor,
               ),
               textAlign: TextAlign.center,
             ),

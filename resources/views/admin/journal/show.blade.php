@@ -832,9 +832,10 @@
     </style>
 
     @php
-        $isDekan = is_active_dekan() || (session('active_role') === 'tyutor');
+        $isDekan = is_active_dekan();
         $isRegistrator = is_active_registrator();
         $isOqituvchi = is_active_oqituvchi();
+        $isReadOnly = $isReadOnly ?? is_active_tyutor();
         $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
         $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
         $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
@@ -4869,4 +4870,25 @@
             </div>
         </div>
     </div>
+
+    @if($isReadOnly ?? false)
+    <style>
+        [onclick*="saveRetake"], [onclick*="saveMtGrade"], [onclick*="saveExamGrade"],
+        [onclick*="openLesson"], [onclick*="closeLesson"], [onclick*="superadminEdit"],
+        [onclick*="deleteRetake"], [onclick*="createRetake"], [onclick*="saveOpenedLessonGrade"],
+        .btn-save-grade, .btn-retake, .btn-open-lesson, .btn-close-lesson,
+        button[type="submit"] { display: none !important; }
+        .grade-cell-editable { pointer-events: none !important; cursor: default !important; }
+        .grade-cell-editable:hover { background: inherit !important; }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('td[onclick], td[data-editable]').forEach(function(el) {
+                el.removeAttribute('onclick');
+                el.removeAttribute('data-editable');
+                el.style.cursor = 'default';
+            });
+        });
+    </script>
+    @endif
 </x-app-layout>

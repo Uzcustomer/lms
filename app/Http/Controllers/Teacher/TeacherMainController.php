@@ -182,19 +182,29 @@ class TeacherMainController extends Controller
         }
 
         try {
+            if (!$request->hasFile('photo')) {
+                return back()->with('error', 'Rasm tanlanmadi');
+            }
+
+            // Avvalgi rasmlarni o'chirish (DB + fayl)
+            $oldPhotos = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->get();
+            foreach ($oldPhotos as $old) {
+                $oldFile = public_path($old->photo_path);
+                if (file_exists($oldFile)) {
+                    @unlink($oldFile);
+                }
+                $old->delete();
+            }
+
             $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
             $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
-            $fname = $student->student_id_number . '_' . $safeName . '.jpg';
+            $fname = $student->student_id_number . '_' . $safeName . '_' . time() . '.jpg';
             $dir = public_path('uploads/student-photos/' . date('Y-m'));
             if (!is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
-            $fullPath = $dir . '/' . $fname;
             $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
 
-            if (!$request->hasFile('photo')) {
-                return back()->with('error', 'Rasm tanlanmadi');
-            }
             $request->file('photo')->move($dir, $fname);
 
             \App\Models\StudentPhoto::create([

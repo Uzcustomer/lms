@@ -136,7 +136,15 @@
         {{-- Javobgar firma roli uchun faqat 'Firma talabalari' ko'rinadi, qolganlar yashiriladi --}}
         @if(!$hasActiveRole('javobgar_firma'))
 
-        @if(($isTeacher || $hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oqituvchi', 'kafedra_mudiri', 'fan_masuli'])) && !$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi']))
+        @if($hasActiveRole(['tyutor', 'oqituvchi']) && !$hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'kafedra_mudiri', 'fan_masuli']))
+        <a href="{{ route('teacher.journal-view') }}"
+           class="sidebar-link {{ request()->routeIs('teacher.journal-view*') || request()->routeIs('admin.journal.show') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            Jurnalni ko'rish
+        </a>
+        @elseif(($isTeacher || $hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'kafedra_mudiri', 'fan_masuli'])) && !$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi']))
         <a href="{{ route('admin.journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.journal.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

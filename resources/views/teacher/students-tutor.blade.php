@@ -6,6 +6,12 @@
     <style>
         .tutor-container { max-width: 100%; margin: 0 auto; padding: 16px; }
         .group-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        .photo-stat-card {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 14px 10px; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px;
+            text-decoration: none; transition: all 0.2s; text-align: center;
+        }
+        .photo-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
         .group-card {
             display: flex; align-items: center; gap: 14px; padding: 16px 18px;
             background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px;
@@ -71,6 +77,9 @@
             .group-count { font-size: 11px; }
             .group-badge { font-size: 11px; padding: 3px 8px; }
             .tutor-container { padding: 0; }
+            .photo-stat-card { grid-template-columns: 1fr; }
+            .photo-stat-card div:first-child { font-size: 18px !important; }
+            .photo-stat-card div:last-child { font-size: 10px !important; }
             .student-list { grid-template-columns: 1fr; gap: 4px; padding: 4px; }
             .student-item { padding: 6px 8px; gap: 6px; border-radius: 8px; }
             .student-avatar, .student-avatar img { width: 28px; height: 28px; font-size: 11px; }
@@ -133,6 +142,26 @@
                     <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772"/></svg>
                     <p style="font-size: 14px; font-weight: 600;">Sizga biriktirilgan guruhlar yo'q</p>
                 </div>
+            @endif
+
+            @if(!$tutorGroups->isEmpty() && isset($photoStats))
+            <div style="margin-top:20px;">
+                <h3 style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:10px;">Talaba rasmlari</h3>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                    <a href="{{ route('teacher.students', ['photo_filter' => 'has_photo']) }}" class="photo-stat-card" style="border-color:#bfdbfe;">
+                        <div style="font-size:22px;font-weight:800;color:#1e40af;">{{ $photoStats['has_photo'] }}</div>
+                        <div style="font-size:11px;color:#3b82f6;font-weight:600;">Rasm bor</div>
+                    </a>
+                    <a href="{{ route('teacher.students', ['photo_filter' => 'approved']) }}" class="photo-stat-card" style="border-color:#a7f3d0;">
+                        <div style="font-size:22px;font-weight:800;color:#166534;">{{ $photoStats['approved'] }}</div>
+                        <div style="font-size:11px;color:#16a34a;font-weight:600;">Tasdiqlangan</div>
+                    </a>
+                    <a href="{{ route('teacher.students', ['photo_filter' => 'rejected']) }}" class="photo-stat-card" style="border-color:#fecaca;">
+                        <div style="font-size:22px;font-weight:800;color:#dc2626;">{{ $photoStats['rejected'] }}</div>
+                        <div style="font-size:11px;color:#dc2626;font-weight:600;">Rad etilgan</div>
+                    </a>
+                </div>
+            </div>
             @endif
         </div>
 
@@ -301,6 +330,7 @@
         var currentBlob = null;
         var uploadActionUrl = '';
         var cameraStream = null;
+        var isPhotoFilterView = {{ request('photo_filter') ? 'true' : 'false' }};
 
         function stopCamera() {
             if (cameraStream) {
@@ -459,17 +489,17 @@
                 frame.style.borderStyle = 'solid';
                 frame.style.borderColor = '#3b82f6';
                 document.getElementById('photo-btn-text').textContent = 'Qayta tushirish';
-                document.getElementById('photo-capture-btn').style.display = 'flex';
-                document.getElementById('photo-file-btn').style.display = 'flex';
-                document.getElementById('photo-delete-wrap').style.display = 'block';
+                document.getElementById('photo-capture-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
+                document.getElementById('photo-file-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
+                document.getElementById('photo-delete-wrap').style.display = isPhotoFilterView ? 'none' : 'block';
             } else {
                 img.style.display = 'none';
                 noPhoto.style.display = 'block';
                 frame.style.borderStyle = 'dashed';
                 frame.style.borderColor = '#cbd5e1';
                 document.getElementById('photo-btn-text').textContent = 'Kamerani ochish';
-                document.getElementById('photo-capture-btn').style.display = 'flex';
-                document.getElementById('photo-file-btn').style.display = 'flex';
+                document.getElementById('photo-capture-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
+                document.getElementById('photo-file-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
                 document.getElementById('photo-delete-wrap').style.display = 'none';
             }
             document.getElementById('photo-save-btn').style.display = 'none';

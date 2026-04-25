@@ -167,10 +167,28 @@ class TeacherMainController extends Controller
             $query->where('province_name', $request->province);
         }
 
+        $allStudentIds = Student::whereIn('group_id', $groupHemisIds)->pluck('student_id_number')->toArray();
+        $photoStats = [
+            'has_photo' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'pending')->distinct('student_id_number')->count('student_id_number'),
+            'approved' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'approved')->distinct('student_id_number')->count('student_id_number'),
+            'rejected' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'rejected')->distinct('student_id_number')->count('student_id_number'),
+        ];
+
+        $photoFilter = $request->get('photo_filter');
+        if ($photoFilter === 'has_photo') {
+            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'pending')->pluck('student_id_number')->unique()->toArray();
+            $query->whereIn('student_id_number', $ids);
+        } elseif ($photoFilter === 'approved') {
+            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'approved')->pluck('student_id_number')->unique()->toArray();
+            $query->whereIn('student_id_number', $ids);
+        } elseif ($photoFilter === 'rejected') {
+            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'rejected')->pluck('student_id_number')->unique()->toArray();
+            $query->whereIn('student_id_number', $ids);
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->orderBy('group_name')->orderBy('full_name')->paginate($perPage)->appends($request->query());
 
-        // Viloyatlar ro'yxati (filtr uchun)
         $provinces = Student::whereIn('group_id', $groupHemisIds)
             ->whereNotNull('province_name')
             ->distinct()
@@ -178,7 +196,7 @@ class TeacherMainController extends Controller
             ->sort()
             ->values();
 
-        return view('teacher.students-tutor', compact('students', 'tutorGroups', 'provinces'));
+        return view('teacher.students-tutor', compact('students', 'tutorGroups', 'provinces', 'photoStats'));
     }
 
     public function showStudent(Student $student)

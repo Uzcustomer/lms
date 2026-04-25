@@ -1682,10 +1682,9 @@ class QuizResultController extends Controller
                 'grade' => $result->grade,
             ];
 
-            // JN mavzu formatini aniqlash — OSKI/YN test emas, alohida oqimga yo'naltiramiz
+            // Mavzu formatini aniqlash — shakl "N-mavzu" bo'lsa, mavzu retake sifatida yuklanadi
             $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
-            $isJnType = $result->quiz_type && stripos($result->quiz_type, 'JN') === 0;
-            if ($isMavzuShakl && $isJnType) {
+            if ($isMavzuShakl) {
                 $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides);
                 continue;
             }

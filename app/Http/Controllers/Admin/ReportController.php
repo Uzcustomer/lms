@@ -2372,8 +2372,24 @@ class ReportController extends Controller
                     if ($w !== null) $hemisWeeksSet[$w] = true;
                 }
 
-                // HEMIS yo'q, lekin KTR soati bor haftalar uchun alohida qator YARATILMAYDI
-                // (KTR soatlari Jami satrida to'liq ko'rinadi)
+                // HEMIS darsi yo'q, lekin KTR rejasida soat bor haftalar uchun alohida qator
+                // (Aks holda Jami satridagi KTR yig'indisi qatorlardagi yig'indidan ko'p bo'lib chalkashlik tug'diradi)
+                if ($ktrExists) {
+                    foreach ($ktrWeeks as $w => $wd) {
+                        if (empty($wd[$code])) continue;
+                        if (isset($hemisWeeksSet[$w])) continue;
+                        $weekDate = $weekStartByIdx[$w] ?? '';
+                        if ($weekDate === '' || isset($hemisDatesSet[$weekDate])) continue;
+                        $list[] = [
+                            'date' => $weekDate,
+                            'hemis' => 0,
+                            'ktr' => (int) $wd[$code],
+                            'marked' => 0,
+                            'ktr_only' => true,
+                        ];
+                        $hemisDatesSet[$weekDate] = true;
+                    }
+                }
 
                 // Sana bo'yicha saralash
                 usort($list, function ($a, $b) {
@@ -2408,7 +2424,9 @@ class ReportController extends Controller
                     'lesson' => $k + 1,
                     'date' => date('d.m.Y', strtotime($date)),
                     'cells' => [],
+                    'ktr_only' => true,
                 ];
+                $rowHasHemis = false;
                 foreach ($trainingTypes as $code => $info) {
                     $l = $byTypeByDate[$code][$date] ?? null;
                     $hemisH = $l ? (int) $l['hemis'] : 0;
@@ -2419,6 +2437,9 @@ class ReportController extends Controller
                     } else {
                         $ktrH = null;
                     }
+                    if ($l && empty($l['ktr_only'])) {
+                        $rowHasHemis = true;
+                    }
                     $rowData['cells'][$code] = [
                         'hemis' => $hemisH,
                         'ktr' => $ktrH,
@@ -2426,6 +2447,7 @@ class ReportController extends Controller
                         'diff' => $ktrExists ? (round($ktrH - $hemisH, 1) + 0) : null,
                     ];
                 }
+                if ($rowHasHemis) $rowData['ktr_only'] = false;
                 $lessonsList[] = $rowData;
             }
 

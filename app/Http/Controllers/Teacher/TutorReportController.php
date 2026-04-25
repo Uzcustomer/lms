@@ -119,23 +119,12 @@ class TutorReportController extends Controller
             ->orderBy('name')
             ->get();
 
-        $kafedras = DB::table('curriculum_subjects as cs')
-            ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
-            ->whereIn('g.group_hemis_id', $tutorGroupIds)
-            ->whereNotNull('cs.department_id')
-            ->whereNotNull('cs.department_name')
-            ->select('cs.department_id', 'cs.department_name')
-            ->groupBy('cs.department_id', 'cs.department_name')
-            ->orderBy('cs.department_name')
-            ->get();
-
         $dekanFacultyIds = [];
 
         return view('teacher.reports.jn', compact(
             'educationTypes',
             'selectedEducationType',
             'faculties',
-            'kafedras',
             'dekanFacultyIds'
         ));
     }
@@ -237,6 +226,10 @@ class TutorReportController extends Controller
             $studentQuery = DB::table('students as s')
                 ->whereIn('s.group_id', $tutorGroupIds)
                 ->select('s.hemis_id', 's.group_id');
+
+            if ($request->filled('student_name')) {
+                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+            }
 
             if ($request->filled('faculty')) {
                 $faculty = Department::find($request->faculty);
@@ -632,14 +625,17 @@ class TutorReportController extends Controller
             })
             ->whereIn('g.group_hemis_id', $tutorGroupIds);
 
+        if ($request->filled('group_id')) {
+            $selectedGroup = Group::find($request->group_id);
+            if ($selectedGroup) {
+                $query->where('g.group_hemis_id', $selectedGroup->group_hemis_id);
+            }
+        }
         if ($request->filled('faculty_id')) {
             $faculty = Department::find($request->faculty_id);
             if ($faculty) {
                 $query->where('g.department_hemis_id', $faculty->department_hemis_id);
             }
-        }
-        if ($request->filled('department_id')) {
-            $query->where('cs.department_id', $request->department_id);
         }
         if ($request->filled('specialty_id')) {
             $query->where('g.specialty_hemis_id', $request->specialty_id);

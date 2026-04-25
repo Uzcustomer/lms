@@ -922,7 +922,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     if (items.isEmpty) return const SizedBox.shrink();
 
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -930,9 +931,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         Text(
           'Fanlar',
           style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
             color: textColor,
+            letterSpacing: 0.3,
           ),
         ),
         const SizedBox(height: 10),
@@ -945,143 +947,76 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           if (jn == null) {
             jnColor = AppTheme.textSecondary;
           } else if (jn >= 71) {
-            jnColor = const Color(0xFF43A047);
+            jnColor = const Color(0xFF4A6CF7);
           } else if (jn >= 56) {
             jnColor = const Color(0xFFFFA726);
           } else {
             jnColor = const Color(0xFFE53935);
           }
 
-          Color attColor;
-          if (att >= 80) {
-            attColor = const Color(0xFF43A047);
-          } else if (att >= 60) {
-            attColor = const Color(0xFFFFA726);
-          } else {
-            attColor = const Color(0xFFE53935);
-          }
-
           return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: isDark ? AppTheme.darkCard : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(isDark ? 25 : 10),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildGlassCard(
+              isDark: isDark,
+              borderRadius: 16,
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Row(
-                      children: [
-                        // JN circular indicator
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: jn != null ? (jn / 100).clamp(0.0, 1.0) : 0),
-                          duration: Duration(milliseconds: 900 + index * 100),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, animVal, _) {
-                            return SizedBox(
-                              width: 50,
-                              height: 50,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  CircularProgressIndicator(
-                                    value: animVal,
-                                    strokeWidth: 4,
-                                    backgroundColor: isDark
-                                        ? Colors.white.withAlpha(15)
-                                        : jnColor.withAlpha(30),
-                                    valueColor: AlwaysStoppedAnimation(jnColor),
-                                  ),
-                                  Text(
-                                    jn != null ? jn.round().toString() : '-',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: jnColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: jnColor.withOpacity(isDark ? 0.2 : 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          jn != null ? jn.round().toString() : '-',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: jnColor,
+                          ),
                         ),
-                        const SizedBox(width: 12),
-                        // Subject name + attendance bar
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['name'] as String,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: textColor,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
                             children: [
+                              Icon(Icons.access_time_rounded,
+                                  size: 12, color: subTextColor),
+                              const SizedBox(width: 3),
                               Text(
-                                item['name'] as String,
+                                '${att.round()}% · ${item['absent']}/${item['total']} soat',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : AppTheme.textPrimary,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              TweenAnimationBuilder<double>(
-                                tween: Tween(begin: 0, end: att / 100),
-                                duration: Duration(milliseconds: 1000 + index * 80),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, animVal, _) {
-                                  return ClipRRect(
-                                    borderRadius: BorderRadius.circular(5),
-                                    child: LinearProgressIndicator(
-                                      value: animVal,
-                                      minHeight: 5,
-                                      backgroundColor: isDark
-                                          ? Colors.white.withAlpha(15)
-                                          : attColor.withAlpha(30),
-                                      valueColor: AlwaysStoppedAnimation(attColor),
-                                    ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                'Davomat: ${item['absent']}/${item['total']} soat',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: isDark ? Colors.white.withAlpha(120) : Colors.grey[600],
+                                  fontSize: 11,
+                                  color: subTextColor,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Attendance percentage
-                        Column(
-                          children: [
-                            Text(
-                              '${att.round()}%',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: attColor,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Icon(
-                              att >= 80 ? Icons.check_circle_outline : Icons.warning_amber_rounded,
-                              size: 14,
-                              color: attColor,
-                            ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
             ),
           );
         }),
@@ -1112,31 +1047,27 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final remainingAmount = (summary?['remaining_amount'] ?? 0).toDouble();
     final progress = totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
 
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           l.tuitionFee,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: textColor,
+            letterSpacing: 0.3,
+          ),
         ),
         const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(isDark ? 40 : 12),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
+        _buildGlassCard(
+          isDark: isDark,
+          borderRadius: 16,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Payment form badge
@@ -1260,14 +1191,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ],
           ),
         ),
+        ),
         // Contract list section
         if (isContract && contractList != null && contractList.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(
             l.contractList,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+              letterSpacing: 0.3,
+            ),
           ),
           const SizedBox(height: 12),
           ...contractList.map((contract) {
@@ -1279,22 +1214,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             final educYear = c['education_year']?.toString() ?? '';
             final isPaid = cStatus == 'paid';
 
-            return Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(isDark ? 30 : 8),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildGlassCard(
+                isDark: isDark,
+                borderRadius: 14,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Education year & status row
@@ -1355,6 +1282,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   ),
                 ],
               ),
+            ),
+            ),
             );
           }),
         ],

@@ -1053,7 +1053,7 @@
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
                     html += '<td>';
                     if (g.yn_turi === 'jn_mavzu') {
-                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background:#fef3c7;color:#92400e;">JN mavzu</span>';
+                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background:#fef3c7;color:#92400e;">' + esc(g.mavzu_shakl || g.shakl || 'Mavzu') + '</span>';
                     } else if (g.yn_turi) {
                         html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;' + (g.yn_turi === 'oski' ? 'background:#dbeafe;color:#1e40af;' : 'background:#d1fae5;color:#065f46;') + '">' + (g.yn_turi === 'oski' ? 'OSKI' : 'Test') + '</span>';
                     } else {

@@ -113,7 +113,7 @@
     <div class="tutor-container">
 
         {{-- Guruhni tanlash ko'rinishi --}}
-        @if(!request('group'))
+        @if(!request('group') && !request('photo_filter'))
         <div>
             @if(!$tutorGroups->isEmpty() && isset($photoStats))
             <div style="margin-bottom:16px;">
@@ -170,13 +170,26 @@
         {{-- Talabalar ro'yxati --}}
         <div>
             <a href="{{ route('teacher.students') }}" class="back-btn">                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
-                Guruhlar
+                Orqaga
             </a>
 
                 @php
                     $currentGroup = $tutorGroups->firstWhere('group_hemis_id', request('group'));
+                    $photoFilterLabel = match(request('photo_filter')) {
+                        'has_photo' => 'Rasm bor',
+                        'approved' => 'Tasdiqlangan',
+                        'rejected' => 'Rad etilgan',
+                        default => null,
+                    };
                 @endphp
-                @if($currentGroup)
+                @if($photoFilterLabel)
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                        <div>
+                            <h3 style="font-size:18px;font-weight:700;color:#1e293b;">{{ $photoFilterLabel }}</h3>
+                            <p style="font-size:13px;color:#64748b;">{{ $students->total() }} ta talaba</p>
+                        </div>
+                    </div>
+                @elseif($currentGroup)
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
                         <div>
                             <h3 style="font-size:18px;font-weight:700;color:#1e293b;">{{ $currentGroup->name }}</h3>

@@ -381,11 +381,10 @@ class TutorReportController extends Controller
                     $gradeKey = $info['student_hemis_id'] . '|' . $info['subject_id'] . '|' . $dateKey;
                     $dayGrades = $gradesByDay[$gradeKey] ?? [];
 
-                    $ppdKey = $comboKey . '|' . $dateKey;
-                    $pairsInDay = $pairsPerDay[$ppdKey] ?? 1;
+                    if (empty($dayGrades)) continue;
 
                     $gradeSum = array_sum($dayGrades);
-                    $dailyAvg = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                    $dailyAvg = round($gradeSum / count($dayGrades), 0, PHP_ROUND_HALF_UP);
 
                     $dailySum += $dailyAvg;
                     $daysForAverage++;

@@ -43,16 +43,23 @@ class TeacherMainController extends Controller
         $teacher = auth()->user();
         $semester = Semester::where('current', true)->first();
 
+        // Aktiv rol (loyihaning standart konventsiyasi — students() bilan bir xil)
+        $userRoles = $teacher ? $teacher->getRoleNames()->toArray() : [];
+        $activeRole = session('active_role', $userRoles[0] ?? '');
+        if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
+            $activeRole = $userRoles[0];
+        }
+
+        // Statistika va Top 10 — faqat "oqituvchi" rolida ko'rinadi
+        $isTeacherRole = $activeRole === 'oqituvchi';
+
         $stats = null;
         $top10Payload = null;
 
-        if ($teacher && $semester && !empty($teacher->hemis_id)) {
+        if ($isTeacherRole && $teacher && $semester && !empty($teacher->hemis_id)) {
             $stats = Cache::get(
                 CalculateTeacherDashboardStats::employeeCacheKey($teacher->hemis_id, $semester->id)
             );
-        }
-
-        if ($semester) {
             $top10Payload = Cache::get(
                 CalculateTeacherDashboardStats::top10CacheKey($semester->id)
             );
@@ -67,6 +74,7 @@ class TeacherMainController extends Controller
             'top10UpdatedAt'  => $top10UpdatedAt,
             'teacher'         => $teacher,
             'semester'        => $semester,
+            'isTeacherRole'   => $isTeacherRole,
         ]);
     }
 

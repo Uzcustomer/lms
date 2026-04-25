@@ -35,6 +35,7 @@
     <div style="padding: 16px 0;">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
 
+        @if($isTeacherRole)
             {{-- 4 ta kart yoki bo'sh holat --}}
             @if($stats)
                 <div style="margin-bottom: 8px;">
@@ -164,6 +165,7 @@
                     </div>
                 @endif
             </div>
+        @endif
 
         </div>
     </div>

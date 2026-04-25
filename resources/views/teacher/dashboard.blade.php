@@ -2,7 +2,7 @@
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             Dashboard
-            @if($semester)
+            @if($isTeacherRole && $semester)
                 <small class="text-muted" style="font-size: 14px; font-weight: normal;">
                     — {{ $semester->name }}
                 </small>

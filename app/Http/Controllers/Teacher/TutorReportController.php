@@ -13,32 +13,40 @@ use Illuminate\Support\Facades\DB;
 
 class TutorReportController extends Controller
 {
-    /**
-     * Tyutor guruhlarining hemis_id larini olish
-     */
     private function getTutorGroupIds()
     {
         $teacher = auth()->guard('teacher')->user();
-        return $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+
+        $tutorGroupIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+
+        $scheduleGroupIds = DB::table('schedules')
+            ->where('employee_id', $teacher->hemis_id)
+            ->where('education_year_current', true)
+            ->whereNotNull('lesson_date')
+            ->pluck('group_id')
+            ->unique()
+            ->toArray();
+
+        return array_values(array_unique(array_merge($tutorGroupIds, $scheduleGroupIds)));
     }
 
-    /**
-     * Tyutor guruhlarini olish (filtr uchun)
-     */
     private function getTutorGroups()
     {
-        $teacher = auth()->guard('teacher')->user();
-        return $teacher->groups()->where('active', true)->orderBy('name')->get();
+        $groupIds = $this->getTutorGroupIds();
+        if (empty($groupIds)) {
+            return collect();
+        }
+        return \App\Models\Group::whereIn('group_hemis_id', $groupIds)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
     }
 
-    /**
-     * Guruh filtri qo'llangan group_ids
-     */
     private function getFilteredGroupIds(Request $request)
     {
         $groupIds = $this->getTutorGroupIds();
         if (empty($groupIds)) {
-            abort(403, 'Sizga biriktirilgan guruhlar yo\'q.');
+            return [];
         }
         if ($request->filled('group')) {
             $selected = $request->group;
@@ -86,112 +94,203 @@ class TutorReportController extends Controller
      */
     public function jnReport(Request $request)
     {
-        $tutorGroups = $this->getTutorGroups();
-        $groupIds = $this->getFilteredGroupIds($request);
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(180);
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        try {
+            $tutorGroups = $this->getTutorGroups();
+            $groupIds = $this->getFilteredGroupIds($request);
 
-        // Schedule dan barcha fanlarni olish (joriy semestr)
-        $scheduleQuery = DB::table('schedules as sch')
-            ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
-            ->join('semesters as sem', function ($join) {
-                $join->on('sem.code', '=', 'sch.semester_code')
-                    ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
-            })
-            ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
-            ->whereNotNull('sch.lesson_date')
-            ->where('sem.current', true)
-            ->where('sch.education_year_current', true)
-            ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
-            ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
-            ->get();
-
-        if ($scheduleQuery->isEmpty()) {
-            return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
-        }
-
-        // Baholarni olish (admin mantiqi: status, reason, retake_grade ham)
-        $students = Student::whereIn('group_id', $groupIds)->get();
-        $studentHemisIds = $students->pluck('hemis_id')->toArray();
-        $validSubjectIds = $scheduleQuery->pluck('subject_id')->unique()->toArray();
-        $validSemesterCodes = $scheduleQuery->pluck('semester_code')->unique()->toArray();
-
-        $grades = DB::table('student_grades')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->whereIn('subject_id', $validSubjectIds)
-            ->whereIn('semester_code', $validSemesterCodes)
-            ->whereNotIn('training_type_code', $excludedCodes)
-            ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason',
-                'lesson_date', 'lesson_pair_code')
-            ->get();
-
-        // Admin mantiqi: kunlik o'rtachani pair_code bo'yicha hisoblash
-        $gradeMap = [];
-        foreach ($grades as $g) {
-            $effectiveGrade = $this->getEffectiveGradeForJn($g);
-            if ($effectiveGrade === null) continue;
-
-            $key = $g->student_hemis_id . '|' . $g->subject_id;
-            $date = substr($g->lesson_date, 0, 10);
-            $gradeMap[$key][$date][] = $effectiveGrade;
-        }
-
-        // Guruh nomi map
-        $groupNameMap = DB::table('groups')
-            ->whereIn('group_hemis_id', $groupIds)
-            ->pluck('name', 'group_hemis_id')
-            ->toArray();
-
-        // Natijalarni yig'ish
-        $results = [];
-        foreach ($scheduleQuery as $combo) {
-            $groupName = $groupNameMap[$combo->group_id] ?? $combo->group_id;
-            $groupStudents = $students->where('group_id', $combo->group_id);
-
-            foreach ($groupStudents as $student) {
-                $key = $student->hemis_id . '|' . $combo->subject_id;
-                $dailyGrades = $gradeMap[$key] ?? [];
-
-                if (empty($dailyGrades)) {
-                    $avg = null;
-                } else {
-                    $dailyAvgs = [];
-                    foreach ($dailyGrades as $dayGrades) {
-                        $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades), 0, PHP_ROUND_HALF_UP);
-                    }
-                    $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 0, PHP_ROUND_HALF_UP);
-                }
-
-                $results[] = [
-                    'group_name' => $groupName,
-                    'subject_name' => $combo->subject_name,
-                    'student_name' => $student->full_name,
-                    'student_id' => $student->student_id_number,
-                    'avg_grade' => $avg,
-                    'grade_count' => count($dailyGrades),
-                ];
+            if (empty($groupIds)) {
+                return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
             }
+
+            $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+            $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
+            $currentSemester = $request->get('current_semester', '1') == '1';
+
+            $scheduleQuery = DB::table('schedules as sch')
+                ->join('groups as gr', 'gr.group_hemis_id', '=', 'sch.group_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.code', '=', 'sch.semester_code')
+                        ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
+                })
+                ->whereIn('sch.group_id', $groupIds)
+                ->whereNotIn('sch.training_type_name', $excludedNames)
+                ->whereNotNull('sch.lesson_date')
+                ->where('sch.education_year_current', true);
+
+            foreach ($excludedSubjectPatterns as $pattern) {
+                $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+
+            if ($currentSemester) {
+                $scheduleQuery->where('sem.current', true);
+            }
+
+            $scheduleQuery = $scheduleQuery
+                ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code', 'sch.semester_name')
+                ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code', 'sch.semester_name')
+                ->get();
+
+            if ($scheduleQuery->isEmpty()) {
+                return view('teacher.reports.jn', compact('tutorGroups'))->with('results', []);
+            }
+
+            $students = Student::whereIn('group_id', $groupIds)
+                ->select('hemis_id', 'group_id', 'full_name', 'student_id_number')
+                ->get();
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+            $validSubjectIds = $scheduleQuery->pluck('subject_id')->unique()->toArray();
+            $validSemesterCodes = $scheduleQuery->pluck('semester_code')->unique()->toArray();
+
+            // Baholarni cursor bilan o'qib, kunlik o'rtacha hisoblash (memory tejash)
+            $gradeMap = [];
+            $gradesQuery = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereIn('subject_id', $validSubjectIds)
+                ->whereIn('semester_code', $validSemesterCodes)
+                ->whereNotIn('training_type_name', $excludedNames)
+                ->whereNotNull('lesson_date')
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade', 'status', 'reason',
+                    'lesson_date', 'lesson_pair_code');
+
+            foreach ($gradesQuery->cursor() as $g) {
+                $effectiveGrade = $this->getEffectiveGradeForJn($g);
+                if ($effectiveGrade === null) continue;
+
+                $key = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code;
+                $date = substr($g->lesson_date, 0, 10);
+                $gradeMap[$key][$date][] = $effectiveGrade;
+            }
+
+            // Guruh nomi map
+            $groupNameMap = DB::table('groups')
+                ->whereIn('group_hemis_id', $groupIds)
+                ->pluck('name', 'group_hemis_id')
+                ->toArray();
+
+            // Natijalarni yig'ish
+            $results = [];
+            foreach ($scheduleQuery as $combo) {
+                $groupName = $groupNameMap[$combo->group_id] ?? $combo->group_id;
+                $groupStudents = $students->where('group_id', $combo->group_id);
+
+                foreach ($groupStudents as $student) {
+                    $key = $student->hemis_id . '|' . $combo->subject_id . '|' . $combo->semester_code;
+                    $dailyGrades = $gradeMap[$key] ?? [];
+
+                    if (empty($dailyGrades)) {
+                        $avg = null;
+                    } else {
+                        $dailyAvgs = [];
+                        foreach ($dailyGrades as $dayGrades) {
+                            $dailyAvgs[] = round(array_sum($dayGrades) / count($dayGrades), 0, PHP_ROUND_HALF_UP);
+                        }
+                        $avg = round(array_sum($dailyAvgs) / count($dailyAvgs), 0, PHP_ROUND_HALF_UP);
+                    }
+
+                    $results[] = [
+                        'group_name' => $groupName,
+                        'semester_name' => $combo->semester_name,
+                        'semester_code' => $combo->semester_code,
+                        'subject_name' => $combo->subject_name,
+                        'student_name' => $student->full_name,
+                        'student_id' => $student->student_id_number,
+                        'avg_grade' => $avg,
+                        'grade_count' => count($dailyGrades),
+                    ];
+                }
+            }
+
+            // Filtr
+            if ($request->filled('filter') && $request->filter === 'low') {
+                $results = array_filter($results, fn($r) => $r['avg_grade'] !== null && $r['avg_grade'] < 60);
+            } elseif ($request->filled('filter') && $request->filter === 'no_grade') {
+                $results = array_filter($results, fn($r) => $r['avg_grade'] === null);
+            }
+
+            usort($results, function ($a, $b) {
+                $cmp = strcmp($a['group_name'], $b['group_name']);
+                if ($cmp !== 0) return $cmp;
+                $cmp = ((int) $b['semester_code']) <=> ((int) $a['semester_code']);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp($a['subject_name'], $b['subject_name']);
+                if ($cmp !== 0) return $cmp;
+                return strcmp($a['student_name'], $b['student_name']);
+            });
+
+            $results = array_values($results);
+
+            if ($request->get('export') === 'excel') {
+                return $this->exportJnExcel($results);
+            }
+
+            return view('teacher.reports.jn', compact('tutorGroups', 'results'));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Tutor JN report error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response('JN o\'zlashtirish hisobotini yuklashda xatolik: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function exportJnExcel(array $data)
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('JN hisobot');
+
+        $headers = ['#', 'Guruh', 'Semestr', 'Fan', 'Talaba FISH', 'Talaba ID', "O'rtacha baho", 'Darslar soni'];
+        foreach ($headers as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
         }
 
-        // Filtr
-        if ($request->filled('filter') && $request->filter === 'low') {
-            $results = array_filter($results, fn($r) => $r['avg_grade'] !== null && $r['avg_grade'] < 60);
-        } elseif ($request->filled('filter') && $request->filter === 'no_grade') {
-            $results = array_filter($results, fn($r) => $r['avg_grade'] === null);
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1a3268']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+        $sheet->getStyle("A1:{$colLetter}1")->applyFromArray($headerStyle);
+
+        foreach ($data as $i => $r) {
+            $row = $i + 2;
+            $sheet->setCellValue([1, $row], $i + 1);
+            $sheet->setCellValue([2, $row], $r['group_name']);
+            $sheet->setCellValue([3, $row], $r['semester_name'] ?? '-');
+            $sheet->setCellValue([4, $row], $r['subject_name']);
+            $sheet->setCellValue([5, $row], $r['student_name']);
+            $sheet->setCellValue([6, $row], $r['student_id']);
+            $sheet->setCellValue([7, $row], $r['avg_grade']);
+            $sheet->setCellValue([8, $row], $r['grade_count']);
         }
 
-        usort($results, function ($a, $b) {
-            $cmp = strcmp($a['group_name'], $b['group_name']);
-            if ($cmp !== 0) return $cmp;
-            $cmp = strcmp($a['subject_name'], $b['subject_name']);
-            if ($cmp !== 0) return $cmp;
-            return strcmp($a['student_name'], $b['student_name']);
-        });
+        $widths = [5, 15, 12, 35, 30, 15, 14, 12];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
 
-        $results = array_values($results);
+        $lastRow = count($data) + 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:{$colLetter}{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            ]);
+        }
 
-        return view('teacher.reports.jn', compact('tutorGroups', 'results'));
+        $fileName = 'JN_hisobot_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'jn_');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     /**
@@ -244,7 +343,8 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // Schedule kombinatsiyalarini olish (joriy semestr)
         $scheduleCombos = DB::table('schedules as sch')
@@ -254,11 +354,17 @@ class TutorReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
             })
             ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->where('sem.current', true)
             ->where('sch.education_year_current', true)
-            ->whereNull('sch.deleted_at')
+            ->whereNull('sch.deleted_at');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleCombos->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $scheduleCombos = $scheduleCombos
             ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
             ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name', 'sch.semester_code')
             ->get();
@@ -352,7 +458,7 @@ class TutorReportController extends Controller
                 ->whereIn('student_hemis_id', $hemisChunk)
                 ->whereIn('subject_id', $validSubjectIds)
                 ->whereIn('semester_code', $validSemesterCodes)
-                ->whereNotIn('training_type_code', $excludedCodes)
+                ->whereNotIn('training_type_name', $excludedNames)
                 ->whereNotNull('lesson_date')
                 ->when($minScheduleDate, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                 ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
@@ -523,7 +629,8 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
         $scoreLimit = (int) $request->get('score_limit', 90);
 
         // Fanlar ro'yxatini olish
@@ -534,10 +641,16 @@ class TutorReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
             })
             ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->where('sem.current', true)
-            ->where('sch.education_year_current', true)
+            ->where('sch.education_year_current', true);
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $scheduleSubjects->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $scheduleSubjects = $scheduleSubjects
             ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name')
             ->groupBy('sch.group_id', 'sch.subject_id', 'sch.subject_name')
             ->get();
@@ -555,7 +668,7 @@ class TutorReportController extends Controller
         $grades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->whereIn('subject_id', $validSubjectIds)
-            ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotIn('training_type_name', $excludedNames)
             ->select('student_hemis_id', 'subject_id', 'grade', 'retake_grade', 'status', 'reason', 'lesson_date')
             ->get();
 
@@ -634,7 +747,8 @@ class TutorReportController extends Controller
     {
         $tutorGroups = $this->getTutorGroups();
         $groupIds = $this->getFilteredGroupIds($request);
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102]);
+        $excludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
+        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
 
         // Schedule yozuvlarini olish (o'tgan kunlar uchun)
         $schedules = DB::table('schedules as sch')
@@ -644,12 +758,18 @@ class TutorReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'gr.curriculum_hemis_id');
             })
             ->whereIn('sch.group_id', $groupIds)
-            ->whereNotIn('sch.training_type_code', $excludedCodes)
+            ->whereNotIn('sch.training_type_name', $excludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')
             ->where('sem.current', true)
             ->where('sch.education_year_current', true)
-            ->whereRaw('DATE(sch.lesson_date) < CURDATE()')
+            ->whereRaw('DATE(sch.lesson_date) < CURDATE()');
+
+        foreach ($excludedSubjectPatterns as $pattern) {
+            $schedules->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+
+        $schedules = $schedules
             ->select('sch.group_id', 'sch.subject_id', 'sch.subject_name',
                 'sch.employee_id', 'sch.employee_name',
                 DB::raw('DATE(sch.lesson_date) as lesson_date'),
@@ -669,7 +789,7 @@ class TutorReportController extends Controller
         $existingGrades = DB::table('student_grades')
             ->whereIn('student_hemis_id', $students->pluck('hemis_id')->toArray())
             ->whereIn('subject_id', $subjectIds)
-            ->whereNotIn('training_type_code', $excludedCodes)
+            ->whereNotIn('training_type_name', $excludedNames)
             ->select('student_hemis_id', 'subject_id', DB::raw('DATE(lesson_date) as lesson_date'))
             ->distinct()
             ->get();

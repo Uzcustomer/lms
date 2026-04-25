@@ -29,12 +29,12 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       'superadmin', 'admin', 'kichik_admin', 'registrator_ofisi',
       'dekan', 'oqituvchi', 'kafedra_mudiri', 'fan_masuli',
     ];
-    if (activeRole != null && jurnalRoles.contains(activeRole) && activeRole != 'oquv_bolimi') {
+    if (activeRole != null && jurnalRoles.contains(activeRole) && activeRole != 'oquv_bolimi' && activeRole != 'oquv_bolimi_boshligi') {
       items.add(_NavItem(Icons.edit_note_outlined, Icons.edit_note, 'Jurnal', 'journal'));
     }
 
-    // Talabalar - most roles except test_markazi, oquv_bolimi
-    if (activeRole != 'test_markazi' && activeRole != 'oquv_bolimi') {
+    // Talabalar - most roles except test_markazi, oquv_bolimi, oquv_bolimi_boshligi
+    if (activeRole != 'test_markazi' && activeRole != 'oquv_bolimi' && activeRole != 'oquv_bolimi_boshligi') {
       items.add(_NavItem(Icons.people_outline, Icons.people, l.students, 'students'));
     }
 

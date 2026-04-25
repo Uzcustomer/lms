@@ -221,26 +221,87 @@
             return dateStr;
         }
 
+        var calcPollTimer = null;
+        var calcStartTime = null;
+
         function loadReport(page) {
             currentPage = page || 1;
+
+            // Agar natija tayyor bo'lsa, faqat sahifalash/filtrlash
+            if (page > 1 || window._calcDone) {
+                return fetchCalcResults(currentPage);
+            }
+
+            // Background job ishga tushirish
             var params = getFilters();
             params.page = currentPage;
 
             $('#empty-state').hide();
             $('#table-area').hide();
             $('#loading-state').show();
-
-            var startTime = performance.now();
+            calcStartTime = performance.now();
 
             $.ajax({
                 url: '{{ route("admin.reports.lesson-assignment.data") }}',
                 type: 'GET',
                 data: params,
-                timeout: 120000,
+                timeout: 15000,
                 success: function(res) {
-                    var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                    if (res.queued) {
+                        startCalcPolling();
+                    }
+                },
+                error: function(xhr) {
                     $('#loading-state').hide();
+                    calcReset();
+                    $('#empty-state').show().find('p:first').html("<b>Xatolik yuz berdi</b>");
+                }
+            });
+        }
 
+        function startCalcPolling() {
+            if (calcPollTimer) clearInterval(calcPollTimer);
+            window._calcDone = false;
+            calcPollTimer = setInterval(pollCalcStatus, 2000);
+        }
+
+        function pollCalcStatus() {
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.calc-status") }}',
+                type: 'GET',
+                timeout: 10000,
+                success: function(res) {
+                    if (res.status === 'done') {
+                        clearInterval(calcPollTimer);
+                        calcPollTimer = null;
+                        window._calcDone = true;
+                        fetchCalcResults(1);
+                    } else if (res.status === 'failed') {
+                        clearInterval(calcPollTimer);
+                        calcPollTimer = null;
+                        $('#loading-state').hide();
+                        calcReset();
+                        $('#empty-state').show().find('p:first').html("<b>" + (res.message || 'Xatolik yuz berdi') + "</b>");
+                    }
+                }
+            });
+        }
+
+        function fetchCalcResults(page) {
+            var params = getFilters();
+            params.page = page;
+
+            $('#loading-state').show();
+            $('#table-area').hide();
+
+            $.ajax({
+                url: '{{ route("admin.reports.lesson-assignment.calc-results") }}',
+                type: 'GET',
+                data: params,
+                timeout: 30000,
+                success: function(res) {
+                    var elapsed = calcStartTime ? ((performance.now() - calcStartTime) / 1000).toFixed(1) : '—';
+                    $('#loading-state').hide();
                     calcReset();
 
                     if (!res.data || res.data.length === 0) {
@@ -257,21 +318,10 @@
                     $('#table-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
-                error: function(xhr) {
+                error: function() {
                     $('#loading-state').hide();
-                    var errMsg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
-                    var errDetail = '';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errMsg = xhr.responseJSON.message;
-                        if (xhr.responseJSON.file) errDetail = ' (' + xhr.responseJSON.file + ')';
-                    } else if (xhr.status === 0) {
-                        errMsg = "Serverga ulanib bo'lmadi yoki vaqt tugadi.";
-                    } else if (xhr.status === 504 || xhr.status === 502) {
-                        errMsg = "Server javob bermadi (timeout). Kamroq kun tanlab ko'ring.";
-                    }
-                    $('#empty-state').show().find('p:first').html("<b>" + errMsg + "</b>" + (errDetail ? '<br><span style=\"font-size:11px;color:#94a3b8;\">' + errDetail + '</span>' : ''));
-                    console.error('[loadReport] xhr.status=' + xhr.status, xhr.responseJSON || xhr.responseText);
                     calcReset();
+                    $('#empty-state').show().find('p:first').html("<b>Natijalarni olishda xatolik</b>");
                 }
             });
         }
@@ -301,6 +351,7 @@
             pct.show().text('');
             $('#empty-state').hide();
             $('#table-area').hide();
+            window._calcDone = false;
 
             $.ajax({
                 url: '{{ route("admin.reports.lesson-assignment.sync-schedules") }}',

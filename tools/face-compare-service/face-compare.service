@@ -1,0 +1,19 @@
+[Unit]
+Description=LMS Face Compare Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/face-compare-service
+Environment="PATH=/var/www/face-compare-service/venv/bin"
+Environment="HOME=/var/www/face-compare-service"
+Environment="DEEPFACE_HOME=/var/www/face-compare-service"
+Environment="TF_CPP_MIN_LOG_LEVEL=2"
+ExecStart=/var/www/face-compare-service/venv/bin/uvicorn app:app --host 127.0.0.1 --port 5005
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

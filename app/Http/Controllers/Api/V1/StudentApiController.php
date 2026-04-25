@@ -14,6 +14,8 @@ use App\Models\Independent;
 use App\Models\IndependentGradeHistory;
 use App\Models\IndependentSubmission;
 use App\Models\MarkingSystemScore;
+use App\Models\ExamSchedule;
+use App\Models\StudentRating;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Setting;
@@ -108,22 +110,30 @@ class StudentApiController extends Controller
                 'employee_name' => $g->employee_name,
             ]);
 
-        $debtBySemester = $debtRecords->groupBy('semester_name')->map(function ($records, $semesterName) {
-            return $records->map(fn($r) => [
-                'subject_name' => $r->subject_name,
-                'credit' => $r->credit,
-                'total_acload' => $r->total_acload,
-                'total_point' => $r->total_point,
-                'grade' => $r->grade,
-                'retraining_status' => $r->retraining_status,
-            ]);
-        });
+        // Semester-level averages for comparison
+        $semesterAvgs = StudentGrade::where('student_id', $student->id)
+            ->where('status', 'recorded')
+            ->select('semester_code', DB::raw('AVG(CAST(grade AS DECIMAL(10,2))) as semester_avg'))
+            ->groupBy('semester_code')
+            ->orderBy('semester_code')
+            ->pluck('semester_avg', 'semester_code');
+
+        $currentSemesterCode = $student->semester_code;
+        $semesterKeys = $semesterAvgs->keys()->toArray();
+        $currentIndex = array_search($currentSemesterCode, $semesterKeys);
+
+        $currentSemesterAvg = $semesterAvgs[$currentSemesterCode] ?? null;
+        $prevSemesterAvg = ($currentIndex !== false && $currentIndex > 0)
+            ? $semesterAvgs[$semesterKeys[$currentIndex - 1]]
+            : null;
 
         return response()->json([
             'data' => [
                 'student_name' => $student->full_name,
                 'gpa' => (float) $avgGpa,
                 'avg_grade' => $student->avg_grade ?? 0,
+                'current_semester_avg' => $currentSemesterAvg ? round((float) $currentSemesterAvg, 2) : null,
+                'prev_semester_avg' => $prevSemesterAvg ? round((float) $prevSemesterAvg, 2) : null,
                 'debt_subjects' => $debtSubjectsCount,
                 'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,
@@ -707,6 +717,7 @@ class StudentApiController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
             ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotNull('lesson_date')
             ->min('lesson_date');
@@ -716,6 +727,7 @@ class StudentApiController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semester)
             ->whereNotNull('lesson_date')
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                 $q2->where('education_year_code', $educationYearCode);
                 if ($minScheduleDate !== null) {
@@ -744,10 +756,27 @@ class StudentApiController extends Controller
                 'lesson_pair_end_time' => $g->lesson_pair_end_time,
             ]);
 
+        $scheduleDates = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semester)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
+            ->select('lesson_date', 'training_type_code', 'training_type_name')
+            ->orderBy('lesson_date', 'asc')
+            ->get()
+            ->map(fn($s) => [
+                'lesson_date' => $s->lesson_date,
+                'training_type_code' => $s->training_type_code,
+                'training_type_name' => $s->training_type_name,
+            ]);
+
         return response()->json([
             'data' => [
                 'subject_id' => $subjectId,
                 'grades' => $grades,
+                'schedule_dates' => $scheduleDates,
             ],
         ]);
     }
@@ -1046,7 +1075,11 @@ class StudentApiController extends Controller
         ]);
 
         $student = $request->user();
+        $isNewPhone = empty($student->phone);
         $student->phone = $request->phone;
+        if ($isNewPhone || !$student->phone_added_at) {
+            $student->phone_added_at = now();
+        }
         $student->save();
 
         $days = (int) Setting::get('telegram_deadline_days', 19);
@@ -1181,6 +1214,103 @@ class StudentApiController extends Controller
                 'education_year' => $educationYearCode,
                 'course' => $course,
                 'semester_name' => $student->semester_name,
+            ],
+        ]);
+    }
+
+    public function examSchedule(Request $request): JsonResponse
+    {
+        $student = $request->user();
+
+        $exams = ExamSchedule::where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $student->semester_code)
+            ->where(function ($query) use ($student) {
+                $query->where('education_year', $student->education_year_code)
+                    ->orWhereNull('education_year');
+            })
+            ->get()
+            ->flatMap(function ($exam) {
+                $items = [];
+
+                if (!$exam->oski_na && $exam->oski_date) {
+                    $items[] = [
+                        'subject_name' => $exam->subject_name,
+                        'exam_type' => 'OSKI',
+                        'date' => $exam->oski_date->format('Y-m-d'),
+                        'time' => $exam->oski_time,
+                    ];
+                }
+
+                if (!$exam->test_na && $exam->test_date) {
+                    $items[] = [
+                        'subject_name' => $exam->subject_name,
+                        'exam_type' => 'Test',
+                        'date' => $exam->test_date->format('Y-m-d'),
+                        'time' => $exam->test_time,
+                    ];
+                }
+
+                return $items;
+            })
+            ->sortBy('date')
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data' => $exams,
+        ]);
+    }
+
+    public function studentRating(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        $myRating = StudentRating::where('student_hemis_id', $student->hemis_id)->first();
+
+        $query = StudentRating::query();
+
+        $filterType = $request->input('filter', 'group');
+        if ($filterType === 'group' && $myRating) {
+            $query->where('group_name', $myRating->group_name);
+        } elseif ($filterType === 'specialty' && $myRating) {
+            $query->where('specialty_code', $myRating->specialty_code)
+                  ->where('level_code', $myRating->level_code);
+        } elseif ($filterType === 'department' && $myRating) {
+            $query->where('department_code', $myRating->department_code)
+                  ->where('level_code', $myRating->level_code);
+        }
+
+        $students = $query->orderByDesc('jn_average')->get();
+
+        $rank = 0;
+        $myRank = 0;
+        $list = [];
+        $limit = ($filterType === 'group') ? null : 100;
+
+        foreach ($students as $i => $s) {
+            $rank = $i + 1;
+            $isMe = $s->student_hemis_id == $student->hemis_id;
+            if ($isMe) $myRank = $rank;
+
+            if ($limit === null || $rank <= $limit || $isMe) {
+                $list[] = [
+                    'rank' => $rank,
+                    'full_name' => $s->full_name,
+                    'group_name' => $s->group_name,
+                    'jn_average' => (float) $s->jn_average,
+                    'subjects_count' => $s->subjects_count,
+                    'is_me' => $isMe,
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'my_rank' => $myRank,
+                'my_jn_average' => $myRating ? (float) $myRating->jn_average : 0,
+                'total_students' => count($students),
+                'filter' => $filterType,
+                'students' => $list,
             ],
         ]);
     }

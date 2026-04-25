@@ -169,6 +169,7 @@
                             <th>Sana</th>
                             <th>Juftlik</th>
                             <th>Vaqti</th>
+                            <th>Dars turi</th>
                             <th>Turi</th>
                             <th>Soat</th>
                         </tr>
@@ -334,6 +335,7 @@
                             html += '<td>' + esc(d.lesson_date) + '</td>';
                             html += '<td>' + esc(d.pair_name) + '</td>';
                             html += '<td style="font-size:11.5px;color:#475569;">' + esc(d.pair_time) + '</td>';
+                            html += '<td style="font-size:11.5px;color:#475569;">' + esc(d.training_type_name || '—') + '</td>';
                             html += '<td><span class="badge ' + typeCls + '">' + d.type + '</span></td>';
                             html += '<td style="text-align:center;font-weight:700;">' + d.hours + '</td>';
                             html += '</tr>';

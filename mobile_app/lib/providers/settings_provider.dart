@@ -17,14 +17,17 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      final prefs = await SharedPreferences.getInstance();
 
-    final themeStr = prefs.getString(_themeKey) ?? 'light';
-    _themeMode = themeStr == 'dark' ? ThemeMode.dark : ThemeMode.light;
+      final themeStr = prefs.getString(_themeKey) ?? 'light';
+      _themeMode = themeStr == 'dark' ? ThemeMode.dark : ThemeMode.light;
 
-    final localeStr = prefs.getString(_localeKey) ?? 'uz';
-    _locale = Locale(localeStr);
-
+      final localeStr = prefs.getString(_localeKey) ?? 'uz';
+      _locale = Locale(localeStr);
+    } catch (_) {
+      // Keep defaults on failure
+    }
     notifyListeners();
   }
 

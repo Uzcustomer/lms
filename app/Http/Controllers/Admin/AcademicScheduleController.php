@@ -105,6 +105,7 @@ class AcademicScheduleController extends Controller
         // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
         $activeRole = session('active_role', $user?->getRoleNames()->first());
         $canDelete = $user && in_array($activeRole, $adminRoles);
+        $canEdit = $canDelete || ($user && $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
 
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
@@ -127,6 +128,7 @@ class AcademicScheduleController extends Controller
             'currentEducationYear',
             'routePrefix',
             'canDelete',
+            'canEdit',
         ));
     }
 
@@ -685,6 +687,7 @@ class AcademicScheduleController extends Controller
         $user = auth()->user() ?? auth('teacher')->user();
         $activeRole = session('active_role', $user?->getRoleNames()->first());
         $isAdmin = $user && in_array($activeRole, ['superadmin', 'admin', 'kichik_admin']);
+        $canEditSaved = $isAdmin || ($user && $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
         $minDate = $isAdmin ? $today : $today->copy()->addDay();
 
         foreach ($validSchedules as $schedule) {
@@ -745,7 +748,7 @@ class AcademicScheduleController extends Controller
                 $newTestDate = !empty($schedule['test_date']) ? $schedule['test_date'] : null;
                 $newTestNa = $testNa;
 
-                if ($record->exists) {
+                if ($record->exists && !$canEditSaved) {
                     // Agar OSKI sana yoki N/A allaqachon saqlangan bo'lsa — o'zgartirma
                     if ($record->oski_date || $record->oski_na) {
                         $newOskiDate = $record->oski_date?->format('Y-m-d');
@@ -795,7 +798,8 @@ class AcademicScheduleController extends Controller
         $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
         // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
         $activeRole = session('active_role', $user?->getRoleNames()->first());
-        if (!$user || !in_array($activeRole, $adminRoles)) {
+        $canEdit = $user && (in_array($activeRole, $adminRoles) || $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
+        if (!$canEdit) {
             abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
         }
 
@@ -1417,6 +1421,20 @@ class AcademicScheduleController extends Controller
                     );
                 }
 
+                $nonAuditoriumCodes = ['17'];
+                $entryAuditoriumHours = 0;
+                if (is_array($entrySubject->subject_details)) {
+                    foreach ($entrySubject->subject_details as $detail) {
+                        $trainingCode = (string) (($detail['trainingType'] ?? [])['code'] ?? '');
+                        if ($trainingCode !== '' && !in_array($trainingCode, $nonAuditoriumCodes)) {
+                            $entryAuditoriumHours += (float) ($detail['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($entryAuditoriumHours <= 0) {
+                    $entryAuditoriumHours = (float) ($entrySubject->total_acload ?: 1);
+                }
+
                 foreach ($entryStudents as $student) {
                     $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
 
@@ -1427,8 +1445,7 @@ class AcademicScheduleController extends Controller
                         ->whereNotIn('training_type_code', [99, 100, 101, 102])
                         ->sum('absent_off');
 
-                    $totalAcload = $entrySubject->total_acload ?: 1;
-                    $qoldiq = round($qoldirgan * 100 / $totalAcload, 2);
+                    $qoldiq = round($qoldirgan * 100 / $entryAuditoriumHours, 2);
 
                     // Kontrakt qarzdorligi tekshiruvi
                     $contract = ContractList::where('student_hemis_id', $student->hemis_id)
@@ -1460,7 +1477,7 @@ class AcademicScheduleController extends Controller
                         $mtFailed = true;
                         $holat = 'X';
                     }
-                    if ($qoldiq > 25) {
+                    if ($qoldiq >= 25) {
                         $davomatFailed = true;
                         $holat = 'X';
                     }

@@ -355,7 +355,11 @@ class StudentAuthController extends Controller
         ]);
 
         $student = Auth::guard('student')->user();
+        $isNewPhone = empty($student->phone);
         $student->phone = $request->phone;
+        if ($isNewPhone || !$student->phone_added_at) {
+            $student->phone_added_at = now();
+        }
         $student->save();
 
         $days = Setting::get('telegram_deadline_days', 7);

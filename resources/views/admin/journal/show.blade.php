@@ -11,6 +11,27 @@
             background: #bfdbfe;
         }
 
+        /* Sababli ariza asosida otrabotka qilingan baho — 12-qo'shimcha shaklga tushadi */
+        .sababli-retake-cell {
+            background: #ede9fe !important;
+            border: 1.5px solid #7c3aed !important;
+            color: #5b21b6;
+            font-weight: 700;
+            position: relative;
+        }
+        .sababli-retake-cell::after {
+            content: "★";
+            position: absolute;
+            top: -2px;
+            right: 1px;
+            font-size: 8px;
+            color: #7c3aed;
+            line-height: 1;
+        }
+        .sababli-retake-cell:hover {
+            background: #ddd6fe !important;
+        }
+
         .tab-content {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -525,7 +546,10 @@
             color: #dc2626 !important;
         }
         .grade-retake {
-            color: #7c3aed !important;
+            color: #111827 !important;
+            background: #c9c9c9;
+            padding: 1px 3px;
+            border-radius: 2px;
         }
         /* Diagonal split cell for retake grades */
         .split-cell {
@@ -533,6 +557,7 @@
             width: 100%;
             height: 40px;
             overflow: hidden;
+            background: #c9c9c9;
         }
         .split-cell .split-line {
             position: absolute;
@@ -561,7 +586,7 @@
             font-size: 11px;
             font-weight: 600;
             line-height: 1;
-            color: #7c3aed;
+            color: #111827;
         }
         .editable-cell {
             position: relative;
@@ -807,9 +832,18 @@
     </style>
 
     @php
-        $isDekan = is_active_dekan();
+        $isDekan = is_active_dekan() || (session('active_role') === 'tyutor');
         $isRegistrator = is_active_registrator();
-        $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+        $isOqituvchi = is_active_oqituvchi();
+        $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
+        $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
+        $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
+        $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+        $pastLessonDates = array_values(array_filter($jbLessonDates, fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d') <= $todayStr));
+        $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
+        $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
+        $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
+        $canAdminEditExam = false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -1119,7 +1153,7 @@
                                                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
                                             }
 
-                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
+                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null, 'on_sababli' => false, 'oski_sababli' => false, 'test_sababli' => false];
 
                                             // Calculate attendance percentage with 2 decimal places
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
@@ -1142,7 +1176,7 @@
                                                     $isRetake = $hasRetakeInDay[$date] ?? false;
                                                     $hasNonFinalInDay = $hasGrades && collect($dayGrades)->contains(fn($g) => !($g['is_final'] ?? true));
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
                                                     @if($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
@@ -1157,9 +1191,11 @@
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                             $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
                                                             $daySababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $date && $excuseData->end_date >= $date;
+                                                            $dateKeyForSababli = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                                            $hemisSababliDay = !empty($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli] ?? []);
                                                         @endphp
-                                                        @if($hasApprovedExcuse)
-                                                            <span class="excuse-nb-cell font-medium" title="Sababli (tasdiqlangan hujjat)">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
+                                                        @if($hasApprovedExcuse || $hemisSababliDay)
+                                                            <span class="excuse-nb-cell font-medium" title="Sababli">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
                                                         @else
                                                             <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
                                                         @endif
@@ -1177,16 +1213,16 @@
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['oski_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
                                                 @if($canAdminEditExam && $oskiRounded !== null)
                                                     <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
                                                 @else
                                                     {{ $oskiRounded !== null ? $oskiRounded : '' }}
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['test_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
                                                 @if($canAdminEditExam && $testRounded !== null)
                                                     <span class="font-bold text-blue-600">{{ $testRounded }}</span>
                                                 @else
@@ -1317,7 +1353,7 @@
                                                 $mtAverage = round((float) $manualMt, 0, PHP_ROUND_HALF_UP);
                                             }
 
-                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null];
+                                            $other = $otherGrades[$student->hemis_id] ?? ['on' => null, 'oski' => null, 'test' => null, 'on_sababli' => false, 'oski_sababli' => false, 'test_sababli' => false];
 
                                             $absentOff = $attendanceData[$student->hemis_id] ?? 0;
                                             $davomatPercent = $auditoriumHours > 0 ? round(($absentOff / $auditoriumHours) * 100, 2) : 0;
@@ -1342,15 +1378,14 @@
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                                        $isSuperAdminRole = auth()->user()?->hasRole('superadmin') ?? false;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRateAdmin = !$isDekan && (($isAdminRole && !$isYnSubmitted) || $isSuperAdminRole);
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted || $isSuperAdminRole;
+                                                        $canRateAdmin = !$isDekan && $isAdminRole && !$isYnSubmitted;
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted;
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;
@@ -1390,7 +1425,28 @@
                                                         }
                                                     @endphp
                                                     @if($grade !== null)
-                                                        @if($canEditExcuseExisting)
+                                                        @if($isSuperAdmin && $gradeData)
+                                                            {{-- Superadmin: istalgan bahoni edit qilish --}}
+                                                            <div class="editable-cell cursor-pointer hover:bg-purple-50" onclick="superadminEdit(this, {{ $gradeData['id'] }})" title="Superadmin: bahoni o'zgartirish">
+                                                                @if($hasRetake && $retakeType === 'low_grade')
+                                                                    @php $origVal = round($gradeData['original_grade'], 0); $retakeVal = round($gradeData['retake_grade'], 0); @endphp
+                                                                    <div class="split-cell"><svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg><span class="split-top text-red-600">{{ $origVal }}</span><span class="split-bottom">{{ $retakeVal }}</span></div>
+                                                                @elseif($hasRetake && $retakeType === 'absent')
+                                                                    @php
+                                                                        $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                                        $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                                        $nbColorClass = $hemisSababli ? 'text-green-600' : 'text-red-600';
+                                                                    @endphp
+                                                                    <div class="split-cell"><svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg><span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span><span class="split-bottom">{{ round($grade, 0) }}</span></div>
+                                                                @else
+                                                                    @php
+                                                                        $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
+                                                                        $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
+                                                                    @endphp
+                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
+                                                                @endif
+                                                            </div>
+                                                        @elseif($canEditExcuseExisting)
                                                             {{-- Sababli ariza asosida mavjud bahoni o'zgartirish --}}
                                                             <div class="editable-cell grade-cell-opened cursor-pointer hover:bg-amber-50"
                                                                  data-row="{{ $index }}" data-col="{{ $colIndex }}"
@@ -1415,9 +1471,9 @@
                                                             @php
                                                                 $origVal = round($gradeData['original_grade'], 0);
                                                                 $retakeVal = round($gradeData['retake_grade'], 0);
+                                                                $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                             @endphp
-                                                            <div class="split-cell @if($canRateAdmin) cursor-pointer hover:bg-blue-50 @endif" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $canRateAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($canRateAdmin) onclick="makeEditable(this, {{ $gradeData['id'] }})" @endif>
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="Oldingi: {{ $origVal }}, Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top text-red-600">{{ $origVal }}</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1425,14 +1481,37 @@
                                                         @elseif($hasRetake && $retakeType === 'absent')
                                                             {{-- NB + retake baho --}}
                                                             @php
-                                                                $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
                                                                 $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                                 $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
-                                                                $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $lmsSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                                $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                                $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                                $isSababli = $lmsSababli || $hemisSababli;
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
+                                                                $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                             @endphp
-                                                            <div class="split-cell @if($isSuperAdmin) cursor-pointer hover:bg-amber-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}{{ $isSuperAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($isSuperAdmin && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ round($grade, 0) }})" @elseif($isSuperAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
+                                                            @php
+                                                                $retakeTooltip = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . round($grade, 0);
+                                                                if ($retakeSababli) {
+                                                                    $retakeTooltip .= ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)';
+                                                                }
+                                                                if (isset($absenceData)) {
+                                                                    if (!empty($absenceData['retake_graded_at'])) {
+                                                                        $retakeTooltip .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                    }
+                                                                    $graderName = null;
+                                                                    if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                        $graderName = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                    } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                        $graderName = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                    }
+                                                                    if ($graderName) {
+                                                                        $retakeTooltip .= "\nBaho qo'ydi: " . $graderName;
+                                                                    }
+                                                                    $retakeTooltip .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
+                                                                }
+                                                            @endphp
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>
@@ -1442,21 +1521,33 @@
                                                                 $isTeacherGrade = ($gradeData['hemis_id'] ?? null) == 88888888;
                                                                 $gradeColorClass = round($grade, 0) < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTeacherGrade ? 'text-green-600' : 'text-gray-900');
                                                             @endphp
-                                                            @if($canRateAdmin && $gradeData)
-                                                                <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="adminEditGrade(this, {{ $gradeData['id'] }}, {{ round($grade, 0) }})" title="Bosib o'zgartirish yoki o'chirish">
-                                                                    <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                                </div>
-                                                            @else
-                                                                <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
-                                                            @endif
+                                                            <span class="{{ $isRetake ? 'grade-retake' : $gradeColorClass }} font-medium">{{ round($grade, 0) }}</span>
                                                         @endif
                                                     @elseif($isAbsent)
                                                         @php
                                                             $hasApprovedExcuse = isset($approvedExcuses[$student->hemis_id]);
                                                             $excuseData = $approvedExcuses[$student->hemis_id] ?? null;
-                                                            $isSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                            $lmsSababli = $hasApprovedExcuse && $excuseData && $excuseData->start_date <= $col['date'] && $excuseData->end_date >= $col['date'];
+                                                            $dateKeyForSababli = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                            $hemisSababli = isset($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli][$col['pair']]);
+                                                            $isSababli = $lmsSababli || $hemisSababli;
                                                             $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                             $excuseAlreadySaved = isset($excuseGradeSnapshots[$student->hemis_id]);
+
+                                                            // Sababli ariza deadline: ariza tasdiqlangan kundan boshlab
+                                                            // sababli kunlar soniga teng vaqt o'qituvchiga beriladi
+                                                            // Admin va superadmin uchun deadline yo'q
+                                                            $excuseDeadlinePassed = false;
+                                                            $excuseDeadlineStr = null;
+                                                            if ($excuseData && $excuseData->reviewed_at) {
+                                                                $excuseDays = \Carbon\Carbon::parse($excuseData->start_date)
+                                                                    ->diffInDays(\Carbon\Carbon::parse($excuseData->end_date)) + 1;
+                                                                $excuseDeadline = \Carbon\Carbon::parse($excuseData->reviewed_at)
+                                                                    ->addDays($excuseDays)->endOfDay();
+                                                                $excuseDeadlinePassed = now()->greaterThan($excuseDeadline);
+                                                                $excuseDeadlineStr = $excuseDeadline->format('d.m.Y H:i');
+                                                            }
+                                                            $canEnterExcuseGrade = !$isDekan && (!$excuseDeadlinePassed || $isAdminRole);
                                                         @endphp
                                                         @if($isExcuseOpenedForStudent && !$hasRetake && $isOqituvchi)
                                                             {{-- Sababli ariza asosida NB ga baho qo'yish --}}
@@ -1470,14 +1561,18 @@
                                                                 <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                                                             </div>
-                                                        @elseif($hasApprovedExcuse && !$hasRetake && !$excuseAlreadySaved)
-                                                            {{-- Sababli NB — modal orqali baho kiritish --}}
+                                                        @elseif($hasApprovedExcuse && !$hasRetake && ((!$excuseAlreadySaved && $canEnterExcuseGrade) || (auth()->user()?->hasRole('superadmin') ?? false)))
+                                                            {{-- Sababli NB — modal orqali baho kiritish (superadmin YN snapshot/muddat cheklovlaridan tashqari) --}}
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
                                                                  onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
-                                                                 title="Sababli — bosib baho kiriting">
+                                                                 title="Sababli — bosib baho kiriting{{ !$isAdminRole && $excuseDeadlineStr ? ' (muddat: ' . $excuseDeadlineStr . ')' : '' }}">
                                                                 <span class="text-green-600 font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
                                                             </div>
+                                                        @elseif($hasApprovedExcuse && !$hasRetake)
+                                                            {{-- Dekan / muddat o'tgan / excuse snapshot allaqachon yuborilgan — faqat ko'rish --}}
+                                                            <span class="text-green-600 font-medium"
+                                                                  title="{{ $excuseDeadlinePassed && !$isAdminRole ? 'Sababli baho kiritish muddati o\'tgan (' . $excuseDeadlineStr . ')' : 'Sababli — baho kiritishga ruxsat yo\'q' }}">NB</span>
                                                         @elseif($showRatingInput)
                                                             {{-- NB — otrabotka qilish mumkin --}}
                                                             <div class="editable-cell cursor-pointer hover:bg-blue-50" onclick="makeEditable(this, {{ $gradeRecordId }})" title="Bosib baho kiriting">
@@ -1490,10 +1585,26 @@
                                                             {{-- NB + otrabotka qilgan: diagonal split --}}
                                                             @php
                                                                 $retakeVal = round($absenceData['retake_grade'], 0);
-                                                                $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
+                                                                $retakeSababli = !empty($absenceData['retake_was_sababli']);
+                                                                $retakeTooltip2 = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . $retakeVal;
+                                                                if ($retakeSababli) {
+                                                                    $retakeTooltip2 .= ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)';
+                                                                }
+                                                                if (!empty($absenceData['retake_graded_at'])) {
+                                                                    $retakeTooltip2 .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                }
+                                                                $graderName2 = null;
+                                                                if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                    $graderName2 = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                    $graderName2 = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                }
+                                                                if ($graderName2) {
+                                                                    $retakeTooltip2 .= "\nBaho qo'ydi: " . $graderName2;
+                                                                }
+                                                                $retakeTooltip2 .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
                                                             @endphp
-                                                            <div class="split-cell @if($isSuperAdmin) cursor-pointer hover:bg-amber-50 @endif" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $isSuperAdmin ? ' — bosib o\'zgartirish' : '' }}"
-                                                                @if($isSuperAdmin && $isSababli && $hasApprovedExcuse) onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }}, {{ $retakeVal }})" @elseif($isSuperAdmin) onclick="makeEditable(this, {{ $gradeRecordId }})" @endif>
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip2 }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -1531,23 +1642,23 @@
                                             <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             @php
-                                                $oskiRounded2 = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
-                                                $testRounded2 = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded2 !== null ? $oskiRounded2 : 'null' }})" title="Bosib OSKI bahosini kiriting" @endif>
-                                                @if($canAdminEditExam && $oskiRounded2 !== null)
-                                                    <span class="font-bold text-blue-600">{{ $oskiRounded2 }}</span>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['oski_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                                @if($canAdminEditExam && $oskiRounded !== null)
+                                                    <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
                                                 @else
-                                                    {{ $oskiRounded2 !== null ? $oskiRounded2 : '' }}
+                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded2 !== null ? $testRounded2 : 'null' }})" title="Bosib Test bahosini kiriting" @endif>
-                                                @if($canAdminEditExam && $testRounded2 !== null)
-                                                    <span class="font-bold text-blue-600">{{ $testRounded2 }}</span>
+                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['test_sababli']) ? 'sababli-retake-cell' : '' }}"
+                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                                @if($canAdminEditExam && $testRounded !== null)
+                                                    <span class="font-bold text-blue-600">{{ $testRounded }}</span>
                                                 @else
-                                                    {{ $testRounded2 !== null ? $testRounded2 : '' }}
+                                                    {{ $testRounded !== null ? $testRounded : '' }}
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -1573,6 +1684,32 @@
                 </div>
 
                 {{-- YN ga yuborish paneli — faqat biriktirilgan o'qituvchiga ko'rinadi --}}
+                @php
+                    $sababliStudentsCount = 0;
+                    foreach (($students ?? []) as $__stu) {
+                        $__h = $__stu->hemis_id;
+                        $__hasSababli = false;
+                        foreach ((($jbGrades ?? [])[$__h] ?? []) as $__dateGrades) {
+                            foreach ($__dateGrades as $__g) {
+                                if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                            }
+                        }
+                        if (!$__hasSababli) {
+                            foreach ((($mtGrades ?? [])[$__h] ?? []) as $__dateGrades) {
+                                foreach ($__dateGrades as $__g) {
+                                    if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                                }
+                            }
+                        }
+                        if (!$__hasSababli) {
+                            $__o = ($otherGrades ?? [])[$__h] ?? [];
+                            if (!empty($__o['on_sababli']) || !empty($__o['oski_sababli']) || !empty($__o['test_sababli'])) {
+                                $__hasSababli = true;
+                            }
+                        }
+                        if ($__hasSababli) $sababliStudentsCount++;
+                    }
+                @endphp
                 @if(($canSubmitYn ?? false) || (isset($ynSubmission) && $ynSubmission))
                 <div class="mt-4 p-4 bg-gray-50 border rounded-lg">
                     <div class="flex items-center justify-between">
@@ -1596,7 +1733,7 @@
                         <div>
                             @if(isset($ynSubmission) && $ynSubmission)
                                 <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
-                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
+                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at?->format('d.m.Y H:i') ?? '-' }})
                                     @if($ynSubmission->submittedBy)
                                         <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
                                     @endif
@@ -1729,13 +1866,16 @@
                             @endif
 
                             <button type="button" id="btn-export-yn-qaydnoma"
-                                class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
+                                class="relative px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
                                 onclick="openYnWeightsModal()"
-                                title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish">
+                                title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish{{ $sababliStudentsCount > 0 ? ' — ' . $sababliStudentsCount . ' ta talaba uchun 12-qo\'shimcha shakl ham chiqadi' : '' }}">
                                 <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                 </svg>
                                 YN qaydnoma yaratish
+                                @if($sababliStudentsCount > 0)
+                                    <span class="absolute -top-2 -right-2 bg-violet-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md" title="12-qo'shimcha shaklga {{ $sababliStudentsCount }} ta talaba tushadi">{{ $sababliStudentsCount }}</span>
+                                @endif
                             </button>
                         </div>
                     </div>
@@ -1750,6 +1890,17 @@
                             <div class="px-6 py-4 border-b border-gray-200">
                                 <h3 class="text-lg font-bold text-gray-800">Vaznlarni taqsimlang</h3>
                                 <p class="text-sm text-gray-500 mt-1">Jami 100 bo'lishi kerak</p>
+                                @if($sababliStudentsCount > 0)
+                                    <div class="mt-3 px-3 py-2 rounded-lg bg-violet-50 border border-violet-200 flex items-start gap-2">
+                                        <svg class="w-4 h-4 text-violet-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                        <p class="text-xs text-violet-800">
+                                            Bu guruhda <strong>{{ $sababliStudentsCount }} ta</strong> talaba sababli ariza asosida qayta topshirgan —
+                                            ular uchun <strong>12-qo'shimcha shakl</strong> avtomatik ikkinchi sheet sifatida Excel'ga qo'shiladi.
+                                        </p>
+                                    </div>
+                                @endif
                             </div>
                             <div class="px-6 py-4 space-y-3">
                                 <div class="flex items-center justify-between">
@@ -1947,16 +2098,40 @@
                                                 }
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
-                                            $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
-                                            $isSuperAdminMt = auth()->user()?->hasRole('superadmin') ?? false;
+                                            $isAdminMt = (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false) && \App\Models\Setting::get('feature_admin_mt_grade', '0') === '1';
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
+
+                                            // Sababli ariza orqali MT bahosi: talaba uchun tasdiqlangan
+                                            // sababli ariza bo'lsa va MT makeup turi belgilangan bo'lsa,
+                                            // YN yuborilgandan keyin ham deadline ichida baho qo'yish ochiq
+                                            $hasMtSababli = false;
+                                            $mtSababliDeadlinePassed = false;
+                                            $mtExcuseInfo = $approvedExcuses[$student->hemis_id] ?? null;
+                                            if ($mtExcuseInfo && $mtExcuseInfo->makeups) {
+                                                foreach ($mtExcuseInfo->makeups as $mk) {
+                                                    if (($mk->assessment_type ?? null) === 'mt' && ($mk->subject_id ?? null) == $subjectId) {
+                                                        $hasMtSababli = true;
+                                                        break;
+                                                    }
+                                                }
+                                                if ($hasMtSababli && $mtExcuseInfo->reviewed_at) {
+                                                    $mtExcuseDays = \Carbon\Carbon::parse($mtExcuseInfo->start_date)
+                                                        ->diffInDays(\Carbon\Carbon::parse($mtExcuseInfo->end_date)) + 1;
+                                                    $mtExcuseDeadline = \Carbon\Carbon::parse($mtExcuseInfo->reviewed_at)
+                                                        ->addDays($mtExcuseDays)->endOfDay();
+                                                    $mtSababliDeadlinePassed = now()->greaterThan($mtExcuseDeadline);
+                                                }
+                                            }
+                                            $mtSababliCanGrade = $hasMtSababli && !$isDekan && !$isRegistrator
+                                                && (!$mtSababliDeadlinePassed || $isAdminMt);
+
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? !$isSuperAdminMt
+                                                ? ($isAdminMt ? false : !$mtSababliCanGrade)
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
-                                            // YN yuborilgan bo'lsa hamma action bloklash (superadmin bundan mustasno)
-                                            if ($isYnSubmittedMt && !$isSuperAdminMt) {
+                                            // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
+                                            if ($isYnSubmittedMt && !$mtSababliCanGrade && !$isAdminMt) {
                                                 $canRegrade = false;
                                             }
 
@@ -2003,7 +2178,7 @@
                                                         @elseif($urgency === 'danger')
                                                             <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
                                                         @endif
-                                                        @if($isSuperAdminMt)
+                                                        @if(auth()->user()?->hasRole('superadmin') && !$isYnSubmittedMt)
                                                             <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"
                                                                 class="mt-file-delete-btn"
                                                                 title="Faylni o'chirish">&#10005;</button>
@@ -2272,8 +2447,9 @@
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
+                                                    @php $retakeSababli = !empty($gradeData['retake_was_sababli']); @endphp
                                                     @if($grade !== null)
-                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ round($grade, 0) }}</span>
+                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} {{ $retakeSababli ? 'sababli-retake-cell' : '' }} font-medium" @if($retakeSababli) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>{{ round($grade, 0) }}</span>
                                                     @elseif($isAbsent)
                                                         <span class="text-red-600 font-medium">NB</span>
                                                     @else
@@ -2951,10 +3127,11 @@
             }
         }
 
-        // Admin: ON/OSKI/Test baho kiritish
+        // OSKI/Test baho kiritish vaqtinchalik yopilgan
         function editExamGrade(cell, studentHemisId, typeCode, currentValue) {
+            return;
             if (cell.querySelector('input')) return;
-            var typeNames = {100: 'ON%', 101: 'OSKI', 102: 'Test'};
+            var typeNames = {101: 'OSKI', 102: 'Test'};
             var original = cell.innerHTML;
             var input = document.createElement('input');
             input.type = 'number'; input.min = '0'; input.max = '100'; input.step = '1';
@@ -2966,10 +3143,13 @@
             input.focus();
             input.select();
 
+            var saved = false;
             function save() {
+                if (saved) return;
+                saved = true;
                 var val = input.value.trim();
                 if (val === '') { cell.innerHTML = original; return; }
-                if (isNaN(val) || val < 0 || val > 100) { alert('0-100 orasida kiriting'); input.focus(); return; }
+                if (isNaN(val) || val < 0 || val > 100) { alert('0-100 orasida kiriting'); cell.innerHTML = original; return; }
                 cell.innerHTML = '<span style="color:#6b7280;">...</span>';
                 fetch('{{ route("admin.journal.save-exam-grade") }}', {
                     method: 'POST',
@@ -2985,7 +3165,9 @@
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        cell.innerHTML = '<span class="font-bold text-blue-600">' + Math.round(data.grade) + '</span>';
+                        var rounded = Math.round(data.grade);
+                        cell.innerHTML = '<span class="font-bold text-blue-600">' + rounded + '</span>';
+                        cell.onclick = function() { editExamGrade(this, studentHemisId, typeCode, rounded); };
                     } else {
                         alert(data.message || 'Xatolik');
                         cell.innerHTML = original;
@@ -2997,7 +3179,7 @@
             input.addEventListener('blur', save);
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-                if (e.key === 'Escape') { cell.innerHTML = original; }
+                if (e.key === 'Escape') { saved = true; cell.innerHTML = original; }
             });
         }
 
@@ -3318,6 +3500,78 @@
             }
         })();
 
+        // Superadmin: istalgan bahoni to'g'ridan-to'g'ri o'zgartirish
+        function superadminEdit(cellDiv, gradeId) {
+            if (currentEditingCell) return;
+            currentEditingCell = cellDiv;
+            const originalContent = cellDiv.innerHTML;
+            const hasSplit = cellDiv.querySelector('.split-cell') !== null;
+            const splitTop = cellDiv.querySelector('.split-top');
+            const splitTopHTML = splitTop ? splitTop.outerHTML : '';
+            let saving = false;
+
+            // split-bottom dagi qiymatni olish, aks holda span dagi
+            const bottomSpan = cellDiv.querySelector('.split-bottom');
+            const plainSpan = cellDiv.querySelector('span');
+            const currentVal = bottomSpan ? bottomSpan.textContent.trim() : (plainSpan ? plainSpan.textContent.trim() : '');
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.max = '100';
+            input.value = currentVal;
+            input.className = 'w-full text-center border border-purple-500 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-purple-300';
+            input.style.cssText = 'width:50px;height:28px;';
+
+            cellDiv.innerHTML = '';
+            cellDiv.appendChild(input);
+            input.focus();
+            input.select();
+
+            function save() {
+                if (saving) return;
+                saving = true;
+                input.removeEventListener('blur', blurHandler);
+                const val = parseFloat(input.value);
+                if (isNaN(val) || val < 0 || val > 100) {
+                    cellDiv.innerHTML = originalContent;
+                    currentEditingCell = null;
+                    return;
+                }
+                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
+                fetch('{{ route("admin.journal.superadmin-edit-grade") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+                    body: JSON.stringify({ grade_id: gradeId, grade: val })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const rounded = Math.round(data.grade);
+                        if (hasSplit) {
+                            cellDiv.innerHTML = `<div class="split-cell"><svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>${splitTopHTML}<span class="split-bottom">${rounded}</span></div>`;
+                        } else {
+                            const color = rounded < {{ $minimumLimit ?? 60 }} ? 'color:#dc2626' : 'color:#111827';
+                            cellDiv.innerHTML = `<span class="font-medium" style="${color}">${rounded}</span>`;
+                        }
+                        cellDiv.onclick = function() { superadminEdit(this, gradeId); };
+                    } else {
+                        alert(data.message || 'Xatolik');
+                        cellDiv.innerHTML = originalContent;
+                    }
+                    currentEditingCell = null;
+                })
+                .catch(() => { cellDiv.innerHTML = originalContent; currentEditingCell = null; });
+            }
+
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); save(); }
+                else if (e.key === 'Escape') { saving = true; cellDiv.innerHTML = originalContent; currentEditingCell = null; }
+            });
+            function blurHandler() { if (!saving) save(); }
+            input.addEventListener('blur', blurHandler);
+        }
+
         // Retake grade functionality - Excel-like inline editing
         let currentEditingCell = null;
 
@@ -3635,113 +3889,6 @@
             });
         }
 
-        function adminEditGrade(cellDiv, gradeId, currentGrade) {
-            if (currentEditingCell) return;
-            currentEditingCell = cellDiv;
-            const originalContent = cellDiv.innerHTML;
-            let saving = false;
-
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'display:flex; align-items:center; gap:2px;';
-
-            const input = document.createElement('input');
-            input.type = 'number';
-            input.min = '0';
-            input.max = '100';
-            input.value = currentGrade;
-            input.className = 'text-center border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-300';
-            input.style.cssText = 'width:42px; height:26px; padding:1px 2px; font-size:12px;';
-
-            const delBtn = document.createElement('button');
-            delBtn.innerHTML = '&times;';
-            delBtn.title = "O'chirish";
-            delBtn.className = 'text-red-500 hover:text-red-700 font-bold';
-            delBtn.style.cssText = 'font-size:16px; line-height:1; padding:0 2px; cursor:pointer; border:none; background:none;';
-
-            wrapper.appendChild(input);
-            wrapper.appendChild(delBtn);
-            cellDiv.innerHTML = '';
-            cellDiv.appendChild(wrapper);
-            input.focus();
-            input.select();
-
-            function doSave() {
-                if (saving) return;
-                saving = true;
-                const val = input.value.trim();
-                if (val === '' || val == currentGrade) {
-                    cellDiv.innerHTML = originalContent;
-                    currentEditingCell = null;
-                    return;
-                }
-                const gradeNum = parseFloat(val);
-                if (isNaN(gradeNum) || gradeNum < 0 || gradeNum > 100) {
-                    alert('0 dan 100 gacha baho kiriting');
-                    cellDiv.innerHTML = originalContent;
-                    currentEditingCell = null;
-                    return;
-                }
-                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
-                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                    body: JSON.stringify({ grade_id: gradeId, grade: gradeNum, action: 'update' })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const v = Math.round(data.grade);
-                        const minLimit = {{ $minimumLimit ?? 60 }};
-                        const colorClass = v < minLimit ? 'text-red-600' : 'text-gray-900';
-                        cellDiv.innerHTML = `<span class="${colorClass} font-medium">${v}</span>`;
-                        cellDiv.onclick = function() { adminEditGrade(this, gradeId, v); };
-                        currentEditingCell = null;
-                    } else {
-                        alert(data.message || 'Xatolik');
-                        cellDiv.innerHTML = originalContent;
-                        currentEditingCell = null;
-                    }
-                })
-                .catch(() => { alert('Xatolik'); cellDiv.innerHTML = originalContent; currentEditingCell = null; });
-            }
-
-            function doDelete() {
-                if (saving) return;
-                if (!confirm('Bahoni butunlay o\'chirmoqchimisiz?')) return;
-                saving = true;
-                cellDiv.innerHTML = '<span class="text-gray-500">...</span>';
-                fetch('{{ route("admin.journal.admin-edit-grade") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-                    body: JSON.stringify({ grade_id: gradeId, action: 'delete' })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        cellDiv.innerHTML = '<span class="text-gray-300">-</span>';
-                        cellDiv.onclick = null;
-                        cellDiv.className = '';
-                        currentEditingCell = null;
-                    } else {
-                        alert(data.message || 'Xatolik');
-                        cellDiv.innerHTML = originalContent;
-                        currentEditingCell = null;
-                    }
-                })
-                .catch(() => { alert('Xatolik'); cellDiv.innerHTML = originalContent; currentEditingCell = null; });
-            }
-
-            input.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); input.removeEventListener('blur', blurHandler); doSave(); }
-                else if (e.key === 'Escape') { saving = true; cellDiv.innerHTML = originalContent; currentEditingCell = null; }
-            });
-
-            function blurHandler() {
-                setTimeout(() => { if (!saving) { cellDiv.innerHTML = originalContent; currentEditingCell = null; } }, 150);
-            }
-            input.addEventListener('blur', blurHandler);
-            delBtn.addEventListener('click', function(e) { e.stopPropagation(); input.removeEventListener('blur', blurHandler); doDelete(); });
-        }
     </script>
 
     {{-- ===== DARS OCHISH MODAL ===== --}}
@@ -4504,10 +4651,13 @@
             .then(({ok, data}) => {
                 if (ok && data.success) {
                     const notif = document.createElement('div');
-                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#3b82f6; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
                     notif.textContent = data.message;
                     document.body.appendChild(notif);
-                    setTimeout(() => location.reload(), 2000);
+                    setTimeout(() => notif.remove(), 4000);
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                    btn.style.opacity = '1';
                 } else {
                     alert(data.message || 'Natijalarni yuklashda xatolik yuz berdi');
                     btn.disabled = false;
@@ -4666,19 +4816,7 @@
             });
         }
 
-        // Sahifa yuklanganda — agar OSKI/Test sanasi o'tgan va natijalar tortilmagan bo'lsa, avtomatik tortish
-        @php
-            $autoFetchEs = $examSchedule ?? null;
-            $autoFetchOskiPassed = $autoFetchEs && $autoFetchEs->oski_date && $autoFetchEs->oski_date->isPast();
-            $autoFetchTestPassed = $autoFetchEs && $autoFetchEs->test_date && $autoFetchEs->test_date->isPast();
-            $autoFetchAnyPassed = $autoFetchOskiPassed || $autoFetchTestPassed;
-        @endphp
-        @if(isset($ynSubmission) && $ynSubmission && $autoFetchAnyPassed && !$ynSubmission->results_fetched)
-        document.addEventListener('DOMContentLoaded', function() {
-            // Avtomatik natijalarni tortish
-            fetchYnResults();
-        });
-        @endif
+        // Auto-fetch o'chirilgan — foydalanuvchi o'zi tugmani bosadi yoki Diagnostika orqali yuklaydi
     </script>
 
     {{-- Sababli baho kiritish modal oynasi --}}
@@ -4731,4 +4869,5 @@
             </div>
         </div>
     </div>
+
 </x-app-layout>

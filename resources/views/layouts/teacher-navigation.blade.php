@@ -33,15 +33,24 @@
                     </x-nav-link>
                 </div>
                 @endif
+                @if($navActiveRole !== 'tyutor')
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                         {{ __('Jurnal') }}
                     </x-nav-link>
                 </div>
-                @if($navActiveRole !== 'oqituvchi')
+                @endif
                 @php
                     $hasTutorGroups = auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0;
+                    if (!$hasTutorGroups) {
+                        $hasTutorGroups = \Illuminate\Support\Facades\DB::table('schedules')
+                            ->where('employee_id', auth()->guard('teacher')->user()->hemis_id)
+                            ->where('education_year_current', true)
+                            ->whereNotNull('lesson_date')
+                            ->limit(1)->exists();
+                    }
                 @endphp
+                @if($navActiveRole !== 'oqituvchi' || $hasTutorGroups)
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <div class="flex items-center">
                         <x-dropdown align="right" width="48">
@@ -392,6 +401,7 @@
                                 'inspeksiya' => 'Inspeksiya',
                                 'oquv_prorektori' => "O'quv prorektori",
                                 'oquv_bolimi' => "O'quv bo'limi",
+                                'oquv_bolimi_boshligi' => "O'quv bo'limi boshlig'i",
                                 'buxgalteriya' => 'Buxgalteriya',
                                 'manaviyat' => "Ma'naviyat",
                                 'tyutor' => 'Tyutor',
@@ -498,10 +508,11 @@
                     {{ __('Baholar') }}
                 </x-responsive-nav-link>
                 @endif
+                @if($navActiveRole !== 'tyutor')
                 <x-responsive-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                     {{ __('Jurnal') }}
                 </x-responsive-nav-link>
-                @if($navActiveRole !== 'oqituvchi')
+                @endif
                 @if($hasTutorGroups ?? false)
                     <x-responsive-nav-link :href="route('teacher.reports.jn')">JN o'zlashtirish</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('teacher.reports.absence-74')">74 soat dars qoldirish</x-responsive-nav-link>
@@ -510,7 +521,8 @@
                     <x-responsive-nav-link :href="route('teacher.reports.top-students')">5 ga da'vogar</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('teacher.reports.unrated')">Baho qo'ymaganlar</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('teacher.reports.contracts')">Kontraktlar</x-responsive-nav-link>
-                @else
+                @endif
+                @if($navActiveRole !== 'oqituvchi' && !($hasTutorGroups ?? false))
                     <x-responsive-nav-link :href="route('teacher.independent.index')">{{ __('Mustaqil ta\'lim') }}</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('teacher.oraliqnazorat.index')">Oraliq nazorat</x-responsive-nav-link>
                     @if( auth()->user()->hasRole(['dekan']))
@@ -519,7 +531,6 @@
                         <x-responsive-nav-link :href="route('teacher.qaytnoma.index')">YN oldi qaydnoma</x-responsive-nav-link>
                     @endif
                 @endif
-                @endif {{-- end oqituvchi check --}}
 
                 @if(auth()->guard('teacher')->user()->hasRole(['registrator_ofisi']))
                 <div class="border-t border-gray-200 pt-2 mt-2">

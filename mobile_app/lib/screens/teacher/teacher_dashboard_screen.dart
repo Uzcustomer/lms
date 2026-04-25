@@ -142,6 +142,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         return Icons.workspace_premium;
       case 'oquv_bolimi':
         return Icons.domain;
+      case 'oquv_bolimi_boshligi':
+        return Icons.domain_verification;
       case 'buxgalteriya':
         return Icons.account_balance_wallet;
       case 'test_markazi':

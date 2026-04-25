@@ -11,6 +11,7 @@ enum ProjectRole: string
     case VICE_RECTOR = 'oquv_prorektori';
     case REGISTRAR_OFFICE = 'registrator_ofisi';
     case ACADEMIC_DEPARTMENT = 'oquv_bolimi';
+    case ACADEMIC_DEPARTMENT_HEAD = 'oquv_bolimi_boshligi';
     case ACCOUNTANT = 'buxgalteriya';
     case SPIRITUAL_AFFAIRS = 'manaviyat';
     case TUTOR = 'tyutor';
@@ -32,6 +33,7 @@ enum ProjectRole: string
             self::VICE_RECTOR => "O'quv prorektori",
             self::REGISTRAR_OFFICE => 'Registrator ofisi',
             self::ACADEMIC_DEPARTMENT => "O'quv bo'limi",
+            self::ACADEMIC_DEPARTMENT_HEAD => "O'quv bo'limi boshlig'i",
             self::ACCOUNTANT => 'Buxgalteriya',
             self::SPIRITUAL_AFFAIRS => "Ma'naviyat",
             self::TUTOR => 'Tyutor',

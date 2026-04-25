@@ -199,7 +199,7 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
-                                                    @if($oskiSaved)
+                                                    @if($oskiSaved && !($canEdit ?? false))
                                                         {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
                                                         <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
                                                             <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
@@ -223,6 +223,25 @@
                                                             <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                                         </button>
                                                         @endif
+                                                    @elseif($oskiSaved && ($canEdit ?? false))
+                                                        {{-- Saqlangan lekin o'zgartirish mumkin (boshlig'i/admin) --}}
+                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
+                                                            <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
+                                                                   class="exam-sc-date" autocomplete="off"
+                                                                   data-initial-value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('Y-m-d') : '' }}" />
+                                                        </div>
+                                                        <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
+                                                                   {{ $item['oski_na'] ? 'checked' : '' }}
+                                                                   onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
+                                                        @if($canDelete)
+                                                        <button type="button" class="clear-date-btn" title="OSKI sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'oski')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                        @endif
                                                     @else
                                                         <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}">
                                                             <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
@@ -238,7 +257,7 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
-                                                    @if($testSaved)
+                                                    @if($testSaved && !($canEdit ?? false))
                                                         {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
                                                         <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
                                                             <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
@@ -256,6 +275,25 @@
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
                                                         @endif
                                                         <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
+                                                        @if($canDelete)
+                                                        <button type="button" class="clear-date-btn" title="Test sanasini o'chirish"
+                                                                onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'test')">
+                                                            <svg style="width:13px;height:13px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                        @endif
+                                                    @elseif($testSaved && ($canEdit ?? false))
+                                                        {{-- Saqlangan lekin o'zgartirish mumkin (boshlig'i/admin) --}}
+                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
+                                                            <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
+                                                                   class="exam-sc-date" autocomplete="off"
+                                                                   data-initial-value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('Y-m-d') : '' }}" />
+                                                        </div>
+                                                        <label class="na-toggle" title="Bu fan uchun Test yo'q">
+                                                            <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
+                                                                   {{ $item['test_na'] ? 'checked' : '' }}
+                                                                   onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
+                                                            <span class="na-label">N/A</span>
+                                                        </label>
                                                         @if($canDelete)
                                                         <button type="button" class="clear-date-btn" title="Test sanasini o'chirish"
                                                                 onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'test')">
@@ -689,7 +727,12 @@
 
             // Jadval sana inputlari uchun ScrollCalendar ishga tushirish
             document.querySelectorAll('.exam-sc-date').forEach(function(inp) {
-                new ScrollCalendar(inp.id);
+                var sc = new ScrollCalendar(inp.id);
+                // Agar saqlangan sana mavjud bo'lsa (canEdit rejimida) — qiymatni o'rnatish
+                var initialVal = inp.getAttribute('data-initial-value');
+                if (initialVal) {
+                    sc.setValue(initialVal);
+                }
             });
 
             // Sort funksiyasi

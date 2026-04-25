@@ -112,6 +112,22 @@
                                 </select>
                             </div>
                             @endif
+                            <div class="filter-item" style="min-width: 170px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Fayllar</label>
+                                <select id="has_files" name="has_files" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    <option value="yes" {{ request('has_files') === 'yes' ? 'selected' : '' }}>Yuklangan</option>
+                                    <option value="no" {{ request('has_files') === 'no' ? 'selected' : '' }}>Yuklanmagan</option>
+                                </select>
+                            </div>
+                            <div class="filter-item" style="min-width: 200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ec4899;"></span> Umumiy ma'lumotlar</label>
+                                <select id="has_admission_data" name="has_admission_data" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    <option value="yes" {{ request('has_admission_data') === 'yes' ? 'selected' : '' }}>To'ldirilgan</option>
+                                    <option value="no" {{ request('has_admission_data') === 'no' ? 'selected' : '' }}>To'ldirilmagan</option>
+                                </select>
+                            </div>
                             <div class="filter-item" style="min-width: 120px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <button type="submit" class="btn-calc">

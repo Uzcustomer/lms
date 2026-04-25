@@ -4,8 +4,8 @@ import '../../l10n/app_localizations.dart';
 import 'student_dashboard_screen.dart';
 import 'student_grades_screen.dart';
 import 'student_schedule_screen.dart';
-import 'student_services_screen.dart';
 import 'student_profile_screen.dart';
+import 'student_useful_screen.dart';
 
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
@@ -15,13 +15,13 @@ class StudentHomeScreen extends StatefulWidget {
 }
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
-  int _currentIndex = 2; // Home (center) is default
+  int _currentIndex = 2;
 
   final _screens = const [
     StudentGradesScreen(),
     StudentScheduleScreen(),
     StudentDashboardScreen(),
-    StudentServicesScreen(),
+    StudentUsefulScreen(),
     StudentProfileScreen(),
   ];
 
@@ -40,7 +40,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       _NavItem(Icons.grade_outlined, Icons.grade, l.grades),
       _NavItem(Icons.calendar_today_outlined, Icons.calendar_today, l.schedule),
       _NavItem(Icons.dashboard_outlined, Icons.dashboard, l.home),
-      _NavItem(Icons.miscellaneous_services_outlined, Icons.miscellaneous_services, l.services),
+      _NavItem(Icons.apps_outlined, Icons.apps_rounded, l.useful),
       _NavItem(Icons.person_outline, Icons.person, l.profile),
     ];
 
@@ -141,3 +141,4 @@ class _NavItemWidget extends StatelessWidget {
     );
   }
 }
+

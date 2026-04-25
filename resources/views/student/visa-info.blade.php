@@ -108,7 +108,7 @@ function checkPdfSize(input) {
 {{-- Alpine store + searchable select components --}}
 <script>
 document.addEventListener('alpine:init', function() {
-    Alpine.store('birthCountry', '{{ old('birth_country', $visaInfo?->birth_country ?? 'India') }}');
+    Alpine.store('birthCountry', '{{ old('birth_country', $visaInfo?->birth_country ?? '') }}');
 });
 
 var countryRegions = {

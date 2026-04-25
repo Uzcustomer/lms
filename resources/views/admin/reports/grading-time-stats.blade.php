@@ -207,9 +207,52 @@
 
         function downloadExcel() {
             var params = getFilters();
+            if (!params.date_from || !params.date_to) {
+                alert("Sana oralig'ini tanlang!");
+                return;
+            }
             params.export = 'excel';
             var query = $.param(params);
-            window.location.href = '{{ route("admin.reports.grading-time-stats.data") }}?' + query;
+            var url = '{{ route("admin.reports.grading-time-stats.data") }}?' + query;
+
+            var btn = $('#btn-excel');
+            var originalHtml = btn.html();
+            btn.prop('disabled', true).html('<span style="display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite;margin-right:6px;"></span>Yuklanmoqda...');
+
+            fetch(url, { method: 'GET', credentials: 'same-origin' })
+                .then(function(response) {
+                    if (!response.ok) {
+                        return response.text().then(function(text) {
+                            var msg = 'Xatolik: ' + response.status;
+                            try {
+                                var j = JSON.parse(text);
+                                if (j.error) msg = j.error;
+                            } catch(e) {}
+                            throw new Error(msg);
+                        });
+                    }
+                    return response.blob().then(function(blob) {
+                        var disp = response.headers.get('Content-Disposition') || '';
+                        var match = disp.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+                        var filename = match ? decodeURIComponent(match[1]) : ('Vaqtlar_statistikasi_' + new Date().toISOString().slice(0,10) + '.xlsx');
+                        var blobUrl = URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(function() {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(blobUrl);
+                        }, 200);
+                    });
+                })
+                .catch(function(err) {
+                    alert(err.message || "Excel yuklashda xatolik yuz berdi");
+                })
+                .finally(function() {
+                    btn.prop('disabled', false).html(originalHtml);
+                });
         }
 
         function switchTab(tab) {

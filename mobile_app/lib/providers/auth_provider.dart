@@ -48,6 +48,7 @@ class AuthProvider extends ChangeNotifier {
     'oquv_prorektori': "O'quv prorektori",
     'registrator_ofisi': 'Registrator ofisi',
     'oquv_bolimi': "O'quv bo'limi",
+    'oquv_bolimi_boshligi': "O'quv bo'limi boshlig'i",
     'buxgalteriya': 'Buxgalteriya',
     'manaviyat': "Ma'naviyat",
     'tyutor': 'Tyutor',
@@ -79,19 +80,23 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> checkAuth() async {
-    final isLoggedIn = await _apiService.isLoggedIn();
-    if (isLoggedIn) {
-      try {
-        final response = await _authService.getMe();
-        _user = response['user'] as Map<String, dynamic>?;
-        _guard = await _apiService.getGuard();
-        _parseRoles(response);
-        _state = AuthState.authenticated;
-      } catch (_) {
-        await _apiService.clearToken();
+    try {
+      final isLoggedIn = await _apiService.isLoggedIn();
+      if (isLoggedIn) {
+        try {
+          final response = await _authService.getMe();
+          _user = response['user'] as Map<String, dynamic>?;
+          _guard = await _apiService.getGuard();
+          _parseRoles(response);
+          _state = AuthState.authenticated;
+        } catch (_) {
+          await _apiService.clearToken();
+          _state = AuthState.unauthenticated;
+        }
+      } else {
         _state = AuthState.unauthenticated;
       }
-    } else {
+    } catch (_) {
       _state = AuthState.unauthenticated;
     }
     notifyListeners();

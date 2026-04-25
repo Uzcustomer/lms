@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Teacher;
 
 use App\Exports\StudentGradeBox;
 use App\Exports\StudentGradesExportAdmin;
+use App\Console\Commands\CalculateTeacherDashboardStats;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
@@ -26,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class TeacherMainController extends Controller
@@ -38,7 +40,34 @@ class TeacherMainController extends Controller
     }
     public function index()
     {
-        return view('teacher.dashboard');
+        $teacher = auth()->user();
+        $semester = Semester::where('current', true)->first();
+
+        $stats = null;
+        $top10Payload = null;
+
+        if ($teacher && $semester && !empty($teacher->hemis_id)) {
+            $stats = Cache::get(
+                CalculateTeacherDashboardStats::employeeCacheKey($teacher->hemis_id, $semester->id)
+            );
+        }
+
+        if ($semester) {
+            $top10Payload = Cache::get(
+                CalculateTeacherDashboardStats::top10CacheKey($semester->id)
+            );
+        }
+
+        $top10 = $top10Payload['items'] ?? [];
+        $top10UpdatedAt = $top10Payload['last_updated'] ?? null;
+
+        return view('teacher.dashboard', [
+            'stats'           => $stats,
+            'top10'           => $top10,
+            'top10UpdatedAt'  => $top10UpdatedAt,
+            'teacher'         => $teacher,
+            'semester'        => $semester,
+        ]);
     }
 
     public function info()

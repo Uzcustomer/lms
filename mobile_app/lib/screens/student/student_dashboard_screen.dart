@@ -205,7 +205,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   end: Alignment.bottomRight,
                   colors: isDark
                       ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF3C1053)]
-                      : const [Color(0xFFFFCBA4), Color(0xFFFF9AC9), Color(0xFFBB8FCE)],
+                      : const [Color(0xFFFFF0E6), Color(0xFFFFD6E8), Color(0xFFE8D5F5)],
                 ),
               ),
               child: const LoadingWidget(),
@@ -241,10 +241,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: const [0.0, 0.3, 0.6, 1.0],
+                stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
                 colors: isDark
-                    ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF0D0221)]
-                    : const [Color(0xFFFFCBA4), Color(0xFFFF9AC9), Color(0xFFBB8FCE), Color(0xFFD7BDE2)],
+                    ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF150638), Color(0xFF0D0221)]
+                    : const [Color(0xFFFFF0E6), Color(0xFFFFD6E8), Color(0xFFE8D5F5), Color(0xFFD4E4FF), Color(0xFFFFF0E6)],
               ),
             ),
             child: RefreshIndicator(

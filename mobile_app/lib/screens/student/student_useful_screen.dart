@@ -85,10 +85,10 @@ class StudentUsefulScreen extends StatelessWidget {
             children: [
               // Top bar
               Container(
-                padding: EdgeInsets.only(top: statusBarH, left: 16, right: 8),
-                height: statusBarH + 56,
+                padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
+                height: statusBarH + 64,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF1565C0),
+                  color: Color(0xFF0D47A1),
                   borderRadius: BorderRadius.only(
                     bottomLeft: Radius.circular(18),
                     bottomRight: Radius.circular(18),
@@ -104,7 +104,11 @@ class StudentUsefulScreen extends StatelessWidget {
                     Text(l.useful, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                     const Spacer(),
                     IconButton(
-                      icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
+                      icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                       onPressed: () {},
                     ),
                   ],

@@ -129,7 +129,7 @@ class StudentUsefulScreen extends StatelessWidget {
                       gradient: const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFFE53935), Color(0xFFFF7043)],
+                        colors: [Color(0xFFE53935), Color(0xFFFF7043), Color(0xFFFF9800)],
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [

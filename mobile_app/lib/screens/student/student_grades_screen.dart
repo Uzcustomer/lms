@@ -275,6 +275,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             );
           },
         ),
+        ],
       ),
     );
   }
@@ -1335,8 +1336,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
             ),
           ],
         ),
-      ],
-    ),
+      ),
     );
   }
 

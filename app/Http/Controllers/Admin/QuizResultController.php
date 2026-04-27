@@ -493,7 +493,7 @@ class QuizResultController extends Controller
                         ->whereIn('student_hemis_id', $chunk)
                         ->whereIn('subject_id', $fanIds)
                         ->whereIn('semester_code', $allSemCodesForOski)
-                        ->where('training_type_code', 101)
+                        ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
                         ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
                         ->groupBy('student_hemis_id', 'subject_id')
@@ -1088,7 +1088,7 @@ class QuizResultController extends Controller
                         ->whereIn('student_hemis_id', $chunk)
                         ->whereIn('subject_id', $fanIds)
                         ->whereIn('semester_code', $allSemCodesForOski)
-                        ->where('training_type_code', 101)
+                        ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
                         ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
                         ->groupBy('student_hemis_id', 'subject_id')
@@ -1271,9 +1271,17 @@ class QuizResultController extends Controller
             return ['code' => 'not_first', 'text' => '1-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 6) Oldin yuklangan
+        // 6) Oldin yuklangan (quiz_result_id orqali)
         if (isset($uploadedResultIds[$result->id])) {
             return ['code' => 'uploaded', 'text' => 'Oldin yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        }
+
+        // 6.1) DB da OSKI/Test baho allaqachon bor (quiz_result_id siz ham)
+        if ($student) {
+            $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
+            if (isset($oskiGrades[$gradeCheckKey])) {
+                return ['code' => 'uploaded', 'text' => 'Oldin yuklangan (OSKI: ' . $oskiGrades[$gradeCheckKey] . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiGrades[$gradeCheckKey]];
+            }
         }
 
         // 7) Dublikat tekshiruvi (2O / 2T)

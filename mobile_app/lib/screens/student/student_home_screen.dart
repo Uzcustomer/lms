@@ -51,11 +51,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: AppTheme.primaryLight,
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1A1A2E).withAlpha(60),
+                color: AppTheme.primaryColor.withAlpha(40),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

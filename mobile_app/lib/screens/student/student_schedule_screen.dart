@@ -134,36 +134,42 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
 
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
     final cc = cardColor ?? const Color(0xFF0D47A1);
+    final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
+    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
           decoration: BoxDecoration(
-            gradient: isDark ? null : RadialGradient(
-              center: Alignment.topRight,
-              radius: 0.8,
-              colors: [cc.withOpacity(0.15), cc.withOpacity(0.03), Colors.white],
-              stops: const [0.0, 0.35, 0.8],
-            ),
-            color: isDark ? Colors.white.withOpacity(0.08) : null,
+            color: surface,
+            border: Border.all(color: border),
             borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withOpacity(0.12)
-                  : Colors.white,
-              width: 1.5,
-            ),
-            boxShadow: isDark ? null : [
+            boxShadow: [
               BoxShadow(
-                color: cc.withOpacity(0.08),
-                blurRadius: 20,
-                spreadRadius: 2,
-                offset: const Offset(0, 2),
+                color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1A1340).withOpacity(0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: child,
+          child: Stack(
+            children: [
+              Positioned(
+                top: -10,
+                right: -10,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: cc.withOpacity(isDark ? 0.25 : 0.18),
+                  ),
+                ),
+              ),
+              child,
+            ],
+          ),
         ),
       ),
     );
@@ -176,18 +182,32 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     final statusBarH = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
-            colors: isDark
-                ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF150638), Color(0xFF0D0221)]
-                : const [Color(0xFFF5F6FA), Color(0xFFF0F2F8), Color(0xFFEEF0F5), Color(0xFFF0F2F8), Color(0xFFF5F6FA)],
+      backgroundColor: isDark ? const Color(0xFF0B1020) : const Color(0xFFFEF7F0),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(-1.0, -1.0),
+                  radius: 1.4,
+                  colors: isDark
+                      ? const [Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFFEC4899), Color(0xFF0B1020)]
+                      : const [Color(0xFFC7D2FE), Color(0xFFFBCFE8), Color(0xFFFED7AA), Color(0xFFFEF7F0)],
+                  stops: const [0.0, 0.35, 0.65, 1.0],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: Consumer<StudentProvider>(
+          Positioned(
+            top: 180, right: -80,
+            child: _buildBlob(isDark ? const Color(0xFFF472B6) : const Color(0xFFF9A8D4)),
+          ),
+          Positioned(
+            top: 480, left: -80,
+            child: _buildBlob(isDark ? const Color(0xFF60A5FA) : const Color(0xFFA5B4FC)),
+          ),
+          Consumer<StudentProvider>(
           builder: (context, provider, _) {
             if (provider.isLoading && provider.schedule == null) {
               return const LoadingWidget();
@@ -765,6 +785,24 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               ),
             ),
           ],
+        ),
+      ],
+    ),
+    );
+  }
+
+  Widget _buildBlob(Color color) {
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+      child: Container(
+        width: 240,
+        height: 240,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.0, 0.7],
+          ),
         ),
       ),
     );

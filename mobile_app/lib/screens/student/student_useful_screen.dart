@@ -326,25 +326,24 @@ class _GlassTile extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => item.screen),
               ),
               borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // hue glow
-                    Positioned(
-                      top: -20,
-                      right: -20,
-                      child: Container(
-                        width: 90,
-                        height: 90,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: item.color.withOpacity(isDark ? 0.25 : 0.18),
-                        ),
+              child: Stack(
+                children: [
+                  // hue glow — inside ClipRRect so it gets clipped
+                  Positioned(
+                    top: -10,
+                    right: -10,
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: item.color.withOpacity(isDark ? 0.25 : 0.18),
                       ),
                     ),
-                    Column(
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -386,8 +385,8 @@ class _GlassTile extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

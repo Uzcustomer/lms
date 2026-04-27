@@ -53,10 +53,10 @@ class StudentUsefulScreen extends StatelessWidget {
       ),
       _ServiceCard(
         icon: Icons.grid_view_rounded,
-        title: 'Elektron xizmatlar',
-        subtitle: 'Sababli ariza va xizmatlar',
+        title: 'Imtihon sanalari',
+        subtitle: 'OSKI va Test kunlari',
         color: const Color(0xFF6366F1),
-        screen: const StudentServicesScreen(),
+        screen: const ExamScheduleScreen(),
       ),
       _ServiceCard(
         icon: Icons.menu_book_rounded,

@@ -7,6 +7,8 @@ use App\Exports\InternationalStudentsExport;
 use App\Models\Student;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
+use App\Models\StudentVisaInfoHistory;
+use App\Services\StudentVisaHistoryService;
 use App\Services\TelegramService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -396,6 +398,8 @@ class InternationalStudentController extends Controller
     public function approve(Request $request, Student $student)
     {
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $historyService = app(StudentVisaHistoryService::class);
+        $oldValues = $historyService->fieldsFrom($visaInfo);
 
         $visaInfo->update([
             'status' => 'approved',
@@ -403,6 +407,8 @@ class InternationalStudentController extends Controller
             'reviewed_by' => $this->currentUserId(),
             'reviewed_at' => now(),
         ]);
+
+        $historyService->snapshot($student, $visaInfo->fresh(), StudentVisaInfoHistory::CHANGE_APPROVED, $oldValues);
 
         // Talabaga bildirishnoma yuborish
         StudentNotification::create([
@@ -433,6 +439,8 @@ class InternationalStudentController extends Controller
         ]);
 
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $historyService = app(StudentVisaHistoryService::class);
+        $oldValues = $historyService->fieldsFrom($visaInfo);
 
         $visaInfo->update([
             'status' => 'rejected',
@@ -440,6 +448,14 @@ class InternationalStudentController extends Controller
             'reviewed_by' => $this->currentUserId(),
             'reviewed_at' => now(),
         ]);
+
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            StudentVisaInfoHistory::CHANGE_REJECTED,
+            $oldValues,
+            $request->rejection_reason
+        );
 
         // Talabaga bildirishnoma yuborish
         StudentNotification::create([
@@ -468,6 +484,8 @@ class InternationalStudentController extends Controller
     {
         $request->validate(['process_type' => 'required|in:registration,visa']);
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $historyService = app(StudentVisaHistoryService::class);
+        $oldValues = $historyService->fieldsFrom($visaInfo);
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
         $updates = [
@@ -485,6 +503,13 @@ class InternationalStudentController extends Controller
         $visaInfo->update($updates);
 
         $label = $request->process_type === 'visa' ? 'Viza' : 'Registratsiya';
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            StudentVisaInfoHistory::CHANGE_PASSPORT_ACCEPTED,
+            $oldValues,
+            "{$label} uchun pasport qabul qilindi"
+        );
         $this->notifyStudent($student, "Pasportingiz qabul qilindi. {$label} jarayoni boshlandi.");
 
         return redirect()->route('admin.international-students.show', $student)
@@ -498,11 +523,20 @@ class InternationalStudentController extends Controller
     {
         $request->validate(['process_type' => 'required|in:registration,visa']);
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $historyService = app(StudentVisaHistoryService::class);
+        $oldValues = $historyService->fieldsFrom($visaInfo);
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
 
         $visaInfo->update([$field => StudentVisaInfo::PROCESS_REGISTERING]);
 
         $label = $request->process_type === 'visa' ? 'Viza' : 'Registratsiya';
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            StudentVisaInfoHistory::CHANGE_MARK_REGISTERING,
+            $oldValues,
+            "{$label} jarayoni davom etmoqda"
+        );
         $this->notifyStudent($student, "{$label} jarayoni davom etmoqda.");
 
         return redirect()->route('admin.international-students.show', $student)
@@ -516,6 +550,8 @@ class InternationalStudentController extends Controller
     {
         $request->validate(['process_type' => 'required|in:registration,visa']);
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $historyService = app(StudentVisaHistoryService::class);
+        $oldValues = $historyService->fieldsFrom($visaInfo);
         $type = $request->process_type;
 
         $updates = [
@@ -540,16 +576,18 @@ class InternationalStudentController extends Controller
             $updates['registration_doc_path'] = null;
         }
 
-        // Eski fayllarni diskdan o'chirish
-        foreach (['visa_scan_path', 'registration_doc_path'] as $fileField) {
-            if (isset($updates[$fileField]) && $updates[$fileField] === null && $visaInfo->$fileField) {
-                \Storage::disk('public')->delete($visaInfo->$fileField);
-            }
-        }
+        // Eski PDF fayllar diskdan O'CHIRILMAYDI — tarix orqali ko'rinadigan bo'lib qoladi
 
         $visaInfo->update($updates);
 
         $label = $type === 'visa' ? 'Viza va registratsiya' : 'Registratsiya';
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            StudentVisaInfoHistory::CHANGE_PASSPORT_RETURNED,
+            $oldValues,
+            "Pasport qaytarildi ({$label}) — talaba qaytadan to'ldirishi kerak"
+        );
         $this->notifyStudent($student, "Pasportingiz qaytarildi. {$label} ma'lumotlaringizni 3 kun ichida qaytadan kiriting!");
 
         return redirect()->route('admin.international-students.show', $student)
@@ -816,9 +854,12 @@ class InternationalStudentController extends Controller
         // Bo'sh qiymatlarni olib tashlash — eski ma'lumotni o'chirmasligi uchun
         $data = array_filter($data, fn($v) => $v !== null && $v !== '');
 
+        $historyService = app(StudentVisaHistoryService::class);
+        $oldValues = $existing ? $historyService->fieldsFrom($existing) : null;
+
         $visaInfo = StudentVisaInfo::updateOrCreate(['student_id' => $student->id], $data);
 
-        // PDF fayllar
+        // PDF fayllar — eski fayllar diskdan O'CHIRILMAYDI (tarix uchun saqlanadi)
         $storagePath = 'student-visa/' . $student->id;
         foreach ([
             'passport_scan' => 'passport_scan_path',
@@ -826,13 +867,18 @@ class InternationalStudentController extends Controller
             'registration_doc' => 'registration_doc_path',
         ] as $inputName => $dbField) {
             if ($request->hasFile($inputName)) {
-                if ($visaInfo->$dbField) {
-                    \Storage::disk('public')->delete($visaInfo->$dbField);
-                }
                 $visaInfo->$dbField = $request->file($inputName)->store($storagePath, 'public');
             }
         }
         $visaInfo->save();
+
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            $existing ? StudentVisaInfoHistory::CHANGE_UPDATED : StudentVisaInfoHistory::CHANGE_CREATED,
+            $oldValues,
+            'Registrator ofisi tahrirladi'
+        );
 
         return redirect()->route('admin.international-students.show', $student)
             ->with('success', 'Viza ma\'lumotlari saqlandi.');
@@ -845,19 +891,30 @@ class InternationalStudentController extends Controller
     {
         $request->validate(['student_ids' => 'required|array|min:1', 'firm' => 'required|string']);
         $students = Student::whereIn('id', $request->student_ids)->get();
+        $historyService = app(StudentVisaHistoryService::class);
 
         foreach ($students as $student) {
             $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
+            $oldValues = $visaInfo ? $historyService->fieldsFrom($visaInfo) : null;
+
             if ($visaInfo) {
                 $visaInfo->update(['firm' => $request->firm]);
             } else {
-                StudentVisaInfo::create([
+                $visaInfo = StudentVisaInfo::create([
                     'student_id' => $student->id,
                     'firm' => $request->firm,
                     'birth_date' => $student->birth_date,
                     'status' => 'pending',
                 ]);
             }
+
+            $historyService->snapshot(
+                $student,
+                $visaInfo->fresh(),
+                StudentVisaInfoHistory::CHANGE_FIRM_ASSIGNED,
+                $oldValues,
+                'Bulk: firma biriktirildi — ' . $request->firm
+            );
         }
 
         return redirect()->back()->with('success', count($students) . ' ta talabaga firma biriktirildi.');
@@ -876,12 +933,15 @@ class InternationalStudentController extends Controller
             $firmCustom = $request->firm_custom;
         }
 
+        $historyService = app(StudentVisaHistoryService::class);
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
+        $oldValues = $visaInfo ? $historyService->fieldsFrom($visaInfo) : null;
+
         if ($visaInfo) {
             $visaInfo->update(['firm' => $firm, 'firm_custom' => $firmCustom]);
         } else {
             // visaInfo yo'q — faqat firma bilan yaratish, status kiritilmagan qoladi
-            StudentVisaInfo::create([
+            $visaInfo = StudentVisaInfo::create([
                 'student_id' => $student->id,
                 'firm' => $firm,
                 'firm_custom' => $firmCustom,
@@ -889,6 +949,15 @@ class InternationalStudentController extends Controller
                 'status' => 'pending',
             ]);
         }
+
+        $firmLabel = $firm === 'other' ? ($firmCustom ?? 'Boshqa') : $firm;
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            StudentVisaInfoHistory::CHANGE_FIRM_ASSIGNED,
+            $oldValues,
+            "Firma biriktirildi: {$firmLabel}"
+        );
 
         return redirect()->back()->with('success', $student->full_name . ' uchun firma biriktirildi.');
     }
@@ -899,14 +968,18 @@ class InternationalStudentController extends Controller
     public function destroyVisaInfo(Request $request, Student $student)
     {
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->firstOrFail();
+        $historyService = app(StudentVisaHistoryService::class);
 
-        // Yuklangan fayllarni o'chirish
-        foreach (['passport_scan_path', 'visa_scan_path', 'registration_doc_path'] as $field) {
-            if ($visaInfo->$field) {
-                \Storage::disk('public')->delete($visaInfo->$field);
-            }
-        }
+        // Avval o'chirishdan oldingi snapshot — barcha ma'lumotlar tarixda qoladi
+        $historyService->snapshot(
+            $student,
+            $visaInfo,
+            StudentVisaInfoHistory::CHANGE_DELETED,
+            null,
+            'Viza ma\'lumotlari o\'chirildi'
+        );
 
+        // PDF fayllar diskdan O'CHIRILMAYDI — tarix ularga link beradi
         $visaInfo->delete();
 
         $this->notifyStudent($student, 'Viza ma\'lumotlaringiz admin tomonidan o\'chirildi. Qaytadan kiritishingiz kerak.');
@@ -925,6 +998,47 @@ class InternationalStudentController extends Controller
         }
 
         return \Storage::disk('public')->response($visaInfo->$field);
+    }
+
+    /**
+     * Talaba viza ma'lumotlari o'zgarishlar tarixi.
+     */
+    public function history(Student $student)
+    {
+        if (!\Schema::hasTable('student_visa_info_histories')) {
+            return redirect()->route('admin.international-students.show', $student)
+                ->with('error', 'Iltimos, avval migratsiyani bajaring: php artisan migrate');
+        }
+
+        $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
+        $history = StudentVisaInfoHistory::where('student_id', $student->id)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return view('admin.international-students.history', compact('student', 'visaInfo', 'history'));
+    }
+
+    /**
+     * Tarixdagi PDF faylni ko'rsatish (eski versiyalardan).
+     */
+    public function showHistoryFile(Student $student, int $historyId, string $field)
+    {
+        $allowed = ['passport_scan_path', 'visa_scan_path', 'registration_doc_path'];
+        if (!in_array($field, $allowed)) {
+            abort(404);
+        }
+
+        $record = StudentVisaInfoHistory::where('id', $historyId)
+            ->where('student_id', $student->id)
+            ->firstOrFail();
+
+        $path = $record->$field;
+        if (!$path || !\Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        return \Storage::disk('public')->response($path);
     }
 
     public function export(Request $request)

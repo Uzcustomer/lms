@@ -53,7 +53,7 @@
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         @if($visaInfo->status === 'approved')
                             <span class="sv-badge sv-badge-green">Tasdiqlangan</span>
                         @elseif($visaInfo->status === 'rejected')
@@ -64,6 +64,10 @@
                         @if($visaInfo->firm)
                             <span class="sv-badge sv-badge-indigo">{{ $visaInfo->firm_display }}</span>
                         @endif
+                        <a href="{{ route('admin.international-students.history', $student) }}" class="sv-badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+                            <svg style="width:12px;height:12px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Tarix
+                        </a>
                     </div>
                 </div>
 

@@ -2,9 +2,9 @@
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             Dashboard
-            @if($isTeacherRole && $semester)
+            @if($isTeacherRole && !empty($stats['semester_codes']))
                 <small class="text-muted" style="font-size: 14px; font-weight: normal;">
-                    — {{ $semester->name }}
+                    — joriy semestrlar: {{ implode(', ', $stats['semester_codes']) }}
                 </small>
             @endif
         </h2>
@@ -105,9 +105,7 @@
                     <i class="fas fa-clock" style="font-size: 40px; color: #adb5bd; margin-bottom: 12px;"></i>
                     <h5>Statistika hali tayyor emas</h5>
                     <p style="margin-bottom: 0;">
-                        @if(!$semester)
-                            Joriy semestr aniqlanmadi. Administrator bilan bog'laning.
-                        @elseif($teacher && empty($teacher->hemis_id))
+                        @if($teacher && empty($teacher->hemis_id))
                             Sizning HEMIS ID raqamingiz tizimda yo'q. Administrator bilan bog'laning.
                         @else
                             Ma'lumotlar har kuni soat <strong>03:00</strong> da yangilanadi.

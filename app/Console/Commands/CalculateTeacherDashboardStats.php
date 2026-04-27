@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * O'qituvchi dashbordi uchun joriy semestrdagi baholash sifati statistikasini
- * hisoblab keshga yozadi. Har kuni 03:00 da bir marta ishlaydi.
+ * O'qituvchi dashbordi uchun joriy semestrlardagi (juft semestrlar bahorda,
+ * toq semestrlar kuzda) baholash sifati statistikasini hisoblab keshga yozadi.
+ * Har kuni 03:00 da bir marta ishlaydi.
  *
  * MA'LUMOT MANBASI: faqat student_grades jadvali
  *   - lesson_date           — dars sanasi
@@ -28,9 +29,12 @@ use Illuminate\Support\Facades\Log;
  *                   (grade IS NULL va NB ham qo'yilmagan)
  *
  * Filtrlar:
- *   - Faqat joriy semestr (semester_code)
- *   - Mashg'ulot turi: amaliy, seminar, laboratoriya
- *     (ma'ruza, mustaqil ta'lim, kurs ishi, oraliq nazorat, oski, testlar — chiqib ketadi)
+ *   - Joriy semestrlar: SELECT DISTINCT code FROM semesters WHERE current = 1
+ *     (semestrlar jadvalidagi barcha "current" semestrlar — bahorda 2,4,6,8,10,12)
+ *   - Mashg'ulot turi: training_type_code NOT IN config('app.training_type_code')
+ *     (Ma'ruza=11, Mustaqil ta'lim=99, Oraliq nazorat=100, Oski=101, Yakuniy test=102, Quiz test=103)
+ *   - Fan nomi: subject_name LIKE config('app.grade_excluded_subject_patterns') chiqib ketadi
+ *     ("tanishuv amaliyoti", "quv amaliyoti" — O'quv amaliyoti, Tanishuv amaliyoti)
  *   - Otrobotka/qayta baho hisoblanmaydi (retake_grade IS NULL, status != 'retake')
  *   - Mustaqil ta'lim baholari hisoblanmaydi (independent_id IS NULL)
  *
@@ -41,46 +45,40 @@ class CalculateTeacherDashboardStats extends Command
 {
     protected $signature = 'dashboard:teacher-stats {--teacher= : Faqat bitta o\'qituvchi (employee_id) uchun hisoblash}';
 
-    protected $description = "O'qituvchi dashbordi statistikasini joriy semestr bo'yicha hisoblab keshga yozadi";
+    protected $description = "O'qituvchi dashbordi statistikasini joriy semestrlar bo'yicha hisoblab keshga yozadi";
 
     public const CACHE_TTL_SECONDS = 25 * 3600; // 24 soat + 1 soat buffer
-    public const CACHE_VERSION = 'v1';
+    public const CACHE_VERSION = 'v2';
 
     /**
      * Top 10 ga kirishi uchun o'qituvchining minimal baholar soni —
-     * chunki 1/1 = 100% kabi statistik shovqinni cheklaydi.
+     * 1/1 = 100% kabi statistik shovqinni cheklaydi.
      */
     public const MIN_GRADES_FOR_TOP10 = 30;
-
-    /**
-     * Loyihada keng qo'llanadigan filtr (JournalController, QuizResultController
-     * va h.k. dan olindi). "Kurs ishi" foydalanuvchi talabiga ko'ra qo'shildi.
-     */
-    public const EXCLUDED_TRAINING_TYPES = [
-        "Ma'ruza",
-        "Mustaqil ta'lim",
-        "Oraliq nazorat",
-        "Oski",
-        "Yakuniy test",
-        "Quiz test",
-        "Kurs ishi",
-    ];
 
     public function handle(): int
     {
         $startTime = microtime(true);
 
-        $semester = Semester::where('current', true)->first();
-        if (!$semester) {
-            $this->error('Joriy semestr topilmadi (Semester.current = true).');
-            Log::warning('[TeacherDashboardStats] Joriy semestr topilmadi.');
+        // Joriy o'quv yili (max education_year among current=1 rows)
+        $currentYear = $this->getCurrentEducationYear();
+        if (!$currentYear) {
+            $this->error('Joriy o\'quv yili topilmadi (semesters.current = 1).');
+            Log::warning('[TeacherDashboardStats] Joriy o\'quv yili topilmadi.');
             return self::FAILURE;
         }
 
-        $this->info("Joriy semestr: {$semester->code} — {$semester->name}");
+        // Joriy o'quv yilidagi current=1 semestrlar (bahorda juft, kuzda toq)
+        $currentCodes = $this->getCurrentSemesterCodes($currentYear);
+        if (empty($currentCodes)) {
+            $this->error('Joriy semestrlar topilmadi.');
+            return self::FAILURE;
+        }
+        $this->info("Joriy o'quv yili: {$currentYear}");
+        $this->info('Joriy semestr kodlari: ' . implode(', ', $currentCodes));
 
         $teacherFilter = $this->option('teacher');
-        $rows = $this->fetchStats($semester->code, $teacherFilter);
+        $rows = $this->fetchStats($currentCodes, $currentYear, $teacherFilter);
         $totalTeachers = count($rows);
         $this->info("{$totalTeachers} ta o'qituvchi uchun ma'lumot topildi.");
 
@@ -88,10 +86,10 @@ class CalculateTeacherDashboardStats extends Command
         $cachedCount = 0;
 
         foreach ($rows as $row) {
-            $stats = $this->buildStatsArray($row, $semester);
+            $stats = $this->buildStatsArray($row, $currentCodes, $currentYear);
 
             Cache::put(
-                self::employeeCacheKey($row->employee_id, $semester->id),
+                self::employeeCacheKey($row->employee_id),
                 $stats,
                 self::CACHE_TTL_SECONDS
             );
@@ -109,7 +107,7 @@ class CalculateTeacherDashboardStats extends Command
 
         $top10 = $this->buildTop10($top10Source);
         Cache::put(
-            self::top10CacheKey($semester->id),
+            self::top10CacheKey(),
             [
                 'items'        => $top10,
                 'last_updated' => Carbon::now('Asia/Tashkent')->toDateTimeString(),
@@ -120,7 +118,6 @@ class CalculateTeacherDashboardStats extends Command
         $elapsed = round(microtime(true) - $startTime, 1);
         $this->info("Tayyor: {$cachedCount} o'qituvchi keshga yozildi, top 10 hisoblandi ({$elapsed}s).");
 
-        // nightly:run ichida ishlasa, progress xabari yuboriladi
         if (app()->bound('nightly.progress')) {
             try {
                 $cb = app('nightly.progress');
@@ -133,13 +130,59 @@ class CalculateTeacherDashboardStats extends Command
         return self::SUCCESS;
     }
 
-    private function fetchStats(string $semesterCode, ?string $teacherFilter): array
+    /**
+     * Joriy o'quv yili — current=1 yozuvlar orasidagi eng katta education_year.
+     */
+    private function getCurrentEducationYear(): ?string
     {
-        $excludedPlaceholders = implode(',', array_fill(0, count(self::EXCLUDED_TRAINING_TYPES), '?'));
+        return Semester::where('current', true)->max('education_year');
+    }
+
+    /**
+     * Joriy o'quv yilidagi unikal semester kodlar ro'yxati
+     * (masalan ['2', '4', '6', ...]). Bahorda juft, kuzda toq.
+     */
+    private function getCurrentSemesterCodes(string $educationYear): array
+    {
+        return Semester::where('current', true)
+            ->where('education_year', $educationYear)
+            ->pluck('code')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Excluded training_type_code lar — config('app.training_type_code')
+     */
+    private function excludedTrainingTypeCodes(): array
+    {
+        return config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+    }
+
+    /**
+     * Fan nomi LIKE filtrlari — config('app.grade_excluded_subject_patterns')
+     */
+    private function excludedSubjectPatterns(): array
+    {
+        return config('app.grade_excluded_subject_patterns', ['tanishuv amaliyoti', 'quv amaliyoti']);
+    }
+
+    private function fetchStats(array $semesterCodes, string $educationYear, ?string $teacherFilter): array
+    {
+        $semesterPlaceholders = implode(',', array_fill(0, count($semesterCodes), '?'));
+
+        $excludedCodes = $this->excludedTrainingTypeCodes();
+        $excludedCodePlaceholders = implode(',', array_fill(0, count($excludedCodes), '?'));
+
+        $subjectPatterns = $this->excludedSubjectPatterns();
+        $subjectFilterSql = '';
+        foreach ($subjectPatterns as $_) {
+            $subjectFilterSql .= " AND LOWER(subject_name) NOT LIKE ?";
+        }
+
         $teacherFilterSql = $teacherFilter ? "AND employee_id = ?" : "";
 
-        // Faqat student_grades dan, lesson_date + lesson_pair_end_time bilan
-        // created_at ni taqqoslab kategoriyaga ajratadi.
         $sql = <<<SQL
             SELECT
                 employee_id,
@@ -172,8 +215,10 @@ class CalculateTeacherDashboardStats extends Command
                 COUNT(*) AS jami
             FROM student_grades
             WHERE deleted_at IS NULL
-                AND semester_code = ?
-                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND semester_code IN ({$semesterPlaceholders})
+                AND education_year_code = ?
+                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL
                 AND (status IS NULL OR status != 'retake')
@@ -184,28 +229,29 @@ class CalculateTeacherDashboardStats extends Command
             GROUP BY employee_id
         SQL;
 
-        $bindings = array_merge([$semesterCode], self::EXCLUDED_TRAINING_TYPES);
-        if ($teacherFilter) {
-            $bindings[] = $teacherFilter;
-        }
+        $bindings = [];
+        foreach ($semesterCodes as $c)   { $bindings[] = $c; }
+        $bindings[] = $educationYear;
+        foreach ($excludedCodes as $c)   { $bindings[] = $c; }
+        foreach ($subjectPatterns as $p) { $bindings[] = '%' . strtolower($p) . '%'; }
+        if ($teacherFilter) { $bindings[] = $teacherFilter; }
 
         return DB::select($sql, $bindings);
     }
 
-    private function buildStatsArray(object $row, Semester $semester): array
+    private function buildStatsArray(object $row, array $currentCodes, string $educationYear): array
     {
         $jami = (int) $row->jami;
 
         $stats = [
-            'dars_vaqtida' => (int) $row->dars_vaqtida,
-            'ish_vaqtida'  => (int) $row->ish_vaqtida,
-            'kech'         => (int) $row->kech,
-            'baholanmagan' => (int) $row->baholanmagan,
-            'jami'         => $jami,
-            'semester_id'   => $semester->id,
-            'semester_code' => $semester->code,
-            'semester_name' => $semester->name,
-            'last_updated'  => Carbon::now('Asia/Tashkent')->toDateTimeString(),
+            'dars_vaqtida'   => (int) $row->dars_vaqtida,
+            'ish_vaqtida'    => (int) $row->ish_vaqtida,
+            'kech'           => (int) $row->kech,
+            'baholanmagan'   => (int) $row->baholanmagan,
+            'jami'           => $jami,
+            'semester_codes' => $currentCodes,
+            'education_year' => $educationYear,
+            'last_updated'   => Carbon::now('Asia/Tashkent')->toDateTimeString(),
         ];
 
         $stats['dars_foiz']         = $jami > 0 ? round($stats['dars_vaqtida'] * 100 / $jami, 1) : 0.0;
@@ -251,13 +297,13 @@ class CalculateTeacherDashboardStats extends Command
         return $top10;
     }
 
-    public static function employeeCacheKey(int|string $employeeId, int $semesterId): string
+    public static function employeeCacheKey(int|string $employeeId): string
     {
-        return 'teacher_dashboard_stats:' . self::CACHE_VERSION . ":{$employeeId}:{$semesterId}";
+        return 'teacher_dashboard_stats:' . self::CACHE_VERSION . ":{$employeeId}:current";
     }
 
-    public static function top10CacheKey(int $semesterId): string
+    public static function top10CacheKey(): string
     {
-        return 'teacher_dashboard_top10:' . self::CACHE_VERSION . ":{$semesterId}";
+        return 'teacher_dashboard_top10:' . self::CACHE_VERSION . ':current';
     }
 }

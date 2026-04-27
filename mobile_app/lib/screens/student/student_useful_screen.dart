@@ -208,7 +208,7 @@ class StudentUsefulScreen extends StatelessWidget {
                     crossAxisCount: 2,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 1.15,
+                    childAspectRatio: 1.4,
                   ),
                   itemCount: services.length,
                   itemBuilder: (_, i) => _buildCard(context, services[i], isDark, txt, sub),

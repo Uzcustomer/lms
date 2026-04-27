@@ -111,18 +111,44 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return all;
   }
 
-  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20}) {
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
+    final cc = cardColor ?? const Color(0xFF0D47A1);
+    final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
+    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.08) : Colors.white.withOpacity(0.65),
+            color: surface,
+            border: Border.all(color: border),
             borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.8)),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1A1340).withOpacity(0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          child: child,
+          child: Stack(
+            children: [
+              Positioned(
+                top: -10,
+                right: -10,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: cc.withOpacity(isDark ? 0.25 : 0.18),
+                  ),
+                ),
+              ),
+              child,
+            ],
+          ),
         ),
       ),
     );
@@ -135,17 +161,32 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     final statusBarH = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-                ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF150638), Color(0xFF0D0221)]
-                : const [Color(0xFFF0F2FF), Color(0xFFE8ECFF), Color(0xFFE0E8F8), Color(0xFFE8ECFF), Color(0xFFF0F2FF)],
+      backgroundColor: isDark ? const Color(0xFF0B1020) : const Color(0xFFFEF7F0),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(-1.0, -1.0),
+                  radius: 1.4,
+                  colors: isDark
+                      ? const [Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFFEC4899), Color(0xFF0B1020)]
+                      : const [Color(0xFFC7D2FE), Color(0xFFFBCFE8), Color(0xFFFED7AA), Color(0xFFFEF7F0)],
+                  stops: const [0.0, 0.35, 0.65, 1.0],
+                ),
+              ),
+            ),
           ),
-        ),
-        child: Consumer<StudentProvider>(
+          Positioned(
+            top: 180, right: -80,
+            child: _buildBlob(isDark ? const Color(0xFFF472B6) : const Color(0xFFF9A8D4)),
+          ),
+          Positioned(
+            top: 480, left: -80,
+            child: _buildBlob(isDark ? const Color(0xFF60A5FA) : const Color(0xFFA5B4FC)),
+          ),
+          Consumer<StudentProvider>(
           builder: (context, provider, _) {
             if (provider.isLoading && provider.subjects == null) {
               return const Center(child: LoadingWidget());
@@ -234,6 +275,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             );
           },
         ),
+        ],
       ),
     );
   }
@@ -316,6 +358,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _buildGlassCard(
         isDark: isDark,
+        cardColor: const Color(0xFFFF9800),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -356,6 +399,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       child: _buildGlassCard(
         isDark: isDark,
         borderRadius: 16,
+        cardColor: const Color(0xFF1565C0),
         child: Padding(
           padding: const EdgeInsets.all(4),
           child: Row(
@@ -402,6 +446,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
     return _buildGlassCard(
       isDark: isDark,
+      cardColor: _cardTextColors[index % _cardTextColors.length],
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1290,6 +1335,23 @@ class _JnGradesPageState extends State<_JnGradesPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlob(Color color) {
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+      child: Container(
+        width: 240,
+        height: 240,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.0, 0.7],
+          ),
         ),
       ),
     );

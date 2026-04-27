@@ -28,9 +28,10 @@ class CheckVisaExpiryCommand extends Command
         // Staff uchun guruhlangan Telegram xabarlari:
         // $groups[$level][$type][] = ['line' => '...', 'firm' => '...']
         $groups = [
-            'danger'  => ['registratsiya' => [], 'visa' => []],
-            'warning' => ['registratsiya' => [], 'visa' => []],
-            'info'    => ['registratsiya' => [], 'visa' => []],
+            'renewing' => ['registratsiya' => [], 'visa' => []],
+            'danger'   => ['registratsiya' => [], 'visa' => []],
+            'warning'  => ['registratsiya' => [], 'visa' => []],
+            'info'     => ['registratsiya' => [], 'visa' => []],
         ];
 
         $sent = 0;
@@ -63,6 +64,27 @@ class CheckVisaExpiryCommand extends Command
         $daysLeft = $info->registrationDaysLeft();
         if ($daysLeft === null || $daysLeft > 7) return 0;
 
+        $en = $this->isInternational($student);
+
+        // Agar registratsiya yangilanmoqda holatida bo'lsa — alohida xabar
+        if ($info->isRegistrationProcessActive()) {
+            $message = $en
+                ? "🔄 Your registration is currently being renewed. Please wait."
+                : "🔄 Registratsiyangiz yangilanmoqda. Iltimos, kuting.";
+
+            $this->notifyStudent($student, $telegram, $message, 'renewing', 'registratsiya');
+
+            $staffLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — registratsiya yangilanmoqda";
+            $this->createSiteNotificationsForStaff($info, "🔄 {$staffLine}");
+
+            $groups['renewing']['registratsiya'][] = [
+                'line' => "{$student->full_name} (" . ($student->group_name ?? '-') . ") — yangilanmoqda",
+                'firm' => $info->firm,
+            ];
+
+            return 1;
+        }
+
         if ($daysLeft <= 3) {
             $level = 'danger';
         } elseif ($daysLeft <= 5) {
@@ -74,7 +96,6 @@ class CheckVisaExpiryCommand extends Command
         }
 
         $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
-        $en = $this->isInternational($student);
 
         if ($daysLeft <= 0) {
             $message = $en
@@ -110,6 +131,27 @@ class CheckVisaExpiryCommand extends Command
         $daysLeft = $info->visaDaysLeft();
         if ($daysLeft === null || $daysLeft > 30) return 0;
 
+        $en = $this->isInternational($student);
+
+        // Agar viza yangilanmoqda holatida bo'lsa — alohida xabar
+        if ($info->isVisaProcessActive()) {
+            $message = $en
+                ? "🔄 Your visa is currently being renewed. Please wait."
+                : "🔄 Vizangiz yangilanmoqda. Iltimos, kuting.";
+
+            $this->notifyStudent($student, $telegram, $message, 'renewing', 'visa');
+
+            $staffLine = "{$student->full_name} (" . ($student->group_name ?? '-') . ") — viza yangilanmoqda";
+            $this->createSiteNotificationsForStaff($info, "🔄 {$staffLine}");
+
+            $groups['renewing']['visa'][] = [
+                'line' => "{$student->full_name} (" . ($student->group_name ?? '-') . ") — yangilanmoqda",
+                'firm' => $info->firm,
+            ];
+
+            return 1;
+        }
+
         if ($daysLeft <= 15) {
             $level = 'danger';
         } elseif ($daysLeft <= 20) {
@@ -121,7 +163,6 @@ class CheckVisaExpiryCommand extends Command
         }
 
         $emoji = match($level) { 'danger' => '🔴', 'warning' => '🟡', 'info' => '🟢' };
-        $en = $this->isInternational($student);
 
         if ($daysLeft <= 0) {
             $message = $en
@@ -174,10 +215,12 @@ class CheckVisaExpiryCommand extends Command
         StudentNotification::create([
             'student_id' => $student->id,
             'type' => 'system',
-            'title' => match($type) {
-                'registratsiya' => 'Registratsiya muddati ogohlantirishi',
-                'visa' => 'Viza muddati ogohlantirishi',
-                'passport' => 'Pasport topshirish ogohlantirishi',
+            'title' => match(true) {
+                $level === 'renewing' && $type === 'registratsiya' => 'Registratsiya yangilanmoqda',
+                $level === 'renewing' && $type === 'visa' => 'Viza yangilanmoqda',
+                $type === 'registratsiya' => 'Registratsiya muddati ogohlantirishi',
+                $type === 'visa' => 'Viza muddati ogohlantirishi',
+                $type === 'passport' => 'Pasport topshirish ogohlantirishi',
             },
             'message' => $message,
             'data' => ['level' => $level, 'type' => $type],
@@ -255,11 +298,17 @@ class CheckVisaExpiryCommand extends Command
      */
     private function dispatchGroupedTelegramMessages(array $groups, TelegramService $telegram): void
     {
-        $emojis = ['danger' => '🔴', 'warning' => '🟡', 'info' => '🟢'];
+        $emojis = [
+            'renewing' => '🔄',
+            'danger'   => '🔴',
+            'warning'  => '🟡',
+            'info'     => '🟢',
+        ];
         $titles = [
-            'danger'  => 'Shoshilinch — muddat tugagan yoki juda yaqin',
-            'warning' => 'Ogohlantirish — muddat yaqin',
-            'info'    => 'Eslatma — muddat yaqinlashmoqda',
+            'renewing' => 'Yangilanmoqda',
+            'danger'   => 'Shoshilinch — muddat tugagan yoki juda yaqin',
+            'warning'  => 'Ogohlantirish — muddat yaqin',
+            'info'     => 'Eslatma — muddat yaqinlashmoqda',
         ];
 
         foreach ($groups as $level => $typesData) {

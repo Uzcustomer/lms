@@ -138,8 +138,8 @@
         .journal-table tbody tr:hover { background: #f1f5f9 !important; }
         .journal-table td { padding: 7px 8px; vertical-align: middle; line-height: 1.4; }
         .td-num { font-weight: 700; color: #64748b; font-size: 12px; }
-        .row-uploaded { background: #f0fdf4 !important; }
-        .row-uploaded td { opacity: 0.6; }
+        .row-uploaded { background: #dcfce7 !important; }
+        .row-uploaded td { opacity: 0.85; }
 
         /* === BADGES === */
         .badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
@@ -435,7 +435,7 @@
             var styles = {
                 'ok':               'background:#dcfce7;color:#166534;border:1px solid #86efac;',
                 'mavzu':            'background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;',
-                'uploaded':         'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
+                'uploaded':         'background:#dcfce7;color:#166534;border:1px solid #86efac;',
                 '2O':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 '2T':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 'not_in_curriculum':'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',

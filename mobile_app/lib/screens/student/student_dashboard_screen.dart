@@ -301,7 +301,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
-    final cc = cardColor ?? const Color(0xFF0D47A1);
+    final cc = cardColor ?? const Color(0xFF0A1A3A);
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
     final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
@@ -396,7 +396,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 4),
           height: statusBarHeight + 64,
           decoration: const BoxDecoration(
-            color: Color(0xFF0D47A1),
+            color: Color(0xFF0A1A3A),
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(18),
               bottomRight: Radius.circular(18),

@@ -76,7 +76,7 @@ class StudentUsefulScreen extends StatelessWidget {
             stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
             colors: isDark
                 ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF150638), Color(0xFF0D0221)]
-                : const [Colors.white, Colors.white, Colors.white, Colors.white, Colors.white],
+                : const [Color(0xFFF5F6FA), Color(0xFFF0F2F8), Color(0xFFEEF0F5), Color(0xFFF0F2F8), Color(0xFFF5F6FA)],
           ),
         ),
         child: SingleChildScrollView(
@@ -235,18 +235,19 @@ class StudentUsefulScreen extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: isDark ? null : RadialGradient(
               center: Alignment.topRight,
-              radius: 1.2,
-              colors: [item.color.withOpacity(0.22), item.color.withOpacity(0.06), Colors.white.withOpacity(0.95)],
-              stops: const [0.0, 0.4, 1.0],
+              radius: 0.8,
+              colors: [item.color.withOpacity(0.15), item.color.withOpacity(0.03), Colors.white],
+              stops: const [0.0, 0.35, 0.8],
             ),
             color: isDark ? Colors.white.withOpacity(0.08) : null,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9)),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : Colors.white, width: 1.5),
             boxShadow: isDark ? null : [
               BoxShadow(
-                color: item.color.withOpacity(0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
+                color: item.color.withOpacity(0.08),
+                blurRadius: 20,
+                spreadRadius: 2,
+                offset: const Offset(0, 2),
               ),
             ],
           ),

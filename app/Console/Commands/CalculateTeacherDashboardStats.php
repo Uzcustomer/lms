@@ -49,13 +49,19 @@ class CalculateTeacherDashboardStats extends Command
     protected $description = "O'qituvchi dashbordi statistikasini joriy semestrlar bo'yicha hisoblab keshga yozadi";
 
     public const CACHE_TTL_SECONDS = 25 * 3600; // 24 soat + 1 soat buffer
-    public const CACHE_VERSION = 'v2';
+    public const CACHE_VERSION = 'v3';
 
     /**
-     * Top 10 ga kirishi uchun o'qituvchining minimal baholar soni —
-     * 1/1 = 100% kabi statistik shovqinni cheklaydi.
+     * Liderlar ro'yxatiga (Top N + shaxsiy o'rin) kirishi uchun
+     * o'qituvchining minimal baholar soni — 1/1 = 100% kabi
+     * statistik shovqinni cheklaydi.
      */
-    public const MIN_GRADES_FOR_TOP10 = 30;
+    public const MIN_GRADES_FOR_LEADERBOARD = 30;
+
+    /**
+     * Top jadvalda nechta o'qituvchi ko'rsatiladi.
+     */
+    public const TOP_LEADERBOARD_SIZE = 20;
 
     public function handle(): int
     {
@@ -83,21 +89,19 @@ class CalculateTeacherDashboardStats extends Command
         $totalTeachers = count($rows);
         $this->info("{$totalTeachers} ta o'qituvchi uchun ma'lumot topildi.");
 
-        $top10Source = [];
-        $cachedCount = 0;
+        // 1) Avval har bir o'qituvchi uchun stats ni hisoblaymiz
+        $allStats = [];
+        $rankedSource = [];
 
         foreach ($rows as $row) {
             $stats = $this->buildStatsArray($row, $currentCodes, $currentYear);
+            $allStats[(int) $row->employee_id] = [
+                'stats' => $stats,
+                'employee_name' => $row->employee_name,
+            ];
 
-            Cache::put(
-                self::employeeCacheKey($row->employee_id),
-                $stats,
-                self::CACHE_TTL_SECONDS
-            );
-            $cachedCount++;
-
-            if ($stats['jami'] >= self::MIN_GRADES_FOR_TOP10) {
-                $top10Source[] = [
+            if ($stats['jami'] >= self::MIN_GRADES_FOR_LEADERBOARD) {
+                $rankedSource[] = [
                     'employee_id'   => (int) $row->employee_id,
                     'employee_name' => $row->employee_name,
                     'foiz'          => $stats['vaqtida_foiz'],
@@ -106,18 +110,49 @@ class CalculateTeacherDashboardStats extends Command
             }
         }
 
-        $top10 = $this->buildTop10($top10Source);
+        // 2) Sortlab, har bir o'qituvchining o'rnini aniqlaymiz
+        usort($rankedSource, function ($a, $b) {
+            if ($a['foiz'] === $b['foiz']) {
+                return $b['jami'] <=> $a['jami'];
+            }
+            return $b['foiz'] <=> $a['foiz'];
+        });
+        $totalRanked = count($rankedSource);
+        $rankByEmployee = [];
+        foreach ($rankedSource as $idx => $entry) {
+            $rankByEmployee[$entry['employee_id']] = $idx + 1;
+        }
+
+        // 3) Stats ni rank bilan to'ldirib keshga yozamiz
+        $cachedCount = 0;
+        foreach ($allStats as $employeeId => $payload) {
+            $stats = $payload['stats'];
+            $stats['rank']         = $rankByEmployee[$employeeId] ?? null;
+            $stats['total_ranked'] = $totalRanked;
+
+            Cache::put(
+                self::employeeCacheKey($employeeId),
+                $stats,
+                self::CACHE_TTL_SECONDS
+            );
+            $cachedCount++;
+        }
+
+        // 4) Top N ni alohida keshlash (o'qituvchilar va kafedralarni yuklab)
+        $topN = $this->buildTopLeaderboard($rankedSource);
         Cache::put(
-            self::top10CacheKey(),
+            self::topLeaderboardCacheKey(),
             [
-                'items'        => $top10,
+                'items'        => $topN,
+                'total_ranked' => $totalRanked,
+                'size'         => self::TOP_LEADERBOARD_SIZE,
                 'last_updated' => Carbon::now('Asia/Tashkent')->toDateTimeString(),
             ],
             self::CACHE_TTL_SECONDS
         );
 
         $elapsed = round(microtime(true) - $startTime, 1);
-        $this->info("Tayyor: {$cachedCount} o'qituvchi keshga yozildi, top 10 hisoblandi ({$elapsed}s).");
+        $this->info("Tayyor: {$cachedCount} o'qituvchi keshga yozildi, top " . self::TOP_LEADERBOARD_SIZE . " hisoblandi ({$elapsed}s).");
 
         if (app()->bound('nightly.progress')) {
             try {
@@ -297,36 +332,117 @@ class CalculateTeacherDashboardStats extends Command
         return $stats;
     }
 
-    private function buildTop10(array $top10Source): array
+    /**
+     * Top N (TOP_LEADERBOARD_SIZE) o'qituvchini medal va kafedra emoji
+     * bilan birga qaytaradi. Kirish: avval sortlangan rankedSource.
+     */
+    private function buildTopLeaderboard(array $rankedSource): array
     {
-        usort($top10Source, function ($a, $b) {
-            if ($a['foiz'] === $b['foiz']) {
-                return $b['jami'] <=> $a['jami'];
-            }
-            return $b['foiz'] <=> $a['foiz'];
-        });
-        $top10Source = array_slice($top10Source, 0, 10);
-
-        if (empty($top10Source)) {
+        $top = array_slice($rankedSource, 0, self::TOP_LEADERBOARD_SIZE);
+        if (empty($top)) {
             return [];
         }
 
-        $employeeIds = array_column($top10Source, 'employee_id');
+        $employeeIds = array_column($top, 'employee_id');
         $teachers = Teacher::whereIn('hemis_id', $employeeIds)->get()->keyBy('hemis_id');
 
-        $top10 = [];
-        foreach ($top10Source as $idx => $entry) {
+        $items = [];
+        foreach ($top as $idx => $entry) {
+            $rank = $idx + 1;
             $teacher = $teachers->get($entry['employee_id']);
-            $top10[] = [
-                'rank'         => $idx + 1,
+            $kafedra = $teacher?->department ?? '—';
+
+            $items[] = [
+                'rank'         => $rank,
+                'medal'        => $this->medalFor($rank),
                 'employee_id'  => $entry['employee_id'],
                 'fio'          => $teacher?->full_name ?? $entry['employee_name'] ?? '—',
-                'kafedra'      => $teacher?->department ?? '—',
+                'kafedra'      => $kafedra,
+                'kafedra_emoji'=> $this->departmentEmoji($kafedra),
                 'foiz'         => $entry['foiz'],
                 'jami'         => $entry['jami'],
             ];
         }
-        return $top10;
+        return $items;
+    }
+
+    /**
+     * 1, 2, 3-o'rinlar uchun medal emoji, qolganlar uchun bo'sh.
+     */
+    private function medalFor(int $rank): string
+    {
+        return match ($rank) {
+            1 => '🥇',
+            2 => '🥈',
+            3 => '🥉',
+            default => '',
+        };
+    }
+
+    /**
+     * Kafedra nomidagi kalit so'zga qarab tematik emoji tanlaydi
+     * (tibbiy/anatomiya/fiziologiya/farmakologiya va h.k.).
+     * Topilmasa, default 🎓.
+     */
+    private function departmentEmoji(?string $department): string
+    {
+        if (!$department) {
+            return '🎓';
+        }
+        $d = mb_strtolower($department, 'UTF-8');
+
+        $patterns = [
+            'stomatolog'      => '🦷',
+            'farmakolog'      => '💊',
+            'farmatsev'       => '💊',
+            'biokim'          => '🧬',
+            'gistolog'        => '🔬',
+            'sitolog'         => '🔬',
+            'mikrobiolog'     => '🦠',
+            'patolog'         => '🩻',
+            'anatomiya'       => '🦴',
+            'fiziolog'        => '❤️',
+            'kardiolog'       => '❤️',
+            'nevrolog'        => '🧠',
+            'psixiat'         => '🧠',
+            'oftalmolog'      => '👁️',
+            'otorinolaring'   => '👂',
+            'onkolog'         => '🩻',
+            'radiolog'        => '🩻',
+            'xirurg'          => '🩺',
+            'jarrohlik'       => '🩺',
+            'travmatolog'     => '🩻',
+            'akusher'         => '🤰',
+            'gineko'          => '🤰',
+            'pediatr'         => '👶',
+            'bolalar'         => '👶',
+            'ichki kasallik'  => '🤒',
+            'yuqumli'         => '🤧',
+            'infeksion'       => '🤧',
+            'dermatolog'      => '🧴',
+            'gigiyena'        => '🧼',
+            'jamoat salomat'  => '🏥',
+            'tibbiy huquq'    => '⚖️',
+            'huquq'           => '⚖️',
+            'falsafa'         => '📜',
+            'til'             => '📖',
+            'fizika'          => '⚛️',
+            'kimyo'           => '🧪',
+            'matematika'      => '🧮',
+            'informatika'     => '💻',
+            'iqtisod'         => '💼',
+            'menejment'       => '📊',
+            'sport'           => '⚽',
+            'jismoniy tarbiya'=> '⚽',
+        ];
+
+        foreach ($patterns as $kw => $emoji) {
+            if (str_contains($d, $kw)) {
+                return $emoji;
+            }
+        }
+
+        return '🎓';
     }
 
     public static function employeeCacheKey(int|string $employeeId): string
@@ -334,8 +450,8 @@ class CalculateTeacherDashboardStats extends Command
         return 'teacher_dashboard_stats:' . self::CACHE_VERSION . ":{$employeeId}:current";
     }
 
-    public static function top10CacheKey(): string
+    public static function topLeaderboardCacheKey(): string
     {
-        return 'teacher_dashboard_top10:' . self::CACHE_VERSION . ':current';
+        return 'teacher_dashboard_top:' . self::CACHE_VERSION . ':current';
     }
 }

@@ -30,38 +30,29 @@ class DebugTeacherDashboardStats extends Command
         $excluded = CalculateTeacherDashboardStats::EXCLUDED_TRAINING_TYPES;
         $excludedPlaceholders = implode(',', array_fill(0, count($excluded), '?'));
 
-        // 1-bo'lim: Top 5 o'qituvchi (Variant B — schedules × students bo'yicha)
-        $this->line("--- TOP 5 o'qituvchi (schedules × group students bo'yicha) ---");
+        // 1-bo'lim: Top 5 o'qituvchi (jami student_grades yozuvlari bo'yicha)
+        $this->line("--- TOP 5 o'qituvchi (student_grades yozuvlari bo'yicha) ---");
 
         $sql1 = "
             SELECT
-                sch.employee_id,
-                MAX(sch.employee_name) AS employee_name,
+                employee_id,
+                MAX(employee_name) AS employee_name,
                 COUNT(*) AS jami,
-                SUM(CASE WHEN sg.grade IS NOT NULL THEN 1 ELSE 0 END) AS bilan_bahosi,
-                SUM(CASE WHEN sg.reason = 'absent' THEN 1 ELSE 0 END) AS nb_count,
-                SUM(CASE
-                    WHEN sg.id IS NULL OR (sg.grade IS NULL AND (sg.reason IS NULL OR sg.reason != 'absent') AND (sg.status IS NULL OR sg.status != 'absent'))
-                    THEN 1 ELSE 0 END) AS bosh,
-                MIN(sg.created_at_api) AS eng_erta_baho,
-                MAX(sg.created_at_api) AS eng_kech_baho,
-                MIN(sch.lesson_date) AS eng_erta_dars,
-                MAX(sch.lesson_date) AS eng_kech_dars
-            FROM schedules sch
-            INNER JOIN students st ON st.group_id = sch.group_id
-            LEFT JOIN student_grades sg
-                ON sg.subject_schedule_id = sch.schedule_hemis_id
-                AND sg.student_hemis_id    = st.hemis_id
-                AND sg.deleted_at IS NULL
-                AND sg.retake_grade IS NULL
-                AND (sg.status IS NULL OR sg.status != 'retake')
-                AND sg.independent_id IS NULL
-            WHERE sch.deleted_at IS NULL
-                AND sch.semester_code = ?
-                AND sch.training_type_name NOT IN ({$excludedPlaceholders})
-                AND sch.lesson_date IS NOT NULL
-                AND sch.lesson_date <= NOW()
-            GROUP BY sch.employee_id
+                SUM(CASE WHEN grade IS NOT NULL THEN 1 ELSE 0 END) AS bilan_bahosi,
+                SUM(CASE WHEN reason = 'absent' THEN 1 ELSE 0 END) AS nb_count,
+                SUM(CASE WHEN grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent') THEN 1 ELSE 0 END) AS bosh,
+                MIN(created_at) AS eng_erta_baho,
+                MAX(created_at) AS eng_kech_baho,
+                MIN(lesson_date) AS eng_erta_dars,
+                MAX(lesson_date) AS eng_kech_dars
+            FROM student_grades
+            WHERE deleted_at IS NULL
+                AND semester_code = ?
+                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND independent_id IS NULL
+                AND retake_grade IS NULL
+                AND (status IS NULL OR status != 'retake')
+            GROUP BY employee_id
             ORDER BY jami DESC
             LIMIT 5
         ";
@@ -98,45 +89,38 @@ class DebugTeacherDashboardStats extends Command
             SELECT
                 COUNT(*) AS jami,
                 SUM(CASE
-                    WHEN (sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                         AND sg.created_at_api IS NOT NULL
-                         AND sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), sch.lesson_pair_end_time)
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                         AND created_at IS NOT NULL
+                         AND created_at <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
                     THEN 1 ELSE 0 END) AS dars_vaqtida,
                 SUM(CASE
-                    WHEN (sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                         AND sg.created_at_api IS NOT NULL
-                         AND sg.created_at_api > TIMESTAMP(DATE(sch.lesson_date), sch.lesson_pair_end_time)
-                         AND sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), '18:00:00')
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                         AND created_at IS NOT NULL
+                         AND created_at > TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
+                         AND created_at <= TIMESTAMP(DATE(lesson_date), '18:00:00')
                     THEN 1 ELSE 0 END) AS ish_vaqtida,
                 SUM(CASE
-                    WHEN (sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                         AND sg.created_at_api IS NOT NULL
-                         AND sg.created_at_api > TIMESTAMP(DATE(sch.lesson_date), '18:00:00')
-                         AND sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), '23:59:59')
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                         AND created_at IS NOT NULL
+                         AND created_at > TIMESTAMP(DATE(lesson_date), '18:00:00')
+                         AND created_at <= TIMESTAMP(DATE(lesson_date), '23:59:59')
                     THEN 1 ELSE 0 END) AS kech,
                 SUM(CASE
-                    WHEN sg.id IS NULL
-                         OR (sg.grade IS NULL AND (sg.reason IS NULL OR sg.reason != 'absent') AND (sg.status IS NULL OR sg.status != 'absent'))
-                         OR ((sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                             AND (sg.created_at_api IS NULL OR sg.created_at_api > TIMESTAMP(DATE(sch.lesson_date), '23:59:59')))
+                    WHEN (grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent'))
+                         OR ((grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                             AND (created_at IS NULL OR created_at > TIMESTAMP(DATE(lesson_date), '23:59:59')))
                     THEN 1 ELSE 0 END) AS baholanmagan
-            FROM schedules sch
-            INNER JOIN students st ON st.group_id = sch.group_id
-            LEFT JOIN student_grades sg
-                ON sg.subject_schedule_id = sch.schedule_hemis_id
-                AND sg.student_hemis_id    = st.hemis_id
-                AND sg.deleted_at IS NULL
-                AND sg.retake_grade IS NULL
-                AND (sg.status IS NULL OR sg.status != 'retake')
-                AND sg.independent_id IS NULL
-            WHERE sch.deleted_at IS NULL
-                AND sch.semester_code = ?
-                AND sch.training_type_name NOT IN ({$excludedPlaceholders})
-                AND sch.lesson_date IS NOT NULL
-                AND sch.lesson_date <= NOW()
-                AND sch.lesson_pair_end_time IS NOT NULL
-                AND sch.lesson_pair_end_time != ''
-                AND sch.employee_id = ?
+            FROM student_grades
+            WHERE deleted_at IS NULL
+                AND semester_code = ?
+                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND independent_id IS NULL
+                AND retake_grade IS NULL
+                AND (status IS NULL OR status != 'retake')
+                AND lesson_date IS NOT NULL
+                AND lesson_pair_end_time IS NOT NULL
+                AND lesson_pair_end_time != ''
+                AND employee_id = ?
         ";
         $bindings = array_merge([$semester->code], $excluded, [$teacherFilter]);
         $stat = DB::select($sql2, $bindings)[0] ?? null;
@@ -159,39 +143,31 @@ class DebugTeacherDashboardStats extends Command
 
         $sql3 = "
             SELECT
-                DATE(sch.lesson_date) AS dars_sanasi,
-                sch.lesson_pair_end_time AS dars_tugash,
-                st.hemis_id AS student_hemis_id,
-                sg.created_at_api,
-                sg.grade,
-                sg.reason,
-                sg.status,
-                sch.training_type_name,
+                DATE(lesson_date) AS dars_sanasi,
+                lesson_pair_end_time AS dars_tugash,
+                student_hemis_id,
+                created_at,
+                grade,
+                reason,
+                status,
+                training_type_name,
                 CASE
-                    WHEN sg.id IS NULL THEN 'YOZUV_YOQ'
-                    WHEN (sg.grade IS NULL AND (sg.reason IS NULL OR sg.reason != 'absent') AND (sg.status IS NULL OR sg.status != 'absent')) THEN 'BOSH'
-                    WHEN sg.created_at_api IS NULL THEN 'NULL_API'
-                    WHEN sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), sch.lesson_pair_end_time) THEN 'DARS'
-                    WHEN sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), '18:00:00') THEN 'ISH'
-                    WHEN sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), '23:59:59') THEN 'KECH'
+                    WHEN (grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent')) THEN 'BOSH'
+                    WHEN created_at IS NULL THEN 'NULL_CREATED'
+                    WHEN created_at <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time) THEN 'DARS'
+                    WHEN created_at <= TIMESTAMP(DATE(lesson_date), '18:00:00') THEN 'ISH'
+                    WHEN created_at <= TIMESTAMP(DATE(lesson_date), '23:59:59') THEN 'KECH'
                     ELSE 'TUGAGAN'
                 END AS kategoriya
-            FROM schedules sch
-            INNER JOIN students st ON st.group_id = sch.group_id
-            LEFT JOIN student_grades sg
-                ON sg.subject_schedule_id = sch.schedule_hemis_id
-                AND sg.student_hemis_id    = st.hemis_id
-                AND sg.deleted_at IS NULL
-                AND sg.retake_grade IS NULL
-                AND (sg.status IS NULL OR sg.status != 'retake')
-                AND sg.independent_id IS NULL
-            WHERE sch.deleted_at IS NULL
-                AND sch.semester_code = ?
-                AND sch.training_type_name NOT IN ({$excludedPlaceholders})
-                AND sch.lesson_date IS NOT NULL
-                AND sch.lesson_date <= NOW()
-                AND sch.employee_id = ?
-            ORDER BY sch.lesson_date DESC, sg.created_at_api DESC
+            FROM student_grades
+            WHERE deleted_at IS NULL
+                AND semester_code = ?
+                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND independent_id IS NULL
+                AND retake_grade IS NULL
+                AND (status IS NULL OR status != 'retake')
+                AND employee_id = ?
+            ORDER BY lesson_date DESC, created_at DESC
             LIMIT 10
         ";
         $details = DB::select($sql3, $bindings);
@@ -202,7 +178,7 @@ class DebugTeacherDashboardStats extends Command
                 $d->dars_sanasi,
                 $d->dars_tugash,
                 $d->student_hemis_id,
-                $d->created_at_api ?? '-',
+                $d->created_at ?? '-',
                 $d->grade ?? '-',
                 $d->reason ?? '-',
                 $d->status ?? '-',
@@ -211,7 +187,7 @@ class DebugTeacherDashboardStats extends Command
             ];
         }
         $this->table(
-            ['dars_sana', 'tugash', 'student_id', 'created_at_api', 'grade', 'reason', 'status', 'tur', 'kategoriya'],
+            ['dars_sana', 'tugash', 'student_id', 'created_at', 'grade', 'reason', 'status', 'tur', 'kategoriya'],
             $detailRows
         );
 

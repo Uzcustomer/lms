@@ -100,6 +100,24 @@ class TeacherMainController extends Controller
 
         // Tyutor guruhlari mavjud bo'lsa, guruh bo'yicha talabalarni ko'rsat
         $tutorGroups = $teacher->groups()->where('active', true)->orderBy('name')->get();
+
+        // Schedule orqali biriktirilgan guruhlarni ham qo'shish
+        if ($tutorGroups->isEmpty() && $teacher->hemis_id) {
+            $scheduleGroupIds = DB::table('schedules')
+                ->where('employee_id', $teacher->hemis_id)
+                ->where('education_year_current', true)
+                ->whereNotNull('lesson_date')
+                ->pluck('group_id')
+                ->unique()
+                ->toArray();
+            if (!empty($scheduleGroupIds)) {
+                $tutorGroups = \App\Models\Group::whereIn('group_hemis_id', $scheduleGroupIds)
+                    ->where('active', true)
+                    ->orderBy('name')
+                    ->get();
+            }
+        }
+
         if ($tutorGroups->count() > 0) {
             return $this->studentsTutor($request, $teacher, $tutorGroups);
         }

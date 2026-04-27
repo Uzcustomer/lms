@@ -194,44 +194,20 @@ class _ServicesHero extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF1E88E5), Color(0xFF1565C0), Color(0xFF0D47A1)],
-            stops: [0.0, 0.6, 1.0],
+            colors: [Color(0xFF7C4DFF), Color(0xFFAB47BC), Color(0xFFFF7043)],
           ),
           border: Border.all(color: Colors.white.withOpacity(0.3)),
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1565C0).withOpacity(0.4),
-              blurRadius: 30,
-              offset: const Offset(0, 14),
+              color: const Color(0xFF7C4DFF).withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         padding: const EdgeInsets.all(18),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              right: -30,
-              top: -30,
-              child: Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.14),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            const Positioned(
-              right: 22,
-              bottom: 22,
-              child: Opacity(
-                opacity: 0.45,
-                child: Icon(Icons.grid_view_rounded, size: 56, color: Colors.white),
-              ),
-            ),
-            Column(
+        child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
@@ -272,20 +248,18 @@ class _ServicesHero extends StatelessWidget {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Kirish', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF1565C0))),
+                      Text('Kirish', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF7C4DFF))),
                       SizedBox(width: 6),
-                      Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF1565C0)),
+                      Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF7C4DFF)),
                     ],
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
+          ),
+      );
+    }
   }
-}
 
 // ---------- Glass tile ----------
 class _GlassTile extends StatelessWidget {

@@ -1235,18 +1235,33 @@ class QuizResultController extends Controller
             return ['code' => 'no_student', 'text' => 'Talaba topilmadi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
+        // 1.5) Oldin yuklangan (quiz_result_id orqali yoki DB da OSKI/Test baho bor)
+        if (isset($uploadedResultIds[$result->id])) {
+            return ['code' => 'uploaded', 'text' => 'Oldin yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        }
+        $existingOskiGrade = null;
+        if ($result->fan_id) {
+            $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
+            if (isset($oskiGrades[$gradeCheckKey])) {
+                $existingOskiGrade = $oskiGrades[$gradeCheckKey];
+            }
+        }
+        if ($existingOskiGrade === null && $result->fan_name) {
+            $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name);
+            if (isset($oskiGrades[$gradeCheckKeyName])) {
+                $existingOskiGrade = $oskiGrades[$gradeCheckKeyName];
+            }
+        }
+        if ($existingOskiGrade !== null) {
+            return ['code' => 'uploaded', 'text' => 'Oldin yuklangan (' . $existingOskiGrade . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $existingOskiGrade];
+        }
+
         // 2) Mavzu formatini aniqlash (shakl: "N-mavzu")
         $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
 
         if ($isMavzuShakl) {
-            // Baho tekshiruvi
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
                 return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
-            }
-
-            // Oldin yuklangan (quiz_result_id bo'yicha mavjudligini tekshirish)
-            if (isset($uploadedResultIds[$result->id])) {
-                return ['code' => 'uploaded', 'text' => 'Oldin yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
 
             // Fan o'quv rejada bormi tekshirish
@@ -1279,32 +1294,7 @@ class QuizResultController extends Controller
             return ['code' => 'not_first', 'text' => '1-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 6) Oldin yuklangan (quiz_result_id orqali)
-        if (isset($uploadedResultIds[$result->id])) {
-            return ['code' => 'uploaded', 'text' => 'Oldin yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
-        }
-
-        // 6.1) DB da OSKI/Test baho allaqachon bor (quiz_result_id siz ham)
-        if ($student) {
-            $existingGrade = null;
-            if ($result->fan_id) {
-                $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
-                if (isset($oskiGrades[$gradeCheckKey])) {
-                    $existingGrade = $oskiGrades[$gradeCheckKey];
-                }
-            }
-            if ($existingGrade === null && $result->fan_name) {
-                $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name);
-                if (isset($oskiGrades[$gradeCheckKeyName])) {
-                    $existingGrade = $oskiGrades[$gradeCheckKeyName];
-                }
-            }
-            if ($existingGrade !== null) {
-                return ['code' => 'uploaded', 'text' => 'Oldin yuklangan (' . $existingGrade . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $existingGrade];
-            }
-        }
-
-        // 7) Dublikat tekshiruvi (2O / 2T)
+        // 6) Dublikat tekshiruvi (2O / 2T)
         $typeCode = in_array($result->quiz_type, $testTypes) ? 'T' : 'O';
         $dupKey = $result->student_id . '|' . $result->fan_id . '|' . $typeCode . '|' . $result->shakl;
         if (isset($duplicateMap[$dupKey]) && count($duplicateMap[$dupKey]) > 1) {

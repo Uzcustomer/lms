@@ -337,42 +337,30 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       children: [
         // Top bar
         Padding(
-          padding: EdgeInsets.only(
-            top: statusBarHeight + 8,
-            left: 16,
-            right: 8,
-          ),
+          padding: EdgeInsets.only(top: statusBarHeight + 8, left: 16, right: 16),
           child: Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(10),
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(Icons.home_rounded,
-                    color: isDark ? Colors.white : const Color(0xFF5C3D2E), size: 20),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                l.appTitle,
-                style: TextStyle(
-                  color: isDark ? Colors.white : const Color(0xFF5C3D2E),
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
+                child: Icon(Icons.home_rounded, color: isDark ? Colors.white : const Color(0xFF1A1A2E), size: 22),
               ),
               const Spacer(),
-              IconButton(
-                icon: Icon(Icons.notifications_outlined,
-                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
-                onPressed: () {},
-              ),
-              IconButton(
-                icon: Icon(Icons.settings_outlined,
-                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
-                onPressed: () => _showSettingsSheet(context),
+              Text(l.home, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
+              const Spacer(),
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: GestureDetector(
+                  onTap: () => _showSettingsSheet(context),
+                  child: Icon(Icons.notifications_outlined, color: isDark ? Colors.white : const Color(0xFF1A1A2E), size: 22),
+                ),
               ),
             ],
           ),

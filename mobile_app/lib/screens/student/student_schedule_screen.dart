@@ -217,33 +217,27 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 children: [
                   // Top bar
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                     child: Row(
                       children: [
                         Container(
-                          width: 36,
-                          height: 36,
+                          width: 40, height: 40,
                           decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(10),
+                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(Icons.home_rounded,
-                              color: isDark ? Colors.white : const Color(0xFF5C3D2E), size: 20),
+                          child: Icon(Icons.home_rounded, color: isDark ? Colors.white : const Color(0xFF1A1A2E), size: 22),
                         ),
                         const Spacer(),
-                        Text(
-                          l.schedule,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : AppTheme.textPrimary,
-                          ),
-                        ),
+                        Text(l.schedule, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
                         const Spacer(),
-                        IconButton(
-                          icon: Icon(Icons.notifications_outlined,
-                              color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
-                          onPressed: () {},
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.notifications_outlined, color: isDark ? Colors.white : const Color(0xFF1A1A2E), size: 22),
                         ),
                       ],
                     ),

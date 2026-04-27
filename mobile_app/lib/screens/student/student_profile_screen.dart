@@ -117,31 +117,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
 
+    final statusBarH = MediaQuery.of(context).padding.top;
+
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(l.profile),
-        centerTitle: true,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.pop(context),
-              )
-            : const Padding(
-                padding: EdgeInsets.all(12),
-                child: Icon(Icons.account_balance, size: 28),
-              ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(context),
-          ),
-        ],
-      ),
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.profile == null) {
@@ -169,9 +148,37 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             onRefresh: () => provider.loadProfile(),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              padding: EdgeInsets.fromLTRB(16, statusBarH + 8, 16, 100),
               child: Column(
                 children: [
+                  // Top bar
+                  Row(
+                    children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.home_rounded, color: isDark ? Colors.white : const Color(0xFF1A1A2E), size: 22),
+                      ),
+                      const Spacer(),
+                      Text(l.profile, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : const Color(0xFF1A1A2E))),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => _showLogoutDialog(context),
+                        child: Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.logout_rounded, color: isDark ? Colors.white : const Color(0xFF1A1A2E), size: 22),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   _buildProfileCard(context, profile),
                   const SizedBox(height: 16),
                   _buildTelegramCard(context, profile),

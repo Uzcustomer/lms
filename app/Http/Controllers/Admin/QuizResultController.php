@@ -495,13 +495,17 @@ class QuizResultController extends Controller
                         ->whereIn('semester_code', $allSemCodesForOski)
                         ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
-                        ->groupBy('student_hemis_id', 'subject_id')
+                        ->select('student_hemis_id', 'subject_id', 'subject_name', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name')
                         ->get();
 
                     foreach ($oskiRows as $row) {
                         $k = $row->student_hemis_id . '|' . $row->subject_id;
                         $oskiGrades[$k] = (float) $row->grade;
+                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name);
+                        if (!isset($oskiGrades[$kName])) {
+                            $oskiGrades[$kName] = (float) $row->grade;
+                        }
                     }
                     unset($oskiRows);
                 }
@@ -1090,13 +1094,17 @@ class QuizResultController extends Controller
                         ->whereIn('semester_code', $allSemCodesForOski)
                         ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
-                        ->groupBy('student_hemis_id', 'subject_id')
+                        ->select('student_hemis_id', 'subject_id', 'subject_name', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name')
                         ->get();
 
                     foreach ($oskiRows as $row) {
                         $k = $row->student_hemis_id . '|' . $row->subject_id;
                         $oskiGrades[$k] = (float) $row->grade;
+                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name);
+                        if (!isset($oskiGrades[$kName])) {
+                            $oskiGrades[$kName] = (float) $row->grade;
+                        }
                     }
                     unset($oskiRows);
                 }
@@ -1278,9 +1286,21 @@ class QuizResultController extends Controller
 
         // 6.1) DB da OSKI/Test baho allaqachon bor (quiz_result_id siz ham)
         if ($student) {
-            $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
-            if (isset($oskiGrades[$gradeCheckKey])) {
-                return ['code' => 'uploaded', 'text' => 'Oldin yuklangan (OSKI: ' . $oskiGrades[$gradeCheckKey] . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiGrades[$gradeCheckKey]];
+            $existingGrade = null;
+            if ($result->fan_id) {
+                $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
+                if (isset($oskiGrades[$gradeCheckKey])) {
+                    $existingGrade = $oskiGrades[$gradeCheckKey];
+                }
+            }
+            if ($existingGrade === null && $result->fan_name) {
+                $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name);
+                if (isset($oskiGrades[$gradeCheckKeyName])) {
+                    $existingGrade = $oskiGrades[$gradeCheckKeyName];
+                }
+            }
+            if ($existingGrade !== null) {
+                return ['code' => 'uploaded', 'text' => 'Oldin yuklangan (' . $existingGrade . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $existingGrade];
             }
         }
 

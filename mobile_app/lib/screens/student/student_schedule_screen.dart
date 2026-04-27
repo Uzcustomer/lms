@@ -158,12 +158,18 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               Positioned(
                 top: -10,
                 right: -10,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: cc.withOpacity(isDark ? 0.25 : 0.18),
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [cc.withOpacity(isDark ? 0.35 : 0.28), cc.withOpacity(0)],
+                        stops: const [0.0, 0.7],
+                      ),
+                    ),
                   ),
                 ),
               ),

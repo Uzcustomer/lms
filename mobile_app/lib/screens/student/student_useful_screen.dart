@@ -305,17 +305,17 @@ class _GlassTile extends StatelessWidget {
                 children: [
                   // hue glow — inside ClipRRect so it gets clipped
                   Positioned(
-                    top: -10,
-                    right: -10,
+                    top: -20,
+                    right: -20,
                     child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
                       child: Container(
-                        width: 100,
-                        height: 100,
+                        width: 140,
+                        height: 140,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
-                            colors: [item.color.withOpacity(isDark ? 0.35 : 0.28), item.color.withOpacity(0)],
+                            colors: [item.color.withOpacity(isDark ? 0.4 : 0.32), item.color.withOpacity(0)],
                             stops: const [0.0, 0.7],
                           ),
                         ),

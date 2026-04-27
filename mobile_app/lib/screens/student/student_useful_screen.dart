@@ -233,14 +233,20 @@ class StudentUsefulScreen extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.08) : item.color.withOpacity(0.08),
+            gradient: isDark ? null : LinearGradient(
+              begin: Alignment.bottomLeft,
+              end: Alignment.topRight,
+              colors: [item.color.withOpacity(0.18), item.color.withOpacity(0.04), Colors.white],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+            color: isDark ? Colors.white.withOpacity(0.08) : null,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : item.color.withOpacity(0.12)),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9)),
             boxShadow: isDark ? null : [
               BoxShadow(
-                color: item.color.withOpacity(0.10),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
+                color: item.color.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
               ),
             ],
           ),

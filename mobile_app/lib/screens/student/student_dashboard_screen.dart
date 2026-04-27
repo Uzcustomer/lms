@@ -288,29 +288,31 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
-    final lightBg = cardColor?.withOpacity(0.08) ?? const Color(0xFFF0F4FF);
-    final lightBorder = cardColor?.withOpacity(0.12) ?? const Color(0xFFDCE3F5);
-    final shadowColor = cardColor?.withOpacity(0.10) ?? const Color(0xFF0D47A1).withOpacity(0.06);
+    final cc = cardColor ?? const Color(0xFF0D47A1);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : lightBg,
+            gradient: isDark ? null : LinearGradient(
+              begin: Alignment.bottomLeft,
+              end: Alignment.topRight,
+              colors: [cc.withOpacity(0.18), cc.withOpacity(0.04), Colors.white],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+            color: isDark ? Colors.white.withOpacity(0.08) : null,
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(
               color: isDark
                   ? Colors.white.withOpacity(0.12)
-                  : lightBorder,
+                  : Colors.white.withOpacity(0.9),
             ),
             boxShadow: isDark ? null : [
               BoxShadow(
-                color: shadowColor,
-                blurRadius: 12,
-                offset: const Offset(0, 3),
+                color: cc.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -533,12 +535,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         decoration: BoxDecoration(
           color: isDark
               ? Colors.white.withOpacity(0.08)
-              : const Color(0xFFF0F4FF),
+              : Colors.white.withOpacity(0.7),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isDark
                 ? Colors.white.withOpacity(0.1)
-                : const Color(0xFFDCE3F5),
+                : Colors.white.withOpacity(0.9),
           ),
         ),
         child: Text(

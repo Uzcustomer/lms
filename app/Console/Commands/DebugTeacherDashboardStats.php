@@ -77,8 +77,8 @@ class DebugTeacherDashboardStats extends Command
                 SUM(CASE WHEN grade IS NOT NULL THEN 1 ELSE 0 END) AS bilan_bahosi,
                 SUM(CASE WHEN reason = 'absent' THEN 1 ELSE 0 END) AS nb_count,
                 SUM(CASE WHEN grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent') THEN 1 ELSE 0 END) AS bosh,
-                MIN(created_at) AS eng_erta_baho,
-                MAX(created_at) AS eng_kech_baho,
+                MIN(created_at_api) AS eng_erta_baho,
+                MAX(created_at_api) AS eng_kech_baho,
                 MIN(lesson_date) AS eng_erta_dars,
                 MAX(lesson_date) AS eng_kech_dars
             FROM student_grades
@@ -128,25 +128,25 @@ class DebugTeacherDashboardStats extends Command
                 COUNT(*) AS jami,
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                         AND created_at IS NOT NULL
-                         AND created_at <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
+                         AND created_at_api IS NOT NULL
+                         AND created_at_api <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
                     THEN 1 ELSE 0 END) AS dars_vaqtida,
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                         AND created_at IS NOT NULL
-                         AND created_at >  TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
-                         AND created_at <= TIMESTAMP(DATE(lesson_date), '18:00:00')
+                         AND created_at_api IS NOT NULL
+                         AND created_at_api >  TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
+                         AND created_at_api <= TIMESTAMP(DATE(lesson_date), '18:00:00')
                     THEN 1 ELSE 0 END) AS ish_vaqtida,
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                         AND created_at IS NOT NULL
-                         AND created_at >  TIMESTAMP(DATE(lesson_date), '18:00:00')
-                         AND created_at <= TIMESTAMP(DATE(lesson_date), '23:59:59')
+                         AND created_at_api IS NOT NULL
+                         AND created_at_api >  TIMESTAMP(DATE(lesson_date), '18:00:00')
+                         AND created_at_api <= TIMESTAMP(DATE(lesson_date), '23:59:59')
                     THEN 1 ELSE 0 END) AS kech,
                 SUM(CASE
                     WHEN (grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent'))
                          OR ((grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                             AND (created_at IS NULL OR created_at > TIMESTAMP(DATE(lesson_date), '23:59:59')))
+                             AND (created_at_api IS NULL OR created_at_api > TIMESTAMP(DATE(lesson_date), '23:59:59')))
                     THEN 1 ELSE 0 END) AS baholanmagan
             FROM student_grades
             WHERE deleted_at IS NULL
@@ -185,7 +185,7 @@ class DebugTeacherDashboardStats extends Command
                 DATE(lesson_date) AS dars_sanasi,
                 lesson_pair_end_time AS dars_tugash,
                 student_hemis_id,
-                created_at,
+                created_at_api,
                 grade,
                 reason,
                 status,
@@ -193,10 +193,10 @@ class DebugTeacherDashboardStats extends Command
                 training_type_name,
                 CASE
                     WHEN (grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent')) THEN 'BOSH'
-                    WHEN created_at IS NULL THEN 'NULL_CREATED'
-                    WHEN created_at <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time) THEN 'DARS'
-                    WHEN created_at <= TIMESTAMP(DATE(lesson_date), '18:00:00') THEN 'ISH'
-                    WHEN created_at <= TIMESTAMP(DATE(lesson_date), '23:59:59') THEN 'KECH'
+                    WHEN created_at_api IS NULL THEN 'NULL_API'
+                    WHEN created_at_api <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time) THEN 'DARS'
+                    WHEN created_at_api <= TIMESTAMP(DATE(lesson_date), '18:00:00') THEN 'ISH'
+                    WHEN created_at_api <= TIMESTAMP(DATE(lesson_date), '23:59:59') THEN 'KECH'
                     ELSE 'TUGAGAN'
                 END AS kategoriya
             FROM student_grades
@@ -209,7 +209,7 @@ class DebugTeacherDashboardStats extends Command
                 AND retake_grade IS NULL
                 AND (status IS NULL OR status != 'retake')
                 AND employee_id = ?
-            ORDER BY lesson_date DESC, created_at DESC
+            ORDER BY lesson_date DESC, created_at_api DESC
             LIMIT 15
         ";
         $details = DB::select($sql3, $bindings);
@@ -220,7 +220,7 @@ class DebugTeacherDashboardStats extends Command
                 $d->dars_sanasi,
                 $d->dars_tugash,
                 $d->student_hemis_id,
-                $d->created_at ?? '-',
+                $d->created_at_api ?? '-',
                 $d->grade ?? '-',
                 $d->reason ?? '-',
                 $d->status ?? '-',
@@ -229,7 +229,7 @@ class DebugTeacherDashboardStats extends Command
             ];
         }
         $this->table(
-            ['dars_sana', 'tugash', 'student_id', 'created_at', 'grade', 'reason', 'status', 'tt_code', 'kategoriya'],
+            ['dars_sana', 'tugash', 'student_id', 'created_at_api', 'grade', 'reason', 'status', 'tt_code', 'kategoriya'],
             $detailRows
         );
 

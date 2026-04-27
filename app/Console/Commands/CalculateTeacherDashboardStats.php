@@ -241,7 +241,7 @@ class CalculateTeacherDashboardStats extends Command
             FROM student_grades
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
-                AND education_year_code = ?
+                AND (education_year_code IS NULL OR education_year_code = ?)
                 AND training_type_code NOT IN ({$excludedCodePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL

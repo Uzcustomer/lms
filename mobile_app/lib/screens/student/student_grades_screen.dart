@@ -961,6 +961,23 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       }
     }
   }
+
+  Widget _buildBlob(Color color) {
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+      child: Container(
+        width: 240,
+        height: 240,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.0, 0.7],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _JnGradesPage extends StatefulWidget {
@@ -1335,23 +1352,6 @@ class _JnGradesPageState extends State<_JnGradesPage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBlob(Color color) {
-    return ImageFiltered(
-      imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-      child: Container(
-        width: 240,
-        height: 240,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color, color.withOpacity(0)],
-            stops: const [0.0, 0.7],
-          ),
         ),
       ),
     );

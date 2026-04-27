@@ -361,6 +361,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             );
           },
         ),
+        ],
       ),
     );
   }
@@ -786,8 +787,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             ),
           ],
         ),
-      ],
-    ),
+      ),
     );
   }
 

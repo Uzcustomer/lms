@@ -142,7 +142,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             end: Alignment.bottomRight,
             colors: isDark
                 ? const [Color(0xFF0D0221), Color(0xFF150638), Color(0xFF1B0A3C), Color(0xFF150638), Color(0xFF0D0221)]
-                : const [Color(0xFFF0F2FF), Color(0xFFE8ECFF), Color(0xFFE0E8F8), Color(0xFFE8ECFF), Color(0xFFF0F2FF)],
+                : const [Colors.white, Colors.white],
           ),
         ),
         child: Consumer<StudentProvider>(

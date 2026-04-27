@@ -324,8 +324,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           child: Stack(
             children: [
               Positioned(
-                top: -20,
-                right: -20,
+                top: -50,
+                right: -50,
                 child: ImageFiltered(
                   imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
                   child: Container(

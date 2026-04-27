@@ -305,8 +305,8 @@ class _GlassTile extends StatelessWidget {
                 children: [
                   // hue glow — inside ClipRRect so it gets clipped
                   Positioned(
-                    top: -20,
-                    right: -20,
+                    top: -50,
+                    right: -50,
                     child: ImageFiltered(
                       imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
                       child: Container(

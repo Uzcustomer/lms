@@ -32,9 +32,9 @@ use Illuminate\Support\Facades\Log;
  * Filtrlar:
  *   - Joriy semestrlar: SELECT DISTINCT code FROM semesters WHERE current = 1
  *     (semestrlar jadvalidagi barcha "current" semestrlar — bahorda 2,4,6,8,10,12)
- *   - Mashg'ulot turi: training_type_code NOT IN config('app.training_type_code')
- *     (Ma'ruza=11, Mustaqil ta'lim=99, Oraliq nazorat=100, Oski=101, Yakuniy test=102, Quiz test=103)
- *   - Fan nomi: subject_name LIKE config('app.grade_excluded_subject_patterns') chiqib ketadi
+ *   - Mashg'ulot turi (WHITELIST): faqat Amaliy, Seminar, Klinik mashg'ulot
+ *     (apostrof variantlari bilan: "Klinik mashg'ulot" va "Klinik mashgulot")
+ *   - Fan nomi: subject_name LIKE chiqib ketadi
  *     ("tanishuv amaliyoti", "quv amaliyoti" — O'quv amaliyoti, Tanishuv amaliyoti)
  *   - Otrobotka/qayta baho hisoblanmaydi (retake_grade IS NULL, status != 'retake')
  *   - Mustaqil ta'lim baholari hisoblanmaydi (independent_id IS NULL)
@@ -179,15 +179,21 @@ class CalculateTeacherDashboardStats extends Command
     }
 
     /**
-     * Excluded training_type_code lar — config('app.training_type_code')
+     * Hisoblanadigan mashg'ulot turlari (WHITELIST):
+     *   - Amaliy
+     *   - Seminar
+     *   - Klinik mashg'ulot (2 ta variant — apostrof bilan va apostrofsiz)
      */
-    private function excludedTrainingTypeCodes(): array
-    {
-        return config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
-    }
+    public const INCLUDED_TRAINING_TYPE_NAMES = [
+        'Amaliy',
+        'Seminar',
+        "Klinik mashg'ulot",
+        'Klinik mashgulot',
+    ];
 
     /**
      * Fan nomi LIKE filtrlari — config('app.grade_excluded_subject_patterns')
+     * Tanishuv amaliyoti, O'quv amaliyoti chiqib ketadi.
      */
     private function excludedSubjectPatterns(): array
     {
@@ -198,8 +204,8 @@ class CalculateTeacherDashboardStats extends Command
     {
         $semesterPlaceholders = implode(',', array_fill(0, count($semesterCodes), '?'));
 
-        $excludedCodes = $this->excludedTrainingTypeCodes();
-        $excludedCodePlaceholders = implode(',', array_fill(0, count($excludedCodes), '?'));
+        $includedNames = self::INCLUDED_TRAINING_TYPE_NAMES;
+        $includedNamePlaceholders = implode(',', array_fill(0, count($includedNames), '?'));
 
         $subjectPatterns = $this->excludedSubjectPatterns();
         $subjectFilterSql = '';
@@ -243,7 +249,7 @@ class CalculateTeacherDashboardStats extends Command
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
                 AND (education_year_code IS NULL OR education_year_code = ?)
-                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                AND training_type_name IN ({$includedNamePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL
@@ -258,7 +264,7 @@ class CalculateTeacherDashboardStats extends Command
         $bindings = [];
         foreach ($semesterCodes as $c)   { $bindings[] = $c; }
         $bindings[] = $educationYear;
-        foreach ($excludedCodes as $c)   { $bindings[] = $c; }
+        foreach ($includedNames as $n)   { $bindings[] = $n; }
         foreach ($subjectPatterns as $p) { $bindings[] = '%' . strtolower($p) . '%'; }
         if ($teacherFilter) { $bindings[] = $teacherFilter; }
 

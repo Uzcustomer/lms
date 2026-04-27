@@ -50,11 +50,11 @@ class DebugTeacherDashboardStats extends Command
         $this->info("=== Joriy o'quv yili: {$currentYear} ({$period}) ===");
         $this->info('=== Joriy semestr kodlari: ' . implode(', ', $currentCodes) . " ===\n");
 
-        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+        $includedNames = CalculateTeacherDashboardStats::INCLUDED_TRAINING_TYPE_NAMES;
         $subjectPatterns = config('app.grade_excluded_subject_patterns', ['tanishuv amaliyoti', 'quv amaliyoti']);
 
         $semesterPlaceholders = implode(',', array_fill(0, count($currentCodes), '?'));
-        $excludedCodePlaceholders = implode(',', array_fill(0, count($excludedCodes), '?'));
+        $includedNamePlaceholders = implode(',', array_fill(0, count($includedNames), '?'));
         $subjectFilterSql = '';
         foreach ($subjectPatterns as $_) {
             $subjectFilterSql .= " AND LOWER(subject_name) NOT LIKE ?";
@@ -64,7 +64,7 @@ class DebugTeacherDashboardStats extends Command
         $baseBindings = [];
         foreach ($currentCodes as $c)    { $baseBindings[] = $c; }
         $baseBindings[] = $currentYear;
-        foreach ($excludedCodes as $c)   { $baseBindings[] = $c; }
+        foreach ($includedNames as $n)   { $baseBindings[] = $n; }
         foreach ($subjectPatterns as $p) { $baseBindings[] = '%' . strtolower($p) . '%'; }
 
         // 1-bo'lim: Top 5 o'qituvchi
@@ -85,7 +85,7 @@ class DebugTeacherDashboardStats extends Command
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
                 AND (education_year_code IS NULL OR education_year_code = ?)
-                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                AND training_type_name IN ({$includedNamePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL
@@ -152,7 +152,7 @@ class DebugTeacherDashboardStats extends Command
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
                 AND (education_year_code IS NULL OR education_year_code = ?)
-                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                AND training_type_name IN ({$includedNamePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL
@@ -203,7 +203,7 @@ class DebugTeacherDashboardStats extends Command
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
                 AND (education_year_code IS NULL OR education_year_code = ?)
-                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                AND training_type_name IN ({$includedNamePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL

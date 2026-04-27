@@ -1,9 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
-import '../../providers/student_provider.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'attendance_stats_screen.dart';
@@ -22,12 +20,6 @@ class StudentUsefulScreen extends StatelessWidget {
     final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     final statusBarH = MediaQuery.of(context).padding.top;
-
-    final provider = context.watch<StudentProvider>();
-    final fullName = provider.profile?['full_name']?.toString() ?? '';
-    final firstName = fullName.split(' ').length > 1
-        ? fullName.split(' ')[1]
-        : fullName.split(' ').first;
 
     final services = [
       _ServiceCard(
@@ -92,35 +84,29 @@ class StudentUsefulScreen extends StatelessWidget {
             children: [
               SizedBox(height: statusBarH + 12),
 
-              // Header
+              // Header — like Jadval
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Salom, $firstName',
-                            style: TextStyle(fontSize: 14, color: sub, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            l.useful,
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: txt),
-                          ),
-                        ],
-                      ),
-                    ),
                     Container(
-                      width: 42,
-                      height: 42,
+                      width: 40, height: 40,
                       decoration: BoxDecoration(
                         color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.search_rounded, color: sub, size: 22),
+                      child: Icon(Icons.home_rounded, color: isDark ? Colors.white : AppTheme.textPrimary, size: 22),
+                    ),
+                    const Spacer(),
+                    Text(l.useful, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: txt)),
+                    const Spacer(),
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.notifications_outlined, color: isDark ? Colors.white : AppTheme.textPrimary, size: 22),
                     ),
                   ],
                 ),
@@ -222,7 +208,7 @@ class StudentUsefulScreen extends StatelessWidget {
                     crossAxisCount: 2,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.95,
+                    childAspectRatio: 1.15,
                   ),
                   itemCount: services.length,
                   itemBuilder: (_, i) => _buildCard(context, services[i], isDark, txt, sub),
@@ -257,30 +243,30 @@ class StudentUsefulScreen extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(18),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 46,
-                      height: 46,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: item.color.withOpacity(isDark ? 0.2 : 0.1),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(item.icon, color: item.color, size: 24),
+                      child: Icon(item.icon, color: item.color, size: 22),
                     ),
                     const Spacer(),
                     Text(
                       item.title,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: txt),
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: txt),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
                       item.subtitle,
-                      style: TextStyle(fontSize: 11, color: sub),
+                      style: TextStyle(fontSize: 10, color: sub),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

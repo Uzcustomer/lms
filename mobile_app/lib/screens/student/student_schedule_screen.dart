@@ -213,36 +213,21 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             return RefreshIndicator(
               onRefresh: () => provider.loadSchedule(),
               child: ListView(
-                padding: EdgeInsets.only(top: statusBarH, bottom: 100),
+                padding: const EdgeInsets.only(bottom: 100),
                 children: [
                   // Top bar
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                  Container(
+                    padding: EdgeInsets.only(top: statusBarH, left: 12, right: 12),
+                    height: statusBarH + 56,
+                    color: AppTheme.primaryColor,
                     child: Row(
                       children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(Icons.home_rounded,
-                              color: isDark ? Colors.white : const Color(0xFF5C3D2E), size: 20),
-                        ),
+                        const Icon(Icons.home_rounded, color: Colors.white, size: 24),
                         const Spacer(),
-                        Text(
-                          l.schedule,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : AppTheme.textPrimary,
-                          ),
-                        ),
+                        Text(l.schedule, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                         const Spacer(),
                         IconButton(
-                          icon: Icon(Icons.notifications_outlined,
-                              color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
                           onPressed: () {},
                         ),
                       ],

@@ -9,6 +9,7 @@ import 'gpa_calculator_screen.dart';
 import 'student_rating_screen.dart';
 import 'chat_contacts_screen.dart';
 import 'library_webview_screen.dart';
+import 'student_home_screen.dart';
 
 class StudentUsefulScreen extends StatelessWidget {
   const StudentUsefulScreen({super.key});
@@ -82,31 +83,33 @@ class StudentUsefulScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: statusBarH + 12),
-
-              // Header — like Jadval
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+              // Top bar
+              Container(
+                padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
+                height: statusBarH + 64,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0D47A1),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(18),
+                    bottomRight: Radius.circular(18),
+                  ),
+                ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.home_rounded, color: isDark ? Colors.white : AppTheme.textPrimary, size: 22),
+                    GestureDetector(
+                      onTap: () => StudentHomeScreen.switchToHome(context),
+                      child: const Icon(Icons.account_balance, color: Colors.white, size: 24),
                     ),
                     const Spacer(),
-                    Text(l.useful, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: txt)),
+                    Text(l.useful, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                     const Spacer(),
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.notifications_outlined, color: isDark ? Colors.white : AppTheme.textPrimary, size: 22),
+                    IconButton(
+                      icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
+                      onPressed: () {},
                     ),
                   ],
                 ),

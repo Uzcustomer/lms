@@ -9,6 +9,7 @@ import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../widgets/loading_widget.dart';
+import 'student_home_screen.dart';
 
 class StudentProfileScreen extends StatefulWidget {
   const StudentProfileScreen({super.key});
@@ -117,32 +118,47 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
 
+    final statusBarH = MediaQuery.of(context).padding.top;
+
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(l.profile),
-        centerTitle: true,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.pop(context),
-              )
-            : const Padding(
-                padding: EdgeInsets.all(12),
-                child: Icon(Icons.account_balance, size: 28),
+      body: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
+            height: statusBarH + 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFF0D47A1),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
               ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
+            ),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => StudentHomeScreen.switchToHome(context),
+                  child: const Icon(Icons.account_balance, color: Colors.white, size: 24),
+                ),
+                const Spacer(),
+                Text(l.profile, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                  onPressed: () {},
+                ),
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
+                  onPressed: () {},
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 22),
+                  onPressed: () => _showLogoutDialog(context),
+                ),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(context),
-          ),
-        ],
-      ),
-      body: Consumer<StudentProvider>(
+          Expanded(child: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.profile == null) {
             return const LoadingWidget();
@@ -182,6 +198,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             ),
           );
         },
+      )),
+      ],
       ),
     );
   }

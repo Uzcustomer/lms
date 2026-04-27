@@ -336,42 +336,28 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return Column(
       children: [
         // Top bar
-        Padding(
-          padding: EdgeInsets.only(
-            top: statusBarHeight + 8,
-            left: 16,
-            right: 8,
+        Container(
+          padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 4),
+          height: statusBarHeight + 64,
+          decoration: const BoxDecoration(
+            color: Color(0xFF0D47A1),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(18),
+              bottomRight: Radius.circular(18),
+            ),
           ),
           child: Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.home_rounded,
-                    color: isDark ? Colors.white : const Color(0xFF5C3D2E), size: 20),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                l.appTitle,
-                style: TextStyle(
-                  color: isDark ? Colors.white : const Color(0xFF5C3D2E),
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              const Icon(Icons.account_balance, color: Colors.white, size: 24),
+              const Spacer(),
+              Text(l.home, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
               const Spacer(),
               IconButton(
-                icon: Icon(Icons.notifications_outlined,
-                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
                 onPressed: () {},
               ),
               IconButton(
-                icon: Icon(Icons.settings_outlined,
-                    color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                 onPressed: () => _showSettingsSheet(context),
               ),
             ],

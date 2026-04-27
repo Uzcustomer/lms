@@ -5,6 +5,7 @@ import '../../config/theme.dart';
 import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import 'student_home_screen.dart';
 
 class StudentScheduleScreen extends StatefulWidget {
   const StudentScheduleScreen({super.key});
@@ -213,36 +214,34 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
             return RefreshIndicator(
               onRefresh: () => provider.loadSchedule(),
               child: ListView(
-                padding: EdgeInsets.only(top: statusBarH, bottom: 100),
+                padding: const EdgeInsets.only(bottom: 100),
                 children: [
                   // Top bar
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                  Container(
+                    padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
+                    height: statusBarH + 64,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF0D47A1),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(18),
+                        bottomRight: Radius.circular(18),
+                      ),
+                    ),
                     child: Row(
                       children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(Icons.home_rounded,
-                              color: isDark ? Colors.white : const Color(0xFF5C3D2E), size: 20),
+                        GestureDetector(
+                          onTap: () => StudentHomeScreen.switchToHome(context),
+                          child: const Icon(Icons.account_balance, color: Colors.white, size: 24),
                         ),
                         const Spacer(),
-                        Text(
-                          l.schedule,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white : AppTheme.textPrimary,
-                          ),
-                        ),
+                        Text(l.schedule, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                         const Spacer(),
                         IconButton(
-                          icon: Icon(Icons.notifications_outlined,
-                              color: isDark ? Colors.white70 : const Color(0xFF5C3D2E), size: 22),
+                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                          onPressed: () {},
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                           onPressed: () {},
                         ),
                       ],

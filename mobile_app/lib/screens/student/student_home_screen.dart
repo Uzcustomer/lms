@@ -10,6 +10,11 @@ import 'student_useful_screen.dart';
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
 
+  static void switchToHome(BuildContext context) {
+    final state = context.findAncestorStateOfType<_StudentHomeScreenState>();
+    state?._onTabTapped(2);
+  }
+
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }
@@ -51,11 +56,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: AppTheme.primaryLight,
+            color: const Color(0xFF0D47A1),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: AppTheme.primaryColor.withAlpha(40),
+                color: const Color(0xFF0D47A1).withAlpha(50),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

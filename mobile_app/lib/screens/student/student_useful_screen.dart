@@ -138,15 +138,15 @@ class StudentUsefulScreen extends StatelessWidget {
 
                 const SizedBox(height: 14),
 
-                // Exam hero banner
+                // Services hero banner
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: GestureDetector(
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const ExamScheduleScreen()),
+                      MaterialPageRoute(builder: (_) => const StudentServicesScreen()),
                     ),
-                    child: _ExamHero(),
+                    child: _ServicesHero(),
                   ),
                 ),
 
@@ -183,24 +183,25 @@ class StudentUsefulScreen extends StatelessWidget {
 }
 
 // ---------- Hero card ----------
-class _ExamHero extends StatelessWidget {
+class _ServicesHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: Container(
+        width: double.infinity,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF97316), Color(0xFFEF4444), Color(0xFFDC2626)],
+            colors: [Color(0xFF1E88E5), Color(0xFF1565C0), Color(0xFF0D47A1)],
             stops: [0.0, 0.6, 1.0],
           ),
           border: Border.all(color: Colors.white.withOpacity(0.3)),
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFEF4444).withOpacity(0.4),
+              color: const Color(0xFF1565C0).withOpacity(0.4),
               blurRadius: 30,
               offset: const Offset(0, 14),
             ),
@@ -227,7 +228,7 @@ class _ExamHero extends StatelessWidget {
               bottom: 22,
               child: Opacity(
                 opacity: 0.45,
-                child: Icon(Icons.calendar_today_rounded, size: 56, color: Colors.white),
+                child: Icon(Icons.grid_view_rounded, size: 56, color: Colors.white),
               ),
             ),
             Column(
@@ -240,18 +241,18 @@ class _ExamHero extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: const Text(
-                    'ENG MUHIM',
+                    'XIZMATLAR',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Imtihon sanalari',
+                  'Elektron xizmatlar',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'OSKI va Test kunlari · 3 ta yaqin kun',
+                  'Sababli ariza · Ma\'lumotnoma · Xizmatlar',
                   style: TextStyle(fontSize: 12.5, color: Colors.white.withOpacity(0.9)),
                 ),
                 const SizedBox(height: 14),
@@ -271,9 +272,9 @@ class _ExamHero extends StatelessWidget {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Kirish', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFDC2626))),
+                      Text('Kirish', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF1565C0))),
                       SizedBox(width: 6),
-                      Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFFDC2626)),
+                      Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF1565C0)),
                     ],
                   ),
                 ),

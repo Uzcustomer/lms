@@ -2,7 +2,7 @@
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             Dashboard
-            @if($semester)
+            @if($isTeacherRole && $semester)
                 <small class="text-muted" style="font-size: 14px; font-weight: normal;">
                     — {{ $semester->name }}
                 </small>
@@ -35,6 +35,7 @@
     <div style="padding: 16px 0;">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
 
+        @if($isTeacherRole)
             {{-- 4 ta kart yoki bo'sh holat --}}
             @if($stats)
                 <div style="margin-bottom: 8px;">
@@ -164,6 +165,7 @@
                     </div>
                 @endif
             </div>
+        @endif
 
         </div>
     </div>

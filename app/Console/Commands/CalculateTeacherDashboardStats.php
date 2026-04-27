@@ -29,8 +29,9 @@ use Illuminate\Support\Facades\Log;
  *   - Otrobotka/qayta baho hisoblanmaydi (retake_grade IS NULL, status != 'retake')
  *   - Mustaqil ta'lim baholari hisoblanmaydi (independent_id IS NULL)
  *
- * NB (status='absent', absent_off>0) "BAHOLANGAN" deb hisoblanadi —
+ * NB (reason='absent' yoki status='absent') "BAHOLANGAN" deb hisoblanadi —
  * created_at_api qaysi vaqtda bo'lsa o'sha kategoriyaga tushadi.
+ * (JournalController:1706 — "Jurnal NB ni student_grades.reason='absent' dan o'qiydi")
  */
 class CalculateTeacherDashboardStats extends Command
 {
@@ -138,25 +139,25 @@ class CalculateTeacherDashboardStats extends Command
                 employee_id,
                 MAX(employee_name) AS employee_name,
                 SUM(CASE
-                    WHEN (grade IS NOT NULL OR COALESCE(absent_off, 0) > 0)
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
                          AND created_at_api IS NOT NULL
                          AND created_at_api <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
                     THEN 1 ELSE 0 END) AS dars_vaqtida,
                 SUM(CASE
-                    WHEN (grade IS NOT NULL OR COALESCE(absent_off, 0) > 0)
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
                          AND created_at_api IS NOT NULL
                          AND created_at_api >  TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
                          AND created_at_api <= TIMESTAMP(DATE(lesson_date), '18:00:00')
                     THEN 1 ELSE 0 END) AS ish_vaqtida,
                 SUM(CASE
-                    WHEN (grade IS NOT NULL OR COALESCE(absent_off, 0) > 0)
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
                          AND created_at_api IS NOT NULL
                          AND created_at_api >  TIMESTAMP(DATE(lesson_date), '18:00:00')
                          AND created_at_api <= TIMESTAMP(DATE(lesson_date), '23:59:59')
                     THEN 1 ELSE 0 END) AS kech,
                 SUM(CASE
-                    WHEN (grade IS NULL AND COALESCE(absent_off, 0) = 0)
-                         OR ((grade IS NOT NULL OR COALESCE(absent_off, 0) > 0)
+                    WHEN (grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent'))
+                         OR ((grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
                              AND (created_at_api IS NULL
                                   OR created_at_api > TIMESTAMP(DATE(lesson_date), '23:59:59')))
                     THEN 1 ELSE 0 END) AS baholanmagan,

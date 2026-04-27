@@ -14,34 +14,28 @@ use Illuminate\Support\Facades\Log;
  * O'qituvchi dashbordi uchun joriy semestrdagi baholash sifati statistikasini
  * hisoblab keshga yozadi. Har kuni 03:00 da bir marta ishlaydi.
  *
- * MA'LUMOT MANBASI:
- *   - Dars vaqti va dars ro'yxati: schedules jadvali (kanonik manba)
- *   - Baholash vaqti:               student_grades.created_at_api
- *   - Talabalar guruh ichida:       students.group_id = schedules.group_id
+ * MA'LUMOT MANBASI: faqat student_grades jadvali
+ *   - lesson_date           — dars sanasi
+ *   - lesson_pair_end_time  — dars tugash vaqti (08:30-09:50 dagi 09:50)
+ *   - created_at            — baho qo'yilgan vaqt (LMSga tushgan vaqt)
  *
- * MAXRAJ (Jami):
- *   Schedules dagi har bir o'tgan dars × shu guruhning har bir talabasi =
- *   1 ta "baholash kerak" yozuv. Agar student_grades da yozuv bo'lmasa
- *   yoki grade NULL bo'lsa va NB ham yo'q bo'lsa — "Baholanmagan" toifasiga.
- *
- * Kategoriyalar (StudentGrade.created_at_api ni Schedules vaqti va kun
- * chegaralariga solishtirib aniqlanadi):
+ * Kategoriyalar (created_at ni dars vaqti va kun chegaralariga
+ * solishtirib aniqlanadi):
  *   - dars_vaqtida: dars boshlanishi va tugashi oralig'ida (yoki undan oldin)
  *   - ish_vaqtida:  dars tugagandan keyin shu kuni 18:00 gacha
  *   - kech:         shu kuni 18:00 — 23:59 oralig'ida
  *   - baholanmagan: 23:59 dan keyin baholangan YOKI umuman baholanmagan
+ *                   (grade IS NULL va NB ham qo'yilmagan)
  *
  * Filtrlar:
- *   - Faqat joriy semestr (Schedule.semester_code)
- *   - Faqat o'tgan darslar (schedule.lesson_date <= NOW)
+ *   - Faqat joriy semestr (semester_code)
  *   - Mashg'ulot turi: amaliy, seminar, laboratoriya
  *     (ma'ruza, mustaqil ta'lim, kurs ishi, oraliq nazorat, oski, testlar — chiqib ketadi)
  *   - Otrobotka/qayta baho hisoblanmaydi (retake_grade IS NULL, status != 'retake')
  *   - Mustaqil ta'lim baholari hisoblanmaydi (independent_id IS NULL)
  *
  * NB (reason='absent' yoki status='absent') "BAHOLANGAN" deb hisoblanadi —
- * created_at_api qaysi vaqtda bo'lsa o'sha kategoriyaga tushadi.
- * (JournalController:1706 — "Jurnal NB ni student_grades.reason='absent' dan o'qiydi")
+ * created_at qaysi vaqtda bo'lsa o'sha kategoriyaga tushadi.
  */
 class CalculateTeacherDashboardStats extends Command
 {
@@ -142,61 +136,52 @@ class CalculateTeacherDashboardStats extends Command
     private function fetchStats(string $semesterCode, ?string $teacherFilter): array
     {
         $excludedPlaceholders = implode(',', array_fill(0, count(self::EXCLUDED_TRAINING_TYPES), '?'));
-        $teacherFilterSql = $teacherFilter ? "AND sch.employee_id = ?" : "";
+        $teacherFilterSql = $teacherFilter ? "AND employee_id = ?" : "";
 
-        // Variant B logikasi:
-        // - Asosiy manba: schedules (har bir dars × guruh)
-        // - INNER JOIN students by group_id  (guruhdagi talabalar)
-        // - LEFT JOIN student_grades         (agar yozuv bo'lmasa — baholanmagan)
+        // Faqat student_grades dan, lesson_date + lesson_pair_end_time bilan
+        // created_at ni taqqoslab kategoriyaga ajratadi.
         $sql = <<<SQL
             SELECT
-                sch.employee_id,
-                MAX(sch.employee_name) AS employee_name,
+                employee_id,
+                MAX(employee_name) AS employee_name,
                 SUM(CASE
-                    WHEN (sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                         AND sg.created_at_api IS NOT NULL
-                         AND sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), sch.lesson_pair_end_time)
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                         AND created_at IS NOT NULL
+                         AND created_at <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
                     THEN 1 ELSE 0 END) AS dars_vaqtida,
                 SUM(CASE
-                    WHEN (sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                         AND sg.created_at_api IS NOT NULL
-                         AND sg.created_at_api >  TIMESTAMP(DATE(sch.lesson_date), sch.lesson_pair_end_time)
-                         AND sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), '18:00:00')
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                         AND created_at IS NOT NULL
+                         AND created_at >  TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
+                         AND created_at <= TIMESTAMP(DATE(lesson_date), '18:00:00')
                     THEN 1 ELSE 0 END) AS ish_vaqtida,
                 SUM(CASE
-                    WHEN (sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                         AND sg.created_at_api IS NOT NULL
-                         AND sg.created_at_api >  TIMESTAMP(DATE(sch.lesson_date), '18:00:00')
-                         AND sg.created_at_api <= TIMESTAMP(DATE(sch.lesson_date), '23:59:59')
+                    WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                         AND created_at IS NOT NULL
+                         AND created_at >  TIMESTAMP(DATE(lesson_date), '18:00:00')
+                         AND created_at <= TIMESTAMP(DATE(lesson_date), '23:59:59')
                     THEN 1 ELSE 0 END) AS kech,
                 SUM(CASE
-                    WHEN sg.id IS NULL
-                         OR (sg.grade IS NULL
-                             AND (sg.reason IS NULL OR sg.reason != 'absent')
-                             AND (sg.status IS NULL OR sg.status != 'absent'))
-                         OR ((sg.grade IS NOT NULL OR sg.reason = 'absent' OR sg.status = 'absent')
-                             AND (sg.created_at_api IS NULL
-                                  OR sg.created_at_api > TIMESTAMP(DATE(sch.lesson_date), '23:59:59')))
+                    WHEN (grade IS NULL
+                          AND (reason IS NULL OR reason != 'absent')
+                          AND (status IS NULL OR status != 'absent'))
+                         OR ((grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
+                             AND (created_at IS NULL
+                                  OR created_at > TIMESTAMP(DATE(lesson_date), '23:59:59')))
                     THEN 1 ELSE 0 END) AS baholanmagan,
                 COUNT(*) AS jami
-            FROM schedules sch
-            INNER JOIN students st ON st.group_id = sch.group_id
-            LEFT JOIN student_grades sg
-                ON sg.subject_schedule_id = sch.schedule_hemis_id
-                AND sg.student_hemis_id    = st.hemis_id
-                AND sg.deleted_at IS NULL
-                AND sg.retake_grade IS NULL
-                AND (sg.status IS NULL OR sg.status != 'retake')
-                AND sg.independent_id IS NULL
-            WHERE sch.deleted_at IS NULL
-                AND sch.semester_code = ?
-                AND sch.training_type_name NOT IN ({$excludedPlaceholders})
-                AND sch.lesson_date IS NOT NULL
-                AND sch.lesson_date <= NOW()
-                AND sch.lesson_pair_end_time IS NOT NULL
-                AND sch.lesson_pair_end_time != ''
+            FROM student_grades
+            WHERE deleted_at IS NULL
+                AND semester_code = ?
+                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND independent_id IS NULL
+                AND retake_grade IS NULL
+                AND (status IS NULL OR status != 'retake')
+                AND lesson_date IS NOT NULL
+                AND lesson_pair_end_time IS NOT NULL
+                AND lesson_pair_end_time != ''
                 {$teacherFilterSql}
-            GROUP BY sch.employee_id
+            GROUP BY employee_id
         SQL;
 
         $bindings = array_merge([$semesterCode], self::EXCLUDED_TRAINING_TYPES);

@@ -19,12 +19,22 @@ class DebugTeacherDashboardStats extends Command
 
     public function handle(): int
     {
-        // Joriy semestr kodlari (juft yoki toq)
-        $currentCodes = Semester::where('current', true)->pluck('code')->unique()->values()->all();
+        // Joriy o'quv yili — current=1 yozuvlar orasidagi eng katta education_year
+        $currentYear = Semester::where('current', true)->max('education_year');
+        if (!$currentYear) {
+            $this->error('Joriy o\'quv yili topilmadi.');
+            return self::FAILURE;
+        }
+
+        // Faqat shu o'quv yilidagi current=1 semestrlar
+        $currentCodes = Semester::where('current', true)
+            ->where('education_year', $currentYear)
+            ->pluck('code')->unique()->values()->all();
         if (empty($currentCodes)) {
             $this->error('Joriy semestrlar topilmadi.');
             return self::FAILURE;
         }
+        $this->info("=== Joriy o'quv yili: {$currentYear} ===");
         $this->info('=== Joriy semestr kodlari: ' . implode(', ', $currentCodes) . " ===\n");
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
@@ -40,6 +50,7 @@ class DebugTeacherDashboardStats extends Command
         // Asosiy bindings (3 ta SQL hammasi uchun bir xil filter bindings)
         $baseBindings = [];
         foreach ($currentCodes as $c)    { $baseBindings[] = $c; }
+        $baseBindings[] = $currentYear;
         foreach ($excludedCodes as $c)   { $baseBindings[] = $c; }
         foreach ($subjectPatterns as $p) { $baseBindings[] = '%' . strtolower($p) . '%'; }
 
@@ -60,6 +71,7 @@ class DebugTeacherDashboardStats extends Command
             FROM student_grades
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
+                AND education_year_code = ?
                 AND training_type_code NOT IN ({$excludedCodePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL
@@ -126,6 +138,7 @@ class DebugTeacherDashboardStats extends Command
             FROM student_grades
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
+                AND education_year_code = ?
                 AND training_type_code NOT IN ({$excludedCodePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL
@@ -176,6 +189,7 @@ class DebugTeacherDashboardStats extends Command
             FROM student_grades
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
+                AND education_year_code = ?
                 AND training_type_code NOT IN ({$excludedCodePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL

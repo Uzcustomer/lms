@@ -60,17 +60,25 @@ class CalculateTeacherDashboardStats extends Command
     {
         $startTime = microtime(true);
 
-        // Joriy "current" semestrlar — bahorda juft (2,4,6,8,10,12), kuzda toq
-        $currentCodes = $this->getCurrentSemesterCodes();
-        if (empty($currentCodes)) {
-            $this->error('Joriy semestrlar topilmadi (semesters.current = 1).');
-            Log::warning('[TeacherDashboardStats] Joriy semestrlar topilmadi.');
+        // Joriy o'quv yili (max education_year among current=1 rows)
+        $currentYear = $this->getCurrentEducationYear();
+        if (!$currentYear) {
+            $this->error('Joriy o\'quv yili topilmadi (semesters.current = 1).');
+            Log::warning('[TeacherDashboardStats] Joriy o\'quv yili topilmadi.');
             return self::FAILURE;
         }
-        $this->info('Joriy semestrlar: ' . implode(', ', $currentCodes));
+
+        // Joriy o'quv yilidagi current=1 semestrlar (bahorda juft, kuzda toq)
+        $currentCodes = $this->getCurrentSemesterCodes($currentYear);
+        if (empty($currentCodes)) {
+            $this->error('Joriy semestrlar topilmadi.');
+            return self::FAILURE;
+        }
+        $this->info("Joriy o'quv yili: {$currentYear}");
+        $this->info('Joriy semestr kodlari: ' . implode(', ', $currentCodes));
 
         $teacherFilter = $this->option('teacher');
-        $rows = $this->fetchStats($currentCodes, $teacherFilter);
+        $rows = $this->fetchStats($currentCodes, $currentYear, $teacherFilter);
         $totalTeachers = count($rows);
         $this->info("{$totalTeachers} ta o'qituvchi uchun ma'lumot topildi.");
 
@@ -78,7 +86,7 @@ class CalculateTeacherDashboardStats extends Command
         $cachedCount = 0;
 
         foreach ($rows as $row) {
-            $stats = $this->buildStatsArray($row, $currentCodes);
+            $stats = $this->buildStatsArray($row, $currentCodes, $currentYear);
 
             Cache::put(
                 self::employeeCacheKey($row->employee_id),
@@ -123,12 +131,21 @@ class CalculateTeacherDashboardStats extends Command
     }
 
     /**
-     * Joriy semestrlarning unikal kodlari ro'yxati (masalan ['2', '4', '6', ...]).
-     * Bahorda juft semestrlar, kuzda toq semestrlar bo'ladi.
+     * Joriy o'quv yili — current=1 yozuvlar orasidagi eng katta education_year.
      */
-    private function getCurrentSemesterCodes(): array
+    private function getCurrentEducationYear(): ?string
+    {
+        return Semester::where('current', true)->max('education_year');
+    }
+
+    /**
+     * Joriy o'quv yilidagi unikal semester kodlar ro'yxati
+     * (masalan ['2', '4', '6', ...]). Bahorda juft, kuzda toq.
+     */
+    private function getCurrentSemesterCodes(string $educationYear): array
     {
         return Semester::where('current', true)
+            ->where('education_year', $educationYear)
             ->pluck('code')
             ->unique()
             ->values()
@@ -151,7 +168,7 @@ class CalculateTeacherDashboardStats extends Command
         return config('app.grade_excluded_subject_patterns', ['tanishuv amaliyoti', 'quv amaliyoti']);
     }
 
-    private function fetchStats(array $semesterCodes, ?string $teacherFilter): array
+    private function fetchStats(array $semesterCodes, string $educationYear, ?string $teacherFilter): array
     {
         $semesterPlaceholders = implode(',', array_fill(0, count($semesterCodes), '?'));
 
@@ -199,6 +216,7 @@ class CalculateTeacherDashboardStats extends Command
             FROM student_grades
             WHERE deleted_at IS NULL
                 AND semester_code IN ({$semesterPlaceholders})
+                AND education_year_code = ?
                 AND training_type_code NOT IN ({$excludedCodePlaceholders})
                 {$subjectFilterSql}
                 AND independent_id IS NULL
@@ -213,6 +231,7 @@ class CalculateTeacherDashboardStats extends Command
 
         $bindings = [];
         foreach ($semesterCodes as $c)   { $bindings[] = $c; }
+        $bindings[] = $educationYear;
         foreach ($excludedCodes as $c)   { $bindings[] = $c; }
         foreach ($subjectPatterns as $p) { $bindings[] = '%' . strtolower($p) . '%'; }
         if ($teacherFilter) { $bindings[] = $teacherFilter; }
@@ -220,7 +239,7 @@ class CalculateTeacherDashboardStats extends Command
         return DB::select($sql, $bindings);
     }
 
-    private function buildStatsArray(object $row, array $currentCodes): array
+    private function buildStatsArray(object $row, array $currentCodes, string $educationYear): array
     {
         $jami = (int) $row->jami;
 
@@ -231,6 +250,7 @@ class CalculateTeacherDashboardStats extends Command
             'baholanmagan'   => (int) $row->baholanmagan,
             'jami'           => $jami,
             'semester_codes' => $currentCodes,
+            'education_year' => $educationYear,
             'last_updated'   => Carbon::now('Asia/Tashkent')->toDateTimeString(),
         ];
 

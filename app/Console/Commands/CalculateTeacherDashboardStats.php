@@ -18,9 +18,10 @@ use Illuminate\Support\Facades\Log;
  * MA'LUMOT MANBASI: faqat student_grades jadvali
  *   - lesson_date           — dars sanasi
  *   - lesson_pair_end_time  — dars tugash vaqti (08:30-09:50 dagi 09:50)
- *   - created_at            — baho qo'yilgan vaqt (LMSga tushgan vaqt)
+ *   - created_at_api        — Hemisda baho qo'yilgan haqiqiy vaqt
+ *                             (created_at LMS import vaqti — 8+ kun kech bo'lishi mumkin)
  *
- * Kategoriyalar (created_at ni dars vaqti va kun chegaralariga
+ * Kategoriyalar (created_at_api ni dars vaqti va kun chegaralariga
  * solishtirib aniqlanadi):
  *   - dars_vaqtida: dars boshlanishi va tugashi oralig'ida (yoki undan oldin)
  *   - ish_vaqtida:  dars tugagandan keyin shu kuni 18:00 gacha
@@ -39,7 +40,7 @@ use Illuminate\Support\Facades\Log;
  *   - Mustaqil ta'lim baholari hisoblanmaydi (independent_id IS NULL)
  *
  * NB (reason='absent' yoki status='absent') "BAHOLANGAN" deb hisoblanadi —
- * created_at qaysi vaqtda bo'lsa o'sha kategoriyaga tushadi.
+ * created_at_api qaysi vaqtda bo'lsa o'sha kategoriyaga tushadi.
  */
 class CalculateTeacherDashboardStats extends Command
 {
@@ -214,28 +215,28 @@ class CalculateTeacherDashboardStats extends Command
                 MAX(employee_name) AS employee_name,
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                         AND created_at IS NOT NULL
-                         AND created_at <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
+                         AND created_at_api IS NOT NULL
+                         AND created_at_api <= TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
                     THEN 1 ELSE 0 END) AS dars_vaqtida,
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                         AND created_at IS NOT NULL
-                         AND created_at >  TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
-                         AND created_at <= TIMESTAMP(DATE(lesson_date), '18:00:00')
+                         AND created_at_api IS NOT NULL
+                         AND created_at_api >  TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
+                         AND created_at_api <= TIMESTAMP(DATE(lesson_date), '18:00:00')
                     THEN 1 ELSE 0 END) AS ish_vaqtida,
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                         AND created_at IS NOT NULL
-                         AND created_at >  TIMESTAMP(DATE(lesson_date), '18:00:00')
-                         AND created_at <= TIMESTAMP(DATE(lesson_date), '23:59:59')
+                         AND created_at_api IS NOT NULL
+                         AND created_at_api >  TIMESTAMP(DATE(lesson_date), '18:00:00')
+                         AND created_at_api <= TIMESTAMP(DATE(lesson_date), '23:59:59')
                     THEN 1 ELSE 0 END) AS kech,
                 SUM(CASE
                     WHEN (grade IS NULL
                           AND (reason IS NULL OR reason != 'absent')
                           AND (status IS NULL OR status != 'absent'))
                          OR ((grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
-                             AND (created_at IS NULL
-                                  OR created_at > TIMESTAMP(DATE(lesson_date), '23:59:59')))
+                             AND (created_at_api IS NULL
+                                  OR created_at_api > TIMESTAMP(DATE(lesson_date), '23:59:59')))
                     THEN 1 ELSE 0 END) AS baholanmagan,
                 COUNT(*) AS jami
             FROM student_grades

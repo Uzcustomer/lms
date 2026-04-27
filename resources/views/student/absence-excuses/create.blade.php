@@ -843,17 +843,10 @@
                 this.deadlineExpired = false;
                 if (!this.endDate) return;
                 const end = new Date(this.endDate);
-                let nextDay = new Date(end);
-                nextDay.setDate(nextDay.getDate() + 1);
-                if (nextDay.getDay() === 0) nextDay.setDate(nextDay.getDate() + 1);
-                const today = new Date(); today.setHours(0,0,0,0); nextDay.setHours(0,0,0,0);
-                if (today < nextDay) return;
-                const diff = Math.floor((today - nextDay) / 86400000);
-                if (diff > 10) {
-                    this.deadlineWarning = "Muddati o'tgan (" + diff + " kun). 10 kun ichida ariza topshirish kerak edi.";
+                const today = new Date(); today.setHours(0,0,0,0); end.setHours(0,0,0,0);
+                if (end > today) {
+                    this.deadlineWarning = "Tugash sanasi bugundan katta bo'lmasligi kerak.";
                     this.deadlineExpired = true;
-                } else {
-                    this.deadlineWarning = "Ariza topshirish uchun " + (10 - diff) + " kun qoldi.";
                 }
             },
 

@@ -115,25 +115,26 @@
         {{-- Guruhni tanlash ko'rinishi --}}
         @if(!request('group') && !request('photo_filter'))
         <div>
-            @if(!$tutorGroups->isEmpty() && isset($photoStats))
+            @php
+                $ps = $photoStats ?? ['has_photo' => 0, 'approved' => 0, 'rejected' => 0];
+            @endphp
             <div style="margin-bottom:16px;">
                 <h3 style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:10px;">Talaba rasmlari</h3>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
                     <a href="{{ route('teacher.students', ['photo_filter' => 'has_photo']) }}" class="photo-stat-card" style="border-color:#bfdbfe;">
-                        <div style="font-size:22px;font-weight:800;color:#1e40af;">{{ $photoStats['has_photo'] }}</div>
+                        <div style="font-size:22px;font-weight:800;color:#1e40af;">{{ $ps['has_photo'] }}</div>
                         <div style="font-size:11px;color:#3b82f6;font-weight:600;">Rasm bor</div>
                     </a>
                     <a href="{{ route('teacher.students', ['photo_filter' => 'approved']) }}" class="photo-stat-card" style="border-color:#a7f3d0;">
-                        <div style="font-size:22px;font-weight:800;color:#166534;">{{ $photoStats['approved'] }}</div>
+                        <div style="font-size:22px;font-weight:800;color:#166534;">{{ $ps['approved'] }}</div>
                         <div style="font-size:11px;color:#16a34a;font-weight:600;">Tasdiqlangan</div>
                     </a>
                     <a href="{{ route('teacher.students', ['photo_filter' => 'rejected']) }}" class="photo-stat-card" style="border-color:#fecaca;">
-                        <div style="font-size:22px;font-weight:800;color:#dc2626;">{{ $photoStats['rejected'] }}</div>
+                        <div style="font-size:22px;font-weight:800;color:#dc2626;">{{ $ps['rejected'] }}</div>
                         <div style="font-size:11px;color:#dc2626;font-weight:600;">Rad etilgan</div>
                     </a>
                 </div>
             </div>
-            @endif
 
             <div style="margin-bottom: 16px;">
                 <h3 style="font-size: 16px; font-weight: 700; color: #1e293b;">Guruhlaringiz</h3>

@@ -165,19 +165,10 @@ class AbsenceExcuseController extends Controller
                 function ($attribute, $value, $fail) {
                     if ($value) {
                         $endDate = Carbon::parse($value);
-                        $nextDay = $endDate->copy()->addDay();
-
-                        if ($nextDay->isSunday()) {
-                            $nextDay->addDay();
-                        }
-
                         $today = Carbon::today();
 
-                        if ($today->gte($nextDay)) {
-                            $daysPassed = $nextDay->diffInDays($today);
-                            if ($daysPassed > 10) {
-                                $fail('Hujjatlarni taqdim qilish muddati o\'tgan (10 kundan ko\'p). Tugash sanasidan keyin 10 kun ichida ariza topshirishingiz kerak edi.');
-                            }
+                        if ($endDate->gt($today)) {
+                            $fail('Tugash sanasi bugundan katta bo\'lmasligi kerak.');
                         }
                     }
                 },

@@ -132,7 +132,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     return 0;
   }
 
-  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20}) {
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
+    final lightBg = cardColor?.withOpacity(0.08) ?? const Color(0xFFF0F4FF);
+    final lightBorder = cardColor?.withOpacity(0.12) ?? const Color(0xFFDCE3F5);
+    final shadowColor = cardColor?.withOpacity(0.10) ?? const Color(0xFF0D47A1).withOpacity(0.06);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
@@ -141,16 +144,16 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           decoration: BoxDecoration(
             color: isDark
                 ? Colors.white.withOpacity(0.08)
-                : const Color(0xFFF0F4FF),
+                : lightBg,
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(
               color: isDark
                   ? Colors.white.withOpacity(0.12)
-                  : const Color(0xFFDCE3F5),
+                  : lightBorder,
             ),
             boxShadow: isDark ? null : [
               BoxShadow(
-                color: const Color(0xFF0D47A1).withOpacity(0.06),
+                color: shadowColor,
                 blurRadius: 12,
                 offset: const Offset(0, 3),
               ),
@@ -299,6 +302,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                       child: _buildGlassCard(
                         isDark: isDark,
                         borderRadius: 16,
+                        cardColor: const Color(0xFF7C4DFF),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 40),
                           child: Center(
@@ -354,6 +358,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
       child: _buildGlassCard(
         isDark: isDark,
         borderRadius: 14,
+        cardColor: const Color(0xFF1565C0),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           child: Row(
@@ -653,6 +658,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 child: _buildGlassCard(
                   isDark: isDark,
                   borderRadius: 16,
+                  cardColor: dotColor,
                   child: Padding(
                     padding: const EdgeInsets.all(14),
                     child: Column(

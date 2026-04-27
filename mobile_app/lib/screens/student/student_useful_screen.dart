@@ -233,12 +233,12 @@ class StudentUsefulScreen extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFF0F4FF),
+            color: isDark ? Colors.white.withOpacity(0.08) : item.color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : const Color(0xFFDCE3F5)),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : item.color.withOpacity(0.12)),
             boxShadow: isDark ? null : [
               BoxShadow(
-                color: const Color(0xFF0D47A1).withOpacity(0.06),
+                color: item.color.withOpacity(0.10),
                 blurRadius: 12,
                 offset: const Offset(0, 3),
               ),

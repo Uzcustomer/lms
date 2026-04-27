@@ -287,7 +287,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20}) {
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
+    final lightBg = cardColor?.withOpacity(0.08) ?? const Color(0xFFF0F4FF);
+    final lightBorder = cardColor?.withOpacity(0.12) ?? const Color(0xFFDCE3F5);
+    final shadowColor = cardColor?.withOpacity(0.10) ?? const Color(0xFF0D47A1).withOpacity(0.06);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
@@ -296,16 +299,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           decoration: BoxDecoration(
             color: isDark
                 ? Colors.white.withOpacity(0.08)
-                : const Color(0xFFF0F4FF),
+                : lightBg,
             borderRadius: BorderRadius.circular(borderRadius),
             border: Border.all(
               color: isDark
                   ? Colors.white.withOpacity(0.12)
-                  : const Color(0xFFDCE3F5),
+                  : lightBorder,
             ),
             boxShadow: isDark ? null : [
               BoxShadow(
-                color: const Color(0xFF0D47A1).withOpacity(0.06),
+                color: shadowColor,
                 blurRadius: 12,
                 offset: const Offset(0, 3),
               ),
@@ -378,6 +381,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: _buildGlassCard(
             isDark: isDark,
+            cardColor: const Color(0xFF1565C0),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -948,10 +952,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             jnColor = const Color(0xFFE53935);
           }
 
+          const subjectColors = [Color(0xFF43A047), Color(0xFF7C4DFF), Color(0xFFE65100), Color(0xFF0097A7), Color(0xFFE91E63), Color(0xFF1565C0)];
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _buildGlassCard(
               isDark: isDark,
+              cardColor: subjectColors[index % subjectColors.length],
               borderRadius: 16,
               child: Padding(
                 padding: const EdgeInsets.all(14),
@@ -1056,6 +1062,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         _buildGlassCard(
           isDark: isDark,
           borderRadius: 16,
+          cardColor: const Color(0xFF00897B),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -1210,6 +1217,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               child: _buildGlassCard(
                 isDark: isDark,
                 borderRadius: 14,
+                cardColor: const Color(0xFF4A6CF7),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Column(
@@ -1678,6 +1686,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     return _buildGlassCard(
       isDark: isDark,
+      cardColor: ringColor,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
         child: Column(

@@ -111,19 +111,22 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return all;
   }
 
-  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20}) {
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
+    final lightBg = cardColor?.withOpacity(0.08) ?? const Color(0xFFF0F4FF);
+    final lightBorder = cardColor?.withOpacity(0.12) ?? const Color(0xFFDCE3F5);
+    final shadowColor = cardColor?.withOpacity(0.10) ?? const Color(0xFF0D47A1).withOpacity(0.06);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.08) : const Color(0xFFF0F4FF),
+            color: isDark ? Colors.white.withOpacity(0.08) : lightBg,
             borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : const Color(0xFFDCE3F5)),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.12) : lightBorder),
             boxShadow: isDark ? null : [
               BoxShadow(
-                color: const Color(0xFF0D47A1).withOpacity(0.06),
+                color: shadowColor,
                 blurRadius: 12,
                 offset: const Offset(0, 3),
               ),
@@ -323,6 +326,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _buildGlassCard(
         isDark: isDark,
+        cardColor: const Color(0xFFFF9800),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -363,6 +367,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       child: _buildGlassCard(
         isDark: isDark,
         borderRadius: 16,
+        cardColor: const Color(0xFF1565C0),
         child: Padding(
           padding: const EdgeInsets.all(4),
           child: Row(
@@ -409,6 +414,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
     return _buildGlassCard(
       isDark: isDark,
+      cardColor: _cardTextColors[index % _cardTextColors.length],
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

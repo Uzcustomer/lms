@@ -381,7 +381,15 @@ class InternationalStudentController extends Controller
     {
         $visaInfo = StudentVisaInfo::where('student_id', $student->id)->first();
 
-        return view('admin.international-students.show', compact('student', 'visaInfo'));
+        $history = collect();
+        if (\Schema::hasTable('student_visa_info_histories')) {
+            $history = StudentVisaInfoHistory::where('student_id', $student->id)
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get();
+        }
+
+        return view('admin.international-students.show', compact('student', 'visaInfo', 'history'));
     }
 
     /**

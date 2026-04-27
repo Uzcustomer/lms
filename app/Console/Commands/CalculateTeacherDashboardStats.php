@@ -139,13 +139,38 @@ class CalculateTeacherDashboardStats extends Command
     }
 
     /**
-     * Joriy o'quv yilidagi unikal semester kodlar ro'yxati
-     * (masalan ['2', '4', '6', ...]). Bahorda juft, kuzda toq.
+     * Hozirgi davr juftmi (bahor) yoki toqmi (kuz)?
+     * Kalendar oyga qarab aniqlanadi:
+     *   - Yanvar – Iyun (1–6) = bahor → juft semester raqamlari (2,4,6,8,10,12)
+     *   - Iyul – Dekabr (7–12) = kuz → toq semester raqamlari (1,3,5,7,9,11)
+     */
+    private function isSpringPeriod(): bool
+    {
+        $month = (int) Carbon::now('Asia/Tashkent')->month;
+        return $month >= 1 && $month <= 6;
+    }
+
+    /**
+     * Joriy o'quv yilidagi semester kodlar — faqat hozirgi davrniki
+     * (bahorda juft semestrlar, kuzda toq). HEMIS bazaviy 'current' flagi
+     * akademik yilning hammasini "current" deb belgilaydi, shuning uchun
+     * semester nomidagi raqamga qarab qo'shimcha filtrlash kerak.
      */
     private function getCurrentSemesterCodes(string $educationYear): array
     {
+        $isSpring = $this->isSpringPeriod();
+
         return Semester::where('current', true)
             ->where('education_year', $educationYear)
+            ->get(['code', 'name'])
+            ->filter(function ($s) use ($isSpring) {
+                // "4-semestr" -> 4
+                if (!preg_match('/^(\d+)-?\s*semestr/i', $s->name, $matches)) {
+                    return false;
+                }
+                $num = (int) $matches[1];
+                return $isSpring ? ($num % 2 === 0) : ($num % 2 === 1);
+            })
             ->pluck('code')
             ->unique()
             ->values()

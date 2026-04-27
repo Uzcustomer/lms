@@ -26,15 +26,28 @@ class DebugTeacherDashboardStats extends Command
             return self::FAILURE;
         }
 
-        // Faqat shu o'quv yilidagi current=1 semestrlar
+        // Hozir bahor (juft) yoki kuz (toq) ekanini aniqlash
+        $month = (int) Carbon::now('Asia/Tashkent')->month;
+        $isSpring = $month >= 1 && $month <= 6;
+        $period = $isSpring ? 'bahor (juft semestrlar)' : 'kuz (toq semestrlar)';
+
+        // Faqat shu o'quv yilidagi current=1 semestrlardan juft/toq filtrlash
         $currentCodes = Semester::where('current', true)
             ->where('education_year', $currentYear)
+            ->get(['code', 'name'])
+            ->filter(function ($s) use ($isSpring) {
+                if (!preg_match('/^(\d+)-?\s*semestr/i', $s->name, $matches)) {
+                    return false;
+                }
+                $num = (int) $matches[1];
+                return $isSpring ? ($num % 2 === 0) : ($num % 2 === 1);
+            })
             ->pluck('code')->unique()->values()->all();
         if (empty($currentCodes)) {
             $this->error('Joriy semestrlar topilmadi.');
             return self::FAILURE;
         }
-        $this->info("=== Joriy o'quv yili: {$currentYear} ===");
+        $this->info("=== Joriy o'quv yili: {$currentYear} ({$period}) ===");
         $this->info('=== Joriy semestr kodlari: ' . implode(', ', $currentCodes) . " ===\n");
 
         $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);

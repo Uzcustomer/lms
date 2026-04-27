@@ -9,6 +9,7 @@ import 'gpa_calculator_screen.dart';
 import 'student_rating_screen.dart';
 import 'chat_contacts_screen.dart';
 import 'library_webview_screen.dart';
+import 'student_home_screen.dart';
 
 class StudentUsefulScreen extends StatelessWidget {
   const StudentUsefulScreen({super.key});
@@ -84,12 +85,21 @@ class StudentUsefulScreen extends StatelessWidget {
             children: [
               // Top bar
               Container(
-                padding: EdgeInsets.only(top: statusBarH, left: 12, right: 12),
+                padding: EdgeInsets.only(top: statusBarH, left: 16, right: 8),
                 height: statusBarH + 56,
-                color: AppTheme.primaryColor,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1565C0),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(18),
+                    bottomRight: Radius.circular(18),
+                  ),
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.home_rounded, color: Colors.white, size: 24),
+                    GestureDetector(
+                      onTap: () => StudentHomeScreen.switchToHome(context),
+                      child: const Icon(Icons.account_balance, color: Colors.white, size: 24),
+                    ),
                     const Spacer(),
                     Text(l.useful, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                     const Spacer(),

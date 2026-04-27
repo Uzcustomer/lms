@@ -10,6 +10,11 @@ import 'student_useful_screen.dart';
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
 
+  static void switchToHome(BuildContext context) {
+    final state = context.findAncestorStateOfType<_StudentHomeScreenState>();
+    state?._onTabTapped(2);
+  }
+
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }

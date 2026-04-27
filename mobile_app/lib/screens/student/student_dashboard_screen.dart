@@ -337,12 +337,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       children: [
         // Top bar
         Container(
-          padding: EdgeInsets.only(top: statusBarHeight, left: 12, right: 12),
+          padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 8),
           height: statusBarHeight + 56,
-          color: AppTheme.primaryColor,
+          decoration: const BoxDecoration(
+            color: Color(0xFF1565C0),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(18),
+              bottomRight: Radius.circular(18),
+            ),
+          ),
           child: Row(
             children: [
-              const Icon(Icons.home_rounded, color: Colors.white, size: 24),
+              const Icon(Icons.account_balance, color: Colors.white, size: 24),
               const Spacer(),
               Text(l.home, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
               const Spacer(),

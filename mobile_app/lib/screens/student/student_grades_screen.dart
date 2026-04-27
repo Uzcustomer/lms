@@ -9,6 +9,7 @@ import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import 'student_home_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {
   const StudentGradesScreen({super.key});
@@ -182,12 +183,21 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                   children: [
                     // Top bar
                     Container(
-                      padding: EdgeInsets.only(top: statusBarH, left: 12, right: 12),
+                      padding: EdgeInsets.only(top: statusBarH, left: 16, right: 8),
                       height: statusBarH + 56,
-                      color: AppTheme.primaryColor,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1565C0),
+                        borderRadius: BorderRadius.only(
+                          bottomLeft: Radius.circular(18),
+                          bottomRight: Radius.circular(18),
+                        ),
+                      ),
                       child: Row(
                         children: [
-                          const Icon(Icons.home_rounded, color: Colors.white, size: 24),
+                          GestureDetector(
+                            onTap: () => StudentHomeScreen.switchToHome(context),
+                            child: const Icon(Icons.account_balance, color: Colors.white, size: 24),
+                          ),
                           const Spacer(),
                           Text(l.grades, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                           const Spacer(),

@@ -19,20 +19,32 @@ class DebugTeacherDashboardStats extends Command
 
     public function handle(): int
     {
-        $semester = Semester::where('current', true)->first();
-        if (!$semester) {
-            $this->error('Joriy semestr topilmadi.');
+        // Joriy semestr kodlari (juft yoki toq)
+        $currentCodes = Semester::where('current', true)->pluck('code')->unique()->values()->all();
+        if (empty($currentCodes)) {
+            $this->error('Joriy semestrlar topilmadi.');
             return self::FAILURE;
         }
+        $this->info('=== Joriy semestr kodlari: ' . implode(', ', $currentCodes) . " ===\n");
 
-        $this->info("=== Joriy semestr: {$semester->code} — {$semester->name} ===\n");
+        $excludedCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+        $subjectPatterns = config('app.grade_excluded_subject_patterns', ['tanishuv amaliyoti', 'quv amaliyoti']);
 
-        $excluded = CalculateTeacherDashboardStats::EXCLUDED_TRAINING_TYPES;
-        $excludedPlaceholders = implode(',', array_fill(0, count($excluded), '?'));
+        $semesterPlaceholders = implode(',', array_fill(0, count($currentCodes), '?'));
+        $excludedCodePlaceholders = implode(',', array_fill(0, count($excludedCodes), '?'));
+        $subjectFilterSql = '';
+        foreach ($subjectPatterns as $_) {
+            $subjectFilterSql .= " AND LOWER(subject_name) NOT LIKE ?";
+        }
 
-        // 1-bo'lim: Top 5 o'qituvchi (jami student_grades yozuvlari bo'yicha)
-        $this->line("--- TOP 5 o'qituvchi (student_grades yozuvlari bo'yicha) ---");
+        // Asosiy bindings (3 ta SQL hammasi uchun bir xil filter bindings)
+        $baseBindings = [];
+        foreach ($currentCodes as $c)    { $baseBindings[] = $c; }
+        foreach ($excludedCodes as $c)   { $baseBindings[] = $c; }
+        foreach ($subjectPatterns as $p) { $baseBindings[] = '%' . strtolower($p) . '%'; }
 
+        // 1-bo'lim: Top 5 o'qituvchi
+        $this->line("--- TOP 5 o'qituvchi (joriy semestrlar bo'yicha) ---");
         $sql1 = "
             SELECT
                 employee_id,
@@ -47,8 +59,9 @@ class DebugTeacherDashboardStats extends Command
                 MAX(lesson_date) AS eng_kech_dars
             FROM student_grades
             WHERE deleted_at IS NULL
-                AND semester_code = ?
-                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND semester_code IN ({$semesterPlaceholders})
+                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL
                 AND (status IS NULL OR status != 'retake')
@@ -56,9 +69,9 @@ class DebugTeacherDashboardStats extends Command
             ORDER BY jami DESC
             LIMIT 5
         ";
-        $rows = DB::select($sql1, array_merge([$semester->code], $excluded));
+        $rows = DB::select($sql1, $baseBindings);
 
-        $headers = ['employee_id', 'name', 'jami', 'baho', 'NB', 'bosh', 'eng_erta_baho', 'eng_kech_baho'];
+        $headers = ['employee_id', 'name', 'jami', 'baho', 'NB', 'bosh', 'eng_erta_dars', 'eng_kech_dars'];
         $tableRows = [];
         foreach ($rows as $r) {
             $tableRows[] = [
@@ -68,13 +81,13 @@ class DebugTeacherDashboardStats extends Command
                 $r->bilan_bahosi,
                 $r->nb_count,
                 $r->bosh,
-                $r->eng_erta_baho,
-                $r->eng_kech_baho,
+                $r->eng_erta_dars,
+                $r->eng_kech_dars,
             ];
         }
         $this->table($headers, $tableRows);
 
-        // 2-bo'lim: Tanlangan o'qituvchi uchun batafsil tasniflash
+        // 2-bo'lim: Tanlangan o'qituvchi uchun batafsil
         $teacherFilter = $this->option('teacher');
         if (!$teacherFilter && count($rows) > 0) {
             $teacherFilter = $rows[0]->employee_id;
@@ -96,13 +109,13 @@ class DebugTeacherDashboardStats extends Command
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
                          AND created_at IS NOT NULL
-                         AND created_at > TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
+                         AND created_at >  TIMESTAMP(DATE(lesson_date), lesson_pair_end_time)
                          AND created_at <= TIMESTAMP(DATE(lesson_date), '18:00:00')
                     THEN 1 ELSE 0 END) AS ish_vaqtida,
                 SUM(CASE
                     WHEN (grade IS NOT NULL OR reason = 'absent' OR status = 'absent')
                          AND created_at IS NOT NULL
-                         AND created_at > TIMESTAMP(DATE(lesson_date), '18:00:00')
+                         AND created_at >  TIMESTAMP(DATE(lesson_date), '18:00:00')
                          AND created_at <= TIMESTAMP(DATE(lesson_date), '23:59:59')
                     THEN 1 ELSE 0 END) AS kech,
                 SUM(CASE
@@ -112,8 +125,9 @@ class DebugTeacherDashboardStats extends Command
                     THEN 1 ELSE 0 END) AS baholanmagan
             FROM student_grades
             WHERE deleted_at IS NULL
-                AND semester_code = ?
-                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND semester_code IN ({$semesterPlaceholders})
+                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL
                 AND (status IS NULL OR status != 'retake')
@@ -122,7 +136,7 @@ class DebugTeacherDashboardStats extends Command
                 AND lesson_pair_end_time != ''
                 AND employee_id = ?
         ";
-        $bindings = array_merge([$semester->code], $excluded, [$teacherFilter]);
+        $bindings = array_merge($baseBindings, [$teacherFilter]);
         $stat = DB::select($sql2, $bindings)[0] ?? null;
 
         if ($stat) {
@@ -138,9 +152,8 @@ class DebugTeacherDashboardStats extends Command
             );
         }
 
-        // 3-bo'lim: Birinchi 10 ta yozuvning vaqt tasniflanishi
-        $this->line("\n--- Birinchi 10 ta yozuvning vaqt tafsiloti ---");
-
+        // 3-bo'lim: Birinchi 15 ta yozuvning vaqt tasniflanishi
+        $this->line("\n--- So'nggi 15 ta yozuvning vaqt tafsiloti ---");
         $sql3 = "
             SELECT
                 DATE(lesson_date) AS dars_sanasi,
@@ -150,6 +163,7 @@ class DebugTeacherDashboardStats extends Command
                 grade,
                 reason,
                 status,
+                training_type_code,
                 training_type_name,
                 CASE
                     WHEN (grade IS NULL AND (reason IS NULL OR reason != 'absent') AND (status IS NULL OR status != 'absent')) THEN 'BOSH'
@@ -161,14 +175,15 @@ class DebugTeacherDashboardStats extends Command
                 END AS kategoriya
             FROM student_grades
             WHERE deleted_at IS NULL
-                AND semester_code = ?
-                AND training_type_name NOT IN ({$excludedPlaceholders})
+                AND semester_code IN ({$semesterPlaceholders})
+                AND training_type_code NOT IN ({$excludedCodePlaceholders})
+                {$subjectFilterSql}
                 AND independent_id IS NULL
                 AND retake_grade IS NULL
                 AND (status IS NULL OR status != 'retake')
                 AND employee_id = ?
             ORDER BY lesson_date DESC, created_at DESC
-            LIMIT 10
+            LIMIT 15
         ";
         $details = DB::select($sql3, $bindings);
 
@@ -182,12 +197,12 @@ class DebugTeacherDashboardStats extends Command
                 $d->grade ?? '-',
                 $d->reason ?? '-',
                 $d->status ?? '-',
-                mb_substr($d->training_type_name, 0, 12),
+                $d->training_type_code,
                 $d->kategoriya,
             ];
         }
         $this->table(
-            ['dars_sana', 'tugash', 'student_id', 'created_at', 'grade', 'reason', 'status', 'tur', 'kategoriya'],
+            ['dars_sana', 'tugash', 'student_id', 'created_at', 'grade', 'reason', 'status', 'tt_code', 'kategoriya'],
             $detailRows
         );
 

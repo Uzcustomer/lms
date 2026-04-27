@@ -53,24 +53,28 @@ class TeacherMainController extends Controller
         $isTeacherRole = $activeRole === 'oqituvchi';
 
         $stats = null;
-        $top10Payload = null;
+        $topPayload = null;
 
         if ($isTeacherRole && $teacher && !empty($teacher->hemis_id)) {
             $stats = Cache::get(
                 CalculateTeacherDashboardStats::employeeCacheKey($teacher->hemis_id)
             );
-            $top10Payload = Cache::get(
-                CalculateTeacherDashboardStats::top10CacheKey()
+            $topPayload = Cache::get(
+                CalculateTeacherDashboardStats::topLeaderboardCacheKey()
             );
         }
 
-        $top10 = $top10Payload['items'] ?? [];
-        $top10UpdatedAt = $top10Payload['last_updated'] ?? null;
+        $topItems = $topPayload['items'] ?? [];
+        $topUpdatedAt = $topPayload['last_updated'] ?? null;
+        $topTotalRanked = $topPayload['total_ranked'] ?? null;
+        $topSize = $topPayload['size'] ?? CalculateTeacherDashboardStats::TOP_LEADERBOARD_SIZE;
 
         return view('teacher.dashboard', [
             'stats'           => $stats,
-            'top10'           => $top10,
-            'top10UpdatedAt'  => $top10UpdatedAt,
+            'topItems'        => $topItems,
+            'topUpdatedAt'    => $topUpdatedAt,
+            'topTotalRanked'  => $topTotalRanked,
+            'topSize'         => $topSize,
             'teacher'         => $teacher,
             'isTeacherRole'   => $isTeacherRole,
         ]);

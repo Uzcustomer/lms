@@ -25,8 +25,14 @@
         .td-top10-table table { margin-bottom: 0; }
         .td-top10-table th { background: #f8f9fa; font-size: 13px; text-transform: uppercase; letter-spacing: .3px; color: #495057; }
         .td-top10-table tr.td-me { background: #fff3cd; font-weight: 600; }
-        .td-top10-table .td-rank { font-weight: 700; width: 60px; }
+        .td-top10-table .td-rank { font-weight: 700; width: 70px; text-align: center; font-size: 18px; }
+        .td-top10-table tr.gold   .td-rank { background: linear-gradient(180deg, #fff7d6 0%, #ffefb3 100%); }
+        .td-top10-table tr.silver .td-rank { background: linear-gradient(180deg, #f1f3f5 0%, #dee2e6 100%); }
+        .td-top10-table tr.bronze .td-rank { background: linear-gradient(180deg, #fde2cf 0%, #f9c79c 100%); }
         .td-top10-table .td-foiz { font-weight: 700; color: #28a745; }
+        .td-my-rank { background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%); border-left: 4px solid #ffc107; padding: 16px 20px; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .td-my-rank .td-rank-big { font-size: 32px; font-weight: 700; color: #856404; line-height: 1; }
+        .td-my-rank .td-rank-label { font-size: 13px; color: #6c757d; }
         .td-summary-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 16px; }
         .td-summary-bar > div { height: 100%; }
         .td-stale { font-size: 12px; color: #6c757d; }
@@ -100,6 +106,29 @@
                         </div>
                     </div>
                 @endif
+
+                {{-- Shaxsiy o'rin --}}
+                @if(!empty($stats['rank']))
+                    @php
+                        $rankEmoji = match(true) {
+                            $stats['rank'] === 1 => '🥇',
+                            $stats['rank'] === 2 => '🥈',
+                            $stats['rank'] === 3 => '🥉',
+                            $stats['rank'] <= 10 => '🏆',
+                            $stats['rank'] <= 20 => '🎖️',
+                            default => '🏅',
+                        };
+                    @endphp
+                    <div class="td-my-rank" style="margin-bottom: 24px; display: flex; align-items: center; gap: 16px;">
+                        <div style="font-size: 40px;">{{ $rankEmoji }}</div>
+                        <div>
+                            <div class="td-rank-label">Sizning o'rningiz universitet bo'yicha</div>
+                            <div class="td-rank-big">
+                                {{ $stats['rank'] }}<small style="font-size: 18px; color: #856404; font-weight: 500;">/{{ $stats['total_ranked'] }}</small>
+                            </div>
+                        </div>
+                    </div>
+                @endif
             @else
                 <div class="td-empty" style="margin-bottom: 24px;">
                     <i class="fas fa-clock" style="font-size: 40px; color: #adb5bd; margin-bottom: 12px;"></i>
@@ -115,17 +144,17 @@
                 </div>
             @endif
 
-            {{-- Top 10 o'qituvchilar --}}
+            {{-- Top N o'qituvchilar --}}
             <div style="margin-top: 24px;">
                 <h5 style="margin-bottom: 12px;">
-                    Top 10 o'qituvchi — vaqtida baholanganlik bo'yicha
+                    🏆 Top {{ $topSize }} o'qituvchi — vaqtida baholanganlik bo'yicha
                 </h5>
-                @if(count($top10) > 0)
+                @if(count($topItems) > 0)
                     <div class="td-top10-table">
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th class="td-rank">#</th>
+                                    <th class="td-rank">O'rin</th>
                                     <th>F.I.SH</th>
                                     <th>Kafedra</th>
                                     <th class="text-right">Jami baholash</th>
@@ -133,18 +162,34 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($top10 as $entry)
+                                @foreach($topItems as $entry)
                                     @php
                                         $isMe = $teacher && !empty($teacher->hemis_id)
                                                 && (int)$teacher->hemis_id === (int)$entry['employee_id'];
+                                        $rowClass = match($entry['rank']) {
+                                            1 => 'gold',
+                                            2 => 'silver',
+                                            3 => 'bronze',
+                                            default => '',
+                                        };
+                                        if ($isMe) { $rowClass .= ' td-me'; }
                                     @endphp
-                                    <tr class="{{ $isMe ? 'td-me' : '' }}">
-                                        <td class="td-rank">{{ $entry['rank'] }}</td>
+                                    <tr class="{{ $rowClass }}">
+                                        <td class="td-rank">
+                                            @if(!empty($entry['medal']))
+                                                {{ $entry['medal'] }}
+                                            @else
+                                                {{ $entry['rank'] }}
+                                            @endif
+                                        </td>
                                         <td>
                                             {{ $entry['fio'] }}
                                             @if($isMe) <small class="text-muted">(siz)</small> @endif
                                         </td>
-                                        <td>{{ $entry['kafedra'] }}</td>
+                                        <td>
+                                            <span style="margin-right: 4px;">{{ $entry['kafedra_emoji'] ?? '🎓' }}</span>
+                                            {{ $entry['kafedra'] }}
+                                        </td>
                                         <td class="text-right">{{ number_format($entry['jami']) }}</td>
                                         <td class="text-right td-foiz">{{ $entry['foiz'] }}%</td>
                                     </tr>
@@ -152,14 +197,15 @@
                             </tbody>
                         </table>
                     </div>
-                    @if(!empty($top10UpdatedAt))
+                    @if(!empty($topUpdatedAt))
                         <p class="td-stale" style="margin-top: 8px;">
-                            Top 10 yangilangan: {{ $top10UpdatedAt }}
+                            Top {{ $topSize }} yangilangan: {{ $topUpdatedAt }} —
+                            jami {{ $topTotalRanked }} ta o'qituvchi reyting ichida
                         </p>
                     @endif
                 @else
                     <div class="td-empty">
-                        <p style="margin-bottom: 0;">Top 10 ro'yxati hali tayyor emas yoki ma'lumotlar yetarli emas.</p>
+                        <p style="margin-bottom: 0;">Top ro'yxati hali tayyor emas yoki ma'lumotlar yetarli emas.</p>
                     </div>
                 @endif
             </div>

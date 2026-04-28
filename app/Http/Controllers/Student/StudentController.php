@@ -612,6 +612,7 @@ class StudentController extends Controller
             // JB daily data for horizontal view — retake info bilan
             $jbAbsentDates = [];
             $jbRetakeInfo = [];
+            $jbSababliDates = [];
             foreach ($jbGradesRaw as $g) {
                 if ($g->reason === 'absent') {
                     $jbAbsentDates[$g->lesson_date] = true;
@@ -622,6 +623,14 @@ class StudentController extends Controller
                         'retake' => $g->retake_grade,
                         'is_absent' => $g->reason === 'absent',
                     ];
+                }
+            }
+            // Sababli/sababsiz aniqlash (HEMIS davomat orqali)
+            $subjectAttendance = $allAttendance->get($subjectId) ?? collect();
+            foreach ($subjectAttendance as $att) {
+                if ((int) ($att->absent_on ?? 0) > 0) {
+                    $dateKey = \Carbon\Carbon::parse($att->lesson_date)->format('Y-m-d');
+                    $jbSababliDates[$dateKey] = true;
                 }
             }
             $jbDailyData = [];
@@ -636,6 +645,7 @@ class StudentController extends Controller
                     'average' => $dayAvgH,
                     'has_grades' => $hasGradesH,
                     'is_absent' => !$hasGradesH && isset($jbAbsentDates[$date]),
+                    'is_sababli' => isset($jbSababliDates[substr($date, 0, 10)]),
                     'has_retake' => $retake !== null,
                     'retake_original' => $retake['original'] ?? null,
                     'retake_grade' => $retake['retake'] ?? null,

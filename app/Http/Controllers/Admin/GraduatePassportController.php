@@ -169,4 +169,65 @@ class GraduatePassportController extends Controller
 
         return response()->file($path);
     }
+
+    public function downloadZip(Request $request)
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $query = DB::table('students as s')
+            ->join('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11');
+
+        if ($request->filled('faculty_id')) {
+            $query->where('s.department_id', $request->faculty_id);
+        }
+        if ($request->filled('group_id')) {
+            $query->where('s.group_id', $request->group_id);
+        }
+
+        $rows = $query->select(
+            's.full_name', 's.student_id_number', 's.group_name',
+            'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path'
+        )->orderBy('s.group_name')->orderBy('s.full_name')->get();
+
+        if ($rows->isEmpty()) {
+            return back()->with('error', 'Hujjatlar topilmadi.');
+        }
+
+        $zipName = 'Bitiruvchilar_hujjatlari_' . date('Y-m-d_H-i') . '.zip';
+        $zipPath = tempnam(sys_get_temp_dir(), 'grad_') . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return back()->with('error', 'ZIP fayl yaratib bo\'lmadi.');
+        }
+
+        $addedFiles = 0;
+        foreach ($rows as $row) {
+            $safeName = preg_replace('/[\/\\\\:*?"<>|]/', '', $row->full_name);
+            $folder = trim($row->group_name . '/' . $row->student_id_number . '_' . $safeName);
+
+            foreach (['passport_front_path' => 'passport_old', 'passport_back_path' => 'passport_orqa', 'foreign_passport_path' => 'xorijiy_passport'] as $field => $label) {
+                if (empty($row->$field)) continue;
+                $filePath = storage_path('app/public/' . $row->$field);
+                if (!file_exists($filePath)) continue;
+                $ext = pathinfo($filePath, PATHINFO_EXTENSION) ?: 'jpg';
+                $zip->addFile($filePath, $folder . '/' . $label . '.' . $ext);
+                $addedFiles++;
+            }
+        }
+
+        $zip->close();
+
+        if ($addedFiles === 0) {
+            @unlink($zipPath);
+            return back()->with('error', 'Yuklanadigan fayllar topilmadi.');
+        }
+
+        return response()->download($zipPath, $zipName, [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
+    }
 }

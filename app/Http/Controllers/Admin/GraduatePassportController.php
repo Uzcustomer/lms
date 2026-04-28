@@ -112,6 +112,7 @@ class GraduatePassportController extends Controller
                 'gp.first_name_en', 'gp.last_name_en',
                 'gp.passport_series', 'gp.passport_number', 'gp.jshshir',
                 'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path',
+                'gp.status as gp_status', 'gp.reviewed_by', 'gp.rejection_reason',
                 'gp.created_at as gp_created_at'
             )
             ->orderBy('s.full_name')
@@ -135,6 +136,9 @@ class GraduatePassportController extends Controller
                     'has_front' => !empty($st->passport_front_path),
                     'has_back' => !empty($st->passport_back_path),
                     'has_foreign' => !empty($st->foreign_passport_path),
+                    'gp_status' => $st->gp_status ?? 'pending',
+                    'reviewed_by' => $st->reviewed_by ?? '',
+                    'rejection_reason' => $st->rejection_reason ?? '',
                     'created_at' => $st->gp_created_at ? date('d.m.Y', strtotime($st->gp_created_at)) : '',
                 ];
             });
@@ -168,6 +172,44 @@ class GraduatePassportController extends Controller
         if (!file_exists($path)) abort(404);
 
         return response()->file($path);
+    }
+
+    public function approve($id)
+    {
+        $gp = DB::table('graduate_student_passports')->where('id', $id)->first();
+        if (!$gp) abort(404);
+
+        $user = auth()->user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        DB::table('graduate_student_passports')->where('id', $id)->update([
+            'status' => 'approved',
+            'reviewed_by' => $reviewerName,
+            'reviewed_at' => now(),
+            'rejection_reason' => null,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Tasdiqlandi']);
+    }
+
+    public function reject(Request $request, $id)
+    {
+        $request->validate(['rejection_reason' => 'required|string|max:500']);
+
+        $gp = DB::table('graduate_student_passports')->where('id', $id)->first();
+        if (!$gp) abort(404);
+
+        $user = auth()->user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        DB::table('graduate_student_passports')->where('id', $id)->update([
+            'status' => 'rejected',
+            'reviewed_by' => $reviewerName,
+            'reviewed_at' => now(),
+            'rejection_reason' => $request->rejection_reason,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Rad etildi']);
     }
 
     public function downloadZip(Request $request)

@@ -504,6 +504,18 @@
         </a>
         @endif
 
+        {{-- YN sanasini belgilash huquqi sozlamalardan kelganlar uchun (oquv_bolimi'dan tashqari — ularda alohida bo'lim bor) --}}
+        @if($canAccessExamDateSetting && !$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi']))
+        <div class="sidebar-section">Yakuniy nazorat</div>
+        <a href="{{ $r('admin.academic-schedule.index', 'teacher.academic-schedule.index') }}"
+           class="sidebar-link {{ $isActive('admin.academic-schedule.index', 'teacher.academic-schedule.index') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            YN kunini belgilash
+        </a>
+        @endif
+
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
         <div class="sidebar-section">Hisobotlar</div>
 
@@ -525,15 +537,6 @@
             Dars belgilash
         </a>
 
-        @if($canAccessExamDateSetting && !$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi']))
-        <a href="{{ $r('admin.academic-schedule.index', 'teacher.academic-schedule.index') }}"
-           class="sidebar-link {{ $isActive('admin.academic-schedule.index', 'teacher.academic-schedule.index') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-            </svg>
-            YN kunini belgilash
-        </a>
-        @endif
 
         <a href="{{ route('admin.reports.lesson-hours') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.lesson-hours*') ? 'sidebar-active' : '' }}">

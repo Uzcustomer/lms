@@ -605,10 +605,16 @@
                                             <tbody>
                                                 <tr>
                                                     @foreach($jbData as $idx => $day)
-                                                        <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}">
-                                                            @if($day['has_grades'])
-                                                                @php $v = $day['average']; @endphp
-                                                                <span class="font-medium text-gray-900">{{ $v }}</span>
+                                                        <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}" {!! ($day['has_retake'] ?? false) ? 'style="background:#e5e5e5;position:relative;"' : '' !!}>
+                                                            @if($day['has_retake'] ?? false)
+                                                                @if($day['retake_is_absent'])
+                                                                    <span style="font-size:9px;color:#dc2626;position:absolute;top:1px;left:3px;">NB</span>
+                                                                @elseif($day['retake_original'] !== null)
+                                                                    <span style="font-size:9px;color:#94a3b8;position:absolute;top:1px;left:3px;">{{ round($day['retake_original']) }}</span>
+                                                                @endif
+                                                                <span class="font-medium" style="color:#059669;">{{ round($day['retake_grade']) }}</span>
+                                                            @elseif($day['has_grades'])
+                                                                <span class="font-medium text-gray-900">{{ $day['average'] }}</span>
                                                             @elseif($day['is_absent'])
                                                                 <span class="text-red-600 font-medium">NB</span>
                                                             @else

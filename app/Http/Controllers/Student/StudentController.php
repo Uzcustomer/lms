@@ -594,19 +594,18 @@ class StudentController extends Controller
             }
 
             $dailySum = 0;
-            $actualDaysCount = 0;
             foreach ($jbLessonDates as $date) {
-                $dayGrades = $jbGradesByDatePair[$date] ?? [];
-                if (empty($dayGrades)) continue;
                 if (!isset($jbLessonDatesForAverageLookup[$date])) continue;
 
+                $dayGrades = $jbGradesByDatePair[$date] ?? [];
+                if (empty($dayGrades)) continue;
+
                 $gradeSum = array_sum($dayGrades);
-                $dayAverage = round($gradeSum / count($dayGrades), 0, PHP_ROUND_HALF_UP);
-                $dailySum += $dayAverage;
-                $actualDaysCount++;
+                $dailyAvg = round($gradeSum / count($dayGrades), 0, PHP_ROUND_HALF_UP);
+                $dailySum += $dailyAvg;
             }
-            $jnAverage = $actualDaysCount > 0
-                ? round($dailySum / $actualDaysCount, 0, PHP_ROUND_HALF_UP)
+            $jnAverage = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
             // JB daily data for horizontal view — retake info bilan
@@ -686,16 +685,14 @@ class StudentController extends Controller
             }
 
             $mtDailySum = 0;
-            $mtActualDays = 0;
             foreach ($mtLessonDates as $date) {
                 $dayGrades = $mtGradesByDatePair[$date] ?? [];
                 if (empty($dayGrades)) continue;
                 $gradeSum = array_sum($dayGrades);
                 $mtDailySum += round($gradeSum / count($dayGrades), 0, PHP_ROUND_HALF_UP);
-                $mtActualDays++;
             }
-            $mtAverage = $mtActualDays > 0
-                ? round($mtDailySum / $mtActualDays, 0, PHP_ROUND_HALF_UP)
+            $mtAverage = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
             // MT daily data for horizontal view

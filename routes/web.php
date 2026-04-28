@@ -535,6 +535,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{application}', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'show'])->name('show');
             Route::post('/{application}/approve', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'approve'])->name('approve');
             Route::post('/{application}/reject', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'reject'])->name('reject');
+            Route::delete('/{application}', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'destroy'])->name('destroy');
         });
 
         // Kafedra (Fakultet va kafedralar tuzilmasi)

@@ -56,6 +56,19 @@ class ClubApplicationController extends Controller
         return back()->with('success', '\'' . $application->club_name . '\' arizasi rad etildi.');
     }
 
+    public function destroy(ClubMembership $application)
+    {
+        $activeRole = session('active_role', '');
+        if (!in_array($activeRole, ['superadmin', 'admin'])) {
+            abort(403);
+        }
+
+        $name = $application->club_name;
+        $application->delete();
+
+        return back()->with('success', '\'' . $name . '\' arizasi o\'chirildi.');
+    }
+
     private function checkAccess(ClubMembership $application): void
     {
         $user = auth()->user();

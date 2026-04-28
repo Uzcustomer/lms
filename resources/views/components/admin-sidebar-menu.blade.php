@@ -665,7 +665,7 @@
         @endif
 
         {{-- ============ TALABA ARIZALARI SECTION ============ --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'kafedra_mudiri']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <div class="sidebar-section">Talaba arizalari</div>
 
         <a href="{{ route('admin.absence-excuses.index') }}"
@@ -679,7 +679,7 @@
             @endif
         </a>
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'kafedra_mudiri']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <a href="{{ route('admin.club-applications.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.club-applications.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

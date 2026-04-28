@@ -68,6 +68,13 @@
                                 Qidirish
                             </button>
                         </div>
+                        <div class="filter-item" style="min-width:180px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <button type="button" class="btn-apply" style="background:linear-gradient(135deg,#16a34a,#22c55e);box-shadow:0 2px 4px rgba(22,163,74,0.25);" onclick="downloadZip()">
+                                <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Hujjatlarni yuklab olish
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -152,6 +159,15 @@
             }
 
             applyFilter();
+        }
+
+        function downloadZip() {
+            var params = [];
+            var fac = $('#faculty-select').val();
+            var grp = $('#group-select').val();
+            if (fac) params.push('faculty_id=' + encodeURIComponent(fac));
+            if (grp) params.push('group_id=' + encodeURIComponent(grp));
+            window.location.href = '{{ route("admin.graduate-passports.download-zip") }}' + (params.length ? '?' + params.join('&') : '');
         }
 
         function applyFilter() {

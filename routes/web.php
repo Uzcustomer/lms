@@ -406,6 +406,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/graduate-passports', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'index'])->name('graduate-passports.index');
         Route::get('/graduate-passports/data', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'data'])->name('graduate-passports.data');
         Route::get('/graduate-passports/{id}/file/{field}', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'showFile'])->name('graduate-passports.file');
+        Route::get('/graduate-passports/download-zip', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'downloadZip'])->name('graduate-passports.download-zip');
 
         // Ish e'lonlari (Admin/Registrator)
         Route::get('/job-listings', function () {

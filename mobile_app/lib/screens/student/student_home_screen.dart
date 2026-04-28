@@ -15,6 +15,11 @@ class StudentHomeScreen extends StatefulWidget {
     state?._onTabTapped(2);
   }
 
+  static void switchToGrades(BuildContext context) {
+    final state = context.findAncestorStateOfType<_StudentHomeScreenState>();
+    state?._onTabTapped(0);
+  }
+
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }

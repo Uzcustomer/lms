@@ -330,7 +330,7 @@
             </svg>
             JN o'zlashtirish
         </a>
-        @else
+        @elseif(!$hasActiveRole(['kafedra_mudiri', 'tyutor']))
         <div class="sidebar-section">Qo'shimcha</div>
 
         <a href="{{ $r('admin.independent.index', 'teacher.independent.index') }}"
@@ -665,7 +665,7 @@
         @endif
 
         {{-- ============ TALABA ARIZALARI SECTION ============ --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'kafedra_mudiri']))
         <div class="sidebar-section">Talaba arizalari</div>
 
         <a href="{{ route('admin.absence-excuses.index') }}"

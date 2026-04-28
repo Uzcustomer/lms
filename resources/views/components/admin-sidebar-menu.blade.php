@@ -52,6 +52,10 @@
     }
     $activeRoleLabel = $roleLabels[$activeRole] ?? $activeRole;
 
+    // YN sanasini belgilash huquqi (sozlamalardan)
+    $canAccessExamDateSetting = in_array($activeRole, $adminRoles, true)
+        || \App\Services\ExamDateRoleService::roleHasAnyAccess($activeRole);
+
     // Foydalanuvchi rasmi
     $userAvatar = null;
     if ($isTeacher && isset($user->image) && $user->image) {
@@ -298,6 +302,7 @@
         {{-- O'quv bo'limi roli uchun --}}
         <div class="sidebar-section">O'quv bo'limi</div>
 
+        @if($canAccessExamDateSetting)
         <a href="{{ $r('admin.academic-schedule.index', 'teacher.academic-schedule.index') }}"
            class="sidebar-link {{ $isActive('admin.academic-schedule.index', 'teacher.academic-schedule.index') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,6 +310,7 @@
             </svg>
             YN kunini belgilash
         </a>
+        @endif
         @elseif($hasActiveRole('oqituvchi'))
         {{-- O'qituvchi uchun JN o'zlashtirish --}}
         <div class="sidebar-section">Hisobotlar</div>
@@ -519,7 +525,7 @@
             Dars belgilash
         </a>
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        @if($canAccessExamDateSetting && !$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi']))
         <a href="{{ $r('admin.academic-schedule.index', 'teacher.academic-schedule.index') }}"
            class="sidebar-link {{ $isActive('admin.academic-schedule.index', 'teacher.academic-schedule.index') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

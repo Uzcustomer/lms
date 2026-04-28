@@ -678,6 +678,7 @@
                 <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
             @endif
         </a>
+        @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'kafedra_mudiri']))
         <a href="{{ route('admin.club-applications.index') }}"
@@ -689,6 +690,7 @@
         </a>
         @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <a href="{{ route('admin.exam-appeals.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.exam-appeals.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -158,6 +158,9 @@
                                                 @if($isKafedraMudiri)
                                                     <th class="text-center">Amal</th>
                                                 @endif
+                                                @if(in_array($activeRole, ['superadmin', 'admin']))
+                                                    <th class="text-center">O'chirish</th>
+                                                @endif
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -200,6 +203,15 @@
                                                             @else
                                                                 <span class="text-gray-300">—</span>
                                                             @endif
+                                                        </td>
+                                                    @endif
+                                                    @if(in_array($activeRole, ['superadmin', 'admin']))
+                                                        <td class="text-center">
+                                                            <form method="POST" action="{{ route('admin.club-applications.destroy', $app) }}" onsubmit="return confirm('Arizani o\'chirmoqchimisiz?')">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="px-2 py-1 text-[11px] font-semibold rounded-md text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition">O'chirish</button>
+                                                            </form>
                                                         </td>
                                                     @endif
                                                 </tr>

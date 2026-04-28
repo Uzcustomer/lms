@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Deadline;
 use App\Models\MarkingSystemScore;
 use App\Models\Setting;
+use App\Services\ExamDateRoleService;
 use App\Services\HemisService;
 use Illuminate\Http\Request;
 
@@ -32,6 +33,10 @@ class SettingsController extends Controller
 
         // Telegram data
         $data['telegramDeadlineDays'] = Setting::get('telegram_deadline_days', 7);
+
+        // YN sanasini belgilash huquqi (kurs darajasi -> rollar)
+        $data['examDateRoleMapping'] = ExamDateRoleService::getMapping();
+        $data['examDateConfigurableRoles'] = ExamDateRoleService::configurableRoles();
 
         // Kontrakt to'lov muddatlari
         $defaultCutoffs = json_encode([
@@ -186,6 +191,21 @@ class SettingsController extends Controller
         Setting::set('telegram_deadline_days', $request->telegram_deadline_days);
 
         return redirect()->route('admin.settings')->with('success', 'Telegram sozlamalari muvaffaqiyatli yangilandi.');
+    }
+
+    public function updateExamDateRoles(Request $request)
+    {
+        $request->validate([
+            'exam_date_roles' => 'array',
+            'exam_date_roles.*' => 'array',
+            'exam_date_roles.*.*' => 'string',
+        ]);
+
+        $mapping = $request->input('exam_date_roles', []);
+        ExamDateRoleService::setMapping($mapping);
+
+        return redirect()->route('admin.settings', ['tab' => 'exam-date-roles'])
+            ->with('success', "YN sanasini belgilash huquqlari muvaffaqiyatli yangilandi.");
     }
 
     public function updateContractCutoffs(Request $request)

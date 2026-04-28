@@ -609,25 +609,37 @@ class StudentController extends Controller
                 ? round($dailySum / $actualDaysCount, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
-            // JB daily data for horizontal view
+            // JB daily data for horizontal view — retake info bilan
             $jbAbsentDates = [];
+            $jbRetakeInfo = [];
             foreach ($jbGradesRaw as $g) {
                 if ($g->reason === 'absent') {
                     $jbAbsentDates[$g->lesson_date] = true;
+                }
+                if ($g->retake_grade !== null) {
+                    $jbRetakeInfo[$g->lesson_date] = [
+                        'original' => $g->grade,
+                        'retake' => $g->retake_grade,
+                        'is_absent' => $g->reason === 'absent',
+                    ];
                 }
             }
             $jbDailyData = [];
             foreach ($jbLessonDates as $date) {
                 $dayGradesH = $jbGradesByDatePair[$date] ?? [];
-                $pairsInDayH = $jbPairsPerDay[$date] ?? 1;
                 $hasGradesH = !empty($dayGradesH);
                 $gradeSumH = array_sum($dayGradesH);
                 $dayAvgH = $hasGradesH ? round($gradeSumH / count($dayGradesH), 0, PHP_ROUND_HALF_UP) : 0;
+                $retake = $jbRetakeInfo[$date] ?? null;
                 $jbDailyData[] = [
                     'date' => $date,
                     'average' => $dayAvgH,
                     'has_grades' => $hasGradesH,
                     'is_absent' => !$hasGradesH && isset($jbAbsentDates[$date]),
+                    'has_retake' => $retake !== null,
+                    'retake_original' => $retake['original'] ?? null,
+                    'retake_grade' => $retake['retake'] ?? null,
+                    'retake_is_absent' => $retake['is_absent'] ?? false,
                 ];
             }
 

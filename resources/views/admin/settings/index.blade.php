@@ -224,7 +224,6 @@
                                         <span>{{ $label }}</span>
                                         <span style="font-size: 11px; color: #94a3b8; font-weight: 500;">level: {{ $levelCode }}</span>
                                     </div>
-                                    <input type="hidden" name="exam_date_roles[{{ $levelCode }}][__placeholder]" value="">
                                     <div style="display: flex; flex-direction: column; gap: 6px;">
                                         @foreach($examDateConfigurableRoles as $roleValue => $roleLabel)
                                             @php $checked = in_array($roleValue, $selectedRoles, true); @endphp

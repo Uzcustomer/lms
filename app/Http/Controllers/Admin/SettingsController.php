@@ -196,12 +196,12 @@ class SettingsController extends Controller
     public function updateExamDateRoles(Request $request)
     {
         $request->validate([
-            'exam_date_roles' => 'array',
-            'exam_date_roles.*' => 'array',
-            'exam_date_roles.*.*' => 'string',
+            'exam_date_roles' => 'nullable|array',
+            'exam_date_roles.*' => 'nullable|array',
+            'exam_date_roles.*.*' => 'nullable|string',
         ]);
 
-        $mapping = $request->input('exam_date_roles', []);
+        $mapping = $request->input('exam_date_roles', []) ?? [];
         ExamDateRoleService::setMapping($mapping);
 
         return redirect()->route('admin.settings', ['tab' => 'exam-date-roles'])

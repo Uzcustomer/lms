@@ -7,6 +7,7 @@ use App\Models\Notification;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
 use App\Models\User;
+use App\Services\StudentVisaHistoryService;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -126,23 +127,32 @@ class StudentVisaController extends Controller
 
         $storagePath = 'student-visa/' . $student->id;
 
+        // Yangi PDF lar uchun joy — eski fayllar diskdan O'CHIRILMAYDI (tarix uchun saqlanadi)
         foreach ([
             'passport_scan' => 'passport_scan_path',
             'visa_scan' => 'visa_scan_path',
             'registration_doc' => 'registration_doc_path',
         ] as $inputName => $dbField) {
             if ($request->hasFile($inputName)) {
-                if ($existing?->$dbField) {
-                    Storage::disk('public')->delete($existing->$dbField);
-                }
                 $data[$dbField] = $request->file($inputName)->store($storagePath, 'public');
             }
         }
 
         try {
-            StudentVisaInfo::updateOrCreate(
+            $historyService = app(StudentVisaHistoryService::class);
+            $oldValues = $existing ? $historyService->fieldsFrom($existing) : null;
+
+            $visaInfo = StudentVisaInfo::updateOrCreate(
                 ['student_id' => $student->id],
                 $data
+            );
+
+            $historyService->snapshot(
+                $student,
+                $visaInfo->fresh(),
+                $existing ? \App\Models\StudentVisaInfoHistory::CHANGE_UPDATED : \App\Models\StudentVisaInfoHistory::CHANGE_CREATED,
+                $oldValues,
+                'Talaba o\'zi to\'ldirdi'
             );
         } catch (\Throwable $e) {
             \Log::error('Viza ma\'lumotlarini saqlashda xato: ' . $e->getMessage());

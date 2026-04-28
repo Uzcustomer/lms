@@ -378,6 +378,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{student}/return-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'returnPassport'])->name('return-passport');
             Route::delete('/{student}/visa-info', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'destroyVisaInfo'])->name('destroy-visa-info');
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showFile'])->name('file');
+            Route::get('/{student}/history', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'history'])->name('history');
+            Route::get('/{student}/history/{historyId}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showHistoryFile'])->name('history-file');
         });
 
         // Javobgar firma talabalari (faqat o'qish)

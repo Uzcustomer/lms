@@ -78,7 +78,7 @@
             <select name="visa_type" style="width:100%;padding:6px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;">
                 <option value="">-</option>
                 @foreach(\App\Models\StudentVisaInfo::VISA_TYPES as $k => $l)
-                    <option value="{{ $k }}" {{ ($visaInfo?->visa_type ?? 'A-1') === $k ? 'selected' : '' }}>{{ $l }}</option>
+                    <option value="{{ $k }}" {{ ($visaInfo?->visa_type ?? '') === $k ? 'selected' : '' }}>{{ $l }}</option>
                 @endforeach
             </select>
         </div>

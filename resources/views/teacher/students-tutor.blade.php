@@ -112,12 +112,14 @@
 
     <div class="tutor-container">
 
+        @php $isNazoratchi = is_active_nazoratchi(); @endphp
         {{-- Guruhni tanlash ko'rinishi --}}
         @if(!request('group') && !request('photo_filter'))
         <div>
             @php
                 $ps = $photoStats ?? ['has_photo' => 0, 'approved' => 0, 'rejected' => 0];
             @endphp
+            @if(!$isNazoratchi)
             <div style="margin-bottom:16px;">
                 <h3 style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:10px;">Talaba rasmlari</h3>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
@@ -135,6 +137,7 @@
                     </a>
                 </div>
             </div>
+            @endif
 
             <div style="margin-bottom: 16px;">
                 <h3 style="font-size: 16px; font-weight: 700; color: #1e293b;">Guruhlaringiz</h3>
@@ -219,11 +222,11 @@
                         <div class="student-list">
                             @foreach($groupStudentsList as $student)
                                 @php
-                                    $studentPhoto = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
+                                    $studentPhoto = $isNazoratchi ? null : \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
                                 @endphp
                                 <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}"
-                                     onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }}, {{ json_encode($studentPhoto->status ?? '') }}, {{ json_encode($studentPhoto->rejection_reason ?? '') }})"
-                                     style="cursor:pointer;">
+                                     @if(!$isNazoratchi) onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }}, {{ json_encode($studentPhoto->status ?? '') }}, {{ json_encode($studentPhoto->rejection_reason ?? '') }})" @endif
+                                     style="{{ $isNazoratchi ? '' : 'cursor:pointer;' }}">
                                     @if($studentPhoto && $studentPhoto->photo_path)
                                         <div class="student-avatar"><img src="{{ asset($studentPhoto->photo_path) }}" alt="" style="object-fit:cover;width:100%;height:100%;border-radius:50%;"></div>
                                     @elseif($student->image)
@@ -235,6 +238,7 @@
                                         <div class="student-name">{{ $student->full_name }}</div>
                                         <div class="student-id">{{ $student->student_id_number }}</div>
                                     </div>
+                                    @if(!$isNazoratchi)
                                     <div class="student-right" style="text-align:right;">
                                         @if($studentPhoto && $studentPhoto->status === 'rejected')
                                             <span class="student-status" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;">Rad etildi</span>
@@ -247,6 +251,7 @@
                                             <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                         @endif
                                     </div>
+                                    @endif
                                 </div>
                             @endforeach
                         </div>
@@ -261,11 +266,11 @@
                     <div class="student-list">
                         @forelse($students as $index => $student)
                             @php
-                                $studentPhoto = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
+                                $studentPhoto = $isNazoratchi ? null : \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->latest()->first();
                             @endphp
                             <div class="student-item" data-name="{{ mb_strtolower($student->full_name) }}" data-id="{{ $student->student_id_number }}"
-                                 onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }}, {{ json_encode($studentPhoto->status ?? '') }}, {{ json_encode($studentPhoto->rejection_reason ?? '') }})"
-                                 style="cursor:pointer;">
+                                 @if(!$isNazoratchi) onclick="openPhotoModal({{ $student->id }}, {{ json_encode($student->full_name) }}, {{ json_encode($student->student_id_number) }}, {{ json_encode($student->group_name) }}, {{ json_encode($studentPhoto ? asset($studentPhoto->photo_path) : '') }}, {{ json_encode($studentPhoto->status ?? '') }}, {{ json_encode($studentPhoto->rejection_reason ?? '') }})" @endif
+                                 style="{{ $isNazoratchi ? '' : 'cursor:pointer;' }}">
                                 <div style="font-size:10px;color:#b0b8c4;width:16px;text-align:center;flex-shrink:0;">{{ $students->firstItem() + $index }}</div>
                                 @if($student->image)
                                     <div class="student-avatar"><img src="{{ $student->image }}" alt=""></div>
@@ -280,14 +285,14 @@
                                     </div>
                                 </div>
                                 <div class="student-right" style="text-align:right;">
-                                    @if($studentPhoto && $studentPhoto->status === 'rejected')
+                                    @if(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'rejected')
                                         <span class="student-status" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;">Rad etildi</span>
                                         @if($studentPhoto->rejection_reason)
                                             <div style="font-size:10px;color:#991b1b;max-width:160px;margin-top:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
                                         @endif
-                                    @elseif($studentPhoto && $studentPhoto->status === 'approved')
+                                    @elseif(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'approved')
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
-                                    @elseif($studentPhoto)
+                                    @elseif(!$isNazoratchi && $studentPhoto)
                                         <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                     @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Faol</span>
@@ -334,7 +339,8 @@
         </div>
     </div>
 
-    {{-- Photo Modal --}}
+    {{-- Photo Modal — nazoratchi uchun ko'rsatilmaydi --}}
+    @if(!$isNazoratchi)
     <div id="photo-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;padding:16px;">
         <div class="photo-modal-box" style="background:#fff;border-radius:16px;width:100%;max-width:640px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
             <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;">
@@ -391,6 +397,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     <script>
         var MAX_SIZE = 1200;

@@ -321,6 +321,44 @@
             </svg>
             JN o'zlashtirish
         </a>
+        @elseif($hasActiveRole('nazoratchi'))
+        {{-- Nazoratchi uchun hisobotlar (faqat o'qish) --}}
+        <div class="sidebar-section">Hisobotlar</div>
+        <a href="{{ route('admin.absence_report.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.absence_report.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            74 soat dars qoldirish
+        </a>
+        <a href="{{ route('admin.reports.absence') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.absence*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            25% sababsiz
+        </a>
+        <a href="{{ route('admin.reports.load-vs-pair') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.load-vs-pair*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+            </svg>
+            Yuklama vs Juftlik
+        </a>
+        <a href="{{ route('admin.reports.debtors') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.debtors*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            4&#8805;qarzdorlar
+        </a>
+        <a href="{{ route('admin.reports.top-students') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.top-students*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.05 10.1c-.783-.57-.38-1.81.588-1.81h4.915a1 1 0 00.95-.69l1.519-4.674z"></path>
+            </svg>
+            5 ga da'vogar
+        </a>
         @elseif(!$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         @php
@@ -336,7 +374,7 @@
             </svg>
             JN o'zlashtirish
         </a>
-        @elseif(!$hasActiveRole(['kafedra_mudiri', 'tyutor']))
+        @elseif(!$hasActiveRole(['kafedra_mudiri', 'tyutor', 'nazoratchi']))
         <div class="sidebar-section">Qo'shimcha</div>
 
         <a href="{{ $r('admin.independent.index', 'teacher.independent.index') }}"

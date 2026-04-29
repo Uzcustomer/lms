@@ -73,32 +73,30 @@ class StudentUsefulScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: aurora.base(isDark),
+      backgroundColor: auroraBase(aurora, isDark),
       body: Stack(
         children: [
-          // Aurora background
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   center: const Alignment(-1.0, -1.0),
                   radius: 1.4,
-                  colors: aurora.gradient(isDark),
+                  colors: auroraGradient(aurora, isDark),
                   stops: const [0.0, 0.35, 0.65, 1.0],
                 ),
               ),
             ),
           ),
-          // Soft blobs
           Positioned(
             top: 180,
             right: -80,
-            child: _Blob(color: aurora.blobA(isDark)),
+            child: _Blob(color: auroraBlobA(aurora, isDark)),
           ),
           Positioned(
             top: 480,
             left: -80,
-            child: _Blob(color: aurora.blobB(isDark)),
+            child: _Blob(color: auroraBlobB(aurora, isDark)),
           ),
 
           // Content
@@ -254,7 +252,7 @@ class _AuroraPickerSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: selected
-                          ? theme.swatch
+                          ? theme.gradientLight[1]
                           : ink.withOpacity(0.08),
                       width: selected ? 2 : 1,
                     ),
@@ -285,7 +283,7 @@ class _AuroraPickerSheet extends StatelessWidget {
                         ),
                       ),
                       if (selected)
-                        Icon(Icons.check_circle, color: theme.swatch, size: 24),
+                        Icon(Icons.check_circle, color: theme.gradientLight[1], size: 24),
                     ],
                   ),
                 ),

@@ -191,7 +191,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     final aurora = context.watch<SettingsProvider>().auroraTheme;
 
     return Scaffold(
-      backgroundColor: aurora.base(isDark),
+      backgroundColor: auroraBase(aurora, isDark),
       body: Stack(
         children: [
           Positioned.fill(
@@ -200,7 +200,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 gradient: RadialGradient(
                   center: const Alignment(-1.0, -1.0),
                   radius: 1.4,
-                  colors: aurora.gradient(isDark),
+                  colors: auroraGradient(aurora, isDark),
                   stops: const [0.0, 0.35, 0.65, 1.0],
                 ),
               ),
@@ -208,11 +208,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           ),
           Positioned(
             top: 180, right: -80,
-            child: _buildBlob(aurora.blobA(isDark)),
+            child: _buildBlob(auroraBlobA(aurora, isDark)),
           ),
           Positioned(
             top: 480, left: -80,
-            child: _buildBlob(aurora.blobB(isDark)),
+            child: _buildBlob(auroraBlobB(aurora, isDark)),
           ),
           Consumer<StudentProvider>(
           builder: (context, provider, _) {

@@ -202,7 +202,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         builder: (context, provider, _) {
           if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
             return Container(
-              color: aurora.base(isDark),
+              color: auroraBase(aurora, isDark),
               child: const LoadingWidget(),
             );
           }
@@ -236,7 +236,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: aurora.base(isDark),
+                    color: auroraBase(aurora, isDark),
                   ),
                 ),
               ),
@@ -246,7 +246,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     gradient: RadialGradient(
                       center: const Alignment(-1.0, -1.0),
                       radius: 1.4,
-                      colors: aurora.gradient(isDark),
+                      colors: auroraGradient(aurora, isDark),
                       stops: const [0.0, 0.35, 0.65, 1.0],
                     ),
                   ),
@@ -254,11 +254,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               Positioned(
                 top: 180, right: -80,
-                child: _buildBlob(aurora.blobA(isDark)),
+                child: _buildBlob(auroraBlobA(aurora, isDark)),
               ),
               Positioned(
                 top: 480, left: -80,
-                child: _buildBlob(aurora.blobB(isDark)),
+                child: _buildBlob(auroraBlobB(aurora, isDark)),
               ),
               RefreshIndicator(
               onRefresh: () async {

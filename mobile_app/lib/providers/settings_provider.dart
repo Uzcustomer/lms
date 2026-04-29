@@ -9,7 +9,7 @@ class SettingsProvider extends ChangeNotifier {
 
   ThemeMode _themeMode = ThemeMode.light;
   Locale _locale = const Locale('uz');
-  AuroraTheme _auroraTheme = AuroraThemes.sunrise;
+  AuroraTheme _auroraTheme = AuroraThemes.steel;
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
@@ -30,8 +30,7 @@ class SettingsProvider extends ChangeNotifier {
       final localeStr = prefs.getString(_localeKey) ?? 'uz';
       _locale = Locale(localeStr);
 
-      final auroraId = prefs.getString(_auroraKey) ?? 'sunrise';
-      _auroraTheme = AuroraThemes.byId(auroraId);
+      _auroraTheme = AuroraThemes.steel;
     } catch (_) {
       // Keep defaults on failure
     }

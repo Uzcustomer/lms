@@ -1737,11 +1737,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return _buildGlassCard(
       isDark: isDark,
       cardColor: ringColor,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: percent),
               duration: const Duration(milliseconds: 1400),
@@ -1816,6 +1818,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

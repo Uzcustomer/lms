@@ -48,7 +48,7 @@ class RetakeSettingsController extends Controller
             }
         }
 
-        return redirect()->route('teacher.retake-settings.index')
+        return redirect()->route('admin.retake-settings.index')
             ->with('success', __('Sozlamalar yangilandi'));
     }
 

@@ -1,7 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../../providers/settings_provider.dart';
 import '../../utils/page_transitions.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
@@ -19,6 +22,7 @@ class StudentUsefulScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
     final ink = isDark ? const Color(0xFFF4EEFF) : const Color(0xFF1A1340);
     final sub = ink.withOpacity(0.5);
     final statusBarH = MediaQuery.of(context).padding.top;
@@ -69,7 +73,7 @@ class StudentUsefulScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B1020) : const Color(0xFFFEF7F0),
+      backgroundColor: aurora.base(isDark),
       body: Stack(
         children: [
           // Aurora background
@@ -79,9 +83,7 @@ class StudentUsefulScreen extends StatelessWidget {
                 gradient: RadialGradient(
                   center: const Alignment(-1.0, -1.0),
                   radius: 1.4,
-                  colors: isDark
-                      ? const [Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFFEC4899), Color(0xFF0B1020)]
-                      : const [Color(0xFFC7D2FE), Color(0xFFFBCFE8), Color(0xFFFED7AA), Color(0xFFFEF7F0)],
+                  colors: aurora.gradient(isDark),
                   stops: const [0.0, 0.35, 0.65, 1.0],
                 ),
               ),
@@ -91,12 +93,12 @@ class StudentUsefulScreen extends StatelessWidget {
           Positioned(
             top: 180,
             right: -80,
-            child: _Blob(color: isDark ? const Color(0xFFF472B6) : const Color(0xFFF9A8D4)),
+            child: _Blob(color: aurora.blobA(isDark)),
           ),
           Positioned(
             top: 480,
             left: -80,
-            child: _Blob(color: isDark ? const Color(0xFF60A5FA) : const Color(0xFFA5B4FC)),
+            child: _Blob(color: aurora.blobB(isDark)),
           ),
 
           // Content
@@ -131,7 +133,7 @@ class StudentUsefulScreen extends StatelessWidget {
                       ),
                       IconButton(
                         icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                        onPressed: () {},
+                        onPressed: () => _showAuroraPicker(context),
                       ),
                     ],
                   ),
@@ -177,6 +179,119 @@ class StudentUsefulScreen extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+void _showAuroraPicker(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => _AuroraPickerSheet(isDark: isDark),
+  );
+}
+
+class _AuroraPickerSheet extends StatelessWidget {
+  final bool isDark;
+  const _AuroraPickerSheet({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsProvider>();
+    final ink = isDark ? const Color(0xFFF4EEFF) : const Color(0xFF1A1340);
+    final sub = ink.withOpacity(0.6);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF12172B) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: ink.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            'Sahifa orqa foni',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Sevimli aurora rangingizni tanlang',
+            style: TextStyle(fontSize: 13, color: sub),
+          ),
+          const SizedBox(height: 18),
+          ...AuroraThemes.all.map((theme) {
+            final selected = settings.auroraTheme.id == theme.id;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () {
+                  settings.setAuroraTheme(theme);
+                  Navigator.pop(context);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: selected
+                          ? theme.swatch
+                          : ink.withOpacity(0.08),
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: theme.gradientLight,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          theme.label,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: ink,
+                          ),
+                        ),
+                      ),
+                      if (selected)
+                        Icon(Icons.check_circle, color: theme.swatch, size: 24),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );

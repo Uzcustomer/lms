@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:ui';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
+import '../../providers/settings_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
@@ -186,9 +188,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final statusBarH = MediaQuery.of(context).padding.top;
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B1020) : const Color(0xFFFEF7F0),
+      backgroundColor: aurora.base(isDark),
       body: Stack(
         children: [
           Positioned.fill(
@@ -197,9 +200,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 gradient: RadialGradient(
                   center: const Alignment(-1.0, -1.0),
                   radius: 1.4,
-                  colors: isDark
-                      ? const [Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFFEC4899), Color(0xFF0B1020)]
-                      : const [Color(0xFFC7D2FE), Color(0xFFFBCFE8), Color(0xFFFED7AA), Color(0xFFFEF7F0)],
+                  colors: aurora.gradient(isDark),
                   stops: const [0.0, 0.35, 0.65, 1.0],
                 ),
               ),
@@ -207,11 +208,11 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           ),
           Positioned(
             top: 180, right: -80,
-            child: _buildBlob(isDark ? const Color(0xFFF472B6) : const Color(0xFFF9A8D4)),
+            child: _buildBlob(aurora.blobA(isDark)),
           ),
           Positioned(
             top: 480, left: -80,
-            child: _buildBlob(isDark ? const Color(0xFF60A5FA) : const Color(0xFFA5B4FC)),
+            child: _buildBlob(aurora.blobB(isDark)),
           ),
           Consumer<StudentProvider>(
           builder: (context, provider, _) {

@@ -62,7 +62,7 @@ class RetakeWindowController extends Controller
 
         try {
             /** @var Teacher $user */
-            $user = Auth::guard('teacher')->user();
+            $user = RetakeAccess::currentStaff();
             $this->windowService->createWindow($data, $user);
         } catch (ValidationException $e) {
             return redirect()->back()->withErrors($e->errors())->withInput();
@@ -122,7 +122,7 @@ class RetakeWindowController extends Controller
 
     private function authorizeAccess(): void
     {
-        $user = Auth::guard('teacher')->user();
+        $user = RetakeAccess::currentStaff();
         if (!RetakeAccess::canManageAcademicDept($user)) {
             abort(403, 'Sizda qayta o\'qish oynalarini boshqarish ruxsati yo\'q');
         }
@@ -130,7 +130,7 @@ class RetakeWindowController extends Controller
 
     private function canOverride(): bool
     {
-        return RetakeAccess::canOverride(Auth::guard('teacher')->user());
+        return RetakeAccess::canOverride(RetakeAccess::currentStaff());
     }
 
     /**

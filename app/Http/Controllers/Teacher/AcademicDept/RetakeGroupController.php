@@ -49,7 +49,7 @@ class RetakeGroupController extends Controller
             'aggregations' => $aggregations,
             'groups' => $groups,
             'statusFilter' => $statusFilter,
-            'canOverride' => RetakeAccess::canOverride(Auth::guard('teacher')->user()),
+            'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
         ]);
     }
 
@@ -121,7 +121,7 @@ class RetakeGroupController extends Controller
 
         try {
             /** @var Teacher $actor */
-            $actor = Auth::guard('teacher')->user();
+            $actor = RetakeAccess::currentStaff();
             $group = $this->groupService->createGroup(
                 $data,
                 $data['application_ids'],
@@ -157,7 +157,7 @@ class RetakeGroupController extends Controller
         return view('teacher.academic-dept.retake-groups.edit', [
             'group' => $group,
             'teachers' => $teachers,
-            'canOverride' => RetakeAccess::canOverride(Auth::guard('teacher')->user()),
+            'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
         ]);
     }
 
@@ -180,7 +180,7 @@ class RetakeGroupController extends Controller
 
         try {
             /** @var Teacher $actor */
-            $actor = Auth::guard('teacher')->user();
+            $actor = RetakeAccess::currentStaff();
             $isAdmin = RetakeAccess::canOverride($actor);
             $this->groupService->updateGroup($group, $data, $actor, $isAdmin);
         } catch (ValidationException $e) {
@@ -202,7 +202,7 @@ class RetakeGroupController extends Controller
 
         try {
             /** @var Teacher $actor */
-            $actor = Auth::guard('teacher')->user();
+            $actor = RetakeAccess::currentStaff();
             $this->groupService->publish($group, $actor);
         } catch (ValidationException $e) {
             return redirect()->back()->withErrors($e->errors());
@@ -226,7 +226,7 @@ class RetakeGroupController extends Controller
 
         try {
             /** @var Teacher $actor */
-            $actor = Auth::guard('teacher')->user();
+            $actor = RetakeAccess::currentStaff();
             $this->applicationService->academicReject($app, $actor, $data['reason']);
         } catch (ValidationException $e) {
             return redirect()->back()->withErrors($e->errors());
@@ -240,7 +240,7 @@ class RetakeGroupController extends Controller
      */
     public function overrideStatus(Request $request, int $groupId): RedirectResponse
     {
-        if (!RetakeAccess::canOverride(Auth::guard('teacher')->user())) {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
             abort(403);
         }
 
@@ -256,7 +256,7 @@ class RetakeGroupController extends Controller
 
     private function authorize(): void
     {
-        if (!RetakeAccess::canManageAcademicDept(Auth::guard('teacher')->user())) {
+        if (!RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff())) {
             abort(403, 'Sizda qayta o\'qish guruhlarini boshqarish ruxsati yo\'q');
         }
     }

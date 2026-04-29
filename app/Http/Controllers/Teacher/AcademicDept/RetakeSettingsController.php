@@ -35,7 +35,7 @@ class RetakeSettingsController extends Controller
         ]);
 
         /** @var Teacher $actor */
-        $actor = Auth::guard('teacher')->user();
+        $actor = RetakeAccess::currentStaff();
 
         foreach ($data as $key => $value) {
             $setting = RetakeSetting::where('key', $key)->first();
@@ -54,7 +54,7 @@ class RetakeSettingsController extends Controller
 
     private function authorize(): void
     {
-        if (!RetakeAccess::canManageSettings(Auth::guard('teacher')->user())) {
+        if (!RetakeAccess::canManageSettings(RetakeAccess::currentStaff())) {
             abort(403, 'Sizda qayta o\'qish sozlamalarini boshqarish ruxsati yo\'q');
         }
     }

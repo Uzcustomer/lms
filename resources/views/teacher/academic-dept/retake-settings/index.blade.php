@@ -20,7 +20,7 @@
         @endif
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <form method="POST" action="{{ route('teacher.retake-settings.update') }}" class="space-y-5">
+            <form method="POST" action="{{ route('admin.retake-settings.update') }}" class="space-y-5">
                 @csrf @method('PUT')
 
                 @php

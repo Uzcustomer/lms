@@ -7,8 +7,8 @@
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto"
          x-data="groupFormation({
-             lookupUrl: '{{ route('teacher.retake-groups.lookup') }}',
-             storeUrl: '{{ route('teacher.retake-groups.store') }}',
+             lookupUrl: '{{ route('admin.retake-groups.lookup') }}',
+             storeUrl: '{{ route('admin.retake-groups.store') }}',
              csrf: '{{ csrf_token() }}',
          })">
 
@@ -73,7 +73,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100">
             <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <h3 class="text-sm font-semibold text-gray-900">{{ __("Mavjud guruhlar") }}</h3>
-                <form method="GET" action="{{ route('teacher.retake-groups.index') }}">
+                <form method="GET" action="{{ route('admin.retake-groups.index') }}">
                     <select name="status" onchange="this.form.submit()" class="px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="all" {{ $statusFilter === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
                         <option value="forming" {{ $statusFilter === 'forming' ? 'selected' : '' }}>{{ __("Shakllantirilmoqda") }}</option>
@@ -128,12 +128,12 @@
                                 </td>
                                 <td class="px-3 py-2.5 text-right">
                                     @if($g->status === 'forming')
-                                        <form method="POST" action="{{ route('teacher.retake-groups.publish', $g->id) }}" class="inline">
+                                        <form method="POST" action="{{ route('admin.retake-groups.publish', $g->id) }}" class="inline">
                                             @csrf
                                             <button type="submit" class="text-xs text-green-600 hover:underline mr-2">{{ __("Tasdiqlash") }}</button>
                                         </form>
                                     @endif
-                                    <a href="{{ route('teacher.retake-groups.edit', $g->id) }}"
+                                    <a href="{{ route('admin.retake-groups.edit', $g->id) }}"
                                        class="text-xs text-blue-600 hover:underline">{{ __("Tahrirlash") }}</a>
                                 </td>
                             </tr>
@@ -155,7 +155,7 @@
                         <span x-text="formData.subject_name"></span> · <span x-text="formData.semester_name"></span>
                     </p>
 
-                    <form method="POST" action="{{ route('teacher.retake-groups.store') }}" class="space-y-4">
+                    <form method="POST" action="{{ route('admin.retake-groups.store') }}" class="space-y-4">
                         @csrf
                         <input type="hidden" name="subject_id" :value="formData.subject_id">
                         <input type="hidden" name="subject_name" :value="formData.subject_name">

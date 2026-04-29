@@ -2,7 +2,7 @@
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             {{ __("Guruhni tahrirlash") }}
-            <a href="{{ route('teacher.retake-groups.index') }}" class="text-sm text-blue-600 hover:underline ml-2">← {{ __('Orqaga') }}</a>
+            <a href="{{ route('admin.retake-groups.index') }}" class="text-sm text-blue-600 hover:underline ml-2">← {{ __('Orqaga') }}</a>
         </h2>
     </x-slot>
 
@@ -42,7 +42,7 @@
 
             @php $editable = $group->isEditable() || $canOverride; @endphp
 
-            <form method="POST" action="{{ route('teacher.retake-groups.update', $group->id) }}" class="mt-4 space-y-3">
+            <form method="POST" action="{{ route('admin.retake-groups.update', $group->id) }}" class="mt-4 space-y-3">
                 @csrf @method('PUT')
 
                 <div>
@@ -91,7 +91,7 @@
                             {{ __("Saqlash") }}
                         </button>
                         @if($group->status === 'forming')
-                            <button type="submit" formaction="{{ route('teacher.retake-groups.publish', $group->id) }}"
+                            <button type="submit" formaction="{{ route('admin.retake-groups.publish', $group->id) }}"
                                     class="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700">
                                 {{ __("Tasdiqlash (publish)") }}
                             </button>
@@ -105,7 +105,7 @@
             @if($canOverride)
                 <div class="mt-6 pt-4 border-t border-gray-100">
                     <p class="text-xs text-gray-500 mb-2">{{ __("Super-admin: holatni override qilish") }}</p>
-                    <form method="POST" action="{{ route('teacher.retake-groups.override-status', $group->id) }}" class="flex gap-2">
+                    <form method="POST" action="{{ route('admin.retake-groups.override-status', $group->id) }}" class="flex gap-2">
                         @csrf
                         <select name="status" class="px-3 py-1.5 text-xs border border-gray-300 rounded">
                             <option value="forming" {{ $group->status === 'forming' ? 'selected' : '' }}>forming</option>

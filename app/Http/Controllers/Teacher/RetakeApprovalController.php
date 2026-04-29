@@ -32,7 +32,7 @@ class RetakeApprovalController extends Controller
      */
     public function index(Request $request)
     {
-        $user = Auth::guard('teacher')->user();
+        $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
         // Ariza-guruhlari joiniga ariza-bog'liq filtr
@@ -94,7 +94,7 @@ class RetakeApprovalController extends Controller
      */
     public function show(int $groupId)
     {
-        $user = Auth::guard('teacher')->user();
+        $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
         $group = RetakeApplicationGroup::with([
@@ -121,7 +121,7 @@ class RetakeApprovalController extends Controller
      */
     public function decide(Request $request, int $applicationId): RedirectResponse
     {
-        $user = Auth::guard('teacher')->user();
+        $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
         $data = $request->validate([

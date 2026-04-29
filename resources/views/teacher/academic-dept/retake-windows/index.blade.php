@@ -88,7 +88,7 @@
                                             {{ __("Override") }}
                                         </button>
                                         @if($w->applications_count === 0)
-                                            <form method="POST" action="{{ route('teacher.retake-windows.destroy', $w->id) }}" class="inline" onsubmit="return confirm('{{ __('Aniqmi?') }}')">
+                                            <form method="POST" action="{{ route('admin.retake-windows.destroy', $w->id) }}" class="inline" onsubmit="return confirm('{{ __('Aniqmi?') }}')">
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="text-xs text-red-600 hover:underline">{{ __("O'chirish") }}</button>
                                             </form>
@@ -114,7 +114,7 @@
                 <div class="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 z-10">
                     <h3 class="text-base font-bold text-gray-900 mb-4">{{ __("Yangi qabul oynasi") }}</h3>
                     <form method="POST"
-                          action="{{ route('teacher.retake-windows.store') }}"
+                          action="{{ route('admin.retake-windows.store') }}"
                           x-data="{
                               specialtyId: '',
                               specialtyName: '',
@@ -215,7 +215,7 @@
                     <div class="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 z-10">
                         <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Sanalarni override qilish") }}</h3>
                         <p class="text-xs text-red-600 mb-4">⚠️ {{ __("Faqat istisno holatlarda ishlating") }}</p>
-                        <form :action="`{{ url('/teacher/retake-windows') }}/${overrideId}/override-dates`" method="POST" class="space-y-3">
+                        <form :action="`{{ url('/admin/retake-windows') }}/${overrideId}/override-dates`" method="POST" class="space-y-3">
                             @csrf
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Boshlanish") }}</label>

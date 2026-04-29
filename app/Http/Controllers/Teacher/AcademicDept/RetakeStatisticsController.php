@@ -149,7 +149,7 @@ class RetakeStatisticsController extends Controller
 
     private function authorize(): void
     {
-        if (!RetakeAccess::canViewStatistics(Auth::guard('teacher')->user())) {
+        if (!RetakeAccess::canViewStatistics(RetakeAccess::currentStaff())) {
             abort(403, 'Sizda statistikani ko\'rish ruxsati yo\'q');
         }
     }

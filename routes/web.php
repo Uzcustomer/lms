@@ -51,6 +51,13 @@ use App\Http\Controllers\Student\StudentContractController as StudentContractCtr
 use App\Http\Controllers\LanguageController;
 
 
+// Public tasdiqnoma verifikatsiya sahifasi — auth talab qilmaydi.
+// Rate limited: daqiqada 30 ta urinish bir IP bo'yicha.
+Route::get('/verify/{code}', [\App\Http\Controllers\Public\RetakeVerifyController::class, 'show'])
+    ->where('code', '[a-zA-Z0-9-]+')
+    ->middleware('throttle:30,1')
+    ->name('public.retake-verify');
+
 Route::get('/', function () {
     // Agar foydalanuvchi allaqachon login bo'lgan bo'lsa — o'z dashboardiga yo'naltirish
     if (Auth::guard('web')->check()) {
@@ -195,6 +202,50 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'download'])->name('download');
             Route::post('/{id}/comment', [\App\Http\Controllers\Admin\ExamAppealController::class, 'addComment'])->name('comment');
             Route::get('/comment/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
+        });
+
+        // Qayta o'qish — qabul oynalari (o'quv bo'limi)
+        Route::prefix('retake')->name('retake.')->group(function () {
+            Route::prefix('periods')->name('periods.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\RetakePeriodController::class, 'index'])->name('index');
+                Route::post('/', [\App\Http\Controllers\Admin\Retake\RetakePeriodController::class, 'store'])->name('store');
+            });
+
+            // Dekan paneli
+            Route::prefix('dean')->name('dean.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'index'])->name('index');
+                Route::get('/{id}', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'show'])->whereNumber('id')->name('show');
+                Route::post('/{id}/approve', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'approve'])->whereNumber('id')->name('approve');
+                Route::post('/{id}/reject', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'reject'])->whereNumber('id')->name('reject');
+                Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'downloadFile'])
+                    ->whereNumber('id')->whereIn('type', ['receipt', 'document', 'tasdiqnoma'])->name('download-file');
+            });
+
+            // Registrator paneli
+            Route::prefix('registrar')->name('registrar.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'index'])->name('index');
+                Route::get('/{id}', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'show'])->whereNumber('id')->name('show');
+                Route::post('/{id}/approve', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'approve'])->whereNumber('id')->name('approve');
+                Route::post('/{id}/reject', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'reject'])->whereNumber('id')->name('reject');
+                Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'downloadFile'])
+                    ->whereNumber('id')->whereIn('type', ['receipt', 'document', 'tasdiqnoma'])->name('download-file');
+            });
+
+            // O'quv bo'limi yakuniy bosqich
+            Route::prefix('academic')->name('academic.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'index'])->name('index');
+                Route::post('/applications/{id}/reject', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'rejectApplication'])
+                    ->whereNumber('id')->name('application.reject');
+                Route::get('/applications/{id}/file/{type}', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'downloadFile'])
+                    ->whereNumber('id')->whereIn('type', ['receipt', 'document', 'tasdiqnoma'])->name('application.file');
+
+                Route::prefix('groups')->name('groups.')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'groupsIndex'])->name('index');
+                    Route::post('/', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'storeGroup'])->name('store');
+                    Route::get('/{id}', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'groupShow'])->whereNumber('id')->name('show');
+                    Route::put('/{id}', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'groupUpdate'])->whereNumber('id')->name('update');
+                });
+            });
         });
 
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
@@ -907,6 +958,14 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'download'])->name('download');
             Route::post('/{id}/comment', [\App\Http\Controllers\Student\ExamAppealController::class, 'addComment'])->name('comment');
             Route::get('/comment/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
+        });
+
+        // Qayta o'qish uchun ariza (talaba)
+        Route::prefix('retake')->name('retake.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\RetakeController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\RetakeController::class, 'store'])->name('store');
+            Route::get('/{id}/document', [\App\Http\Controllers\Student\RetakeController::class, 'downloadDocument'])->name('document');
+            Route::get('/{id}/tasdiqnoma', [\App\Http\Controllers\Student\RetakeController::class, 'downloadTasdiqnoma'])->name('tasdiqnoma');
         });
 
         // Bitiruvchi shartnomalar (talaba)

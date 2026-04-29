@@ -3,6 +3,10 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
+use App\Http\Controllers\Api\V1\Retake\AcademicDeptRetakeController;
+use App\Http\Controllers\Api\V1\Retake\DeanRetakeController;
+use App\Http\Controllers\Api\V1\Retake\RegistrarRetakeController;
+use App\Http\Controllers\Api\V1\Retake\StudentRetakeController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -103,6 +107,59 @@ Route::prefix('v1')->group(function () {
             Route::get('/groups/{groupId}/students', [TutorApiController::class, 'groupStudents']);
             Route::get('/students/{studentId}', [TutorApiController::class, 'studentProfile']);
             Route::get('/students/{studentId}/academic-records', [TutorApiController::class, 'studentAcademicRecords']);
+        });
+
+        // ── Retake (Qayta o'qish) — Talaba ────────────────
+        Route::prefix('student/retake')->group(function () {
+            Route::get('/curriculum', [StudentRetakeController::class, 'curriculum']);
+            Route::get('/period/active', [StudentRetakeController::class, 'activePeriod']);
+            Route::get('/applications', [StudentRetakeController::class, 'index']);
+            Route::post('/applications', [StudentRetakeController::class, 'store'])
+                ->middleware('throttle:5,1'); // 5 ta urinish / daqiqa
+            Route::get('/applications/{id}', [StudentRetakeController::class, 'show'])
+                ->whereNumber('id');
+            Route::get('/applications/{id}/document', [StudentRetakeController::class, 'downloadDocument'])
+                ->whereNumber('id');
+            Route::get('/applications/{id}/tasdiqnoma', [StudentRetakeController::class, 'downloadTasdiqnoma'])
+                ->whereNumber('id');
+        });
+
+        // ── Retake — Dekan ────────────────────────────────
+        Route::prefix('dean/retake')->group(function () {
+            Route::get('/applications', [DeanRetakeController::class, 'index']);
+            Route::get('/applications/{id}', [DeanRetakeController::class, 'show'])->whereNumber('id');
+            Route::post('/applications/{id}/approve', [DeanRetakeController::class, 'approve'])->whereNumber('id');
+            Route::post('/applications/{id}/reject', [DeanRetakeController::class, 'reject'])->whereNumber('id');
+        });
+
+        // ── Retake — Registrator ──────────────────────────
+        Route::prefix('registrar/retake')->group(function () {
+            Route::get('/applications', [RegistrarRetakeController::class, 'index']);
+            Route::get('/applications/{id}', [RegistrarRetakeController::class, 'show'])->whereNumber('id');
+            Route::post('/applications/{id}/approve', [RegistrarRetakeController::class, 'approve'])->whereNumber('id');
+            Route::post('/applications/{id}/reject', [RegistrarRetakeController::class, 'reject'])->whereNumber('id');
+        });
+
+        // ── Retake — O'quv bo'limi ────────────────────────
+        Route::prefix('academic/retake')->group(function () {
+            // Qabul oynalari (faqat POST + GET — adolatlilik qoidasi: PUT/DELETE yo'q)
+            Route::get('/periods', [AcademicDeptRetakeController::class, 'periodsIndex']);
+            Route::get('/periods/active', [AcademicDeptRetakeController::class, 'periodsActive']);
+            Route::post('/periods', [AcademicDeptRetakeController::class, 'periodsStore']);
+
+            // Arizalar (academic_dept ko'lami)
+            Route::get('/applications', [AcademicDeptRetakeController::class, 'applicationsIndex']);
+            Route::get('/applications/grouped', [AcademicDeptRetakeController::class, 'applicationsGrouped']);
+            Route::post('/applications/{id}/reject', [AcademicDeptRetakeController::class, 'applicationsReject'])
+                ->whereNumber('id');
+
+            // Guruhlar
+            Route::get('/groups', [AcademicDeptRetakeController::class, 'groupsIndex']);
+            Route::post('/groups', [AcademicDeptRetakeController::class, 'groupsStore']);
+            Route::put('/groups/{id}', [AcademicDeptRetakeController::class, 'groupsUpdate'])->whereNumber('id');
+
+            // O'qituvchilar (guruh shakllantirish uchun)
+            Route::get('/teachers', [AcademicDeptRetakeController::class, 'teachers']);
         });
     });
 });

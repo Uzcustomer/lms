@@ -40,6 +40,11 @@ class ApiConfig {
   static const String chatGroup = '/chat/group';
   static const String chatGroupSend = '/chat/group/send';
 
+  // Retake (qayta o'qish) endpoints — talaba
+  static const String studentRetakeCurriculum = '/student/retake/curriculum';
+  static const String studentRetakeActivePeriod = '/student/retake/period/active';
+  static const String studentRetakeApplications = '/student/retake/applications';
+
   // Teacher endpoints
   static const String teacherDashboard = '/teacher/dashboard';
   static const String teacherProfile = '/teacher/profile';

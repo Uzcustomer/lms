@@ -223,6 +223,10 @@
 
             $.get(dataUrl, params, function(res) {
                 $('#loading').hide();
+                if (res && res.error) {
+                    $('#empty').show().find('p').text(res.message || "Xatolik yuz berdi");
+                    return;
+                }
                 var students = res.students || [];
                 var stats = res.stats || {};
 
@@ -300,6 +304,8 @@
                         } else if (s.gp_status === 'rejected') {
                             reviewStatus = '<span class="badge-empty" style="background:#fef2f2;color:#dc2626;border-color:#fecaca;">Rad etilgan</span>';
                             if (s.rejection_reason) reviewStatus += '<div style="font-size:10px;color:#991b1b;margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(s.rejection_reason) + '">' + esc(s.rejection_reason) + '</div>';
+                        } else if (s.gp_status === 'resubmitted') {
+                            reviewStatus = '<span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;">Qayta yukladi</span>';
                         } else {
                             reviewStatus = '<span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fde68a;">Kutilmoqda</span>';
                         }
@@ -326,9 +332,17 @@
                 }
                 $('#table-body').html(html);
                 $('#table-area').show();
-            }).fail(function() {
+            }).fail(function(xhr) {
                 $('#loading').hide();
-                $('#empty').show().find('p').text("Xatolik yuz berdi");
+                var msg = "Xatolik yuz berdi";
+                try {
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    } else if (xhr && xhr.status) {
+                        msg = "Xatolik yuz berdi (" + xhr.status + ")";
+                    }
+                } catch (e) {}
+                $('#empty').show().find('p').text(msg);
             });
         }
 

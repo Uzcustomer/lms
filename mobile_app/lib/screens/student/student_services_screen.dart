@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../utils/page_transitions.dart';
+import '../../widgets/scale_tap.dart';
 import 'absence_excuse_list_screen.dart';
 
 class StudentServicesScreen extends StatelessWidget {
@@ -89,13 +90,15 @@ class _ServiceCard extends StatelessWidget {
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
-    return Material(
-      color: cardColor,
-      borderRadius: BorderRadius.circular(16),
-      elevation: isDark ? 0 : 2,
-      child: InkWell(
-        onTap: item.onTap,
+    return ScaleTap(
+      onTap: item.onTap,
+      child: Material(
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
+        elevation: isDark ? 0 : 2,
+        child: InkWell(
+          onTap: item.onTap,
+          borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -136,6 +139,7 @@ class _ServiceCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

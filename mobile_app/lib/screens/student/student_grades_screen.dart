@@ -12,6 +12,7 @@ import '../../services/student_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 import '../../utils/page_transitions.dart';
+import '../../widgets/scale_tap.dart';
 import 'student_home_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {
@@ -514,7 +515,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 final hasValue = value != null;
                 final color = _gradeBoxColors[i];
                 return Expanded(
-                  child: GestureDetector(
+                  child: ScaleTap(
+                    scaleDown: 0.90,
                     onTap: () => _onGradeCardTap(context, subject, key,
                       gradeLabels[i], _gradeFullLabels[i], value, isDark, l),
                     child: Container(

@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/scale_tap.dart';
 import '../../utils/page_transitions.dart';
 import 'teacher_journal_screen.dart';
 
@@ -405,25 +406,27 @@ class _SubjectCard extends StatelessWidget {
     final levelName = subject['level_name']?.toString() ?? '';
     final educationType = subject['education_type_name']?.toString() ?? '';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : Colors.grey).withAlpha(isDark ? 60 : 30),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
+    return ScaleTap(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.darkCard : Colors.white,
           borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: (isDark ? Colors.black : Colors.grey).withAlpha(isDark ? 60 : 30),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -524,6 +527,7 @@ class _SubjectCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

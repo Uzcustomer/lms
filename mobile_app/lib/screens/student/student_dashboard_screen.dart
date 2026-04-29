@@ -13,6 +13,7 @@ import '../../providers/student_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/scale_tap.dart';
 import 'student_home_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
@@ -1001,7 +1002,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           const subjectColors = [Color(0xFF43A047), Color(0xFF7C4DFF), Color(0xFFE65100), Color(0xFF0097A7), Color(0xFFE91E63), Color(0xFF1565C0)];
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: GestureDetector(
+            child: ScaleTap(
               onTap: () => StudentHomeScreen.switchToGrades(context),
               child: _buildGlassCard(
               isDark: isDark,

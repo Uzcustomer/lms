@@ -908,10 +908,12 @@
             },
             miniPrevMonth(index) {
                 const item = this.assessments[index];
-                const today = new Date();
-                const cur = item.cal_year * 12 + item.cal_month;
-                const min = today.getFullYear() * 12 + today.getMonth();
-                if (cur <= min) return;
+                if (!this.noDayLimit) {
+                    const today = new Date();
+                    const cur = item.cal_year * 12 + item.cal_month;
+                    const min = today.getFullYear() * 12 + today.getMonth();
+                    if (cur <= min) return;
+                }
                 if (item.cal_month === 0) { item.cal_month = 11; item.cal_year--; }
                 else item.cal_month--;
             },
@@ -968,8 +970,8 @@
                     const dt = new Date(item.cal_year, item.cal_month, d);
                     const ds = this._toStr(dt);
                     const isSun = dt.getDay() === 0;
-                    const isPast = dt < today;
-                    const beyondLimit = maxDate ? ds > maxDate : false;
+                    const isPast = this.noDayLimit ? false : (dt < today);
+                    const beyondLimit = (this.noDayLimit || !maxDate) ? false : (ds > maxDate);
                     // Non-JN: shu fan JN range ichidagi sanalar band
                     let takenByJn = false;
                     if (jnStart && jnEnd) {

@@ -994,6 +994,14 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             }
             return back();
         })->name('switch-role');
+
+        // Qayta o'qish arizalari (Dekan + Registrator paneli)
+        Route::prefix('retake')->name('retake.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'index'])->name('index');
+            Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'show'])->name('show');
+            Route::post('/applications/{applicationId}/decide', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'decide'])->name('decide');
+        });
+
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
             Route::get('/unread-count', [TeacherNotificationController::class, 'unreadCount'])->name('unread-count');

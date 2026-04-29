@@ -11,11 +11,12 @@ class RetakeSetting extends Model
         'value',
         'description',
         'updated_by_user_id',
+        'updated_by_name',
     ];
 
     public function updatedBy()
     {
-        return $this->belongsTo(User::class, 'updated_by_user_id');
+        return $this->belongsTo(Teacher::class, 'updated_by_user_id');
     }
 
     public static function get(string $key, mixed $default = null): mixed

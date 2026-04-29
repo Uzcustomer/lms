@@ -4,7 +4,7 @@ namespace App\Services\Retake;
 
 use App\Models\RetakeApplicationWindow;
 use App\Models\Student;
-use App\Models\User;
+use App\Models\Teacher;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -46,7 +46,7 @@ class RetakeWindowService
     /**
      * Yangi qabul oynasini ochish (O'quv bo'limi).
      */
-    public function createWindow(array $data, User $createdBy): RetakeApplicationWindow
+    public function createWindow(array $data, Teacher $createdBy): RetakeApplicationWindow
     {
         $this->validateDateRange($data['start_date'], $data['end_date']);
 
@@ -65,6 +65,7 @@ class RetakeWindowService
         return RetakeApplicationWindow::create([
             ...$data,
             'created_by_user_id' => $createdBy->id,
+            'created_by_name' => $createdBy->full_name,
         ]);
     }
 

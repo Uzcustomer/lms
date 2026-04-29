@@ -13,10 +13,9 @@ return new class extends Migration {
             $table->string('key')->unique();
             $table->string('value');
             $table->string('description')->nullable();
-            $table->unsignedBigInteger('updated_by_user_id')->nullable();
+            $table->unsignedBigInteger('updated_by_user_id')->nullable(); // teachers.id (no FK)
+            $table->string('updated_by_name')->nullable();
             $table->timestamps();
-
-            $table->foreign('updated_by_user_id')->references('id')->on('users')->onDelete('set null');
         });
 
         DB::table('retake_settings')->insert([

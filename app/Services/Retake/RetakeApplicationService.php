@@ -6,11 +6,10 @@ use App\Models\AcademicRecord;
 use App\Models\RetakeApplication;
 use App\Models\RetakeApplicationGroup;
 use App\Models\RetakeApplicationLog;
-use App\Models\RetakeApplicationWindow;
 use App\Models\RetakeSetting;
 use App\Models\Student;
-use App\Models\User;
-use Illuminate\Database\Eloquent\Collection;
+use App\Models\Teacher;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -187,7 +186,7 @@ class RetakeApplicationService
                     'credit' => (float) $debt->credit,
                 ]);
 
-                $this->log($app, RetakeApplicationLog::ACTION_SUBMITTED, $student->id, null, [
+                $this->log($app, RetakeApplicationLog::ACTION_SUBMITTED, $student, null, [
                     'group_id' => $group->id,
                 ]);
             }
@@ -199,7 +198,7 @@ class RetakeApplicationService
     /**
      * Dekan tasdiqlaydi/rad etadi.
      */
-    public function deanDecide(RetakeApplication $app, User $user, string $decision, ?string $reason = null): RetakeApplication
+    public function deanDecide(RetakeApplication $app, Teacher $actor, string $decision, ?string $reason = null): RetakeApplication
     {
         $this->assertReviewable($app);
         $this->assertDecision($decision);
@@ -208,12 +207,13 @@ class RetakeApplicationService
             $this->assertReason($reason);
         }
 
-        return DB::transaction(function () use ($app, $user, $decision, $reason) {
+        return DB::transaction(function () use ($app, $actor, $decision, $reason) {
             $from = $app->dean_status;
 
             $app->update([
                 'dean_status' => $decision,
-                'dean_user_id' => $user->id,
+                'dean_user_id' => $actor->id,
+                'dean_user_name' => $actor->full_name,
                 'dean_decision_at' => now(),
                 'dean_reason' => $reason,
             ]);
@@ -223,7 +223,7 @@ class RetakeApplicationService
                 $decision === RetakeApplication::STATUS_APPROVED
                     ? RetakeApplicationLog::ACTION_DEAN_APPROVED
                     : RetakeApplicationLog::ACTION_DEAN_REJECTED,
-                $user->id,
+                $actor,
                 $reason,
                 ['from' => $from, 'to' => $decision]
             );
@@ -237,7 +237,7 @@ class RetakeApplicationService
     /**
      * Registrator tasdiqlaydi/rad etadi.
      */
-    public function registrarDecide(RetakeApplication $app, User $user, string $decision, ?string $reason = null): RetakeApplication
+    public function registrarDecide(RetakeApplication $app, Teacher $actor, string $decision, ?string $reason = null): RetakeApplication
     {
         $this->assertReviewable($app);
         $this->assertDecision($decision);
@@ -246,12 +246,13 @@ class RetakeApplicationService
             $this->assertReason($reason);
         }
 
-        return DB::transaction(function () use ($app, $user, $decision, $reason) {
+        return DB::transaction(function () use ($app, $actor, $decision, $reason) {
             $from = $app->registrar_status;
 
             $app->update([
                 'registrar_status' => $decision,
-                'registrar_user_id' => $user->id,
+                'registrar_user_id' => $actor->id,
+                'registrar_user_name' => $actor->full_name,
                 'registrar_decision_at' => now(),
                 'registrar_reason' => $reason,
             ]);
@@ -261,7 +262,7 @@ class RetakeApplicationService
                 $decision === RetakeApplication::STATUS_APPROVED
                     ? RetakeApplicationLog::ACTION_REGISTRAR_APPROVED
                     : RetakeApplicationLog::ACTION_REGISTRAR_REJECTED,
-                $user->id,
+                $actor,
                 $reason,
                 ['from' => $from, 'to' => $decision]
             );
@@ -275,7 +276,7 @@ class RetakeApplicationService
     /**
      * O'quv bo'limi yakka arizani rad etadi (guruh shakllantirilmagan bo'lsa).
      */
-    public function academicReject(RetakeApplication $app, User $user, string $reason): RetakeApplication
+    public function academicReject(RetakeApplication $app, Teacher $actor, string $reason): RetakeApplication
     {
         $this->assertReason($reason);
 
@@ -285,17 +286,18 @@ class RetakeApplicationService
             ]);
         }
 
-        return DB::transaction(function () use ($app, $user, $reason) {
+        return DB::transaction(function () use ($app, $actor, $reason) {
             $app->update([
                 'academic_dept_status' => RetakeApplication::STATUS_REJECTED,
-                'academic_dept_user_id' => $user->id,
+                'academic_dept_user_id' => $actor->id,
+                'academic_dept_user_name' => $actor->full_name,
                 'academic_dept_decision_at' => now(),
                 'academic_dept_reason' => $reason,
                 'final_status' => RetakeApplication::STATUS_REJECTED,
                 'rejected_by' => RetakeApplication::REJECTED_BY_ACADEMIC_DEPT,
             ]);
 
-            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_REJECTED, $user->id, $reason);
+            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_REJECTED, $actor, $reason);
 
             return $app->refresh();
         });
@@ -305,7 +307,7 @@ class RetakeApplicationService
      * O'quv bo'limi guruhga biriktirib tasdiqlaydi.
      * Bu metod RetakeGroupService dan chaqiriladi — bir nechta arizani birga tasdiqlaydi.
      */
-    public function academicApprove(RetakeApplication $app, User $user, int $retakeGroupId): RetakeApplication
+    public function academicApprove(RetakeApplication $app, Teacher $actor, int $retakeGroupId): RetakeApplication
     {
         if ($app->final_status !== RetakeApplication::STATUS_PENDING) {
             throw ValidationException::withMessages([
@@ -319,19 +321,20 @@ class RetakeApplicationService
             ]);
         }
 
-        return DB::transaction(function () use ($app, $user, $retakeGroupId) {
+        return DB::transaction(function () use ($app, $actor, $retakeGroupId) {
             $app->update([
                 'academic_dept_status' => RetakeApplication::STATUS_APPROVED,
-                'academic_dept_user_id' => $user->id,
+                'academic_dept_user_id' => $actor->id,
+                'academic_dept_user_name' => $actor->full_name,
                 'academic_dept_decision_at' => now(),
                 'final_status' => RetakeApplication::STATUS_APPROVED,
                 'retake_group_id' => $retakeGroupId,
             ]);
 
-            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_APPROVED, $user->id, null, [
+            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_APPROVED, $actor, null, [
                 'retake_group_id' => $retakeGroupId,
             ]);
-            $this->log($app, RetakeApplicationLog::ACTION_GROUP_ASSIGNED, $user->id, null, [
+            $this->log($app, RetakeApplicationLog::ACTION_GROUP_ASSIGNED, $actor, null, [
                 'retake_group_id' => $retakeGroupId,
             ]);
 
@@ -422,17 +425,30 @@ class RetakeApplicationService
         }
     }
 
+    /**
+     * Audit log yozish. $actor — Teacher, Student yoki null (system).
+     */
     private function log(
         RetakeApplication $app,
         string $action,
-        ?int $userId = null,
+        Teacher|Student|null $actor = null,
         ?string $reason = null,
         array $metadata = [],
     ): void {
+        $userId = $actor?->id;
+        $userType = match (true) {
+            $actor instanceof Teacher => 'teacher',
+            $actor instanceof Student => 'student',
+            default => 'system',
+        };
+        $userName = $actor?->full_name;
+
         RetakeApplicationLog::create([
             'application_id' => $app->id,
             'group_id' => $app->group_id,
             'user_id' => $userId,
+            'user_type' => $userType,
+            'user_name' => $userName,
             'action' => $action,
             'from_status' => $metadata['from'] ?? null,
             'to_status' => $metadata['to'] ?? null,

@@ -25,6 +25,7 @@ class RetakeGroup extends Model
         'max_students',
         'status',
         'created_by_user_id',
+        'created_by_name',
     ];
 
     protected $casts = [
@@ -40,7 +41,7 @@ class RetakeGroup extends Model
 
     public function createdBy()
     {
-        return $this->belongsTo(User::class, 'created_by_user_id');
+        return $this->belongsTo(Teacher::class, 'created_by_user_id');
     }
 
     public function applications()

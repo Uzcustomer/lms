@@ -23,6 +23,8 @@ class RetakeApplicationLog extends Model
         'application_id',
         'group_id',
         'user_id',
+        'user_type',
+        'user_name',
         'action',
         'from_status',
         'to_status',
@@ -44,8 +46,16 @@ class RetakeApplicationLog extends Model
         return $this->belongsTo(RetakeApplicationGroup::class, 'group_id');
     }
 
-    public function user()
+    /**
+     * Polymorphic-ish user relation: user_type'ga qarab Teacher yoki Student.
+     * Bevosita relation o'rniga oddiy resolve metodi.
+     */
+    public function actor()
     {
-        return $this->belongsTo(User::class, 'user_id');
+        return match ($this->user_type) {
+            'teacher' => Teacher::find($this->user_id),
+            'student' => Student::find($this->user_id),
+            default => null,
+        };
     }
 }

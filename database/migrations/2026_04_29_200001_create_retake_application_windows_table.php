@@ -26,7 +26,8 @@ return new class extends Migration {
             $table->date('start_date');
             $table->date('end_date');
 
-            $table->unsignedBigInteger('created_by_user_id')->nullable();
+            $table->unsignedBigInteger('created_by_user_id')->nullable(); // teachers.id (no FK)
+            $table->string('created_by_name')->nullable();
 
             $table->timestamps();
 
@@ -36,8 +37,6 @@ return new class extends Migration {
             );
             $table->index(['start_date', 'end_date'], 'retake_window_dates_idx');
             $table->index('specialty_id');
-
-            $table->foreign('created_by_user_id')->references('id')->on('users')->onDelete('set null');
         });
     }
 

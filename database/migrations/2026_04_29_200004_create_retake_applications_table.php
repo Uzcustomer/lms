@@ -22,20 +22,23 @@ return new class extends Migration {
 
             // ─── Dekan ──────────────────────────────────────
             $table->enum('dean_status', ['pending', 'approved', 'rejected'])->default('pending');
-            $table->unsignedBigInteger('dean_user_id')->nullable();
+            $table->unsignedBigInteger('dean_user_id')->nullable(); // teachers.id (no FK; xodimlar teachers jadvalida)
+            $table->string('dean_user_name')->nullable();
             $table->timestamp('dean_decision_at')->nullable();
             $table->text('dean_reason')->nullable();
 
             // ─── Registrator ofis ───────────────────────────
             $table->enum('registrar_status', ['pending', 'approved', 'rejected'])->default('pending');
-            $table->unsignedBigInteger('registrar_user_id')->nullable();
+            $table->unsignedBigInteger('registrar_user_id')->nullable(); // teachers.id
+            $table->string('registrar_user_name')->nullable();
             $table->timestamp('registrar_decision_at')->nullable();
             $table->text('registrar_reason')->nullable();
 
             // ─── O'quv bo'limi ──────────────────────────────
             // dean+registrar approved bo'lganda 'pending' ga avto o'tadi
             $table->enum('academic_dept_status', ['pending', 'approved', 'rejected'])->default('pending');
-            $table->unsignedBigInteger('academic_dept_user_id')->nullable();
+            $table->unsignedBigInteger('academic_dept_user_id')->nullable(); // teachers.id
+            $table->string('academic_dept_user_name')->nullable();
             $table->timestamp('academic_dept_decision_at')->nullable();
             $table->text('academic_dept_reason')->nullable();
 
@@ -67,9 +70,8 @@ return new class extends Migration {
                 ->references('id')->on('retake_groups')
                 ->onDelete('set null');
 
-            $table->foreign('dean_user_id')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('registrar_user_id')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('academic_dept_user_id')->references('id')->on('users')->onDelete('set null');
+            // Tasdiqlovchi xodimlar teachers jadvalida saqlanadi va polimorfik bo'lishi
+            // mumkin (loyiha pattern: unsignedBigInteger + cached name, FK yo'q).
         });
     }
 

@@ -12,7 +12,9 @@ return new class extends Migration {
 
             $table->unsignedBigInteger('application_id')->nullable(); // ariza alohida log
             $table->unsignedBigInteger('group_id')->nullable();       // ariza-guruh log (yuborilganda)
-            $table->unsignedBigInteger('user_id')->nullable();        // null bo'lsa system
+            $table->unsignedBigInteger('user_id')->nullable();        // teachers.id yoki students.id; null = system
+            $table->string('user_type', 20)->nullable();              // teacher / student / system
+            $table->string('user_name')->nullable();                  // cached F.I.Sh.
 
             $table->string('action', 60); // submitted, dean_approved, dean_rejected, ...
             $table->string('from_status', 40)->nullable();
@@ -35,7 +37,7 @@ return new class extends Migration {
                 ->references('id')->on('retake_application_groups')
                 ->onDelete('cascade');
 
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
+            // user_id polimorfik: teachers.id yoki students.id (FK yo'q)
         });
     }
 

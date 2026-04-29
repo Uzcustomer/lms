@@ -158,17 +158,47 @@ class RetakeApprovalController extends Controller
 
     // ──────────────────────────────────────────────────────────────────
 
-    private function detectRole(Teacher $user): string
+    /**
+     * Joriy aktor (Teacher yoki User) uchun mos rolni aniqlash.
+     * 'registrar' — universitet bo'yicha hammani ko'radi, 'dean' — faqat o'z fakulteti.
+     */
+    private function detectRole(?\Illuminate\Database\Eloquent\Model $user): string
     {
-        // Registrator ofisi ham teacher guard'da (teachers jadvalida)
-        if ($user->hasRole(ProjectRole::REGISTRAR_OFFICE->value)
-            || $user->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value])
-        ) {
+        if (!$user) {
+            abort(403, 'Avtorizatsiya talab qilinadi');
+        }
+
+        // Sessionda aktiv rol (sidebar shuni ishlatadi). Foydalanuvchining
+        // bir nechta roli bo'lishi mumkin — biz aktiv rol bo'yicha xulq belgilaymiz,
+        // lekin agar aktiv rol kichik_admin/oquv_prorektori va h.k. bo'lsa,
+        // ular ham hammasini ko'radi (registrar sifatida).
+        $activeRole = (string) session('active_role', '');
+        $registrarLikeActive = [
+            ProjectRole::REGISTRAR_OFFICE->value,
+            ProjectRole::SUPERADMIN->value,
+            ProjectRole::ADMIN->value,
+            ProjectRole::JUNIOR_ADMIN->value,
+            ProjectRole::INSPECTOR->value,
+            ProjectRole::VICE_RECTOR->value,
+            ProjectRole::ACADEMIC_DEPARTMENT->value,
+            ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+        ];
+
+        if ($activeRole === ProjectRole::DEAN->value) {
+            return 'dean';
+        }
+        if (in_array($activeRole, $registrarLikeActive, true)) {
+            return 'registrar';
+        }
+
+        // Aktiv rol noma'lum yoki yo'q — hasRole bilan tekshiramiz
+        if ($user->hasAnyRole($registrarLikeActive)) {
             return 'registrar';
         }
         if ($user->hasRole(ProjectRole::DEAN->value)) {
             return 'dean';
         }
+
         abort(403, 'Sizda qayta o\'qish arizalarini ko\'rib chiqish ruxsati yo\'q');
     }
 
@@ -185,11 +215,11 @@ class RetakeApprovalController extends Controller
         };
     }
 
-    private function calculateStats(string $role, Teacher $user): array
+    private function calculateStats(string $role, \Illuminate\Database\Eloquent\Model $user): array
     {
         $base = RetakeApplication::query();
 
-        if ($role === 'dean') {
+        if ($role === 'dean' && $user instanceof Teacher) {
             $facultyIds = $user->deanFacultyIds;
             if (empty($facultyIds)) {
                 return ['pending' => 0, 'approved' => 0, 'rejected' => 0];
@@ -208,23 +238,29 @@ class RetakeApprovalController extends Controller
         ];
     }
 
-    private function authorizeGroupView(Teacher $user, string $role, RetakeApplicationGroup $group): void
+    private function authorizeGroupView(\Illuminate\Database\Eloquent\Model $user, string $role, RetakeApplicationGroup $group): void
     {
         if ($role === 'registrar') {
             return; // Registrator hammasini ko'radi
         }
 
         // Dekan — o'z fakulteti
+        if (!$user instanceof Teacher) {
+            abort(403, 'Dekan ruxsati teacher hisobida bo\'lishi kerak');
+        }
         $student = Student::where('hemis_id', $group->student_hemis_id)->first();
         if (!$student || !RetakeAccess::deanHandlesStudent($user, $student)) {
             abort(403, 'Bu ariza sizning fakultetingizga tegishli emas');
         }
     }
 
-    private function authorizeApplicationDecision(Teacher $user, string $role, RetakeApplication $app): void
+    private function authorizeApplicationDecision(\Illuminate\Database\Eloquent\Model $user, string $role, RetakeApplication $app): void
     {
         if ($role === 'registrar') {
             return;
+        }
+        if (!$user instanceof Teacher) {
+            abort(403, 'Dekan ruxsati teacher hisobida bo\'lishi kerak');
         }
         if (!RetakeAccess::deanCanReviewApplication($user, $app)) {
             abort(403, 'Bu ariza sizning fakultetingizga tegishli emas');

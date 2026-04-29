@@ -31,6 +31,7 @@ class RetakeApprovalService
 
     public function __construct(
         private readonly RetakeLogService $logService,
+        private readonly RetakeTasdiqnomaService $tasdiqnomaService,
     ) {
     }
 
@@ -175,7 +176,17 @@ class RetakeApprovalService
         $this->logService->log($application, RetakeLogAction::ACADEMIC_DEPT_APPROVED, $actor);
         $this->logService->log($application, RetakeLogAction::ASSIGNED_TO_GROUP, $actor, "Group ID: {$retakeGroupId}");
 
-        return $application->fresh();
+        $fresh = $application->fresh();
+
+        // Tasdiqnoma PDF generatsiya (QR kod bilan).
+        // Xato bo'lsa ham tasdiqlash holati qaytmasligi kerak — log'da qoladi.
+        try {
+            $this->tasdiqnomaService->generate($fresh);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $fresh->fresh();
     }
 
     // === State transitions ===

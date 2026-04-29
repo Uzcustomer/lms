@@ -41,6 +41,7 @@ class RetakeApplicationService
     public function __construct(
         private readonly RetakePeriodService $periodService,
         private readonly RetakeLogService $logService,
+        private readonly RetakeDocxService $docxService,
     ) {
     }
 
@@ -95,6 +96,15 @@ class RetakeApplicationService
                 $this->logService->log($application, $action, $student);
 
                 $created->push($application);
+            }
+
+            // Bitta umumiy DOCX generatsiya (group_id bo'yicha) — har yozuvga
+            // generated_doc_path o'rnatadi.
+            try {
+                $this->docxService->generateForGroup($groupId);
+            } catch (\Throwable $e) {
+                // DOCX xatosi ariza yuborishni to'xtatmasligi kerak — log'da qoladi
+                report($e);
             }
 
             return $created;

@@ -263,6 +263,26 @@
                                     <div class="mt-1 text-xs text-gray-700">
                                         {{ $app->stage_description }}
                                     </div>
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        @if($app->generated_doc_path)
+                                            <a href="{{ route('student.retake.document', $app->id) }}"
+                                               class="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-medium rounded-md">
+                                                Ariza DOCX
+                                            </a>
+                                        @endif
+                                        @if($app->final_status === 'approved' && $app->tasdiqnoma_pdf_path)
+                                            <a href="{{ route('student.retake.tasdiqnoma', $app->id) }}"
+                                               class="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-medium rounded-md">
+                                                Tasdiqnoma PDF
+                                            </a>
+                                        @endif
+                                        @if($app->final_status === 'approved' && $app->verification_code)
+                                            <a href="{{ url('/verify/' . $app->verification_code) }}" target="_blank"
+                                               class="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[11px] font-medium rounded-md">
+                                                QR tekshirish
+                                            </a>
+                                        @endif
+                                    </div>
                                 </div>
                                 @if($app->final_status === 'approved')
                                     <span class="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-800 flex-shrink-0">✓</span>

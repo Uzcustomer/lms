@@ -51,6 +51,13 @@ use App\Http\Controllers\Student\StudentContractController as StudentContractCtr
 use App\Http\Controllers\LanguageController;
 
 
+// Public tasdiqnoma verifikatsiya sahifasi — auth talab qilmaydi.
+// Rate limited: daqiqada 30 ta urinish bir IP bo'yicha.
+Route::get('/verify/{code}', [\App\Http\Controllers\Public\RetakeVerifyController::class, 'show'])
+    ->where('code', '[a-zA-Z0-9-]+')
+    ->middleware('throttle:30,1')
+    ->name('public.retake-verify');
+
 Route::get('/', function () {
     // Agar foydalanuvchi allaqachon login bo'lgan bo'lsa — o'z dashboardiga yo'naltirish
     if (Auth::guard('web')->check()) {

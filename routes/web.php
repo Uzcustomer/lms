@@ -197,6 +197,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/comment/{id}/download', [\App\Http\Controllers\Admin\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
         });
 
+        // Qayta o'qish — qabul oynalari (o'quv bo'limi)
+        Route::prefix('retake')->name('retake.')->group(function () {
+            Route::prefix('periods')->name('periods.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\RetakePeriodController::class, 'index'])->name('index');
+                Route::post('/', [\App\Http\Controllers\Admin\Retake\RetakePeriodController::class, 'store'])->name('store');
+            });
+        });
+
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)
         Route::prefix('contracts')->name('contracts.')->group(function () {
             Route::get('/', [ContractController::class, 'index'])->name('index');

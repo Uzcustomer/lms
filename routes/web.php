@@ -898,6 +898,14 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/delete-all', [\App\Http\Controllers\Student\NotificationController::class, 'deleteAll'])->name('delete-all');
         });
 
+        // Qayta o'qish arizalari
+        Route::prefix('retake')->name('retake.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'index'])->name('index');
+            Route::post('/store', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'store'])->name('store');
+            Route::get('/{groupId}/docx', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'downloadDocx'])->name('download-docx');
+            Route::get('/{groupId}/certificate', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'downloadCertificate'])->name('download-certificate');
+        });
+
         // Imtihon natijalari bo'yicha apellyatsiya
         Route::prefix('appeals')->name('appeals.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\ExamAppealController::class, 'index'])->name('index');

@@ -13,11 +13,7 @@
 
 pest()->extend(Tests\TestCase::class)
     ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
-    ->in('Feature/Auth', 'Feature/ExampleTest.php', 'Feature/ImportGradesTest.php', 'Feature/ProfileTest.php');
-
-// Retake test'lari mustaqil schema bilan ishlaydi (manual SQLite memory).
-pest()->extend(Tests\Feature\Retake\RetakeTestCase::class)
-    ->in('Feature/Retake');
+    ->in('Feature');
 
 /*
 |--------------------------------------------------------------------------

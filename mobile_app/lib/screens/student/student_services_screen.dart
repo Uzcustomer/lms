@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'absence_excuse_list_screen.dart';
-import 'retake/retake_list_screen.dart';
 
 class StudentServicesScreen extends StatelessWidget {
   const StudentServicesScreen({super.key});
@@ -22,16 +21,6 @@ class StudentServicesScreen extends StatelessWidget {
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AbsenceExcuseListScreen()),
-        ),
-      ),
-      _ServiceItem(
-        icon: Icons.refresh,
-        title: "Qayta o'qish",
-        subtitle: 'Akademik qarzdorlik bo\'yicha ariza',
-        color: const Color(0xFFE91E63),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const RetakeListScreen()),
         ),
       ),
     ];

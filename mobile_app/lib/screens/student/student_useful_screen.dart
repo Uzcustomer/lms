@@ -189,6 +189,7 @@ void _showAuroraPicker(BuildContext context) {
   showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
+    isScrollControlled: true,
     builder: (sheetCtx) => _AuroraPickerSheet(isDark: isDark),
   );
 }
@@ -202,17 +203,19 @@ class _AuroraPickerSheet extends StatelessWidget {
     final settings = context.watch<SettingsProvider>();
     final ink = isDark ? const Color(0xFFF4EEFF) : const Color(0xFF1A1340);
     final sub = ink.withOpacity(0.6);
+    final maxHeight = MediaQuery.of(context).size.height * 0.75;
 
     return Container(
+      constraints: BoxConstraints(maxHeight: maxHeight),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF12172B) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 12),
           Center(
             child: Container(
               width: 40, height: 4,
@@ -223,74 +226,88 @@ class _AuroraPickerSheet extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            'Sahifa orqa foni',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: ink,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Sahifa orqa foni',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: ink,
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            'Sevimli aurora rangingizni tanlang',
-            style: TextStyle(fontSize: 13, color: sub),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              'Sevimli aurora rangingizni tanlang',
+              style: TextStyle(fontSize: 13, color: sub),
+            ),
           ),
           const SizedBox(height: 18),
-          ...AuroraThemes.all.map((theme) {
-            final selected = settings.auroraTheme.id == theme.id;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  settings.setAuroraTheme(theme);
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
+          Flexible(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              shrinkWrap: true,
+              itemCount: AuroraThemes.all.length,
+              itemBuilder: (_, index) {
+                final theme = AuroraThemes.all[index];
+                final selected = settings.auroraTheme.id == theme.id;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: selected
-                          ? theme.gradientLight[1]
-                          : ink.withOpacity(0.08),
-                      width: selected ? 2 : 1,
+                    onTap: () {
+                      settings.setAuroraTheme(theme);
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: selected
+                              ? theme.gradientLight[1]
+                              : ink.withOpacity(0.08),
+                          width: selected ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: theme.gradientLight,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              theme.label,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: ink,
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            Icon(Icons.check_circle, color: theme.gradientLight[1], size: 24),
+                        ],
+                      ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: theme.gradientLight,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          theme.label,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: ink,
-                          ),
-                        ),
-                      ),
-                      if (selected)
-                        Icon(Icons.check_circle, color: theme.gradientLight[1], size: 24),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

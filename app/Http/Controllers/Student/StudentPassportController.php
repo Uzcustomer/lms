@@ -128,9 +128,11 @@ class StudentPassportController extends Controller
         }
 
         // Talaba qayta yuborganda rad etilgan holatni tozalaymiz —
-        // admin yangi tekshirishi uchun yana "Kutilmoqda" holatiga qaytadi.
+        // agar avval rad etilgan bo'lsa, admin uchun "Qayta yukladi" deb belgilanadi,
+        // aks holda oddiy "Kutilmoqda" holatida qoladi.
         if (Schema::hasColumn('graduate_student_passports', 'status')) {
-            $data['status'] = 'pending';
+            $wasRejected = $existing && ($existing->status ?? null) === 'rejected';
+            $data['status'] = $wasRejected ? 'resubmitted' : 'pending';
             $data['rejection_reason'] = null;
             $data['reviewed_by'] = null;
             $data['reviewed_at'] = null;

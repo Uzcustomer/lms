@@ -173,29 +173,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
     return Scaffold(
       backgroundColor: auroraBase(aurora, isDark),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-1.0, -1.0),
-                  radius: 1.4,
-                  colors: auroraGradient(aurora, isDark),
-                  stops: const [0.0, 0.35, 0.65, 1.0],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 180, right: -80,
-            child: _buildBlob(auroraBlobA(aurora, isDark)),
-          ),
-          Positioned(
-            top: 480, left: -80,
-            child: _buildBlob(auroraBlobB(aurora, isDark)),
-          ),
-          Consumer<StudentProvider>(
+      body: Consumer<StudentProvider>(
           builder: (context, provider, _) {
             if (provider.isLoading && provider.subjects == null) {
               return const Center(child: LoadingWidget());
@@ -284,8 +262,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             );
           },
         ),
-        ],
-      ),
     );
   }
 

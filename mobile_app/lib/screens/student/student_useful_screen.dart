@@ -75,33 +75,7 @@ class StudentUsefulScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: auroraBase(aurora, isDark),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-1.0, -1.0),
-                  radius: 1.4,
-                  colors: auroraGradient(aurora, isDark),
-                  stops: const [0.0, 0.35, 0.65, 1.0],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 180,
-            right: -80,
-            child: _Blob(color: auroraBlobA(aurora, isDark)),
-          ),
-          Positioned(
-            top: 480,
-            left: -80,
-            child: _Blob(color: auroraBlobB(aurora, isDark)),
-          ),
-
-          // Content
-          SingleChildScrollView(
+      body: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 100),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,8 +148,6 @@ class StudentUsefulScreen extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
     );
   }
 }

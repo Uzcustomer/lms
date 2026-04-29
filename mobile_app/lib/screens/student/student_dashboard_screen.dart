@@ -232,36 +232,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             );
           }
 
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: auroraBase(aurora, isDark),
-                  ),
-                ),
-              ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: const Alignment(-1.0, -1.0),
-                      radius: 1.4,
-                      colors: auroraGradient(aurora, isDark),
-                      stops: const [0.0, 0.35, 0.65, 1.0],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 180, right: -80,
-                child: _buildBlob(auroraBlobA(aurora, isDark)),
-              ),
-              Positioned(
-                top: 480, left: -80,
-                child: _buildBlob(auroraBlobB(aurora, isDark)),
-              ),
-              RefreshIndicator(
+          return Container(
+            color: auroraBase(aurora, isDark),
+            child: RefreshIndicator(
               onRefresh: () async {
                 await Future.wait([
                   provider.loadDashboard(),
@@ -295,7 +268,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ),
               ),
             ),
-            ],
           );
         },
       ),

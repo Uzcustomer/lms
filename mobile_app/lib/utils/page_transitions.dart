@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 class SlideFadePageRoute<T> extends PageRouteBuilder<T> {
   SlideFadePageRoute({
     required this.builder,
-    Duration duration = const Duration(milliseconds: 420),
-    Duration reverseDuration = const Duration(milliseconds: 320),
+    Duration duration = const Duration(milliseconds: 320),
+    Duration reverseDuration = const Duration(milliseconds: 280),
     super.settings,
   }) : super(
           pageBuilder: (context, animation, secondaryAnimation) =>
@@ -12,18 +12,28 @@ class SlideFadePageRoute<T> extends PageRouteBuilder<T> {
           transitionDuration: duration,
           reverseTransitionDuration: reverseDuration,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final curved = CurvedAnimation(
+            final incoming = Tween<Offset>(
+              begin: const Offset(1.0, 0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(
               parent: animation,
-              curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
-            );
-            return FadeTransition(
-              opacity: curved,
+              curve: Curves.fastOutSlowIn,
+              reverseCurve: Curves.fastOutSlowIn.flipped,
+            ));
+
+            final outgoing = Tween<Offset>(
+              begin: Offset.zero,
+              end: const Offset(-0.25, 0),
+            ).animate(CurvedAnimation(
+              parent: secondaryAnimation,
+              curve: Curves.fastOutSlowIn,
+              reverseCurve: Curves.fastOutSlowIn.flipped,
+            ));
+
+            return SlideTransition(
+              position: outgoing,
               child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0.12, 0),
-                  end: Offset.zero,
-                ).animate(curved),
+                position: incoming,
                 child: child,
               ),
             );

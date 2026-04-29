@@ -26,10 +26,10 @@ class AuroraTheme {
   });
 }
 
-const _defaultBase = Color(0xFFE0E4EC);
+const _defaultBase = Color(0xFFA8B4CC);
 const _defaultBaseDark = Color(0xFF10141C);
-const _defaultGradient = [Color(0xFF6878A0), Color(0xFF8898B8), Color(0xFFA8B4CC), Color(0xFFE0E4EC)];
-const _defaultGradientDark = [Color(0xFF384870), Color(0xFF4C6088), Color(0xFF60789C), Color(0xFF10141C)];
+const _defaultGradient = [Color(0xFFA8B4CC), Color(0xFFA8B4CC), Color(0xFFA8B4CC), Color(0xFFA8B4CC)];
+const _defaultGradientDark = [Color(0xFF10141C), Color(0xFF10141C), Color(0xFF10141C), Color(0xFF10141C)];
 
 Color auroraBase(AuroraTheme? t, bool isDark) =>
     isDark ? (t?.baseDark ?? _defaultBaseDark) : (t?.baseLight ?? _defaultBase);
@@ -47,14 +47,14 @@ class AuroraThemes {
   static const steel = AuroraTheme(
     id: 'steel',
     label: 'Po\'lat',
-    baseLight: Color(0xFFE0E4EC),
+    baseLight: Color(0xFFA8B4CC),
     baseDark: Color(0xFF10141C),
-    gradientLight: [Color(0xFF6878A0), Color(0xFF8898B8), Color(0xFFA8B4CC), Color(0xFFE0E4EC)],
-    gradientDark: [Color(0xFF384870), Color(0xFF4C6088), Color(0xFF60789C), Color(0xFF10141C)],
-    blobALight: Color(0xFF7888AC),
-    blobADark: Color(0xFF445C84),
-    blobBLight: Color(0xFF98A4C0),
-    blobBDark: Color(0xFF5C7498),
+    gradientLight: [Color(0xFFA8B4CC), Color(0xFFA8B4CC), Color(0xFFA8B4CC), Color(0xFFA8B4CC)],
+    gradientDark: [Color(0xFF10141C), Color(0xFF10141C), Color(0xFF10141C), Color(0xFF10141C)],
+    blobALight: Color(0xFFA8B4CC),
+    blobADark: Color(0xFF10141C),
+    blobBLight: Color(0xFFA8B4CC),
+    blobBDark: Color(0xFF10141C),
   );
 
   static AuroraTheme byId(String id) => steel;

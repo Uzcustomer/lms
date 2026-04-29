@@ -223,6 +223,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'downloadFile'])
                     ->whereNumber('id')->whereIn('type', ['receipt', 'document', 'tasdiqnoma'])->name('download-file');
             });
+
+            // O'quv bo'limi yakuniy bosqich
+            Route::prefix('academic')->name('academic.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'index'])->name('index');
+                Route::post('/applications/{id}/reject', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'rejectApplication'])
+                    ->whereNumber('id')->name('application.reject');
+                Route::get('/applications/{id}/file/{type}', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'downloadFile'])
+                    ->whereNumber('id')->whereIn('type', ['receipt', 'document', 'tasdiqnoma'])->name('application.file');
+
+                Route::prefix('groups')->name('groups.')->group(function () {
+                    Route::get('/', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'groupsIndex'])->name('index');
+                    Route::post('/', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'storeGroup'])->name('store');
+                    Route::get('/{id}', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'groupShow'])->whereNumber('id')->name('show');
+                    Route::put('/{id}', [\App\Http\Controllers\Admin\Retake\AcademicDeptRetakeController::class, 'groupUpdate'])->whereNumber('id')->name('update');
+                });
+            });
         });
 
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)

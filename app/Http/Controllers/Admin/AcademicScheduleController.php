@@ -1890,40 +1890,55 @@ class AcademicScheduleController extends Controller
     }
 
     /**
-     * Test markazi: berilgan kun uchun maxsus sozlamalarni saqlash (override)
+     * Test markazi: berilgan kun(lar) uchun maxsus sozlamalarni saqlash (override).
+     * Bir nechta kun bir vaqtda saqlanishi mumkin: `dates[]` array yoki `date` skalar.
      */
     public function saveDayOverride(Request $request)
     {
         $request->validate([
-            'date' => 'required|date_format:Y-m-d',
+            'date' => 'nullable|date_format:Y-m-d',
+            'dates' => 'nullable|array',
+            'dates.*' => 'date_format:Y-m-d',
             'work_hours_start' => 'nullable|date_format:H:i',
             'work_hours_end' => 'nullable|date_format:H:i',
             'lunch_start' => 'nullable|date_format:H:i',
             'lunch_end' => 'nullable|date_format:H:i',
-            'computer_count' => 'nullable|integer|min:1|max:10000',
-            'test_duration_minutes' => 'nullable|integer|min:1|max:480',
+            'computer_count' => 'nullable|integer|min:1|max:100000',
+            'test_duration_minutes' => 'nullable|integer|min:1|max:1440',
             'note' => 'nullable|string|max:255',
+            'clear' => 'nullable|boolean',
         ]);
 
-        $date = $request->input('date');
+        // Sanalarni yig'ish (dates yoki date)
+        $dates = collect($request->input('dates', []))->filter()->values()->all();
+        if (empty($dates) && $request->filled('date')) {
+            $dates = [$request->input('date')];
+        }
+        if (empty($dates)) {
+            return response()->json(['success' => false, 'message' => 'Kamida bitta sana tanlash kerak.'], 422);
+        }
+
+        $clearAll = (bool) $request->input('clear', false);
         $userId = auth()->id() ?? auth('teacher')->id();
 
-        // Effektiv sozlamalarni olib mantiqiy validatsiya qilish (default + override)
-        $defaults = ExamCapacityService::getSettings();
-        $workStart = $request->input('work_hours_start') ?: $defaults['work_hours_start'];
-        $workEnd = $request->input('work_hours_end') ?: $defaults['work_hours_end'];
-        if (\Carbon\Carbon::createFromFormat('H:i', $workEnd)->lte(\Carbon\Carbon::createFromFormat('H:i', $workStart))) {
-            return response()->json(['success' => false, 'message' => 'Ish vaqti tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
-        }
-        if ($request->filled('lunch_start') && $request->filled('lunch_end')) {
-            $ls = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_start'));
-            $le = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_end'));
-            if ($le->lte($ls)) {
-                return response()->json(['success' => false, 'message' => 'Tushlik tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
+        // Mantiqiy validatsiya
+        if (!$clearAll) {
+            if ($request->filled('work_hours_start') && $request->filled('work_hours_end')) {
+                $ws = \Carbon\Carbon::createFromFormat('H:i', $request->input('work_hours_start'));
+                $we = \Carbon\Carbon::createFromFormat('H:i', $request->input('work_hours_end'));
+                if ($we->lte($ws)) {
+                    return response()->json(['success' => false, 'message' => 'Ish vaqti tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
+                }
+            }
+            if ($request->filled('lunch_start') && $request->filled('lunch_end')) {
+                $ls = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_start'));
+                $le = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_end'));
+                if ($le->lte($ls)) {
+                    return response()->json(['success' => false, 'message' => 'Tushlik tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
+                }
             }
         }
 
-        // Hech qanday maydon to'ldirilmagan bo'lsa — override yozuvini o'chirib tashlash
         $hasAny = $request->filled('work_hours_start')
             || $request->filled('work_hours_end')
             || $request->filled('lunch_start')
@@ -1932,37 +1947,50 @@ class AcademicScheduleController extends Controller
             || $request->filled('test_duration_minutes')
             || $request->filled('note');
 
-        if (!$hasAny) {
-            ExamCapacityOverride::where('date', $date)->delete();
-            return response()->json([
-                'success' => true,
-                'message' => 'Bu kun uchun maxsus sozlama olib tashlandi (default ishlatiladi).',
+        $savedCount = 0;
+        $clearedCount = 0;
+        $perDay = [];
+
+        foreach ($dates as $date) {
+            if ($clearAll || !$hasAny) {
+                $deleted = ExamCapacityOverride::where('date', $date)->delete();
+                if ($deleted) {
+                    $clearedCount++;
+                }
+            } else {
+                $override = ExamCapacityOverride::firstOrNew(['date' => $date]);
+                $override->fill([
+                    'work_hours_start' => $request->input('work_hours_start') ?: null,
+                    'work_hours_end' => $request->input('work_hours_end') ?: null,
+                    'lunch_start' => $request->input('lunch_start') ?: null,
+                    'lunch_end' => $request->input('lunch_end') ?: null,
+                    'computer_count' => $request->filled('computer_count') ? (int) $request->input('computer_count') : null,
+                    'test_duration_minutes' => $request->filled('test_duration_minutes') ? (int) $request->input('test_duration_minutes') : null,
+                    'note' => $request->input('note'),
+                    'updated_by' => $userId,
+                ]);
+                if (!$override->exists) {
+                    $override->created_by = $userId;
+                }
+                $override->save();
+                $savedCount++;
+            }
+            $perDay[$date] = [
                 'effective' => ExamCapacityService::getSettingsForDate($date),
                 'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
-            ]);
+            ];
         }
 
-        $override = ExamCapacityOverride::firstOrNew(['date' => $date]);
-        $override->fill([
-            'work_hours_start' => $request->input('work_hours_start') ?: null,
-            'work_hours_end' => $request->input('work_hours_end') ?: null,
-            'lunch_start' => $request->input('lunch_start') ?: null,
-            'lunch_end' => $request->input('lunch_end') ?: null,
-            'computer_count' => $request->filled('computer_count') ? (int) $request->input('computer_count') : null,
-            'test_duration_minutes' => $request->filled('test_duration_minutes') ? (int) $request->input('test_duration_minutes') : null,
-            'note' => $request->input('note'),
-            'updated_by' => $userId,
-        ]);
-        if (!$override->exists) {
-            $override->created_by = $userId;
-        }
-        $override->save();
+        $message = $clearAll || !$hasAny
+            ? "Tanlangan {$clearedCount} ta kunda maxsus sozlama olib tashlandi."
+            : "Tanlangan {$savedCount} ta kun uchun maxsus sozlama saqlandi.";
 
         return response()->json([
             'success' => true,
-            'message' => "Bu kun uchun maxsus sozlama saqlandi.",
-            'effective' => ExamCapacityService::getSettingsForDate($date),
-            'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
+            'message' => $message,
+            'saved_count' => $savedCount,
+            'cleared_count' => $clearedCount,
+            'per_day' => $perDay,
         ]);
     }
 

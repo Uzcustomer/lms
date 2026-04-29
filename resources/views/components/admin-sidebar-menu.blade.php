@@ -679,7 +679,7 @@
             @endif
         </a>
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
         <a href="{{ route('admin.club-applications.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.club-applications.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

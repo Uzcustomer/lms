@@ -223,6 +223,10 @@
 
             $.get(dataUrl, params, function(res) {
                 $('#loading').hide();
+                if (res && res.error) {
+                    $('#empty').show().find('p').text(res.message || "Xatolik yuz berdi");
+                    return;
+                }
                 var students = res.students || [];
                 var stats = res.stats || {};
 
@@ -326,9 +330,17 @@
                 }
                 $('#table-body').html(html);
                 $('#table-area').show();
-            }).fail(function() {
+            }).fail(function(xhr) {
                 $('#loading').hide();
-                $('#empty').show().find('p').text("Xatolik yuz berdi");
+                var msg = "Xatolik yuz berdi";
+                try {
+                    if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    } else if (xhr && xhr.status) {
+                        msg = "Xatolik yuz berdi (" + xhr.status + ")";
+                    }
+                } catch (e) {}
+                $('#empty').show().find('p').text(msg);
             });
         }
 

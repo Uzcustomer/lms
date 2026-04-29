@@ -143,6 +143,9 @@ class AbsenceExcuseController extends Controller
 
         $reasonKeys = implode(',', array_keys(AbsenceExcuse::REASONS));
 
+        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+        $makeupDateRule = $noDayLimit ? 'nullable|date' : 'nullable|date|after_or_equal:today';
+
         $request->validate([
             'reason' => "required|in:{$reasonKeys}",
             'doc_number' => 'required|string|max:100',
@@ -206,9 +209,9 @@ class AbsenceExcuseController extends Controller
             'makeup_dates.*.assessment_type' => 'required|string',
             'makeup_dates.*.assessment_type_code' => 'required|string',
             'makeup_dates.*.original_date' => 'required|date',
-            'makeup_dates.*.makeup_date' => 'nullable|date|after_or_equal:today',
-            'makeup_dates.*.makeup_start' => 'nullable|date|after_or_equal:today',
-            'makeup_dates.*.makeup_end' => 'nullable|date|after_or_equal:today',
+            'makeup_dates.*.makeup_date' => $makeupDateRule,
+            'makeup_dates.*.makeup_start' => $makeupDateRule,
+            'makeup_dates.*.makeup_end' => $makeupDateRule,
         ], [
             'reason.required' => 'Sababni tanlang',
             'reason.in' => 'Noto\'g\'ri sabab tanlangan',
@@ -387,8 +390,9 @@ class AbsenceExcuseController extends Controller
         }
 
         $absentDaysCount = $this->countNonSundays($startDate, $endDate);
+        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
 
-        return view('student.absence-excuses.schedule-check', compact('excuse', 'missedAssessments', 'absentDaysCount'));
+        return view('student.absence-excuses.schedule-check', compact('excuse', 'missedAssessments', 'absentDaysCount', 'noDayLimit'));
     }
 
     public function storeMakeupDates(Request $request, $id)
@@ -404,10 +408,13 @@ class AbsenceExcuseController extends Controller
                 ->with('info', 'O\'tkazib yuborilgan nazoratlar topilmadi.');
         }
 
+        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+        $dateRule = $noDayLimit ? 'required|date' : 'required|date|after_or_equal:today';
+
         $rules = [];
         $messages = [];
         foreach ($makeups as $makeup) {
-            $rules["makeup_dates.{$makeup->id}"] = 'required|date|after_or_equal:today';
+            $rules["makeup_dates.{$makeup->id}"] = $dateRule;
             $messages["makeup_dates.{$makeup->id}.required"] = "{$makeup->subject_name} ({$makeup->assessment_type_label}) uchun sana tanlang.";
             $messages["makeup_dates.{$makeup->id}.after_or_equal"] = "Sana bugungi kundan oldin bo'lmasligi kerak.";
         }

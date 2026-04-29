@@ -4371,6 +4371,10 @@ class ReportController extends Controller
      */
     public function loadVsPairReport(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
+
         $faculties = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name')
@@ -4432,6 +4436,10 @@ class ReportController extends Controller
      */
     public function loadVsPairReportData(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
+
         try {
             $cl = 'utf8mb4_unicode_ci';
 
@@ -4482,13 +4490,6 @@ class ReportController extends Controller
             }
             if ($request->filled('group')) {
                 $query->where('ac.group_id', $request->group);
-            }
-            if (is_active_nazoratchi()) {
-                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
-                if (empty($nazoratchiHemisIds)) {
-                    return response()->json(['data' => [], 'total' => 0]);
-                }
-                $query->whereIn('ac.group_id', $nazoratchiHemisIds);
             }
             if ($request->filled('date_from')) {
                 $query->where('ac.lesson_date', '>=', $request->date_from);

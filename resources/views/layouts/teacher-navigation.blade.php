@@ -71,9 +71,6 @@
                                 <x-dropdown-link :href="route('admin.reports.absence')" :active="request()->routeIs('admin.reports.absence*')">
                                     25% sababsiz
                                 </x-dropdown-link>
-                                <x-dropdown-link :href="route('admin.reports.load-vs-pair')" :active="request()->routeIs('admin.reports.load-vs-pair*')">
-                                    Yuklama vs Juftlik
-                                </x-dropdown-link>
                                 <x-dropdown-link :href="route('admin.reports.debtors')" :active="request()->routeIs('admin.reports.debtors*')">
                                     4&#8805;qarzdorlar
                                 </x-dropdown-link>
@@ -556,7 +553,6 @@
                 </div>
                 <x-responsive-nav-link :href="route('admin.absence_report.index')">74 soat dars qoldirish</x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.absence')">25% sababsiz</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.reports.load-vs-pair')">Yuklama vs Juftlik</x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.debtors')">4&#8805;qarzdorlar</x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.top-students')">5 ga da'vogar</x-responsive-nav-link>
                 @endif

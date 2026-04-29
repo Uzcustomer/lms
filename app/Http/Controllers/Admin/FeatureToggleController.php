@@ -21,6 +21,10 @@ class FeatureToggleController extends Controller
             'label' => 'Admin/Superadmin MT baho qo\'yish',
             'description' => 'Jurnalda admin va superadmin MT baholarini qo\'ya olish imkoniyati',
         ],
+        'absence_excuse_no_day_limit' => [
+            'label' => 'Sababli ariza kun chegarasi',
+            'description' => 'Yoqilgan bo\'lsa, talaba 10 kunlik muddat tugagandan keyin ham ariza topshira oladi (limit olib tashlanadi). O\'chirilgan bo\'lsa, standart 10 kunlik chegara amal qiladi.',
+        ],
     ];
 
     public function index()

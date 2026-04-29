@@ -27,9 +27,9 @@ class RetakeApplication extends Model
         'semester_name',
         'credit',
 
-        'dean_status', 'dean_user_id', 'dean_decision_at', 'dean_reason',
-        'registrar_status', 'registrar_user_id', 'registrar_decision_at', 'registrar_reason',
-        'academic_dept_status', 'academic_dept_user_id', 'academic_dept_decision_at', 'academic_dept_reason',
+        'dean_status', 'dean_user_id', 'dean_user_name', 'dean_decision_at', 'dean_reason',
+        'registrar_status', 'registrar_user_id', 'registrar_user_name', 'registrar_decision_at', 'registrar_reason',
+        'academic_dept_status', 'academic_dept_user_id', 'academic_dept_user_name', 'academic_dept_decision_at', 'academic_dept_reason',
 
         'final_status',
         'rejected_by',
@@ -55,17 +55,17 @@ class RetakeApplication extends Model
 
     public function deanUser()
     {
-        return $this->belongsTo(User::class, 'dean_user_id');
+        return $this->belongsTo(Teacher::class, 'dean_user_id');
     }
 
     public function registrarUser()
     {
-        return $this->belongsTo(User::class, 'registrar_user_id');
+        return $this->belongsTo(Teacher::class, 'registrar_user_id');
     }
 
     public function academicDeptUser()
     {
-        return $this->belongsTo(User::class, 'academic_dept_user_id');
+        return $this->belongsTo(Teacher::class, 'academic_dept_user_id');
     }
 
     public function logs()

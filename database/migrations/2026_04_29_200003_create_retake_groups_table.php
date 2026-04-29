@@ -35,7 +35,8 @@ return new class extends Migration {
             $table->enum('status', ['forming', 'scheduled', 'in_progress', 'completed'])
                 ->default('forming');
 
-            $table->unsignedBigInteger('created_by_user_id')->nullable();
+            $table->unsignedBigInteger('created_by_user_id')->nullable(); // teachers.id (no FK)
+            $table->string('created_by_name')->nullable();
 
             $table->timestamps();
 
@@ -44,7 +45,6 @@ return new class extends Migration {
             $table->index(['status', 'start_date', 'end_date'], 'retake_group_transition_idx');
 
             $table->foreign('teacher_id')->references('id')->on('teachers')->onDelete('set null');
-            $table->foreign('created_by_user_id')->references('id')->on('users')->onDelete('set null');
         });
     }
 

@@ -17,6 +17,7 @@ class RetakeApplicationWindow extends Model
         'start_date',
         'end_date',
         'created_by_user_id',
+        'created_by_name',
     ];
 
     protected $casts = [
@@ -26,7 +27,7 @@ class RetakeApplicationWindow extends Model
 
     public function createdBy()
     {
-        return $this->belongsTo(User::class, 'created_by_user_id');
+        return $this->belongsTo(Teacher::class, 'created_by_user_id');
     }
 
     public function applicationGroups()

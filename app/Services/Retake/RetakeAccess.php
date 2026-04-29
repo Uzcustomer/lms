@@ -40,7 +40,7 @@ class RetakeAccess
      */
     public static function canApproveAsRegistrar(?Model $actor): bool
     {
-        if (!$actor instanceof User) {
+        if (!self::isStaff($actor)) {
             return false;
         }
         return $actor->hasRole(ProjectRole::REGISTRAR_OFFICE->value)
@@ -52,7 +52,7 @@ class RetakeAccess
      */
     public static function canManageAcademicDept(?Model $actor): bool
     {
-        if (!$actor instanceof User) {
+        if (!self::isStaff($actor)) {
             return false;
         }
         return $actor->hasAnyRole([
@@ -67,7 +67,7 @@ class RetakeAccess
      */
     public static function canManageSettings(?Model $actor): bool
     {
-        if (!$actor instanceof User) {
+        if (!self::isStaff($actor)) {
             return false;
         }
         return $actor->hasAnyRole([
@@ -90,7 +90,16 @@ class RetakeAccess
      */
     public static function canOverride(?Model $actor): bool
     {
-        return $actor instanceof User && self::isSuperAdmin($actor);
+        return self::isStaff($actor) && self::isSuperAdmin($actor);
+    }
+
+    /**
+     * Loyihaning xodimlari teachers yoki users jadvalida bo'lishi mumkin —
+     * ikkalasi ham HasRoles trait'iga ega.
+     */
+    private static function isStaff(?Model $actor): bool
+    {
+        return $actor instanceof Teacher || $actor instanceof User;
     }
 
     /**
@@ -126,9 +135,9 @@ class RetakeAccess
         return (int) $student->hemis_id === (int) $application->student_hemis_id;
     }
 
-    private static function isSuperAdmin(User $user): bool
+    private static function isSuperAdmin(Model $actor): bool
     {
-        return $user->hasAnyRole([
+        return $actor->hasAnyRole([
             ProjectRole::SUPERADMIN->value,
             ProjectRole::ADMIN->value,
         ]);

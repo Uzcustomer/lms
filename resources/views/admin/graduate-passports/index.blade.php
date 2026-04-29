@@ -155,7 +155,7 @@
                 headers: {'X-CSRF-TOKEN': csrfToken},
                 contentType: 'application/json',
                 data: JSON.stringify({rejection_reason: reason}),
-                success: function() { closeRejectModal(); applyFilter(); },
+                success: function() { closeRejectModal(); btn.disabled = false; applyFilter(); },
                 error: function(xhr) { alert(xhr.responseJSON?.message || 'Xato'); btn.disabled = false; }
             });
         }

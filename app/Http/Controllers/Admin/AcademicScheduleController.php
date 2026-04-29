@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\Department;
+use App\Models\ExamCapacityOverride;
 use App\Models\ExamSchedule;
 use App\Models\Attendance;
 use App\Models\Group;
@@ -21,6 +22,8 @@ use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
 use App\Models\StudentNotification;
+use App\Services\ExamCapacityService;
+use App\Services\ExamDateRoleService;
 use App\Services\TelegramService;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
@@ -41,6 +44,20 @@ class AcademicScheduleController extends Controller
      */
     public function index(Request $request)
     {
+        // Sahifaga kirish huquqini tekshirish (sozlamalardan kelib chiqib)
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $adminRoles = ExamDateRoleService::adminRoles();
+        $isAdmin = $user && in_array($activeRole, $adminRoles, true);
+        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+            abort(403, 'Bu sahifaga kirish uchun ruxsat yo\'q.');
+        }
+
+        // Ushbu rol uchun ruxsat etilgan kurs darajalari
+        $allowedLevelCodes = $isAdmin
+            ? array_keys(ExamDateRoleService::getMapping())
+            : ExamDateRoleService::levelsForRole($activeRole);
+
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
 
@@ -49,6 +66,12 @@ class AcademicScheduleController extends Controller
         $selectedDepartment = $request->get('department_id');
         $selectedSpecialty = $request->get('specialty_id');
         $selectedLevelCode = $request->get('level_code');
+
+        // Agar foydalanuvchi admin bo'lmasa va tanlagan kursi ruxsat etilgan
+        // ro'yxatda bo'lmasa — filtrni avtomatik tozalash
+        if (!$isAdmin && $selectedLevelCode && !in_array((string) $selectedLevelCode, $allowedLevelCodes, true)) {
+            $selectedLevelCode = null;
+        }
         $selectedSemester = $request->get('semester_code');
         $selectedGroup = $request->get('group_id');
         $selectedSubject = $request->get('subject_id');
@@ -71,6 +94,16 @@ class AcademicScheduleController extends Controller
                 $selectedLevelCode, $selectedSubject, $selectedStatus,
                 $currentSemesterToggle, false, $dateFrom, $dateTo
             );
+
+            // Admin bo'lmagan rol — faqat unga ruxsat etilgan kurs darajalari
+            if (!$isAdmin && !empty($allowedLevelCodes)) {
+                $scheduleData = $scheduleData->map(function ($items) use ($allowedLevelCodes) {
+                    return $items->filter(function ($item) use ($allowedLevelCodes) {
+                        $lvl = (string) ($item['group']->level_code ?? $item['level_code'] ?? '');
+                        return $lvl !== '' && in_array($lvl, $allowedLevelCodes, true);
+                    });
+                })->filter(fn($items) => $items->isNotEmpty());
+            }
 
             // OSKI sanasi bo'yicha filtr
             if ($oskiDateFrom || $oskiDateTo) {
@@ -100,12 +133,9 @@ class AcademicScheduleController extends Controller
         }
 
         $routePrefix = $this->routePrefix();
-        $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
-        $user = auth()->user() ?? auth('teacher')->user();
-        // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
-        $activeRole = session('active_role', $user?->getRoleNames()->first());
-        $canDelete = $user && in_array($activeRole, $adminRoles);
-        $canEdit = $canDelete || ($user && $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
+        $canDelete = $isAdmin;
+        // Edit huquqi: admin yoki sozlamalarda biror kurs uchun ruxsatga ega rol
+        $canEdit = $canDelete || !empty($allowedLevelCodes);
 
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
@@ -129,6 +159,7 @@ class AcademicScheduleController extends Controller
             'routePrefix',
             'canDelete',
             'canEdit',
+            'allowedLevelCodes',
         ));
     }
 
@@ -540,6 +571,13 @@ class AcademicScheduleController extends Controller
 
         if ($filteredGroups->isEmpty()) return collect();
 
+        // semester_code → level_code map (kurs darajasini aniqlash uchun)
+        $semesterLevelMap = $semesterFilter(Semester::query())
+            ->whereIn('curriculum_hemis_id', $curriculumIds)
+            ->select('code', 'level_code', 'curriculum_hemis_id')
+            ->get()
+            ->mapWithKeys(fn($s) => [$s->curriculum_hemis_id . '_' . $s->code => (string) $s->level_code]);
+
         // Mavjud jadvallar
         $scheduleQuery = ExamSchedule::query();
         if ($selectedDepartment) $scheduleQuery->where('department_hemis_id', $selectedDepartment);
@@ -581,6 +619,7 @@ class AcademicScheduleController extends Controller
                 $item = [
                     'group' => $group,
                     'subject' => $subject,
+                    'level_code' => $semesterLevelMap[$group->curriculum_hemis_id . '_' . $subject->semester_code] ?? null,
                     'specialty_name' => $group->specialty_name,
                     'lesson_start_date' => $lessonInfo?->lesson_start ? substr($lessonInfo->lesson_start, 0, 10) : null,
                     'lesson_end_date' => $lessonInfo?->lesson_end ? substr($lessonInfo->lesson_end, 0, 10) : null,
@@ -686,9 +725,47 @@ class AcademicScheduleController extends Controller
         // Admin roli uchun bugungi kunni ham belgilash mumkin
         $user = auth()->user() ?? auth('teacher')->user();
         $activeRole = session('active_role', $user?->getRoleNames()->first());
-        $isAdmin = $user && in_array($activeRole, ['superadmin', 'admin', 'kichik_admin']);
-        $canEditSaved = $isAdmin || ($user && $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
+        $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
+        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+            abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
+        }
+        // Saqlangan sanani o'zgartirish — admin yoki sozlamalarda ruxsat etilgan rol
+        $canEditSaved = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
         $minDate = $isAdmin ? $today : $today->copy()->addDay();
+
+        // Foydalanuvchi rolga ruxsat etilgan kurs darajalari
+        $allowedLevelCodes = $isAdmin
+            ? null // admin uchun cheklov yo'q
+            : ExamDateRoleService::levelsForRole($activeRole);
+
+        // (curriculum_hemis_id . '_' . semester_code) → level_code map (validatsiya uchun)
+        $semesterLevelMap = collect();
+        if (is_array($allowedLevelCodes)) {
+            $groupIds = collect($validSchedules)->pluck('group_hemis_id')->filter()->unique()->values();
+            $groupCurriculumMap = Group::whereIn('group_hemis_id', $groupIds)
+                ->pluck('curriculum_hemis_id', 'group_hemis_id');
+            $curriculumIds = $groupCurriculumMap->unique()->values();
+            $semesterCodes = collect($validSchedules)->pluck('semester_code')->filter()->unique()->values();
+
+            if ($curriculumIds->isNotEmpty() && $semesterCodes->isNotEmpty()) {
+                $semesterLevelMap = Semester::whereIn('curriculum_hemis_id', $curriculumIds)
+                    ->whereIn('code', $semesterCodes)
+                    ->get(['curriculum_hemis_id', 'code', 'level_code'])
+                    ->mapWithKeys(fn($s) => [$s->curriculum_hemis_id . '_' . $s->code => (string) $s->level_code]);
+            }
+
+            // Foydalanuvchi rolga ruxsat etilmagan kurslarga tegishli yozuvlarni rad etish
+            foreach ($validSchedules as $schedule) {
+                $curriculumId = $groupCurriculumMap[$schedule['group_hemis_id']] ?? null;
+                if (!$curriculumId) {
+                    continue;
+                }
+                $lvl = (string) ($semesterLevelMap[$curriculumId . '_' . $schedule['semester_code']] ?? '');
+                if ($lvl !== '' && !in_array($lvl, $allowedLevelCodes, true)) {
+                    return redirect()->back()->with('error', 'Sizning rolingizga ushbu kurs darajasi uchun YN sanasini belgilashga ruxsat yo\'q. Sozlamalardan tekshiring.');
+                }
+            }
+        }
 
         foreach ($validSchedules as $schedule) {
             $existingRec = $existingForValidation->get(
@@ -717,6 +794,105 @@ class AcademicScheduleController extends Controller
                             ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
                             : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
                     }
+                }
+            }
+        }
+
+        // Kunlik sig'im validatsiyasi (har bir yangi/o'zgargan sana uchun)
+        // Eslatma: har bir sananing o'z sig'imi pastda alohida hisoblanadi
+        $defaultDailyCapacity = ExamCapacityService::dailyCapacity();
+        if ($defaultDailyCapacity > 0) {
+            // Aggregat: $dateStudents[$date] = qancha qo'shilayotgan talaba (ushbu so'rov ichida)
+            $pendingByDate = [];
+            $groupCountCache = [];
+
+            $countOf = function ($groupId) use (&$groupCountCache) {
+                if (!isset($groupCountCache[$groupId])) {
+                    $groupCountCache[$groupId] = ExamCapacityService::groupStudentCount($groupId);
+                }
+                return $groupCountCache[$groupId];
+            };
+
+            foreach ($validSchedules as $schedule) {
+                $existingRec = $existingForValidation->get(
+                    $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
+                );
+
+                $oskiNa = !empty($schedule['oski_na']);
+                $testNa = !empty($schedule['test_na']);
+
+                // OSKI: agar yangi yoki o'zgargan sana bo'lsa
+                if (!empty($schedule['oski_date']) && !$oskiNa) {
+                    $oldOski = $existingRec?->oski_date?->format('Y-m-d');
+                    $newOski = $schedule['oski_date'];
+                    if ($oldOski !== $newOski) {
+                        $pendingByDate[$newOski]['students'] = ($pendingByDate[$newOski]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
+                        $pendingByDate[$newOski]['exclude'][] = [
+                            'group_hemis_id' => $schedule['group_hemis_id'],
+                            'subject_id' => $schedule['subject_id'],
+                            'semester_code' => $schedule['semester_code'],
+                            'yn_type' => 'oski',
+                        ];
+                    }
+                }
+                // Test: agar yangi yoki o'zgargan sana bo'lsa
+                if (!empty($schedule['test_date']) && !$testNa) {
+                    $oldTest = $existingRec?->test_date?->format('Y-m-d');
+                    $newTest = $schedule['test_date'];
+                    if ($oldTest !== $newTest) {
+                        $pendingByDate[$newTest]['students'] = ($pendingByDate[$newTest]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
+                        $pendingByDate[$newTest]['exclude'][] = [
+                            'group_hemis_id' => $schedule['group_hemis_id'],
+                            'subject_id' => $schedule['subject_id'],
+                            'semester_code' => $schedule['semester_code'],
+                            'yn_type' => 'test',
+                        ];
+                    }
+                }
+            }
+
+            foreach ($pendingByDate as $date => $info) {
+                // Sanada allaqachon belgilangan boshqa yozuvlar (joriy o'zgartirilayotganlardan tashqari)
+                $existingTotal = 0;
+                $excludeList = $info['exclude'] ?? [];
+                $rowsOnDate = ExamSchedule::where(function ($q) use ($date) {
+                    $q->where(function ($q2) use ($date) {
+                        $q2->whereDate('oski_date', $date)->where('oski_na', false);
+                    })->orWhere(function ($q2) use ($date) {
+                        $q2->whereDate('test_date', $date)->where('test_na', false);
+                    });
+                })->get();
+
+                foreach ($rowsOnDate as $row) {
+                    $isExcluded = function (string $ynType) use ($row, $excludeList): bool {
+                        foreach ($excludeList as $ex) {
+                            if ($ex['group_hemis_id'] === $row->group_hemis_id
+                                && (string) $ex['subject_id'] === (string) $row->subject_id
+                                && (string) $ex['semester_code'] === (string) $row->semester_code
+                                && $ex['yn_type'] === $ynType) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    $oskiMatch = $row->oski_date && $row->oski_date->format('Y-m-d') === $date && !$row->oski_na;
+                    $testMatch = $row->test_date && $row->test_date->format('Y-m-d') === $date && !$row->test_na;
+
+                    if ($oskiMatch && !$isExcluded('oski')) {
+                        $existingTotal += $countOf($row->group_hemis_id);
+                    }
+                    if ($testMatch && !$isExcluded('test')) {
+                        $existingTotal += $countOf($row->group_hemis_id);
+                    }
+                }
+
+                $combined = $existingTotal + ($info['students'] ?? 0);
+                $perDayCapacity = ExamCapacityService::dailyCapacityForDate($date);
+                if ($perDayCapacity > 0 && $combined > $perDayCapacity) {
+                    $dateFormatted = \Carbon\Carbon::parse($date)->format('d.m.Y');
+                    return redirect()->back()->with('error',
+                        "Kun ustma-ust tushdi! {$dateFormatted} kuniga jami {$combined} talaba belgilanadi, lekin kunlik sig'im atigi {$perDayCapacity} ta. Boshqa kunni tanlang yoki sozlamalardan sig'imni oshiring.");
                 }
             }
         }
@@ -795,10 +971,10 @@ class AcademicScheduleController extends Controller
     public function clearDate(Request $request)
     {
         $user = auth()->user() ?? auth('teacher')->user();
-        $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
         // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
         $activeRole = session('active_role', $user?->getRoleNames()->first());
-        $canEdit = $user && (in_array($activeRole, $adminRoles) || $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
+        $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
+        $canEdit = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
         if (!$canEdit) {
             abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
         }
@@ -810,6 +986,17 @@ class AcademicScheduleController extends Controller
 
         if (!$groupHemisId || !$subjectId || !$semesterCode || !in_array($dateType, ['oski', 'test'])) {
             return redirect()->back()->with('error', 'Noto\'g\'ri so\'rov.');
+        }
+
+        // Admin bo'lmagan rol — faqat sozlamalarda ruxsat etilgan kurs darajasidagi yozuvni o'chirishi mumkin
+        if (!$isAdmin) {
+            $curriculumId = Group::where('group_hemis_id', $groupHemisId)->value('curriculum_hemis_id');
+            $levelCode = $curriculumId
+                ? (string) (Semester::where('curriculum_hemis_id', $curriculumId)->where('code', $semesterCode)->value('level_code') ?? '')
+                : '';
+            if ($levelCode !== '' && !ExamDateRoleService::canEditLevel($activeRole, $levelCode)) {
+                abort(403, 'Sizning rolingizga ushbu kurs darajasi uchun YN sanasini o\'chirishga ruxsat yo\'q.');
+            }
         }
 
         $record = ExamSchedule::where('group_hemis_id', $groupHemisId)
@@ -930,6 +1117,18 @@ class AcademicScheduleController extends Controller
         $levelQuery = Semester::where($currentSemesterOnly ? 'current' : 'education_year', $currentSemesterOnly ? true : $currentEducationYear)
             ->whereIn('curriculum_hemis_id', $levelCurrIds);
         if ($semesterCode) $levelQuery->where('code', $semesterCode);
+
+        // Foydalanuvchi rolga ruxsat etilgan kurs darajalari (admin emas bo'lsa)
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
+        if (!$isAdmin) {
+            $allowedLevelCodes = ExamDateRoleService::levelsForRole($activeRole);
+            if (!empty($allowedLevelCodes)) {
+                $levelQuery->whereIn('level_code', $allowedLevelCodes);
+            }
+        }
+
         $levels = $levelQuery->select('level_code', 'level_name')
             ->distinct()->orderBy('level_code')->get();
 
@@ -1661,6 +1860,140 @@ class AcademicScheduleController extends Controller
         }
     }
 
+    /**
+     * Test markazi: berilgan kun uchun maxsus ish vaqti / tushlik / sig'im sozlamalarini olish
+     */
+    public function getDayOverride(Request $request)
+    {
+        $request->validate(['date' => 'required|date_format:Y-m-d']);
+        $date = $request->input('date');
+
+        $override = ExamCapacityOverride::where('date', $date)->first();
+        $defaults = ExamCapacityService::getSettings();
+        $effective = ExamCapacityService::getSettingsForDate($date);
+
+        return response()->json([
+            'date' => $date,
+            'defaults' => $defaults,
+            'effective' => $effective,
+            'override' => $override ? [
+                'work_hours_start' => $override->work_hours_start ? substr($override->work_hours_start, 0, 5) : null,
+                'work_hours_end' => $override->work_hours_end ? substr($override->work_hours_end, 0, 5) : null,
+                'lunch_start' => $override->lunch_start ? substr($override->lunch_start, 0, 5) : null,
+                'lunch_end' => $override->lunch_end ? substr($override->lunch_end, 0, 5) : null,
+                'computer_count' => $override->computer_count,
+                'test_duration_minutes' => $override->test_duration_minutes,
+                'note' => $override->note,
+            ] : null,
+            'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
+        ]);
+    }
+
+    /**
+     * Test markazi: berilgan kun(lar) uchun maxsus sozlamalarni saqlash (override).
+     * Bir nechta kun bir vaqtda saqlanishi mumkin: `dates[]` array yoki `date` skalar.
+     */
+    public function saveDayOverride(Request $request)
+    {
+        $request->validate([
+            'date' => 'nullable|date_format:Y-m-d',
+            'dates' => 'nullable|array',
+            'dates.*' => 'date_format:Y-m-d',
+            'work_hours_start' => 'nullable|date_format:H:i',
+            'work_hours_end' => 'nullable|date_format:H:i',
+            'lunch_start' => 'nullable|date_format:H:i',
+            'lunch_end' => 'nullable|date_format:H:i',
+            'computer_count' => 'nullable|integer|min:1|max:100000',
+            'test_duration_minutes' => 'nullable|integer|min:1|max:1440',
+            'note' => 'nullable|string|max:255',
+            'clear' => 'nullable|boolean',
+        ]);
+
+        // Sanalarni yig'ish (dates yoki date)
+        $dates = collect($request->input('dates', []))->filter()->values()->all();
+        if (empty($dates) && $request->filled('date')) {
+            $dates = [$request->input('date')];
+        }
+        if (empty($dates)) {
+            return response()->json(['success' => false, 'message' => 'Kamida bitta sana tanlash kerak.'], 422);
+        }
+
+        $clearAll = (bool) $request->input('clear', false);
+        $userId = auth()->id() ?? auth('teacher')->id();
+
+        // Mantiqiy validatsiya
+        if (!$clearAll) {
+            if ($request->filled('work_hours_start') && $request->filled('work_hours_end')) {
+                $ws = \Carbon\Carbon::createFromFormat('H:i', $request->input('work_hours_start'));
+                $we = \Carbon\Carbon::createFromFormat('H:i', $request->input('work_hours_end'));
+                if ($we->lte($ws)) {
+                    return response()->json(['success' => false, 'message' => 'Ish vaqti tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
+                }
+            }
+            if ($request->filled('lunch_start') && $request->filled('lunch_end')) {
+                $ls = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_start'));
+                $le = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_end'));
+                if ($le->lte($ls)) {
+                    return response()->json(['success' => false, 'message' => 'Tushlik tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
+                }
+            }
+        }
+
+        $hasAny = $request->filled('work_hours_start')
+            || $request->filled('work_hours_end')
+            || $request->filled('lunch_start')
+            || $request->filled('lunch_end')
+            || $request->filled('computer_count')
+            || $request->filled('test_duration_minutes')
+            || $request->filled('note');
+
+        $savedCount = 0;
+        $clearedCount = 0;
+        $perDay = [];
+
+        foreach ($dates as $date) {
+            if ($clearAll || !$hasAny) {
+                $deleted = ExamCapacityOverride::where('date', $date)->delete();
+                if ($deleted) {
+                    $clearedCount++;
+                }
+            } else {
+                $override = ExamCapacityOverride::firstOrNew(['date' => $date]);
+                $override->fill([
+                    'work_hours_start' => $request->input('work_hours_start') ?: null,
+                    'work_hours_end' => $request->input('work_hours_end') ?: null,
+                    'lunch_start' => $request->input('lunch_start') ?: null,
+                    'lunch_end' => $request->input('lunch_end') ?: null,
+                    'computer_count' => $request->filled('computer_count') ? (int) $request->input('computer_count') : null,
+                    'test_duration_minutes' => $request->filled('test_duration_minutes') ? (int) $request->input('test_duration_minutes') : null,
+                    'note' => $request->input('note'),
+                    'updated_by' => $userId,
+                ]);
+                if (!$override->exists) {
+                    $override->created_by = $userId;
+                }
+                $override->save();
+                $savedCount++;
+            }
+            $perDay[$date] = [
+                'effective' => ExamCapacityService::getSettingsForDate($date),
+                'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
+            ];
+        }
+
+        $message = $clearAll || !$hasAny
+            ? "Tanlangan {$clearedCount} ta kunda maxsus sozlama olib tashlandi."
+            : "Tanlangan {$savedCount} ta kun uchun maxsus sozlama saqlandi.";
+
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'saved_count' => $savedCount,
+            'cleared_count' => $clearedCount,
+            'per_day' => $perDay,
+        ]);
+    }
+
     public function saveTestTime(Request $request)
     {
         $request->validate([
@@ -1689,6 +2022,65 @@ class AcademicScheduleController extends Controller
         $oldTime = $examSchedule->{$timeColumn};
         $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
         $ynSubmitted = (bool) $request->input('yn_submitted', false);
+
+        // Sig'im va vaqt-ust-ust tushishini tekshirish
+        if ($relatedDate) {
+            $relatedDateStr = $relatedDate instanceof \Carbon\Carbon
+                ? $relatedDate->format('Y-m-d')
+                : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
+
+            // Kun uchun maxsus sozlamalar (agar belgilangan bo'lsa) yoki default
+            $capacity = ExamCapacityService::getSettingsForDate($relatedDateStr);
+            $computerCount = (int) $capacity['computer_count'];
+            $duration = (int) $capacity['test_duration_minutes'];
+            $workStart = $capacity['work_hours_start'];
+            $workEnd = $capacity['work_hours_end'];
+
+            $newTime = substr($request->test_time, 0, 5);
+            // Ish vaqti oralig'idan tashqarida bo'lmasin
+            $slotStart = \Carbon\Carbon::createFromFormat('H:i', $newTime);
+            $slotEnd = $slotStart->copy()->addMinutes($duration);
+            $wStart = \Carbon\Carbon::createFromFormat('H:i', $workStart);
+            $wEnd = \Carbon\Carbon::createFromFormat('H:i', $workEnd);
+
+            if ($slotStart->lt($wStart) || $slotEnd->gt($wEnd)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Tanlangan vaqt ish soatlaridan ({$workStart}–{$workEnd}) tashqarida. Test davomiyligi {$duration} daqiqa.",
+                ], 422);
+            }
+
+            // Tushlik vaqti bilan ustma-ust tushishini tekshirish
+            if (ExamCapacityService::overlapsLunch($relatedDateStr, $newTime, $duration, $capacity)) {
+                $ls = $capacity['lunch_start'];
+                $le = $capacity['lunch_end'];
+                return response()->json([
+                    'success' => false,
+                    'message' => "Tanlangan vaqt tushlik tanaffusi ({$ls}–{$le}) bilan to'qnashadi. Boshqa vaqtni tanlang.",
+                ], 422);
+            }
+
+            $exclude = [
+                'group_hemis_id' => $request->group_hemis_id,
+                'subject_id' => $request->subject_id,
+                'semester_code' => $request->semester_code,
+                'yn_type' => strtolower($ynType),
+            ];
+
+            $concurrent = ExamCapacityService::concurrentStudentsForSlot($relatedDateStr, $newTime, $exclude);
+            $thisGroupCount = ExamCapacityService::groupStudentCount($request->group_hemis_id);
+            $totalAtSlot = $concurrent + $thisGroupCount;
+
+            if ($totalAtSlot > $computerCount) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Vaqt ustma-ust tushdi! {$newTime} – {$slotEnd->format('H:i')} oralig'ida jami {$totalAtSlot} talaba band bo'ladi, kompyuter sig'imi esa atigi {$computerCount} ta. Boshqa vaqtni tanlang.",
+                    'concurrent_students' => $concurrent,
+                    'this_group_students' => $thisGroupCount,
+                    'computer_count' => $computerCount,
+                ], 422);
+            }
+        }
 
         $examSchedule->update([$timeColumn => $request->test_time]);
 
@@ -1773,7 +2165,7 @@ class AcademicScheduleController extends Controller
 
     public function bandlikKursatkichi(Request $request)
     {
-        $totalComputers = 60;
+        $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
         $today = now()->format('Y-m-d');
 
         // Faqat bugundan keyingi (bugun kiradi) test vaqtlari belgilangan sanalar
@@ -1893,7 +2285,7 @@ class AcademicScheduleController extends Controller
 
     public function bandlikKursatkichiShow(Request $request, string $date)
     {
-        $totalComputers = 60;
+        $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
 
         // Sana validatsiyasi
         try {

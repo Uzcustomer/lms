@@ -107,6 +107,67 @@
                     </div>
                 </div>
 
+                @php
+                    $tcDefaults = \App\Services\ExamCapacityService::getSettings();
+                @endphp
+                <!-- Inline day override panel -->
+                <div id="day-override-panel" data-defaults='@json($tcDefaults)' style="margin:0 16px 14px 16px;background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:1px solid #5eead4;border-radius:12px;padding:12px 14px;">
+                    <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;">
+                        <div style="display:flex;align-items:center;gap:8px;min-width:170px;">
+                            <svg style="width:18px;height:18px;color:#0f766e;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div>
+                                <div style="font-size:13px;font-weight:700;color:#115e59;">Kun sozlamasi</div>
+                                <div style="font-size:11px;color:#0f766e;">Tanlangan kunlar uchun</div>
+                            </div>
+                        </div>
+
+                        <div style="flex:1;min-width:240px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Sanalar</label>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <input type="date" id="do-date-input" style="padding:6px 10px;border:1px solid #5eead4;border-radius:6px;font-size:13px;background:#fff;">
+                                <button type="button" onclick="tcAddDate()" style="padding:6px 10px;background:#0d9488;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Qo'shish</button>
+                            </div>
+                            <div id="do-dates-chips" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;min-height:22px;"></div>
+                        </div>
+
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Ish boshl.</label>
+                            <input type="time" id="do-work-start" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Ish tug.</label>
+                            <input type="time" id="do-work-end" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#92400e;margin-bottom:4px;">Tushlik boshl.</label>
+                            <input type="time" id="do-lunch-start" style="padding:6px 8px;border:1px solid #fbbf24;border-radius:6px;font-size:13px;width:100%;background:#fffbeb;">
+                        </div>
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#92400e;margin-bottom:4px;">Tushlik tug.</label>
+                            <input type="time" id="do-lunch-end" style="padding:6px 8px;border:1px solid #fbbf24;border-radius:6px;font-size:13px;width:100%;background:#fffbeb;">
+                        </div>
+                        <div style="min-width:90px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Kompyuter</label>
+                            <input type="number" id="do-computers" min="1" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="min-width:95px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Davomiyligi</label>
+                            <input type="number" id="do-duration" min="1" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="flex:1;min-width:160px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Izoh</label>
+                            <input type="text" id="do-note" maxlength="255" placeholder="ixtiyoriy" style="padding:6px 10px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+
+                        <div style="display:flex;gap:6px;align-items:flex-end;">
+                            <button type="button" onclick="tcResetOverrideForm()" title="Default qiymatlarga qaytarish" style="padding:6px 10px;background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;font-size:12px;">↺ Reset</button>
+                            <button type="button" onclick="tcSaveDayOverride(true)" title="Tanlangan kunlardagi maxsus sozlamani o'chirish" style="padding:6px 10px;background:#fff;color:#e11d48;border:1px solid #fda4af;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">Tozalash</button>
+                            <button type="button" onclick="tcSaveDayOverride(false)" style="padding:6px 14px;background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;">Saqlash</button>
+                        </div>
+                    </div>
+                    <div id="do-status" style="margin-top:8px;font-size:12px;color:#64748b;min-height:16px;"></div>
+                </div>
+
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
                 <div>
@@ -633,6 +694,126 @@
             url.searchParams.set('current_semester', cs);
             window.location.href = url.toString();
         }
+
+        // ===== Inline day override panel =====
+        var DAY_OVERRIDE_SAVE = '{{ route($routePrefix . ".academic-schedule.test-center.day-override.save") }}';
+        var DO_SELECTED_DATES = [];
+        var DO_DEFAULTS = (function(){
+            var el = document.getElementById('day-override-panel');
+            try { return JSON.parse(el.getAttribute('data-defaults') || '{}'); } catch(e){ return {}; }
+        })();
+
+        function tcResetOverrideForm() {
+            document.getElementById('do-work-start').value = DO_DEFAULTS.work_hours_start || '';
+            document.getElementById('do-work-end').value = DO_DEFAULTS.work_hours_end || '';
+            document.getElementById('do-lunch-start').value = DO_DEFAULTS.lunch_start || '';
+            document.getElementById('do-lunch-end').value = DO_DEFAULTS.lunch_end || '';
+            document.getElementById('do-computers').value = DO_DEFAULTS.computer_count || '';
+            document.getElementById('do-duration').value = DO_DEFAULTS.test_duration_minutes || '';
+            document.getElementById('do-note').value = '';
+        }
+
+        function tcRenderDateChips() {
+            var box = document.getElementById('do-dates-chips');
+            if (!DO_SELECTED_DATES.length) {
+                box.innerHTML = '<span style="font-size:11px;color:#94a3b8;font-style:italic;">Sana qo\'shilmagan</span>';
+                return;
+            }
+            box.innerHTML = DO_SELECTED_DATES.map(function(d, i){
+                var human = d.split('-').reverse().join('.');
+                return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#0d9488;color:#fff;border-radius:12px;font-size:11px;font-weight:600;">'
+                    + human
+                    + '<button type="button" onclick="tcRemoveDate(' + i + ')" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">&times;</button>'
+                    + '</span>';
+            }).join('');
+        }
+
+        function tcAddDate() {
+            var input = document.getElementById('do-date-input');
+            var d = input.value;
+            if (!d) return;
+            if (DO_SELECTED_DATES.indexOf(d) === -1) {
+                DO_SELECTED_DATES.push(d);
+                DO_SELECTED_DATES.sort();
+                tcRenderDateChips();
+            }
+            input.value = '';
+        }
+
+        function tcRemoveDate(idx) {
+            DO_SELECTED_DATES.splice(idx, 1);
+            tcRenderDateChips();
+        }
+
+        function tcSaveDayOverride(clearAll) {
+            var status = document.getElementById('do-status');
+            if (!DO_SELECTED_DATES.length) {
+                status.textContent = 'Avval kamida bitta sana qo\'shing.';
+                status.style.color = '#dc2626';
+                return;
+            }
+            var payload = { dates: DO_SELECTED_DATES };
+            if (clearAll) {
+                payload.clear = true;
+            } else {
+                payload.work_hours_start = document.getElementById('do-work-start').value || null;
+                payload.work_hours_end = document.getElementById('do-work-end').value || null;
+                payload.lunch_start = document.getElementById('do-lunch-start').value || null;
+                payload.lunch_end = document.getElementById('do-lunch-end').value || null;
+                payload.computer_count = document.getElementById('do-computers').value || null;
+                payload.test_duration_minutes = document.getElementById('do-duration').value || null;
+                payload.note = document.getElementById('do-note').value || null;
+            }
+            status.textContent = 'Saqlanmoqda...';
+            status.style.color = '#64748b';
+            fetch(DAY_OVERRIDE_SAVE, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,data:j}; }); })
+              .then(function(res){
+                if (res.ok && res.data.success) {
+                    var msg = res.data.message || 'Saqlandi';
+                    if (res.data.per_day) {
+                        var lines = [];
+                        Object.keys(res.data.per_day).forEach(function(d){
+                            var p = res.data.per_day[d];
+                            var human = d.split('-').reverse().join('.');
+                            lines.push(human + ': ish ' + p.effective.work_hours_start + '–' + p.effective.work_hours_end
+                                + (p.effective.lunch_start ? ', tushlik ' + p.effective.lunch_start + '–' + p.effective.lunch_end : '')
+                                + ', sig\'im ' + p.daily_capacity);
+                        });
+                        msg += ' (' + lines.join(' | ') + ')';
+                    }
+                    status.textContent = msg;
+                    status.style.color = '#16a34a';
+                } else {
+                    status.textContent = (res.data && res.data.message) ? res.data.message : 'Xatolik yuz berdi';
+                    status.style.color = '#dc2626';
+                }
+              }).catch(function(){
+                status.textContent = 'Tarmoq xatosi.';
+                status.style.color = '#dc2626';
+              });
+        }
+
+        // Sahifa yuklanganda default qiymatlarni va bo'sh sanalar ro'yxatini ko'rsatish
+        document.addEventListener('DOMContentLoaded', function(){
+            tcResetOverrideForm();
+            tcRenderDateChips();
+            // Filterdagi dateFrom ni boshlang'ich sana sifatida qo'yish
+            try {
+                var df = $('#date_from').val();
+                if (df) {
+                    var p = df.split('.');
+                    if (p.length === 3) document.getElementById('do-date-input').value = p[2] + '-' + p[1] + '-' + p[0];
+                }
+            } catch(e){}
+        });
 
         function tcExportExcel() {
             var url = new URL('{{ route($routePrefix . ".academic-schedule.test-center.export-excel") }}');

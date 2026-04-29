@@ -227,6 +227,16 @@ class JournalController extends Controller
             $query->where('g.id', $request->group);
         }
 
+        // Nazoratchi: faqat biriktirilgan guruhlar
+        if (is_active_nazoratchi()) {
+            $nazoratchiGroupIds = get_nazoratchi_group_db_ids();
+            if (empty($nazoratchiGroupIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('g.id', $nazoratchiGroupIds);
+            }
+        }
+
         // Joriy semestr filtri (default ON)
         // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
         if ($request->get('current_semester', '1') == '1') {
@@ -300,6 +310,14 @@ class JournalController extends Controller
         // Migratsiya hali ishlatilmagan instancelarda ham jurnal ochilishi uchun
         // retake_was_sababli ustunining mavjudligini tekshirib olamiz
         $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+
+        // Nazoratchi: faqat biriktirilgan guruhlarga ruxsat
+        if (is_active_nazoratchi()) {
+            $nazoratchiGroupIds = get_nazoratchi_group_db_ids();
+            if (!in_array((int) $group->id, array_map('intval', $nazoratchiGroupIds), true)) {
+                abort(403, "Sizga bu guruh bo'yicha jurnal ko'rish huquqi yo'q.");
+            }
+        }
 
         // O'qituvchi uchun: faqat o'ziga dars jadvalida biriktirilgan guruh+fan kombinatsiyasiga ruxsat
         if (is_active_oqituvchi()) {

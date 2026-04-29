@@ -174,9 +174,151 @@ class AuroraThemes {
     blobBDark: Color(0xFF14B8A6),
   );
 
-  static const all = <AuroraTheme>[
+  // ── To'qroq ranglar ──
+
+  static const cobalt = AuroraTheme(
+    id: 'cobalt',
+    label: 'Kobalt',
+    baseLight: Color(0xFFE1E8F5),
+    baseDark: Color(0xFF0B1230),
+    gradientLight: [Color(0xFF6882C4), Color(0xFF8BA3DB), Color(0xFFADBDE6), Color(0xFFE1E8F5)],
+    gradientDark: [Color(0xFF2544A8), Color(0xFF3B5CC0), Color(0xFF5474D4), Color(0xFF0B1230)],
+    blobALight: Color(0xFF7B96D4),
+    blobADark: Color(0xFF4466C0),
+    blobBLight: Color(0xFF95ADE0),
+    blobBDark: Color(0xFF5B7ED6),
+  );
+
+  static const jade = AuroraTheme(
+    id: 'jade',
+    label: 'Nefrit',
+    baseLight: Color(0xFFDCF0E8),
+    baseDark: Color(0xFF0A1C16),
+    gradientLight: [Color(0xFF52B788), Color(0xFF74C9A0), Color(0xFF9BDBB8), Color(0xFFDCF0E8)],
+    gradientDark: [Color(0xFF1B7A4E), Color(0xFF2D9B65), Color(0xFF40B07A), Color(0xFF0A1C16)],
+    blobALight: Color(0xFF63C295),
+    blobADark: Color(0xFF2D9B65),
+    blobBLight: Color(0xFF84D4AC),
+    blobBDark: Color(0xFF40B07A),
+  );
+
+  static const plum = AuroraTheme(
+    id: 'plum',
+    label: 'Olxo\'ri',
+    baseLight: Color(0xFFEBDEF2),
+    baseDark: Color(0xFF160C20),
+    gradientLight: [Color(0xFFA366C4), Color(0xFFB888D4), Color(0xFFCEA8E4), Color(0xFFEBDEF2)],
+    gradientDark: [Color(0xFF7B2EA0), Color(0xFF9244B8), Color(0xFFA85CCC), Color(0xFF160C20)],
+    blobALight: Color(0xFFAE78C8),
+    blobADark: Color(0xFF8838AC),
+    blobBLight: Color(0xFFC498DA),
+    blobBDark: Color(0xFF9E50C2),
+  );
+
+  static const coral = AuroraTheme(
+    id: 'coral',
+    label: 'Marjon',
+    baseLight: Color(0xFFF5E0DD),
+    baseDark: Color(0xFF1C0E0C),
+    gradientLight: [Color(0xFFE07060), Color(0xFFE89080), Color(0xFFF0ACA0), Color(0xFFF5E0DD)],
+    gradientDark: [Color(0xFFC23A2A), Color(0xFFD45040), Color(0xFFE06858), Color(0xFF1C0E0C)],
+    blobALight: Color(0xFFE48070),
+    blobADark: Color(0xFFCC4434),
+    blobBLight: Color(0xFFEC9C8E),
+    blobBDark: Color(0xFFD85C4C),
+  );
+
+  static const sapphire = AuroraTheme(
+    id: 'sapphire',
+    label: 'Sapfir',
+    baseLight: Color(0xFFDAE2F4),
+    baseDark: Color(0xFF0A0E24),
+    gradientLight: [Color(0xFF5068BE), Color(0xFF7488D0), Color(0xFF9AAAE0), Color(0xFFDAE2F4)],
+    gradientDark: [Color(0xFF2040A4), Color(0xFF3458BC), Color(0xFF4A70D0), Color(0xFF0A0E24)],
+    blobALight: Color(0xFF6078C6),
+    blobADark: Color(0xFF3050B4),
+    blobBLight: Color(0xFF8498D6),
+    blobBDark: Color(0xFF4868C6),
+  );
+
+  static const emerald = AuroraTheme(
+    id: 'emerald',
+    label: 'Zumrad',
+    baseLight: Color(0xFFD6EEE0),
+    baseDark: Color(0xFF081C10),
+    gradientLight: [Color(0xFF38A06C), Color(0xFF5CB888), Color(0xFF88CEA8), Color(0xFFD6EEE0)],
+    gradientDark: [Color(0xFF14744A), Color(0xFF228E5C), Color(0xFF30A870), Color(0xFF081C10)],
+    blobALight: Color(0xFF4AAE7A),
+    blobADark: Color(0xFF1C8254),
+    blobBLight: Color(0xFF70C496),
+    blobBDark: Color(0xFF2E9C68),
+  );
+
+  static const ruby = AuroraTheme(
+    id: 'ruby',
+    label: 'Yoqut',
+    baseLight: Color(0xFFF2DDE2),
+    baseDark: Color(0xFF1C0A10),
+    gradientLight: [Color(0xFFCC4466), Color(0xFFDA6880), Color(0xFFE48EA0), Color(0xFFF2DDE2)],
+    gradientDark: [Color(0xFFA82040), Color(0xFFBE3454), Color(0xFFD04C6A), Color(0xFF1C0A10)],
+    blobALight: Color(0xFFD45878),
+    blobADark: Color(0xFFB42C4C),
+    blobBLight: Color(0xFFE07A94),
+    blobBDark: Color(0xFFC64060),
+  );
+
+  static const amber = AuroraTheme(
+    id: 'amber',
+    label: 'Qahrabo',
+    baseLight: Color(0xFFF4EADB),
+    baseDark: Color(0xFF1C1408),
+    gradientLight: [Color(0xFFD49830), Color(0xFFDEB058), Color(0xFFE8C880), Color(0xFFF4EADB)],
+    gradientDark: [Color(0xFFB07818), Color(0xFFC48E28), Color(0xFFD4A438), Color(0xFF1C1408)],
+    blobALight: Color(0xFFD8A440),
+    blobADark: Color(0xFFB88220),
+    blobBLight: Color(0xFFE4BC64),
+    blobBDark: Color(0xFFC89830),
+  );
+
+  static const orchid = AuroraTheme(
+    id: 'orchid',
+    label: 'Orkideya',
+    baseLight: Color(0xFFF0DCF0),
+    baseDark: Color(0xFF180C1A),
+    gradientLight: [Color(0xFFC050B0), Color(0xFFD070C0), Color(0xFFDC94D0), Color(0xFFF0DCF0)],
+    gradientDark: [Color(0xFF982890), Color(0xFFAE3EA4), Color(0xFFC054B6), Color(0xFF180C1A)],
+    blobALight: Color(0xFFC860B4),
+    blobADark: Color(0xFFA43098),
+    blobBLight: Color(0xFFD680C6),
+    blobBDark: Color(0xFFB448A8),
+  );
+
+  static const steel = AuroraTheme(
+    id: 'steel',
+    label: 'Po\'lat',
+    baseLight: Color(0xFFE0E4EC),
+    baseDark: Color(0xFF10141C),
+    gradientLight: [Color(0xFF6878A0), Color(0xFF8898B8), Color(0xFFA8B4CC), Color(0xFFE0E4EC)],
+    gradientDark: [Color(0xFF384870), Color(0xFF4C6088), Color(0xFF60789C), Color(0xFF10141C)],
+    blobALight: Color(0xFF7888AC),
+    blobADark: Color(0xFF445C84),
+    blobBLight: Color(0xFF98A4C0),
+    blobBDark: Color(0xFF5C7498),
+  );
+
+  static const light = <AuroraTheme>[
     sunrise, ocean, forest, sunset, midnight,
     roseGold, arctic, lavender, peach, mint,
+  ];
+
+  static const deep = <AuroraTheme>[
+    cobalt, jade, plum, coral, sapphire,
+    emerald, ruby, amber, orchid, steel,
+  ];
+
+  static const all = <AuroraTheme>[
+    ...light,
+    ...deep,
   ];
 
   static AuroraTheme byId(String id) {

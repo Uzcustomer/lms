@@ -247,68 +247,92 @@ class _AuroraPickerSheet extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Flexible(
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               shrinkWrap: true,
-              itemCount: AuroraThemes.all.length,
-              itemBuilder: (_, index) {
-                final theme = AuroraThemes.all[index];
-                final selected = settings.auroraTheme.id == theme.id;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () {
-                      settings.setAuroraTheme(theme);
-                      Navigator.pop(context);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: selected
-                              ? theme.gradientLight[1]
-                              : ink.withOpacity(0.08),
-                          width: selected ? 2 : 1,
+              children: [
+                ...AuroraThemes.light.map((theme) =>
+                  _buildThemeRow(theme, settings, ink)),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 14),
+                  child: Row(
+                    children: [
+                      Expanded(child: Divider(color: ink.withOpacity(0.12))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'To\'q ranglar',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: ink.withOpacity(0.4),
+                          ),
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: theme.gradientLight,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              theme.label,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: ink,
-                              ),
-                            ),
-                          ),
-                          if (selected)
-                            Icon(Icons.check_circle, color: theme.gradientLight[1], size: 24),
-                        ],
-                      ),
-                    ),
+                      Expanded(child: Divider(color: ink.withOpacity(0.12))),
+                    ],
                   ),
-                );
-              },
+                ),
+                ...AuroraThemes.deep.map((theme) =>
+                  _buildThemeRow(theme, settings, ink)),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildThemeRow(AuroraTheme theme, SettingsProvider settings, Color ink) {
+    final selected = settings.auroraTheme.id == theme.id;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          settings.setAuroraTheme(theme);
+        },
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? theme.gradientLight[1]
+                  : ink.withOpacity(0.08),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: theme.gradientLight,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  theme.label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: ink,
+                  ),
+                ),
+              ),
+              if (selected)
+                Icon(Icons.check_circle, color: theme.gradientLight[1], size: 24),
+            ],
+          ),
+        ),
       ),
     );
   }

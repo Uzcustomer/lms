@@ -1204,15 +1204,38 @@ class StudentController extends Controller
             ->where('is_active', true)
             ->get();
 
-        // Independentlarni subject_hemis_id bo'yicha guruhlash
+        // Independentlarni bir nechta kalit bo'yicha indekslash (Fanlar sahifasidagi mantiq bilan bir xil)
         $independentsByHemisId = $independents->groupBy('subject_hemis_id');
+        $independentsByName = $independents->groupBy('subject_name');
 
-        // Har bir CurriculumSubject uchun independentlarni biriktirish
-        $subjectsList = $curriculumSubjects->map(function ($cs) use ($independentsByHemisId) {
+        $indHemisIds = $independents->pluck('subject_hemis_id')->unique()->filter()->toArray();
+        $hemisToSubjectId = [];
+        if (!empty($indHemisIds)) {
+            $hemisToSubjectId = CurriculumSubject::whereIn('curriculum_subject_hemis_id', $indHemisIds)
+                ->pluck('subject_id', 'curriculum_subject_hemis_id')
+                ->toArray();
+        }
+        $independentsBySubjectId = collect();
+        foreach ($independents as $ind) {
+            $resolvedSubjectId = $hemisToSubjectId[$ind['subject_hemis_id']] ?? null;
+            if ($resolvedSubjectId) {
+                if (!$independentsBySubjectId->has($resolvedSubjectId)) {
+                    $independentsBySubjectId[$resolvedSubjectId] = collect();
+                }
+                $independentsBySubjectId[$resolvedSubjectId]->push($ind);
+            }
+        }
+
+        // Har bir CurriculumSubject uchun independentlarni biriktirish: hemis_id -> subject_id -> name fallback
+        $subjectsList = $curriculumSubjects->map(function ($cs) use ($independentsByHemisId, $independentsBySubjectId, $independentsByName) {
+            $matched = $independentsByHemisId->get($cs->curriculum_subject_hemis_id)
+                ?? $independentsBySubjectId->get($cs->subject_id)
+                ?? $independentsByName->get($cs->subject_name)
+                ?? collect();
             return [
                 'name' => $cs->subject_name,
                 'hemis_id' => $cs->curriculum_subject_hemis_id,
-                'independents' => $independentsByHemisId->get($cs->curriculum_subject_hemis_id, collect()),
+                'independents' => $matched,
             ];
         });
 

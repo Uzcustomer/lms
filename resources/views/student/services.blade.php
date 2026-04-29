@@ -65,6 +65,19 @@
             </a>
             @endif
 
+            {{-- Qayta o'qish uchun ariza --}}
+            <a href="{{ route('student.retake.index') }}"
+               class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
+               style="padding:16px 10px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+                <div class="w-14 h-14 rounded-2xl bg-rose-100 flex items-center justify-center mb-3">
+                    <svg class="w-7 h-7 text-rose-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-bold text-gray-800 text-center leading-tight">Qayta o'qish</span>
+                <span class="text-[11px] text-gray-400 mt-1 text-center">Akademik qarzdorlik</span>
+            </a>
+
             {{-- To'garaklar --}}
             <a href="{{ route('student.clubs') }}"
                class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"

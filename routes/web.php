@@ -913,6 +913,14 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/comment/{id}/download', [\App\Http\Controllers\Student\ExamAppealController::class, 'downloadCommentFile'])->name('comment.download');
         });
 
+        // Qayta o'qish uchun ariza (talaba)
+        Route::prefix('retake')->name('retake.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\RetakeController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\RetakeController::class, 'store'])->name('store');
+            Route::get('/{id}/document', [\App\Http\Controllers\Student\RetakeController::class, 'downloadDocument'])->name('document');
+            Route::get('/{id}/tasdiqnoma', [\App\Http\Controllers\Student\RetakeController::class, 'downloadTasdiqnoma'])->name('tasdiqnoma');
+        });
+
         // Bitiruvchi shartnomalar (talaba)
         Route::prefix('contracts')->name('contracts.')->group(function () {
             Route::get('/', [StudentContractCtrl::class, 'index'])->name('index');

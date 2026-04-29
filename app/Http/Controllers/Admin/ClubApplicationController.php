@@ -13,7 +13,7 @@ class ClubApplicationController extends Controller
         $user = auth()->user();
         $activeRole = session('active_role', '');
 
-        if (!in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'kafedra_mudiri', 'registrator_ofisi'])) {
+        if (!in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'kafedra_mudiri'])) {
             abort(403);
         }
 
@@ -74,7 +74,7 @@ class ClubApplicationController extends Controller
         $user = auth()->user();
         $activeRole = session('active_role', '');
 
-        if (in_array($activeRole, ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'])) {
+        if (in_array($activeRole, ['superadmin', 'admin', 'kichik_admin'])) {
             return;
         }
 

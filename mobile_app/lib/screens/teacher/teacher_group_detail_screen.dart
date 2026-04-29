@@ -4,6 +4,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/teacher_service.dart';
 import '../../services/api_service.dart';
 import '../../widgets/loading_widget.dart';
+import '../../utils/page_transitions.dart';
 import 'teacher_journal_screen.dart';
 
 class TeacherGroupDetailScreen extends StatefulWidget {
@@ -257,7 +258,7 @@ class _TeacherGroupDetailScreenState extends State<TeacherGroupDetailScreen> {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
+            SlideFadePageRoute(
               builder: (_) => TeacherJournalScreen(
                 groupId: widget.groupId,
                 groupName: widget.groupName,

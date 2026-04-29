@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/aurora_themes.dart';
 
 class SettingsProvider extends ChangeNotifier {
   static const String _themeKey = 'theme_mode';
   static const String _localeKey = 'locale';
+  static const String _auroraKey = 'aurora_theme';
 
   ThemeMode _themeMode = ThemeMode.light;
   Locale _locale = const Locale('uz');
+  AuroraTheme _auroraTheme = AuroraThemes.steel;
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
   String get languageCode => _locale.languageCode;
+  AuroraTheme get auroraTheme => _auroraTheme;
 
   SettingsProvider() {
     _loadSettings();
@@ -25,6 +29,8 @@ class SettingsProvider extends ChangeNotifier {
 
       final localeStr = prefs.getString(_localeKey) ?? 'uz';
       _locale = Locale(localeStr);
+
+      _auroraTheme = AuroraThemes.steel;
     } catch (_) {
       // Keep defaults on failure
     }
@@ -49,6 +55,13 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_localeKey, locale.languageCode);
+  }
+
+  Future<void> setAuroraTheme(AuroraTheme theme) async {
+    _auroraTheme = theme;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_auroraKey, theme.id);
   }
 
   bool get isDark => _themeMode == ThemeMode.dark;

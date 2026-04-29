@@ -1,7 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
 import '../../l10n/app_localizations.dart';
+import '../../providers/settings_provider.dart';
+import '../../utils/page_transitions.dart';
+import '../../widgets/scale_tap.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'attendance_stats_screen.dart';
@@ -18,6 +23,7 @@ class StudentUsefulScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
     final ink = isDark ? const Color(0xFFF4EEFF) : const Color(0xFF1A1340);
     final sub = ink.withOpacity(0.5);
     final statusBarH = MediaQuery.of(context).padding.top;
@@ -53,10 +59,10 @@ class StudentUsefulScreen extends StatelessWidget {
       ),
       _ServiceCard(
         icon: Icons.grid_view_rounded,
-        title: 'Elektron xizmatlar',
-        subtitle: 'Sababli ariza va xizmatlar',
+        title: 'Imtihon sanalari',
+        subtitle: 'OSKI va Test kunlari',
         color: const Color(0xFF6366F1),
-        screen: const StudentServicesScreen(),
+        screen: const ExamScheduleScreen(),
       ),
       _ServiceCard(
         icon: Icons.menu_book_rounded,
@@ -68,34 +74,30 @@ class StudentUsefulScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0B1020) : const Color(0xFFFEF7F0),
+      backgroundColor: auroraBase(aurora, isDark),
       body: Stack(
         children: [
-          // Aurora background
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: RadialGradient(
                   center: const Alignment(-1.0, -1.0),
                   radius: 1.4,
-                  colors: isDark
-                      ? const [Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFFEC4899), Color(0xFF0B1020)]
-                      : const [Color(0xFFC7D2FE), Color(0xFFFBCFE8), Color(0xFFFED7AA), Color(0xFFFEF7F0)],
+                  colors: auroraGradient(aurora, isDark),
                   stops: const [0.0, 0.35, 0.65, 1.0],
                 ),
               ),
             ),
           ),
-          // Soft blobs
           Positioned(
             top: 180,
             right: -80,
-            child: _Blob(color: isDark ? const Color(0xFFF472B6) : const Color(0xFFF9A8D4)),
+            child: _Blob(color: auroraBlobA(aurora, isDark)),
           ),
           Positioned(
             top: 480,
             left: -80,
-            child: _Blob(color: isDark ? const Color(0xFF60A5FA) : const Color(0xFFA5B4FC)),
+            child: _Blob(color: auroraBlobB(aurora, isDark)),
           ),
 
           // Content
@@ -109,7 +111,7 @@ class StudentUsefulScreen extends StatelessWidget {
                   padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
                   height: statusBarH + 64,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF0D47A1),
+                    color: Color(0xFF0A1A3A),
                     borderRadius: BorderRadius.only(
                       bottomLeft: Radius.circular(18),
                       bottomRight: Radius.circular(18),
@@ -128,25 +130,21 @@ class StudentUsefulScreen extends StatelessWidget {
                         icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
                         onPressed: () {},
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                        onPressed: () {},
-                      ),
                     ],
                   ),
                 ),
 
                 const SizedBox(height: 14),
 
-                // Exam hero banner
+                // Services hero banner
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: GestureDetector(
+                  child: ScaleTap(
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const ExamScheduleScreen()),
+                      SlideFadePageRoute(builder: (_) => const StudentServicesScreen()),
                     ),
-                    child: _ExamHero(),
+                    child: _ServicesHero(),
                   ),
                 ),
 
@@ -183,54 +181,31 @@ class StudentUsefulScreen extends StatelessWidget {
 }
 
 // ---------- Hero card ----------
-class _ExamHero extends StatelessWidget {
+class _ServicesHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: Container(
+        width: double.infinity,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF97316), Color(0xFFEF4444), Color(0xFFDC2626)],
-            stops: [0.0, 0.6, 1.0],
+            colors: [Color(0xFF7C4DFF), Color(0xFFAB47BC), Color(0xFFFF7043)],
           ),
           border: Border.all(color: Colors.white.withOpacity(0.3)),
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFEF4444).withOpacity(0.4),
-              blurRadius: 30,
-              offset: const Offset(0, 14),
+              color: const Color(0xFF7C4DFF).withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         padding: const EdgeInsets.all(18),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              right: -30,
-              top: -30,
-              child: Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.14),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-            const Positioned(
-              right: 22,
-              bottom: 22,
-              child: Opacity(
-                opacity: 0.45,
-                child: Icon(Icons.calendar_today_rounded, size: 56, color: Colors.white),
-              ),
-            ),
-            Column(
+        child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
@@ -240,18 +215,18 @@ class _ExamHero extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: const Text(
-                    'ENG MUHIM',
+                    'XIZMATLAR',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Imtihon sanalari',
+                  'Elektron xizmatlar',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'OSKI va Test kunlari · 3 ta yaqin kun',
+                  'Sababli ariza · Ma\'lumotnoma · Xizmatlar',
                   style: TextStyle(fontSize: 12.5, color: Colors.white.withOpacity(0.9)),
                 ),
                 const SizedBox(height: 14),
@@ -271,20 +246,18 @@ class _ExamHero extends StatelessWidget {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Kirish', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFDC2626))),
+                      Text('Kirish', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFF7C4DFF))),
                       SizedBox(width: 6),
-                      Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFFDC2626)),
+                      Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF7C4DFF)),
                     ],
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
+          ),
+      );
+    }
   }
-}
 
 // ---------- Glass tile ----------
 class _GlassTile extends StatelessWidget {
@@ -299,45 +272,56 @@ class _GlassTile extends StatelessWidget {
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
     final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: surface,
-            border: Border.all(color: border),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withOpacity(0.3)
-                    : const Color(0xFF1A1340).withOpacity(0.06),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => item.screen),
-              ),
+    return ScaleTap(
+      onTap: () => Navigator.push(
+        context,
+        SlideFadePageRoute(builder: (_) => item.screen),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: surface,
+              border: Border.all(color: border),
               borderRadius: BorderRadius.circular(20),
-              child: Stack(
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withOpacity(0.3)
+                      : const Color(0xFF1A1340).withOpacity(0.06),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  SlideFadePageRoute(builder: (_) => item.screen),
+                ),
+                borderRadius: BorderRadius.circular(20),
+                child: Stack(
                 children: [
                   // hue glow — inside ClipRRect so it gets clipped
                   Positioned(
-                    top: -10,
-                    right: -10,
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: item.color.withOpacity(isDark ? 0.25 : 0.18),
+                    top: -50,
+                    right: -50,
+                    child: ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                      child: Container(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [item.color.withOpacity(isDark ? 0.4 : 0.32), item.color.withOpacity(0)],
+                            stops: const [0.0, 0.7],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -391,6 +375,7 @@ class _GlassTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

@@ -8,10 +8,13 @@ import 'dart:async';
 import 'dart:ui';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
+import '../../config/aurora_themes.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/scale_tap.dart';
+import 'student_home_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -193,13 +196,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
 
     return Scaffold(
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
             return Container(
-              color: isDark ? const Color(0xFF0B1020) : const Color(0xFFFEF7F0),
+              color: auroraBase(aurora, isDark),
               child: const LoadingWidget(),
             );
           }
@@ -233,7 +237,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0B1020) : const Color(0xFFFEF7F0),
+                    color: auroraBase(aurora, isDark),
                   ),
                 ),
               ),
@@ -243,9 +247,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     gradient: RadialGradient(
                       center: const Alignment(-1.0, -1.0),
                       radius: 1.4,
-                      colors: isDark
-                          ? const [Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFFEC4899), Color(0xFF0B1020)]
-                          : const [Color(0xFFC7D2FE), Color(0xFFFBCFE8), Color(0xFFFED7AA), Color(0xFFFEF7F0)],
+                      colors: auroraGradient(aurora, isDark),
                       stops: const [0.0, 0.35, 0.65, 1.0],
                     ),
                   ),
@@ -253,11 +255,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               Positioned(
                 top: 180, right: -80,
-                child: _buildBlob(isDark ? const Color(0xFFF472B6) : const Color(0xFFF9A8D4)),
+                child: _buildBlob(auroraBlobA(aurora, isDark)),
               ),
               Positioned(
                 top: 480, left: -80,
-                child: _buildBlob(isDark ? const Color(0xFF60A5FA) : const Color(0xFFA5B4FC)),
+                child: _buildBlob(auroraBlobB(aurora, isDark)),
               ),
               RefreshIndicator(
               onRefresh: () async {
@@ -301,7 +303,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
-    final cc = cardColor ?? const Color(0xFF0D47A1);
+    final cc = cardColor ?? const Color(0xFF0A1A3A);
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
     final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
@@ -324,14 +326,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           child: Stack(
             children: [
               Positioned(
-                top: -10,
-                right: -10,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: cc.withOpacity(isDark ? 0.25 : 0.18),
+                top: -50,
+                right: -50,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Container(
+                    width: 140,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [cc.withOpacity(isDark ? 0.4 : 0.32), cc.withOpacity(0)],
+                        stops: const [0.0, 0.7],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -390,7 +398,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 4),
           height: statusBarHeight + 64,
           decoration: const BoxDecoration(
-            color: Color(0xFF0D47A1),
+            color: Color(0xFF0A1A3A),
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(18),
               bottomRight: Radius.circular(18),
@@ -943,7 +951,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final jnVal = jn != null
           ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0)
           : null;
-      if (jnVal == null) continue;
       final absentHours = _toDouble(s['absent_hours']);
       final totalHours = _toDouble(s['auditorium_hours']);
       final attendance = totalHours > 0
@@ -995,7 +1002,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           const subjectColors = [Color(0xFF43A047), Color(0xFF7C4DFF), Color(0xFFE65100), Color(0xFF0097A7), Color(0xFFE91E63), Color(0xFF1565C0)];
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: _buildGlassCard(
+            child: ScaleTap(
+              onTap: () => StudentHomeScreen.switchToGrades(context),
+              child: _buildGlassCard(
               isDark: isDark,
               cardColor: subjectColors[index % subjectColors.length],
               borderRadius: 16,
@@ -1057,6 +1066,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   ],
                 ),
               ),
+            ),
             ),
           );
         }),
@@ -1727,10 +1737,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return _buildGlassCard(
       isDark: isDark,
       cardColor: ringColor,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-        child: Column(
-          children: [
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: percent),
               duration: const Duration(milliseconds: 1400),
@@ -1805,6 +1818,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

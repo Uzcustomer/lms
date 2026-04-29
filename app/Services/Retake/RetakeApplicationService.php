@@ -1,0 +1,443 @@
+<?php
+
+namespace App\Services\Retake;
+
+use App\Models\AcademicRecord;
+use App\Models\RetakeApplication;
+use App\Models\RetakeApplicationGroup;
+use App\Models\RetakeApplicationLog;
+use App\Models\RetakeApplicationWindow;
+use App\Models\RetakeSetting;
+use App\Models\Student;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Qayta o'qish arizalari uchun asosiy biznes mantiq.
+ *
+ * Vazifalari:
+ *  - Slot tekshirish (max 3 aktiv)
+ *  - Ariza yuborish (group + applications)
+ *  - Dekan/Registrator parallel tasdiqlash
+ *  - O'quv bo'limi yakuniy tasdiqlash/rad etish
+ *  - HEMIS sync orqali avto-bekor qilish
+ *  - Audit log
+ */
+class RetakeApplicationService
+{
+    public const MAX_ACTIVE_SUBJECTS = 3;
+    public const MIN_SUBJECTS_PER_APPLICATION = 1;
+    public const MAX_SUBJECTS_PER_APPLICATION = 3;
+    public const MAX_COMMENT_LENGTH = 500;
+
+    public function __construct(
+        private RetakeDebtService $debtService,
+        private RetakeWindowService $windowService,
+    ) {}
+
+    /**
+     * Talabaning aktiv (pending + approved) arizalari soni.
+     * Faqat slot hisoblash uchun ishlatiladi.
+     */
+    public function activeSubjectCount(int $studentHemisId): int
+    {
+        return RetakeApplication::query()
+            ->forStudent($studentHemisId)
+            ->active()
+            ->count();
+    }
+
+    /**
+     * Qancha slot bo'sh — talaba yana nechta fan tanlay oladi.
+     */
+    public function remainingSlots(int $studentHemisId): int
+    {
+        return max(0, self::MAX_ACTIVE_SUBJECTS - $this->activeSubjectCount($studentHemisId));
+    }
+
+    /**
+     * Berilgan fan uchun talaba aktiv arizasi bor (pending yoki approved)?
+     * Bitta fanga bir vaqtda faqat bitta aktiv ariza bo'la oladi.
+     */
+    public function hasActiveApplicationFor(int $studentHemisId, string $subjectId, string $semesterId): bool
+    {
+        return RetakeApplication::query()
+            ->forStudent($studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_id', $semesterId)
+            ->active()
+            ->exists();
+    }
+
+    /**
+     * Talaba ariza yuboradi.
+     *
+     * @param  array<int,array{subject_id:string,semester_id:string}>  $selectedSubjects
+     */
+    public function submit(
+        Student $student,
+        array $selectedSubjects,
+        UploadedFile $receipt,
+        ?string $comment = null,
+    ): RetakeApplicationGroup {
+        // 1. Oyna tekshirish
+        $window = $this->windowService->activeWindowForStudent($student);
+        if (!$window || !$window->isOpen()) {
+            throw ValidationException::withMessages([
+                'window' => 'Sizning yo\'nalishingiz va kursingiz uchun ariza qabul oynasi ochiq emas',
+            ]);
+        }
+
+        // 2. Soni tekshirish (1..3)
+        $count = count($selectedSubjects);
+        if ($count < self::MIN_SUBJECTS_PER_APPLICATION || $count > self::MAX_SUBJECTS_PER_APPLICATION) {
+            throw ValidationException::withMessages([
+                'subjects' => 'Eng kamida 1 ta, eng ko\'pi 3 ta fan tanlash mumkin',
+            ]);
+        }
+
+        // 3. Slot tekshirish (aktiv + yangi <= 3)
+        $remaining = $this->remainingSlots((int) $student->hemis_id);
+        if ($count > $remaining) {
+            throw ValidationException::withMessages([
+                'subjects' => "Bo'sh slot yetarli emas. Aktiv arizalaringiz bilan birga jami 3 tadan oshmasligi kerak (qolgan: {$remaining})",
+            ]);
+        }
+
+        // 4. Izoh uzunligi
+        if ($comment !== null && mb_strlen($comment) > self::MAX_COMMENT_LENGTH) {
+            throw ValidationException::withMessages([
+                'comment' => 'Izoh ' . self::MAX_COMMENT_LENGTH . ' belgidan oshmasligi kerak',
+            ]);
+        }
+
+        // 5. Kvitansiya tekshirish
+        $maxMb = RetakeSetting::receiptMaxMb();
+        if ($receipt->getSize() > $maxMb * 1024 * 1024) {
+            throw ValidationException::withMessages([
+                'receipt' => "Kvitansiya hajmi {$maxMb} MB dan oshmasligi kerak",
+            ]);
+        }
+        $allowedExt = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
+        $ext = strtolower($receipt->getClientOriginalExtension());
+        if (!in_array($ext, $allowedExt, true)) {
+            throw ValidationException::withMessages([
+                'receipt' => 'Faqat PDF, DOC, DOCX, JPG, PNG fayllar yuklanishi mumkin',
+            ]);
+        }
+
+        // 6. Tanlangan fanlarning haqiqatan qarzdorlik ekanligini tekshirish
+        $debts = $this->debtService->debts($student);
+        $debtsKeyed = $debts->keyBy(fn (AcademicRecord $r) => $r->subject_id . '|' . $r->semester_id);
+
+        $resolved = [];
+        foreach ($selectedSubjects as $sel) {
+            $key = $sel['subject_id'] . '|' . $sel['semester_id'];
+            $debt = $debtsKeyed->get($key);
+            if (!$debt) {
+                throw ValidationException::withMessages([
+                    'subjects' => "Tanlangan fan ({$sel['subject_id']}) sizning qarzdor ro'yxatingizda yo'q",
+                ]);
+            }
+
+            // Bu fan uchun aktiv ariza yo'qligini tekshirish
+            if ($this->hasActiveApplicationFor((int) $student->hemis_id, $debt->subject_id, $debt->semester_id)) {
+                throw ValidationException::withMessages([
+                    'subjects' => "{$debt->subject_name} fani bo'yicha sizda aktiv ariza allaqachon mavjud",
+                ]);
+            }
+            $resolved[] = $debt;
+        }
+
+        // 7. Hisob-kitob (kreditlar va summa)
+        $creditPrice = RetakeSetting::creditPrice();
+        $totalCredits = array_sum(array_map(fn (AcademicRecord $r) => (float) $r->credit, $resolved));
+        $amount = $totalCredits * $creditPrice;
+
+        // 8. Kvitansiya faylini saqlash
+        $receiptPath = $receipt->store(
+            "retake/receipts/{$student->hemis_id}",
+            'public'
+        );
+
+        // 9. DB tranzaksiya — group + applications + log
+        return DB::transaction(function () use ($student, $window, $resolved, $receiptPath, $amount, $creditPrice, $comment) {
+            $group = RetakeApplicationGroup::create([
+                'student_id' => $student->id,
+                'student_hemis_id' => $student->hemis_id,
+                'window_id' => $window->id,
+                'receipt_path' => $receiptPath,
+                'receipt_amount' => $amount,
+                'credit_price_at_time' => $creditPrice,
+                'comment' => $comment,
+            ]);
+
+            foreach ($resolved as $debt) {
+                /** @var AcademicRecord $debt */
+                $app = RetakeApplication::create([
+                    'group_id' => $group->id,
+                    'student_hemis_id' => $student->hemis_id,
+                    'subject_id' => $debt->subject_id,
+                    'subject_name' => $debt->subject_name,
+                    'semester_id' => $debt->semester_id,
+                    'semester_name' => $debt->semester_name,
+                    'credit' => (float) $debt->credit,
+                ]);
+
+                $this->log($app, RetakeApplicationLog::ACTION_SUBMITTED, $student->id, null, [
+                    'group_id' => $group->id,
+                ]);
+            }
+
+            return $group->load('applications');
+        });
+    }
+
+    /**
+     * Dekan tasdiqlaydi/rad etadi.
+     */
+    public function deanDecide(RetakeApplication $app, User $user, string $decision, ?string $reason = null): RetakeApplication
+    {
+        $this->assertReviewable($app);
+        $this->assertDecision($decision);
+
+        if ($decision === RetakeApplication::STATUS_REJECTED) {
+            $this->assertReason($reason);
+        }
+
+        return DB::transaction(function () use ($app, $user, $decision, $reason) {
+            $from = $app->dean_status;
+
+            $app->update([
+                'dean_status' => $decision,
+                'dean_user_id' => $user->id,
+                'dean_decision_at' => now(),
+                'dean_reason' => $reason,
+            ]);
+
+            $this->log(
+                $app,
+                $decision === RetakeApplication::STATUS_APPROVED
+                    ? RetakeApplicationLog::ACTION_DEAN_APPROVED
+                    : RetakeApplicationLog::ACTION_DEAN_REJECTED,
+                $user->id,
+                $reason,
+                ['from' => $from, 'to' => $decision]
+            );
+
+            $this->recomputeFinalStatus($app->fresh());
+
+            return $app->refresh();
+        });
+    }
+
+    /**
+     * Registrator tasdiqlaydi/rad etadi.
+     */
+    public function registrarDecide(RetakeApplication $app, User $user, string $decision, ?string $reason = null): RetakeApplication
+    {
+        $this->assertReviewable($app);
+        $this->assertDecision($decision);
+
+        if ($decision === RetakeApplication::STATUS_REJECTED) {
+            $this->assertReason($reason);
+        }
+
+        return DB::transaction(function () use ($app, $user, $decision, $reason) {
+            $from = $app->registrar_status;
+
+            $app->update([
+                'registrar_status' => $decision,
+                'registrar_user_id' => $user->id,
+                'registrar_decision_at' => now(),
+                'registrar_reason' => $reason,
+            ]);
+
+            $this->log(
+                $app,
+                $decision === RetakeApplication::STATUS_APPROVED
+                    ? RetakeApplicationLog::ACTION_REGISTRAR_APPROVED
+                    : RetakeApplicationLog::ACTION_REGISTRAR_REJECTED,
+                $user->id,
+                $reason,
+                ['from' => $from, 'to' => $decision]
+            );
+
+            $this->recomputeFinalStatus($app->fresh());
+
+            return $app->refresh();
+        });
+    }
+
+    /**
+     * O'quv bo'limi yakka arizani rad etadi (guruh shakllantirilmagan bo'lsa).
+     */
+    public function academicReject(RetakeApplication $app, User $user, string $reason): RetakeApplication
+    {
+        $this->assertReason($reason);
+
+        if ($app->final_status !== RetakeApplication::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'application' => 'Faqat kutilayotgan arizani rad etish mumkin',
+            ]);
+        }
+
+        return DB::transaction(function () use ($app, $user, $reason) {
+            $app->update([
+                'academic_dept_status' => RetakeApplication::STATUS_REJECTED,
+                'academic_dept_user_id' => $user->id,
+                'academic_dept_decision_at' => now(),
+                'academic_dept_reason' => $reason,
+                'final_status' => RetakeApplication::STATUS_REJECTED,
+                'rejected_by' => RetakeApplication::REJECTED_BY_ACADEMIC_DEPT,
+            ]);
+
+            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_REJECTED, $user->id, $reason);
+
+            return $app->refresh();
+        });
+    }
+
+    /**
+     * O'quv bo'limi guruhga biriktirib tasdiqlaydi.
+     * Bu metod RetakeGroupService dan chaqiriladi — bir nechta arizani birga tasdiqlaydi.
+     */
+    public function academicApprove(RetakeApplication $app, User $user, int $retakeGroupId): RetakeApplication
+    {
+        if ($app->final_status !== RetakeApplication::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'application' => 'Faqat kutilayotgan arizani tasdiqlash mumkin',
+            ]);
+        }
+
+        if (!$app->isDualApproved()) {
+            throw ValidationException::withMessages([
+                'application' => 'Avval dekan va registrator tasdiqlashi kerak',
+            ]);
+        }
+
+        return DB::transaction(function () use ($app, $user, $retakeGroupId) {
+            $app->update([
+                'academic_dept_status' => RetakeApplication::STATUS_APPROVED,
+                'academic_dept_user_id' => $user->id,
+                'academic_dept_decision_at' => now(),
+                'final_status' => RetakeApplication::STATUS_APPROVED,
+                'retake_group_id' => $retakeGroupId,
+            ]);
+
+            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_APPROVED, $user->id, null, [
+                'retake_group_id' => $retakeGroupId,
+            ]);
+            $this->log($app, RetakeApplicationLog::ACTION_GROUP_ASSIGNED, $user->id, null, [
+                'retake_group_id' => $retakeGroupId,
+            ]);
+
+            return $app->refresh();
+        });
+    }
+
+    /**
+     * HEMIS sync'da baho paydo bo'ldi — ariza avtomatik bekor qilinadi.
+     */
+    public function autoCancelByHemis(RetakeApplication $app): RetakeApplication
+    {
+        if ($app->final_status !== RetakeApplication::STATUS_PENDING) {
+            return $app;
+        }
+
+        return DB::transaction(function () use ($app) {
+            $app->update([
+                'final_status' => RetakeApplication::STATUS_REJECTED,
+                'rejected_by' => RetakeApplication::REJECTED_BY_SYSTEM_HEMIS,
+                'academic_dept_reason' => 'HEMIS sync\'da baho paydo bo\'ldi yoki retraining_status o\'zgardi',
+            ]);
+
+            $this->log(
+                $app,
+                RetakeApplicationLog::ACTION_AUTO_CANCELLED_HEMIS,
+                null,
+                'HEMIS\'da baho paydo bo\'lgan, ariza avtomatik bekor qilindi'
+            );
+
+            return $app->refresh();
+        });
+    }
+
+    /**
+     * dean+registrator qarorlari asosida final_status'ni qayta hisoblash.
+     */
+    private function recomputeFinalStatus(RetakeApplication $app): void
+    {
+        // Birortasi rad etgan? → darhol rejected
+        if ($app->dean_status === RetakeApplication::STATUS_REJECTED) {
+            $app->update([
+                'final_status' => RetakeApplication::STATUS_REJECTED,
+                'rejected_by' => RetakeApplication::REJECTED_BY_DEAN,
+            ]);
+            return;
+        }
+        if ($app->registrar_status === RetakeApplication::STATUS_REJECTED) {
+            $app->update([
+                'final_status' => RetakeApplication::STATUS_REJECTED,
+                'rejected_by' => RetakeApplication::REJECTED_BY_REGISTRAR,
+            ]);
+            return;
+        }
+
+        // Ikkalasi tasdiqlagan? → academic_dept'ga o'tadi (status pending qoladi)
+        if ($app->isDualApproved() && $app->academic_dept_status === RetakeApplication::STATUS_PENDING) {
+            // academic_dept_status allaqachon pending — qo'shimcha o'zgarish kerak emas
+            return;
+        }
+    }
+
+    private function assertReviewable(RetakeApplication $app): void
+    {
+        if ($app->final_status === RetakeApplication::STATUS_REJECTED) {
+            throw ValidationException::withMessages([
+                'application' => 'Bu ariza allaqachon rad etilgan, lekin sizning qarroringiz audit log uchun yoziladi',
+            ]);
+        }
+    }
+
+    private function assertDecision(string $decision): void
+    {
+        if (!in_array($decision, [RetakeApplication::STATUS_APPROVED, RetakeApplication::STATUS_REJECTED], true)) {
+            throw ValidationException::withMessages([
+                'decision' => 'Noto\'g\'ri qaror',
+            ]);
+        }
+    }
+
+    private function assertReason(?string $reason): void
+    {
+        $min = RetakeSetting::rejectReasonMinLength();
+        if ($reason === null || mb_strlen(trim($reason)) < $min) {
+            throw ValidationException::withMessages([
+                'reason' => "Sabab eng kamida {$min} belgidan iborat bo'lishi kerak",
+            ]);
+        }
+    }
+
+    private function log(
+        RetakeApplication $app,
+        string $action,
+        ?int $userId = null,
+        ?string $reason = null,
+        array $metadata = [],
+    ): void {
+        RetakeApplicationLog::create([
+            'application_id' => $app->id,
+            'group_id' => $app->group_id,
+            'user_id' => $userId,
+            'action' => $action,
+            'from_status' => $metadata['from'] ?? null,
+            'to_status' => $metadata['to'] ?? null,
+            'reason' => $reason,
+            'metadata' => $metadata ?: null,
+        ]);
+    }
+}

@@ -136,7 +136,7 @@ class RetakeGroupController extends Controller
             ? __('Guruh yaratildi va tasdiqlandi')
             : __('Guruh shakllantirilmoqda (draft)');
 
-        return redirect()->route('teacher.retake-groups.index')->with('success', $msg);
+        return redirect()->route('admin.retake-groups.index')->with('success', $msg);
     }
 
     /**
@@ -187,7 +187,7 @@ class RetakeGroupController extends Controller
             return redirect()->back()->withErrors($e->errors());
         }
 
-        return redirect()->route('teacher.retake-groups.edit', $groupId)
+        return redirect()->route('admin.retake-groups.edit', $groupId)
             ->with('success', __('Guruh yangilandi'));
     }
 

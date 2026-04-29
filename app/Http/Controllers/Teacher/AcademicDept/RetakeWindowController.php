@@ -68,7 +68,7 @@ class RetakeWindowController extends Controller
             return redirect()->back()->withErrors($e->errors())->withInput();
         }
 
-        return redirect()->route('teacher.retake-windows.index')
+        return redirect()->route('admin.retake-windows.index')
             ->with('success', __('Qabul oynasi muvaffaqiyatli yaratildi'));
     }
 
@@ -114,7 +114,7 @@ class RetakeWindowController extends Controller
 
         $window->delete();
 
-        return redirect()->route('teacher.retake-windows.index')
+        return redirect()->route('admin.retake-windows.index')
             ->with('success', __('Oyna o\'chirildi'));
     }
 

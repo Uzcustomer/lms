@@ -247,6 +247,80 @@
                 </div>
             </div>
 
+            {{-- SECTION: TEST MARKAZI SIG'IMI --}}
+            <div x-data="{ open: {{ request('tab') === 'exam-capacity' ? 'true' : 'false' }} }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border: none; cursor: pointer; border-bottom: 1px solid #5eead4;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #14b8a6, #0d9488); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(20,184,166,0.3);">
+                            <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 17px; font-weight: 700; color: #115e59;">Test markazi sig'imi</div>
+                            <div style="font-size: 13px; color: #0f766e; margin-top: 2px;">Kompyuter soni, test davomiyligi va ish vaqti — vaqt/kun ustma-ust tushishini nazorat qilish uchun</div>
+                        </div>
+                    </div>
+                    <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #0f766e; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div x-show="open" x-transition style="padding: 24px;">
+                    <form method="POST" action="{{ route('admin.settings.update.exam-capacity') }}">
+                        @csrf
+
+                        <div style="background: #f0fdfa; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; border: 1px solid #99f6e4; font-size: 13px; color: #115e59; display: flex; align-items: flex-start; gap: 10px;">
+                            <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; margin-top: 1px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div>
+                                Bu sozlamalar test markazi xodimi YN vaqtini belgilashda <strong>vaqt ustma-ust tushishini</strong>, registrator ofisi xodimi YN sanasini belgilashda <strong>kun sig'imi</strong> oshmasligini nazorat qilish uchun ishlatiladi.
+                                Kunlik sig'im = (ish vaqti / test davomiyligi) × kompyuter soni.
+                            </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                            <div style="background: linear-gradient(135deg, #ccfbf1, #99f6e4); border-radius: 14px; padding: 18px; border: 1px solid #2dd4bf;">
+                                <div style="font-size: 12px; font-weight: 700; color: #115e59; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Kompyuter soni</div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="number" name="computer_count" value="{{ old('computer_count', $examCapacity['computer_count']) }}" min="1" max="10000" required style="width: 100%; padding: 10px 14px; border: 2px solid #14b8a6; border-radius: 10px; font-size: 22px; font-weight: 800; color: #115e59; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                                    <span style="font-size: 14px; color: #115e59; font-weight: 600;">ta</span>
+                                </div>
+                            </div>
+
+                            <div style="background: linear-gradient(135deg, #ccfbf1, #99f6e4); border-radius: 14px; padding: 18px; border: 1px solid #2dd4bf;">
+                                <div style="font-size: 12px; font-weight: 700; color: #115e59; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Test davomiyligi</div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="number" name="test_duration_minutes" value="{{ old('test_duration_minutes', $examCapacity['test_duration_minutes']) }}" min="1" max="480" required style="width: 100%; padding: 10px 14px; border: 2px solid #14b8a6; border-radius: 10px; font-size: 22px; font-weight: 800; color: #115e59; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                                    <span style="font-size: 14px; color: #115e59; font-weight: 600;">daqiqa</span>
+                                </div>
+                            </div>
+
+                            <div style="background: linear-gradient(135deg, #ccfbf1, #99f6e4); border-radius: 14px; padding: 18px; border: 1px solid #2dd4bf;">
+                                <div style="font-size: 12px; font-weight: 700; color: #115e59; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Ish vaqti boshlanishi</div>
+                                <input type="time" name="work_hours_start" value="{{ old('work_hours_start', $examCapacity['work_hours_start']) }}" required style="width: 100%; padding: 10px 14px; border: 2px solid #14b8a6; border-radius: 10px; font-size: 22px; font-weight: 800; color: #115e59; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                            </div>
+
+                            <div style="background: linear-gradient(135deg, #ccfbf1, #99f6e4); border-radius: 14px; padding: 18px; border: 1px solid #2dd4bf;">
+                                <div style="font-size: 12px; font-weight: 700; color: #115e59; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Ish vaqti tugashi</div>
+                                <input type="time" name="work_hours_end" value="{{ old('work_hours_end', $examCapacity['work_hours_end']) }}" required style="width: 100%; padding: 10px 14px; border: 2px solid #14b8a6; border-radius: 10px; font-size: 22px; font-weight: 800; color: #115e59; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                            </div>
+                        </div>
+
+                        <div style="background: #f8fafc; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                            <div style="font-size: 13px; color: #64748b;">
+                                Hisoblangan kunlik sig'im (talaba-test soni / kun):
+                            </div>
+                            <div style="font-size: 22px; font-weight: 800; color: #0f766e;">
+                                {{ number_format($examDailyCapacity, 0, '.', ' ') }}
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end;">
+                            <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #14b8a6, #0d9488); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(20,184,166,0.3);">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Saqlash
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             {{-- SECTION: O'TISH BALI CHEGARALARI --}}
             <div x-data="{ open: true }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                 <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fef3c7, #fde68a); border: none; cursor: pointer; border-bottom: 1px solid #fbbf24;">

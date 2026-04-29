@@ -21,6 +21,7 @@ use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
 use App\Models\StudentNotification;
+use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
 use App\Services\TelegramService;
 use App\Enums\ProjectRole;
@@ -792,6 +793,103 @@ class AcademicScheduleController extends Controller
                             ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
                             : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
                     }
+                }
+            }
+        }
+
+        // Kunlik sig'im validatsiyasi (har bir yangi/o'zgargan sana uchun)
+        $dailyCapacity = ExamCapacityService::dailyCapacity();
+        if ($dailyCapacity > 0) {
+            // Aggregat: $dateStudents[$date] = qancha qo'shilayotgan talaba (ushbu so'rov ichida)
+            $pendingByDate = [];
+            $groupCountCache = [];
+
+            $countOf = function ($groupId) use (&$groupCountCache) {
+                if (!isset($groupCountCache[$groupId])) {
+                    $groupCountCache[$groupId] = ExamCapacityService::groupStudentCount($groupId);
+                }
+                return $groupCountCache[$groupId];
+            };
+
+            foreach ($validSchedules as $schedule) {
+                $existingRec = $existingForValidation->get(
+                    $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
+                );
+
+                $oskiNa = !empty($schedule['oski_na']);
+                $testNa = !empty($schedule['test_na']);
+
+                // OSKI: agar yangi yoki o'zgargan sana bo'lsa
+                if (!empty($schedule['oski_date']) && !$oskiNa) {
+                    $oldOski = $existingRec?->oski_date?->format('Y-m-d');
+                    $newOski = $schedule['oski_date'];
+                    if ($oldOski !== $newOski) {
+                        $pendingByDate[$newOski]['students'] = ($pendingByDate[$newOski]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
+                        $pendingByDate[$newOski]['exclude'][] = [
+                            'group_hemis_id' => $schedule['group_hemis_id'],
+                            'subject_id' => $schedule['subject_id'],
+                            'semester_code' => $schedule['semester_code'],
+                            'yn_type' => 'oski',
+                        ];
+                    }
+                }
+                // Test: agar yangi yoki o'zgargan sana bo'lsa
+                if (!empty($schedule['test_date']) && !$testNa) {
+                    $oldTest = $existingRec?->test_date?->format('Y-m-d');
+                    $newTest = $schedule['test_date'];
+                    if ($oldTest !== $newTest) {
+                        $pendingByDate[$newTest]['students'] = ($pendingByDate[$newTest]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
+                        $pendingByDate[$newTest]['exclude'][] = [
+                            'group_hemis_id' => $schedule['group_hemis_id'],
+                            'subject_id' => $schedule['subject_id'],
+                            'semester_code' => $schedule['semester_code'],
+                            'yn_type' => 'test',
+                        ];
+                    }
+                }
+            }
+
+            foreach ($pendingByDate as $date => $info) {
+                // Sanada allaqachon belgilangan boshqa yozuvlar (joriy o'zgartirilayotganlardan tashqari)
+                $existingTotal = 0;
+                $excludeList = $info['exclude'] ?? [];
+                $rowsOnDate = ExamSchedule::where(function ($q) use ($date) {
+                    $q->where(function ($q2) use ($date) {
+                        $q2->whereDate('oski_date', $date)->where('oski_na', false);
+                    })->orWhere(function ($q2) use ($date) {
+                        $q2->whereDate('test_date', $date)->where('test_na', false);
+                    });
+                })->get();
+
+                foreach ($rowsOnDate as $row) {
+                    $isExcluded = function (string $ynType) use ($row, $excludeList): bool {
+                        foreach ($excludeList as $ex) {
+                            if ($ex['group_hemis_id'] === $row->group_hemis_id
+                                && (string) $ex['subject_id'] === (string) $row->subject_id
+                                && (string) $ex['semester_code'] === (string) $row->semester_code
+                                && $ex['yn_type'] === $ynType) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    };
+
+                    $oskiMatch = $row->oski_date && $row->oski_date->format('Y-m-d') === $date && !$row->oski_na;
+                    $testMatch = $row->test_date && $row->test_date->format('Y-m-d') === $date && !$row->test_na;
+
+                    if ($oskiMatch && !$isExcluded('oski')) {
+                        $existingTotal += $countOf($row->group_hemis_id);
+                    }
+                    if ($testMatch && !$isExcluded('test')) {
+                        $existingTotal += $countOf($row->group_hemis_id);
+                    }
+                }
+
+                $combined = $existingTotal + ($info['students'] ?? 0);
+                if ($combined > $dailyCapacity) {
+                    $dateFormatted = \Carbon\Carbon::parse($date)->format('d.m.Y');
+                    return redirect()->back()->with('error',
+                        "Kun ustma-ust tushdi! {$dateFormatted} kuniga jami {$combined} talaba belgilanadi, lekin kunlik sig'im atigi {$dailyCapacity} ta. Boshqa kunni tanlang yoki sozlamalardan sig'imni oshiring.");
                 }
             }
         }
@@ -1788,6 +1886,54 @@ class AcademicScheduleController extends Controller
         $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
         $ynSubmitted = (bool) $request->input('yn_submitted', false);
 
+        // Sig'im va vaqt-ust-ust tushishini tekshirish
+        if ($relatedDate) {
+            $capacity = ExamCapacityService::getSettings();
+            $computerCount = (int) $capacity['computer_count'];
+            $duration = (int) $capacity['test_duration_minutes'];
+            $workStart = $capacity['work_hours_start'];
+            $workEnd = $capacity['work_hours_end'];
+
+            $newTime = substr($request->test_time, 0, 5);
+            // Ish vaqti oralig'idan tashqarida bo'lmasin
+            $slotStart = \Carbon\Carbon::createFromFormat('H:i', $newTime);
+            $slotEnd = $slotStart->copy()->addMinutes($duration);
+            $wStart = \Carbon\Carbon::createFromFormat('H:i', $workStart);
+            $wEnd = \Carbon\Carbon::createFromFormat('H:i', $workEnd);
+
+            if ($slotStart->lt($wStart) || $slotEnd->gt($wEnd)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Tanlangan vaqt ish soatlaridan ({$workStart}–{$workEnd}) tashqarida. Test davomiyligi {$duration} daqiqa.",
+                ], 422);
+            }
+
+            $relatedDateStr = $relatedDate instanceof \Carbon\Carbon
+                ? $relatedDate->format('Y-m-d')
+                : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
+
+            $exclude = [
+                'group_hemis_id' => $request->group_hemis_id,
+                'subject_id' => $request->subject_id,
+                'semester_code' => $request->semester_code,
+                'yn_type' => strtolower($ynType),
+            ];
+
+            $concurrent = ExamCapacityService::concurrentStudentsForSlot($relatedDateStr, $newTime, $exclude);
+            $thisGroupCount = ExamCapacityService::groupStudentCount($request->group_hemis_id);
+            $totalAtSlot = $concurrent + $thisGroupCount;
+
+            if ($totalAtSlot > $computerCount) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Vaqt ustma-ust tushdi! {$newTime} – {$slotEnd->format('H:i')} oralig'ida jami {$totalAtSlot} talaba band bo'ladi, kompyuter sig'imi esa atigi {$computerCount} ta. Boshqa vaqtni tanlang.",
+                    'concurrent_students' => $concurrent,
+                    'this_group_students' => $thisGroupCount,
+                    'computer_count' => $computerCount,
+                ], 422);
+            }
+        }
+
         $examSchedule->update([$timeColumn => $request->test_time]);
 
         // Shu guruhdagi Telegram tasdiqlangan talabalarga notification yuborish
@@ -1871,7 +2017,7 @@ class AcademicScheduleController extends Controller
 
     public function bandlikKursatkichi(Request $request)
     {
-        $totalComputers = 60;
+        $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
         $today = now()->format('Y-m-d');
 
         // Faqat bugundan keyingi (bugun kiradi) test vaqtlari belgilangan sanalar
@@ -1991,7 +2137,7 @@ class AcademicScheduleController extends Controller
 
     public function bandlikKursatkichiShow(Request $request, string $date)
     {
-        $totalComputers = 60;
+        $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
 
         // Sana validatsiyasi
         try {

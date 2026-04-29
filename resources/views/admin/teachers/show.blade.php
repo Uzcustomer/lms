@@ -489,6 +489,41 @@
                                 </div>
                             </div>
 
+                            {{-- Nazoratchi guruhlari bo'limi --}}
+                            @php
+                                $oldNazoratchiGroups = old('nazoratchi_groups', $teacher->nazoratchiGroups()->pluck('groups.id')->toArray());
+                                $isNazoratchiChecked = in_array('nazoratchi', $oldRoles);
+                            @endphp
+                            <div id="nazoratchi-section" style="display: {{ $isNazoratchiChecked ? 'block' : 'none' }}; margin-top: 10px;">
+                                <div style="padding: 10px; background: #fdf4ff; border-radius: 8px; border: 1px solid #f5d0fe;">
+                                    <label style="font-size: 11px; font-weight: 600; color: #86198f; display: block; margin-bottom: 6px;">Nazoratchi roli uchun guruhlar (bir nechta tanlash mumkin):</label>
+                                    <input type="text" id="nazoratchi-search" placeholder="Guruh nomini qidiring..."
+                                           oninput="filterNazoratchiGroups()"
+                                           style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; outline: none; margin-bottom: 6px;">
+                                    @if($allGroups->isEmpty())
+                                        <div style="padding: 8px; background: #fef9c3; border: 1px solid #fde68a; border-radius: 6px; font-size: 12px; color: #854d0e;">
+                                            Guruhlar topilmadi.
+                                        </div>
+                                    @else
+                                        <div id="nazoratchi-groups-list" style="display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto;">
+                                            @foreach($allGroups as $g)
+                                                <label class="nazoratchi-group-row" data-name="{{ mb_strtolower($g->name . ' ' . ($g->department_name ?? '')) }}"
+                                                       style="display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px;"
+                                                       onmouseover="this.style.backgroundColor='#fae8ff'" onmouseout="this.style.backgroundColor='transparent'">
+                                                    <input type="checkbox" name="nazoratchi_groups[]" value="{{ $g->id }}"
+                                                        {{ in_array($g->id, $oldNazoratchiGroups) ? 'checked' : '' }}
+                                                        style="accent-color: #a21caf;">
+                                                    <span style="font-weight: 600; color: #1e293b;">{{ $g->name }}</span>
+                                                    @if($g->department_name)
+                                                        <span style="font-size: 10px; color: #64748b;">— {{ $g->department_name }}</span>
+                                                    @endif
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
                             {{-- Javobgar firma bo'limi --}}
                             @php
                                 $isFirmChecked = in_array('javobgar_firma', $oldRoles);
@@ -575,6 +610,89 @@
                                                             <td style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">{{ $index + 1 }}</td>
                                                             <td style="padding: 8px 12px;">
                                                                 <a href="{{ route('admin.students.show', $student->id) }}" style="color: #1e293b; font-weight: 600; text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='#059669'" onmouseout="this.style.color='#1e293b'">
+                                                                    {{ $student->full_name }}
+                                                                </a>
+                                                            </td>
+                                                            <td style="padding: 8px 12px; color: #64748b; font-family: monospace; font-size: 11px;">{{ $student->student_id_number }}</td>
+                                                            <td style="padding: 8px 12px; text-align: center;">
+                                                                @if($student->avg_gpa)
+                                                                    <span style="padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; {{ $student->avg_gpa >= 3.5 ? 'background: #dcfce7; color: #166534;' : ($student->avg_gpa >= 2.5 ? 'background: #fef9c3; color: #854d0e;' : 'background: #fee2e2; color: #991b1b;') }}">
+                                                                        {{ number_format($student->avg_gpa, 2) }}
+                                                                    </span>
+                                                                @else
+                                                                    <span style="color: #94a3b8;">-</span>
+                                                                @endif
+                                                            </td>
+                                                            <td style="padding: 8px 12px;">
+                                                                <span class="badge {{ $student->student_status_name == 'Faol' || $student->student_status_code == '11' ? 'badge-green' : 'badge-yellow' }}" style="font-size: 10px;">
+                                                                    {{ $student->student_status_name ?? '-' }}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    @else
+                                        <div style="padding: 20px; text-align: center; color: #94a3b8; font-size: 13px;">
+                                            Talabalar topilmadi
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            {{-- NAZORATCHI GURUHLARI VA TALABALAR --}}
+            @if($nazoratchiGroups->count() > 0)
+                <div style="margin-top: 16px;">
+                    <div class="card" style="border: none; box-shadow: none; background: transparent;">
+                        <div class="card-header" style="background: linear-gradient(135deg, #fdf4ff, #faf5ff); color: #86198f; border-bottom: 2px solid #f5d0fe; border-radius: 12px 12px 0 0;">
+                            <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                            Nazoratchi guruhlari ({{ $nazoratchiGroups->count() }})
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        @foreach($nazoratchiGroups as $group)
+                            <div class="card" style="border-color: #f5d0fe;">
+                                <div style="padding: 12px 16px; background: #fdf4ff; border-bottom: 1px solid #f5d0fe; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" onclick="toggleNazoratchiGroup({{ $group->id }})">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #a21caf, #c026d3); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">
+                                            {{ $group->students->count() }}
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 14px; color: #1e293b;">{{ $group->name }}</div>
+                                            <div style="font-size: 11px; color: #64748b;">{{ $group->department_name ?? '' }}</div>
+                                        </div>
+                                    </div>
+                                    <svg id="nazoratchi-group-arrow-{{ $group->id }}" style="width: 16px; height: 16px; color: #64748b; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </div>
+                                <div id="nazoratchi-group-{{ $group->id }}" style="display: none;">
+                                    @if($group->students->count() > 0)
+                                        <div style="overflow-x: auto;">
+                                            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                                                <thead>
+                                                    <tr style="background: #f8fafc;">
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">#</th>
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">F.I.O</th>
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">ID raqam</th>
+                                                        <th style="padding: 8px 12px; text-align: center; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">GPA</th>
+                                                        <th style="padding: 8px 12px; text-align: left; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; font-size: 11px;">Holati</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($group->students as $index => $student)
+                                                        <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#fdf4ff'" onmouseout="this.style.background='transparent'">
+                                                            <td style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">{{ $index + 1 }}</td>
+                                                            <td style="padding: 8px 12px;">
+                                                                <a href="{{ route('admin.students.show', $student->id) }}" style="color: #1e293b; font-weight: 600; text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='#a21caf'" onmouseout="this.style.color='#1e293b'">
                                                                     {{ $student->full_name }}
                                                                 </a>
                                                             </td>
@@ -710,6 +828,15 @@
                 }
             }
 
+            var nazoratchiCheckbox = document.querySelector('input[value="nazoratchi"]');
+            if (nazoratchiCheckbox && nazoratchiCheckbox.checked) {
+                var checked = document.querySelectorAll('input[name="nazoratchi_groups[]"]:checked');
+                if (checked.length === 0) {
+                    alert("Nazoratchi roli uchun kamida bitta guruhni tanlash majburiy!");
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -755,6 +882,25 @@
             } catch (e) {
                 console.error('toggleRole firm error:', e);
             }
+
+            try {
+                var nazoratchiCheckbox = document.querySelector('input[value="nazoratchi"]');
+                var nazoratchiSection = document.getElementById('nazoratchi-section');
+                if (nazoratchiSection && nazoratchiCheckbox) {
+                    nazoratchiSection.style.display = nazoratchiCheckbox.checked ? 'block' : 'none';
+                }
+            } catch (e) {
+                console.error('toggleRole nazoratchi error:', e);
+            }
+        }
+
+        function filterNazoratchiGroups() {
+            var q = (document.getElementById('nazoratchi-search').value || '').toLowerCase().trim();
+            var rows = document.querySelectorAll('.nazoratchi-group-row');
+            rows.forEach(function (row) {
+                var name = row.getAttribute('data-name') || '';
+                row.style.display = (!q || name.indexOf(q) !== -1) ? 'flex' : 'none';
+            });
         }
 
         var subjectCoursesLoaded = false;
@@ -1097,6 +1243,18 @@
         function toggleTutorGroup(groupId) {
             var content = document.getElementById('tutor-group-' + groupId);
             var arrow = document.getElementById('tutor-group-arrow-' + groupId);
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                content.style.display = 'none';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function toggleNazoratchiGroup(groupId) {
+            var content = document.getElementById('nazoratchi-group-' + groupId);
+            var arrow = document.getElementById('nazoratchi-group-arrow-' + groupId);
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 arrow.style.transform = 'rotate(180deg)';

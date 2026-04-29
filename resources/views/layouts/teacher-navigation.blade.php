@@ -33,7 +33,7 @@
                     </x-nav-link>
                 </div>
                 @endif
-                @if($navActiveRole !== 'tyutor')
+                @if(!in_array($navActiveRole, ['tyutor', 'nazoratchi']))
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                         {{ __('Jurnal') }}
@@ -41,7 +41,8 @@
                 </div>
                 @endif
                 @php
-                    $hasTutorGroups = auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0;
+                    $hasTutorGroups = auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0
+                        || auth()->guard('teacher')->user()->nazoratchiGroups()->where('active', true)->count() > 0;
                     if (!$hasTutorGroups) {
                         $hasTutorGroups = \Illuminate\Support\Facades\DB::table('schedules')
                             ->where('employee_id', auth()->guard('teacher')->user()->hemis_id)
@@ -405,6 +406,7 @@
                                 'buxgalteriya' => 'Buxgalteriya',
                                 'manaviyat' => "Ma'naviyat",
                                 'tyutor' => 'Tyutor',
+                                'nazoratchi' => 'Nazoratchi',
                             ];
                         @endphp
                         @if($teacherRoles->count() > 1)
@@ -508,7 +510,7 @@
                     {{ __('Baholar') }}
                 </x-responsive-nav-link>
                 @endif
-                @if($navActiveRole !== 'tyutor')
+                @if(!in_array($navActiveRole, ['tyutor', 'nazoratchi']))
                 <x-responsive-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                     {{ __('Jurnal') }}
                 </x-responsive-nav-link>

@@ -36,6 +36,7 @@ class RetakeApplicationService
         private RetakeDebtService $debtService,
         private RetakeWindowService $windowService,
         private RetakeDocumentService $documentService,
+        private RetakeNotificationService $notificationService,
     ) {}
 
     /**
@@ -192,7 +193,10 @@ class RetakeApplicationService
                 ]);
             }
 
-            return $group->load('applications');
+            $loaded = $group->load('applications', 'student');
+            $this->notificationService->notifyNewSubmission($loaded);
+
+            return $loaded;
         });
     }
 
@@ -231,7 +235,13 @@ class RetakeApplicationService
 
             $this->recomputeFinalStatus($app->fresh());
 
-            return $app->refresh();
+            $fresh = $app->refresh();
+            $this->notificationService->notifyDeanDecision($fresh);
+            if ($fresh->isDualApproved() && $fresh->academic_dept_status === RetakeApplication::STATUS_PENDING) {
+                $this->notificationService->notifyAcademicReady($fresh);
+            }
+
+            return $fresh;
         });
     }
 
@@ -270,7 +280,13 @@ class RetakeApplicationService
 
             $this->recomputeFinalStatus($app->fresh());
 
-            return $app->refresh();
+            $fresh = $app->refresh();
+            $this->notificationService->notifyRegistrarDecision($fresh);
+            if ($fresh->isDualApproved() && $fresh->academic_dept_status === RetakeApplication::STATUS_PENDING) {
+                $this->notificationService->notifyAcademicReady($fresh);
+            }
+
+            return $fresh;
         });
     }
 
@@ -302,6 +318,7 @@ class RetakeApplicationService
 
             $fresh = $app->refresh();
             $this->maybeGenerateGroupDocuments($fresh, $actor);
+            $this->notificationService->notifyAcademicDecision($fresh);
 
             return $fresh;
         });
@@ -344,6 +361,12 @@ class RetakeApplicationService
 
             $fresh = $app->refresh();
             $this->maybeGenerateGroupDocuments($fresh, $actor);
+            $this->notificationService->notifyAcademicDecision($fresh);
+
+            // Hujjatlar tayyor bo'lsa — talabaga xabar
+            if ($fresh->group?->pdf_certificate_path) {
+                $this->notificationService->notifyDocumentsReady($fresh->group);
+            }
 
             return $fresh;
         });
@@ -374,6 +397,7 @@ class RetakeApplicationService
 
             $fresh = $app->refresh();
             $this->maybeGenerateGroupDocuments($fresh);
+            $this->notificationService->notifyAutoCancelled($fresh);
 
             return $fresh;
         });

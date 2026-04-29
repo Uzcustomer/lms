@@ -1022,6 +1022,18 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/applications/{applicationId}/reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'rejectApplication'])->name('applications.reject');
         });
 
+        // O'quv bo'limi: Statistika va eksport (Registrator + O'quv bo'limi)
+        Route::prefix('retake-statistics')->name('retake-statistics.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'exportExcel'])->name('export');
+        });
+
+        // O'quv bo'limi: Sozlamalar (kredit narxi va h.k.)
+        Route::prefix('retake-settings')->name('retake-settings.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'index'])->name('index');
+            Route::put('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'update'])->name('update');
+        });
+
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {
             Route::get('/unread-count', [TeacherNotificationController::class, 'unreadCount'])->name('unread-count');

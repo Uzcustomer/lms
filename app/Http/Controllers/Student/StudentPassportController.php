@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\StudentPassport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class StudentPassportController extends Controller
@@ -124,6 +125,15 @@ class StudentPassportController extends Controller
                 Storage::disk('public')->delete($existing->foreign_passport_path);
             }
             $data['foreign_passport_path'] = $request->file('foreign_passport')->store($storagePath, 'public');
+        }
+
+        // Talaba qayta yuborganda rad etilgan holatni tozalaymiz —
+        // admin yangi tekshirishi uchun yana "Kutilmoqda" holatiga qaytadi.
+        if (Schema::hasColumn('graduate_student_passports', 'status')) {
+            $data['status'] = 'pending';
+            $data['rejection_reason'] = null;
+            $data['reviewed_by'] = null;
+            $data['reviewed_at'] = null;
         }
 
         StudentPassport::updateOrCreate(

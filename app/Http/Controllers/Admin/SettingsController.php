@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Deadline;
 use App\Models\MarkingSystemScore;
 use App\Models\Setting;
+use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
 use App\Services\HemisService;
 use Illuminate\Http\Request;
@@ -37,6 +38,10 @@ class SettingsController extends Controller
         // YN sanasini belgilash huquqi (kurs darajasi -> rollar)
         $data['examDateRoleMapping'] = ExamDateRoleService::getMapping();
         $data['examDateConfigurableRoles'] = ExamDateRoleService::configurableRoles();
+
+        // Test markazi sig'imi sozlamalari
+        $data['examCapacity'] = ExamCapacityService::getSettings();
+        $data['examDailyCapacity'] = ExamCapacityService::dailyCapacity();
 
         // Kontrakt to'lov muddatlari
         $defaultCutoffs = json_encode([
@@ -191,6 +196,30 @@ class SettingsController extends Controller
         Setting::set('telegram_deadline_days', $request->telegram_deadline_days);
 
         return redirect()->route('admin.settings')->with('success', 'Telegram sozlamalari muvaffaqiyatli yangilandi.');
+    }
+
+    public function updateExamCapacity(Request $request)
+    {
+        $request->validate([
+            'computer_count' => 'required|integer|min:1|max:10000',
+            'test_duration_minutes' => 'required|integer|min:1|max:480',
+            'work_hours_start' => 'required|date_format:H:i',
+            'work_hours_end' => 'required|date_format:H:i|after:work_hours_start',
+            'lunch_start' => 'nullable|date_format:H:i|after_or_equal:work_hours_start',
+            'lunch_end' => 'nullable|date_format:H:i|after:lunch_start|before_or_equal:work_hours_end',
+        ]);
+
+        ExamCapacityService::setSettings($request->only([
+            'computer_count',
+            'test_duration_minutes',
+            'work_hours_start',
+            'work_hours_end',
+            'lunch_start',
+            'lunch_end',
+        ]));
+
+        return redirect()->route('admin.settings', ['tab' => 'exam-capacity'])
+            ->with('success', "Test markazi sig'imi sozlamalari muvaffaqiyatli yangilandi.");
     }
 
     public function updateExamDateRoles(Request $request)

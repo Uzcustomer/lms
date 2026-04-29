@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 class SlideFadePageRoute<T> extends PageRouteBuilder<T> {
   SlideFadePageRoute({
     required this.builder,
-    this.duration = const Duration(milliseconds: 320),
-    this.reverseDuration = const Duration(milliseconds: 240),
+    Duration duration = const Duration(milliseconds: 320),
+    Duration reverseDuration = const Duration(milliseconds: 240),
     super.settings,
   }) : super(
           pageBuilder: (context, animation, secondaryAnimation) =>

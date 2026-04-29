@@ -1,0 +1,277 @@
+<?php
+
+namespace App\Services\Retake;
+
+use App\Models\DocumentVerification;
+use App\Models\RetakeApplication;
+use App\Models\RetakeApplicationGroup;
+use App\Models\Student;
+use App\Models\Teacher;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use PhpOffice\PhpWord\Element\Section;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\SimpleType\Jc;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
+
+/**
+ * Tasdiqnoma (PDF + QR) va ariza (DOCX) generatsiyasi.
+ *
+ * Hujjatlar uchchalasi (dekan + registrator + o'quv bo'limi) tasdiqlagandan
+ * keyin generatsiya qilinadi. Bitta application_group uchun bittadan
+ * (har talaba o'z arizasiga bitta DOCX va bitta PDF tasdiqnoma oladi).
+ */
+class RetakeDocumentService
+{
+    public const STORAGE_DISK = 'public';
+    public const DOCX_DIR = 'retake/docx';
+    public const PDF_DIR = 'retake/certificates';
+    public const QR_DIR = 'retake/qr';
+
+    /**
+     * Guruh uchun hujjatlarni generatsiya qilish.
+     * Faqat barcha arizalar yakuniy holatda (pending emas) bo'lganda chaqiriladi.
+     * Tasdiqnoma faqat bitta yoki ko'p APPROVED ariza bo'lsa yaratiladi.
+     */
+    public function generateForGroup(RetakeApplicationGroup $group, ?Teacher $generator = null): RetakeApplicationGroup
+    {
+        $group->load(['student', 'applications.retakeGroup.teacher']);
+
+        if (!$group->student) {
+            return $group;
+        }
+
+        $resolved = $group->applications->every(fn (RetakeApplication $a) => $a->final_status !== 'pending');
+        if (!$resolved) {
+            return $group; // hali yakunlanmagan
+        }
+
+        $approved = $group->applications->where('final_status', 'approved');
+        if ($approved->isEmpty()) {
+            return $group; // tasdiqnomaga loyiq emas
+        }
+
+        // 1. DOCX (ariza shabloni — barcha yuborilgan fanlar bilan)
+        if (!$group->docx_path) {
+            $group->docx_path = $this->generateDocx($group);
+        }
+
+        // 2. Verification token + DocumentVerification yozuvi
+        if (!$group->verification_token) {
+            $verification = $this->createVerification($group, $approved, $generator);
+            $group->verification_token = $verification->token;
+        }
+
+        // 3. PDF tasdiqnoma (faqat tasdiqlangan fanlar bilan, QR kod ichida)
+        if (!$group->pdf_certificate_path) {
+            $group->pdf_certificate_path = $this->generatePdfCertificate($group, $approved);
+
+            // DocumentVerification.document_path ham yangilanadi (inline ko'rish uchun)
+            if (isset($verification)) {
+                $verification->update(['document_path' => $group->pdf_certificate_path]);
+            } elseif ($group->verification_token) {
+                DocumentVerification::where('token', $group->verification_token)
+                    ->update(['document_path' => $group->pdf_certificate_path]);
+            }
+        }
+
+        $group->save();
+
+        return $group;
+    }
+
+    /**
+     * DOCX (ariza) generatsiyasi — foydalanuvchi bergan shablon asosida
+     * dasturiy ravishda yaratiladi (template fayl kerak emas).
+     */
+    public function generateDocx(RetakeApplicationGroup $group): string
+    {
+        $student = $group->student;
+        $applications = $group->applications->sortBy('semester_id')->values();
+
+        // Dekan ismini birinchi tasdiqlangan arizadan olish (ko'pchilikda dekan bitta bo'ladi)
+        $deanName = $applications
+            ->pluck('dean_user_name')
+            ->filter()
+            ->first() ?? '';
+
+        $facultyName = $student->department_name ?? '';
+        $groupName = $student->group_name ?? '';
+        $studentFullName = $student->full_name ?? '';
+        $submissionDate = $group->created_at->format('Y-m-d');
+
+        // {{subjects_list}}: "1-semestr Anatomiya (6.0 kr), 2-semestr Patanatomiya (5.0 kr)"
+        $subjectsList = $applications
+            ->map(fn (RetakeApplication $a) => sprintf(
+                '%s %s (%.1f kr)',
+                $a->semester_name,
+                $a->subject_name,
+                (float) $a->credit
+            ))
+            ->implode(', ');
+
+        $phpWord = new PhpWord();
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(12);
+
+        $section = $phpWord->addSection([
+            'marginTop' => 1134,    // ~2 sm
+            'marginBottom' => 1134,
+            'marginLeft' => 1700,   // ~3 sm
+            'marginRight' => 1134,
+        ]);
+
+        // Yuqori o'ng — tepa yozuv (manzil)
+        $headerStyle = ['alignment' => Jc::END, 'spaceAfter' => 0, 'lineHeight' => 1.15];
+        $section->addText("Toshkent davlat tibbiyot universiteti Termiz filiali", null, $headerStyle);
+        $section->addText("{$facultyName} fakulteti dekani", null, $headerStyle);
+        $section->addText("{$deanName}ga", null, $headerStyle);
+        $section->addText("{$facultyName} fakulteti", null, $headerStyle);
+        $section->addText("{$groupName} guruh talabasi", null, $headerStyle);
+        $section->addText($studentFullName, null, $headerStyle);
+        $section->addText("(F.I.SH) tomonidan", null, $headerStyle);
+
+        $section->addTextBreak(2);
+
+        // ARIZA (markaz, qalin)
+        $section->addText('ARIZA', ['bold' => true, 'size' => 13], ['alignment' => Jc::CENTER]);
+
+        $section->addTextBreak(1);
+
+        // Asosiy matn — Variant A: semester_number olib tashlangan, har fan
+        // o'z semestri bilan subjects_list ichida.
+        $bodyStyle = ['alignment' => Jc::BOTH, 'indentation' => ['firstLine' => 720], 'lineHeight' => 1.5];
+
+        $section->addText(
+            "Men, {$facultyName} fakulteti {$groupName} guruh talabasi {$studentFullName} (F.I.Sh.), "
+            . "ushbu ariza orqali shuni ma'lum qilamanki, akademik qarzdorligim mavjud bo'lgan "
+            . "{$subjectsList} fan(i/lar)ini o'z hisobimdan qayta o'qish uchun ruxsat berishingizni so'rayman.",
+            null,
+            $bodyStyle
+        );
+
+        $section->addTextBreak(1);
+
+        $section->addText(
+            "Mazkur qayta o'qish uchun to'lov xabarnomasi (qayta o'qish) ilova qilinadi.",
+            null,
+            $bodyStyle
+        );
+
+        $section->addTextBreak(4);
+
+        // Talaba imzo qatori
+        $signatureRow = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $signatureRow->addRow();
+        $cellStyle = ['valign' => 'center'];
+        $left = $signatureRow->addCell(7000, $cellStyle);
+        $left->addText("Talaba:  {$studentFullName} F.I.SH", null, ['alignment' => Jc::START]);
+        $right = $signatureRow->addCell(3000, $cellStyle);
+        $right->addText($submissionDate, null, ['alignment' => Jc::END]);
+
+        // Saqlash
+        $fileName = sprintf('ariza_%d_%s.docx', $group->id, Str::slug($studentFullName ?: 'talaba'));
+        $relPath = self::DOCX_DIR . '/' . $fileName;
+        $absPath = Storage::disk(self::STORAGE_DISK)->path($relPath);
+
+        $this->ensureDirectoryExists(dirname($absPath));
+
+        $writer = IOFactory::createWriter($phpWord, 'Word2007');
+        $writer->save($absPath);
+
+        return $relPath;
+    }
+
+    /**
+     * Tasdiqnoma PDF generatsiyasi (QR kod bilan, faqat tasdiqlangan fanlar).
+     */
+    public function generatePdfCertificate(RetakeApplicationGroup $group, $approvedApps): string
+    {
+        $student = $group->student;
+        $verifyUrl = route('document.verify', $group->verification_token);
+
+        // QR kod SVG sifatida (PDF ichiga to'g'ridan-to'g'ri quyiladi)
+        $qrSvg = QrCode::format('svg')
+            ->size(150)
+            ->margin(1)
+            ->errorCorrection('M')
+            ->generate($verifyUrl);
+
+        // QR'ni base64 PNG sifatida ham saqlaymiz (PDF tashqarisidan ham foydalanish uchun)
+        $qrFileName = sprintf('qr_%d.svg', $group->id);
+        $qrPath = self::QR_DIR . '/' . $qrFileName;
+        Storage::disk(self::STORAGE_DISK)->put($qrPath, $qrSvg);
+
+        $pdf = Pdf::loadView('pdf.retake-certificate', [
+            'group' => $group,
+            'student' => $student,
+            'approvedApps' => $approvedApps,
+            'verifyUrl' => $verifyUrl,
+            'qrSvg' => $qrSvg,
+            'verificationToken' => $group->verification_token,
+            'totalCredits' => $approvedApps->sum(fn ($a) => (float) $a->credit),
+            'totalAmount' => (float) $group->receipt_amount,
+        ])->setPaper('A4');
+
+        $fileName = sprintf('tasdiqnoma_%d_%s.pdf', $group->id, Str::slug($student->full_name ?: 'talaba'));
+        $relPath = self::PDF_DIR . '/' . $fileName;
+        $absPath = Storage::disk(self::STORAGE_DISK)->path($relPath);
+
+        $this->ensureDirectoryExists(dirname($absPath));
+
+        $pdf->save($absPath);
+
+        return $relPath;
+    }
+
+    /**
+     * DocumentVerification yozuvini yaratish (mavjud public verify tizimini qayta ishlatish).
+     */
+    private function createVerification(RetakeApplicationGroup $group, $approvedApps, ?Teacher $generator): DocumentVerification
+    {
+        $student = $group->student;
+        $subjectNames = $approvedApps->pluck('subject_name')->implode(', ');
+        $semesterNames = $approvedApps->pluck('semester_name')->unique()->implode(', ');
+        $groupNames = $approvedApps->pluck('retakeGroup.name')->filter()->unique()->implode(', ');
+
+        return DocumentVerification::createForDocument([
+            'document_type' => 'retake_certificate',
+            'subject_name' => $subjectNames,
+            'group_names' => $groupNames ?: null,
+            'semester_name' => $semesterNames ?: null,
+            'department_name' => $student->department_name ?? null,
+            'generated_by' => $generator?->full_name ?? 'system',
+            'meta' => [
+                'application_group_id' => $group->id,
+                'group_uuid' => $group->group_uuid,
+                'student_hemis_id' => (int) $group->student_hemis_id,
+                'student_full_name' => $student->full_name ?? null,
+                'specialty_name' => $student->specialty_name ?? null,
+                'level_name' => $student->level_name ?? $student->level_code ?? null,
+                'student_group_name' => $student->group_name ?? null,
+                'subjects' => $approvedApps->map(fn (RetakeApplication $a) => [
+                    'subject_id' => $a->subject_id,
+                    'subject_name' => $a->subject_name,
+                    'semester_name' => $a->semester_name,
+                    'credit' => (float) $a->credit,
+                    'retake_group_id' => $a->retake_group_id,
+                    'retake_group_name' => $a->retakeGroup?->name,
+                    'teacher_name' => $a->retakeGroup?->teacher_name,
+                    'start_date' => $a->retakeGroup?->start_date?->format('Y-m-d'),
+                    'end_date' => $a->retakeGroup?->end_date?->format('Y-m-d'),
+                ])->all(),
+                'receipt_amount' => (float) $group->receipt_amount,
+                'credit_price_at_time' => (float) $group->credit_price_at_time,
+            ],
+        ]);
+    }
+
+    private function ensureDirectoryExists(string $absDir): void
+    {
+        if (!is_dir($absDir)) {
+            @mkdir($absDir, 0775, true);
+        }
+    }
+}

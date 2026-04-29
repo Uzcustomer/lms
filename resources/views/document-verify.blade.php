@@ -160,8 +160,41 @@
             <div class="card-body" style="padding-top: 0;">
                 <div class="info-row">
                     <span class="info-label">Hujjat turi</span>
-                    <span class="info-value">{{ $verification->document_type }}</span>
+                    <span class="info-value">
+                        @switch($verification->document_type)
+                            @case('retake_certificate')
+                                Qayta o'qish tasdiqnomasi
+                                @break
+                            @default
+                                {{ $verification->document_type }}
+                        @endswitch
+                    </span>
                 </div>
+
+                @if($verification->document_type === 'retake_certificate' && !empty($verification->meta['student_full_name']))
+                    <div class="info-row">
+                        <span class="info-label">Talaba</span>
+                        <span class="info-value">{{ $verification->meta['student_full_name'] }}</span>
+                    </div>
+                    @if(!empty($verification->meta['specialty_name']))
+                        <div class="info-row">
+                            <span class="info-label">Yo'nalish</span>
+                            <span class="info-value">{{ $verification->meta['specialty_name'] }}</span>
+                        </div>
+                    @endif
+                    @if(!empty($verification->meta['level_name']))
+                        <div class="info-row">
+                            <span class="info-label">Kurs</span>
+                            <span class="info-value">{{ $verification->meta['level_name'] }}</span>
+                        </div>
+                    @endif
+                    @if(!empty($verification->meta['student_group_name']))
+                        <div class="info-row">
+                            <span class="info-label">Talaba guruhi</span>
+                            <span class="info-value">{{ $verification->meta['student_group_name'] }}</span>
+                        </div>
+                    @endif
+                @endif
                 @if($verification->subject_name)
                 <div class="info-row">
                     <span class="info-label">Fan</span>

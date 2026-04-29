@@ -792,6 +792,46 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/staff-evaluation/{teacher}/regenerate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'regenerateQr'])->name('staff-evaluation.regenerate-qr');
         Route::get('/staff-evaluation/{teacher}/download-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'downloadQr'])->name('staff-evaluation.download-qr');
         Route::get('/staff-evaluation/{teacher}/export-excel', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'exportExcel'])->name('staff-evaluation.export-excel');
+
+        // ─── Qayta o'qish arizalari ──────────────────────────────────
+        // Dekan + Registrator paneli (rol auto-detect)
+        Route::prefix('retake')->name('retake.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'index'])->name('index');
+            Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'show'])->name('show');
+            Route::post('/applications/{applicationId}/decide', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'decide'])->name('decide');
+        });
+
+        // O'quv bo'limi: Qayta o'qish qabul oynalari
+        Route::prefix('retake-windows')->name('retake-windows.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'store'])->name('store');
+            Route::post('/{windowId}/override-dates', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'overrideDates'])->name('override-dates');
+            Route::delete('/{windowId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'destroy'])->name('destroy');
+        });
+
+        // O'quv bo'limi: Qayta o'qish guruhlari
+        Route::prefix('retake-groups')->name('retake-groups.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'index'])->name('index');
+            Route::get('/lookup', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'lookup'])->name('lookup');
+            Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'store'])->name('store');
+            Route::get('/{groupId}/edit', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'edit'])->name('edit');
+            Route::put('/{groupId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'update'])->name('update');
+            Route::post('/{groupId}/publish', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'publish'])->name('publish');
+            Route::post('/{groupId}/override-status', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'overrideStatus'])->name('override-status');
+            Route::post('/applications/{applicationId}/reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'rejectApplication'])->name('applications.reject');
+        });
+
+        // Statistika va eksport
+        Route::prefix('retake-statistics')->name('retake-statistics.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'exportExcel'])->name('export');
+        });
+
+        // Sozlamalar (kredit narxi va h.k.)
+        Route::prefix('retake-settings')->name('retake-settings.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'index'])->name('index');
+            Route::put('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'update'])->name('update');
+        });
     });
 });
 
@@ -994,45 +1034,6 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             }
             return back();
         })->name('switch-role');
-
-        // Qayta o'qish arizalari (Dekan + Registrator paneli)
-        Route::prefix('retake')->name('retake.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'index'])->name('index');
-            Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'show'])->name('show');
-            Route::post('/applications/{applicationId}/decide', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'decide'])->name('decide');
-        });
-
-        // O'quv bo'limi: Qayta o'qish qabul oynalari
-        Route::prefix('retake-windows')->name('retake-windows.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'index'])->name('index');
-            Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'store'])->name('store');
-            Route::post('/{windowId}/override-dates', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'overrideDates'])->name('override-dates');
-            Route::delete('/{windowId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'destroy'])->name('destroy');
-        });
-
-        // O'quv bo'limi: Qayta o'qish guruhlari
-        Route::prefix('retake-groups')->name('retake-groups.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'index'])->name('index');
-            Route::get('/lookup', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'lookup'])->name('lookup');
-            Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'store'])->name('store');
-            Route::get('/{groupId}/edit', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'edit'])->name('edit');
-            Route::put('/{groupId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'update'])->name('update');
-            Route::post('/{groupId}/publish', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'publish'])->name('publish');
-            Route::post('/{groupId}/override-status', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'overrideStatus'])->name('override-status');
-            Route::post('/applications/{applicationId}/reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'rejectApplication'])->name('applications.reject');
-        });
-
-        // O'quv bo'limi: Statistika va eksport (Registrator + O'quv bo'limi)
-        Route::prefix('retake-statistics')->name('retake-statistics.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'index'])->name('index');
-            Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'exportExcel'])->name('export');
-        });
-
-        // O'quv bo'limi: Sozlamalar (kredit narxi va h.k.)
-        Route::prefix('retake-settings')->name('retake-settings.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'index'])->name('index');
-            Route::put('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'update'])->name('update');
-        });
 
         // Xabarnomalar
         Route::prefix('notifications')->name('notifications.')->group(function () {

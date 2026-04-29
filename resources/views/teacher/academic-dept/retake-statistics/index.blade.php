@@ -8,7 +8,7 @@
     <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
 
         {{-- Filtrlar --}}
-        <form method="GET" action="{{ route('teacher.retake-statistics.index') }}"
+        <form method="GET" action="{{ route('admin.retake-statistics.index') }}"
               class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                 <div>
@@ -60,8 +60,8 @@
             </div>
             <div class="flex gap-2">
                 <button type="submit" class="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
-                <a href="{{ route('teacher.retake-statistics.index') }}" class="px-4 py-1.5 text-xs bg-gray-200 text-gray-700 rounded">{{ __("Tozalash") }}</a>
-                <a href="{{ route('teacher.retake-statistics.export', request()->query()) }}"
+                <a href="{{ route('admin.retake-statistics.index') }}" class="px-4 py-1.5 text-xs bg-gray-200 text-gray-700 rounded">{{ __("Tozalash") }}</a>
+                <a href="{{ route('admin.retake-statistics.export', request()->query()) }}"
                    class="ml-auto px-4 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700">
                     📊 {{ __("Excel'ga eksport") }}
                 </a>

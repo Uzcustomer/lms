@@ -28,7 +28,7 @@
 
         {{-- Filtrlar --}}
         <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <form method="GET" action="{{ route('teacher.retake.index') }}" class="flex flex-wrap gap-3 items-end">
+            <form method="GET" action="{{ route('admin.retake.index') }}" class="flex flex-wrap gap-3 items-end">
                 <div class="flex-1 min-w-[200px]">
                     <label class="block text-xs text-gray-600 mb-1">{{ __('Qidirish') }}</label>
                     <input type="text"

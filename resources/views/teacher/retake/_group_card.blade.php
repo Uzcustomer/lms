@@ -95,7 +95,7 @@
                         @php $myStatus = $app->{$myStatusField}; @endphp
                         @if($myStatus === 'pending')
                             <div class="flex gap-2">
-                                <form method="POST" action="{{ route('teacher.retake.decide', $app->id) }}" class="inline">
+                                <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}" class="inline">
                                     @csrf
                                     <input type="hidden" name="decision" value="approved">
                                     <button type="submit"
@@ -136,7 +136,7 @@
                         <p class="text-xs text-gray-500 mb-3">
                             {{ $app->subject_name }} ({{ $app->semester_name }})
                         </p>
-                        <form method="POST" action="{{ route('teacher.retake.decide', $app->id) }}">
+                        <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}">
                             @csrf
                             <input type="hidden" name="decision" value="rejected">
                             <textarea name="reason"

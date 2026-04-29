@@ -103,6 +103,21 @@ class RetakeAccess
     }
 
     /**
+     * Joriy autentifikatsiya qilingan xodim (Teacher yoki User)ni qaytaradi.
+     * Loyihada xodimlar `teacher` yoki `web` guardlardan birida bo'lishi mumkin.
+     */
+    public static function currentStaff(): ?Model
+    {
+        if (\Illuminate\Support\Facades\Auth::guard('teacher')->check()) {
+            return \Illuminate\Support\Facades\Auth::guard('teacher')->user();
+        }
+        if (\Illuminate\Support\Facades\Auth::guard('web')->check()) {
+            return \Illuminate\Support\Facades\Auth::guard('web')->user();
+        }
+        return null;
+    }
+
+    /**
      * Berilgan dekan ushbu talabaning fakultetiga tegishlimi?
      */
     public static function deanHandlesStudent(Teacher $dean, Student $student): bool

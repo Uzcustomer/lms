@@ -300,6 +300,18 @@
                                 <div style="font-size: 12px; font-weight: 700; color: #115e59; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Ish vaqti tugashi</div>
                                 <input type="time" name="work_hours_end" value="{{ old('work_hours_end', $examCapacity['work_hours_end']) }}" required style="width: 100%; padding: 10px 14px; border: 2px solid #14b8a6; border-radius: 10px; font-size: 22px; font-weight: 800; color: #115e59; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
                             </div>
+
+                            <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 14px; padding: 18px; border: 1px solid #fbbf24;">
+                                <div style="font-size: 12px; font-weight: 700; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Tushlik boshlanishi</div>
+                                <input type="time" name="lunch_start" value="{{ old('lunch_start', $examCapacity['lunch_start'] ?? '') }}" style="width: 100%; padding: 10px 14px; border: 2px solid #d97706; border-radius: 10px; font-size: 22px; font-weight: 800; color: #92400e; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                                <div style="font-size: 11px; color: #b45309; margin-top: 6px;">bo'sh qoldirilsa hisobga olinmaydi</div>
+                            </div>
+
+                            <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 14px; padding: 18px; border: 1px solid #fbbf24;">
+                                <div style="font-size: 12px; font-weight: 700; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Tushlik tugashi</div>
+                                <input type="time" name="lunch_end" value="{{ old('lunch_end', $examCapacity['lunch_end'] ?? '') }}" style="width: 100%; padding: 10px 14px; border: 2px solid #d97706; border-radius: 10px; font-size: 22px; font-weight: 800; color: #92400e; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                                <div style="font-size: 11px; color: #b45309; margin-top: 6px;">bo'sh qoldirilsa hisobga olinmaydi</div>
+                            </div>
                         </div>
 
                         <div style="background: #f8fafc; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">

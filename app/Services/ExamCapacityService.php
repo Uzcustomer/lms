@@ -27,6 +27,8 @@ class ExamCapacityService
             'test_duration_minutes' => 15,
             'work_hours_start' => '09:00',
             'work_hours_end' => '17:00',
+            'lunch_start' => '13:00',
+            'lunch_end' => '14:00',
         ];
     }
 
@@ -51,7 +53,21 @@ class ExamCapacityService
             'test_duration_minutes' => max(1, (int) ($data['test_duration_minutes'] ?? $defaults['test_duration_minutes'])),
             'work_hours_start' => self::normalizeTime($data['work_hours_start'] ?? $defaults['work_hours_start']),
             'work_hours_end' => self::normalizeTime($data['work_hours_end'] ?? $defaults['work_hours_end']),
+            'lunch_start' => self::normalizeTimeOrNull($data['lunch_start'] ?? null),
+            'lunch_end' => self::normalizeTimeOrNull($data['lunch_end'] ?? null),
         ];
+        // Tushlik vaqti faqat ikkalasi to'g'ri bo'lsa va end > start bo'lsa hisobga olinadi
+        if ($clean['lunch_start'] && $clean['lunch_end']) {
+            $ls = Carbon::createFromFormat('H:i', $clean['lunch_start']);
+            $le = Carbon::createFromFormat('H:i', $clean['lunch_end']);
+            if ($le->lte($ls)) {
+                $clean['lunch_start'] = null;
+                $clean['lunch_end'] = null;
+            }
+        } else {
+            $clean['lunch_start'] = null;
+            $clean['lunch_end'] = null;
+        }
         Setting::set(self::SETTING_KEY, json_encode($clean));
     }
 
@@ -64,9 +80,35 @@ class ExamCapacityService
         }
     }
 
+    private static function normalizeTimeOrNull($time): ?string
+    {
+        if ($time === null || $time === '') {
+            return null;
+        }
+        try {
+            return Carbon::createFromFormat('H:i', substr((string) $time, 0, 5))->format('H:i');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Tushlik vaqti aktiv bo'lsa uning daqiqada davomiyligi.
+     */
+    public static function lunchMinutes(array $settings = null): int
+    {
+        $s = $settings ?? self::getSettings();
+        if (empty($s['lunch_start']) || empty($s['lunch_end'])) {
+            return 0;
+        }
+        $ls = Carbon::createFromFormat('H:i', $s['lunch_start']);
+        $le = Carbon::createFromFormat('H:i', $s['lunch_end']);
+        return max(0, $le->diffInMinutes($ls, false));
+    }
+
     /**
      * Bitta kunning maksimal sig'imi (talaba-test soni).
-     * = (ish_vaqti_minut / davomiylik) * kompyuter_soni
+     * = ((ish_vaqti - tushlik) / davomiylik) * kompyuter_soni
      */
     public static function dailyCapacity(): int
     {
@@ -74,11 +116,28 @@ class ExamCapacityService
         $start = Carbon::createFromFormat('H:i', $s['work_hours_start']);
         $end = Carbon::createFromFormat('H:i', $s['work_hours_end']);
         $minutes = max(0, $end->diffInMinutes($start, false));
-        if ($minutes === 0) {
+        $minutes -= self::lunchMinutes($s);
+        if ($minutes <= 0) {
             return 0;
         }
         $slots = (int) floor($minutes / max(1, $s['test_duration_minutes']));
         return $slots * (int) $s['computer_count'];
+    }
+
+    /**
+     * Berilgan sana+vaqt+davomiylik oralig'i tushlik vaqti bilan ustma-ust tushsa true.
+     */
+    public static function overlapsLunch(string $date, string $startTime, int $duration, array $settings = null): bool
+    {
+        $s = $settings ?? self::getSettings();
+        if (empty($s['lunch_start']) || empty($s['lunch_end'])) {
+            return false;
+        }
+        $start = Carbon::parse($date . ' ' . substr($startTime, 0, 5));
+        $end = $start->copy()->addMinutes($duration);
+        $lStart = Carbon::parse($date . ' ' . $s['lunch_start']);
+        $lEnd = Carbon::parse($date . ' ' . $s['lunch_end']);
+        return $start->lt($lEnd) && $end->gt($lStart);
     }
 
     /**

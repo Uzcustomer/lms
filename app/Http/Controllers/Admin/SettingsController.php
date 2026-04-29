@@ -205,6 +205,8 @@ class SettingsController extends Controller
             'test_duration_minutes' => 'required|integer|min:1|max:480',
             'work_hours_start' => 'required|date_format:H:i',
             'work_hours_end' => 'required|date_format:H:i|after:work_hours_start',
+            'lunch_start' => 'nullable|date_format:H:i|after_or_equal:work_hours_start',
+            'lunch_end' => 'nullable|date_format:H:i|after:lunch_start|before_or_equal:work_hours_end',
         ]);
 
         ExamCapacityService::setSettings($request->only([
@@ -212,6 +214,8 @@ class SettingsController extends Controller
             'test_duration_minutes',
             'work_hours_start',
             'work_hours_end',
+            'lunch_start',
+            'lunch_end',
         ]));
 
         return redirect()->route('admin.settings', ['tab' => 'exam-capacity'])

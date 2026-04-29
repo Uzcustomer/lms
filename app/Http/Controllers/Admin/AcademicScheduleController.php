@@ -1912,6 +1912,16 @@ class AcademicScheduleController extends Controller
                 ? $relatedDate->format('Y-m-d')
                 : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
 
+            // Tushlik vaqti bilan ustma-ust tushishini tekshirish
+            if (ExamCapacityService::overlapsLunch($relatedDateStr, $newTime, $duration, $capacity)) {
+                $ls = $capacity['lunch_start'];
+                $le = $capacity['lunch_end'];
+                return response()->json([
+                    'success' => false,
+                    'message' => "Tanlangan vaqt tushlik tanaffusi ({$ls}–{$le}) bilan to'qnashadi. Boshqa vaqtni tanlang.",
+                ], 422);
+            }
+
             $exclude = [
                 'group_hemis_id' => $request->group_hemis_id,
                 'subject_id' => $request->subject_id,

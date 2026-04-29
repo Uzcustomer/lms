@@ -26,6 +26,8 @@ class TutorReportController extends Controller
 
         $tutorGroupIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
 
+        $nazoratchiGroupIds = $teacher->nazoratchiGroups()->where('active', true)->pluck('group_hemis_id')->toArray();
+
         $scheduleGroupIds = DB::table('schedules')
             ->where('employee_id', $teacher->hemis_id)
             ->where('education_year_current', true)
@@ -34,7 +36,7 @@ class TutorReportController extends Controller
             ->unique()
             ->toArray();
 
-        return array_values(array_unique(array_merge($tutorGroupIds, $scheduleGroupIds)));
+        return array_values(array_unique(array_merge($tutorGroupIds, $nazoratchiGroupIds, $scheduleGroupIds)));
     }
 
     private function getTutorGroups()

@@ -606,6 +606,7 @@
             // Deadline
             deadlineWarning: '',
             deadlineExpired: false,
+            noDayLimit: @js($noDayLimit ?? false),
 
             // Assessments
             assessments: [],
@@ -841,6 +842,7 @@
             checkDeadline() {
                 this.deadlineWarning = '';
                 this.deadlineExpired = false;
+                if (this.noDayLimit) return;
                 if (!this.endDate) return;
                 const end = new Date(this.endDate);
                 let nextDay = new Date(end);

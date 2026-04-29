@@ -11,6 +11,7 @@ use App\Models\Notification;
 use App\Models\OraliqNazorat;
 use App\Models\Oski;
 use App\Models\Schedule;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
@@ -36,7 +37,8 @@ class AbsenceExcuseController extends Controller
     public function create()
     {
         $reasons = AbsenceExcuse::REASONS;
-        return view('student.absence-excuses.create', compact('reasons'));
+        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+        return view('student.absence-excuses.create', compact('reasons', 'noDayLimit'));
     }
 
     /**
@@ -163,6 +165,9 @@ class AbsenceExcuseController extends Controller
                     }
                 },
                 function ($attribute, $value, $fail) {
+                    if (Setting::get('feature_absence_excuse_no_day_limit', '0') === '1') {
+                        return;
+                    }
                     if ($value) {
                         $endDate = Carbon::parse($value);
                         $nextDay = $endDate->copy()->addDay();

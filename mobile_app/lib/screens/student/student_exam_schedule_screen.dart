@@ -156,24 +156,34 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
 
                 // Selected date exams
                 Expanded(
-                  child: selectedExams.isEmpty
-                      ? Center(
-                          child: Text(
-                            _selectedDate == null
-                                ? 'Sanani tanlang'
-                                : 'Bu kunda imtihon yo\'q',
-                            style: TextStyle(fontSize: 14, color: subColor),
+                  child: RefreshIndicator(
+                    onRefresh: _loadExams,
+                    child: selectedExams.isEmpty
+                        ? ListView(
+                            children: [
+                              SizedBox(
+                                height: 200,
+                                child: Center(
+                                  child: Text(
+                                    _selectedDate == null
+                                        ? 'Sanani tanlang'
+                                        : 'Bu kunda imtihon yo\'q',
+                                    style: TextStyle(fontSize: 14, color: subColor),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: selectedExams.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (_, i) => _buildExamTile(
+                                selectedExams[i], textColor, subColor, isDark,
+                                cardColor),
                           ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: selectedExams.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (_, i) => _buildExamTile(
-                              selectedExams[i], textColor, subColor, isDark,
-                              cardColor),
-                        ),
+                  ),
                 ),
               ],
             ),

@@ -378,6 +378,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{student}/return-passport', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'returnPassport'])->name('return-passport');
             Route::delete('/{student}/visa-info', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'destroyVisaInfo'])->name('destroy-visa-info');
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showFile'])->name('file');
+            Route::get('/{student}/history', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'history'])->name('history');
+            Route::get('/{student}/history/{historyId}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showHistoryFile'])->name('history-file');
         });
 
         // Javobgar firma talabalari (faqat o'qish)
@@ -404,6 +406,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/graduate-passports', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'index'])->name('graduate-passports.index');
         Route::get('/graduate-passports/data', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'data'])->name('graduate-passports.data');
         Route::get('/graduate-passports/{id}/file/{field}', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'showFile'])->name('graduate-passports.file');
+        Route::get('/graduate-passports/download-zip', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'downloadZip'])->name('graduate-passports.download-zip');
+        Route::post('/graduate-passports/{id}/approve', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'approve'])->name('graduate-passports.approve');
+        Route::post('/graduate-passports/{id}/reject', [\App\Http\Controllers\Admin\GraduatePassportController::class, 'reject'])->name('graduate-passports.reject');
 
         // Ish e'lonlari (Admin/Registrator)
         Route::get('/job-listings', function () {
@@ -495,6 +500,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/settings/password', [SettingsController::class, 'updatePassword'])->name('settings.update.password');
         Route::post('/settings/telegram', [SettingsController::class, 'updateTelegram'])->name('settings.update.telegram');
         Route::post('/settings/contract-cutoffs', [SettingsController::class, 'updateContractCutoffs'])->name('settings.update.contract-cutoffs');
+        Route::post('/settings/exam-date-roles', [SettingsController::class, 'updateExamDateRoles'])->name('settings.update.exam-date-roles');
 
         // Old routes — redirect to unified settings
         Route::get('/deadlines', fn () => redirect()->route('admin.settings', ['tab' => 'deadlines']))->name('deadlines');

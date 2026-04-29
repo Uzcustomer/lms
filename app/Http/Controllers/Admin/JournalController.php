@@ -1751,6 +1751,19 @@ class JournalController extends Controller
                                 'updated_at' => now(),
                             ]);
                             $absenceGradesCreated++;
+                        } elseif ($existingGrade->reason !== 'absent' || $existingGrade->grade !== null) {
+                            // HEMIS'da baho NB ga o'zgartirilgan — mavjud yozuvni yangilash kerak.
+                            // Aks holda eski son baho LMS'da qolib ketadi.
+                            DB::table('student_grades')
+                                ->where('id', $existingGrade->id)
+                                ->update([
+                                    'grade' => null,
+                                    'reason' => 'absent',
+                                    'status' => 'pending',
+                                    'is_final' => !$lessonDate->isToday(),
+                                    'updated_at' => now(),
+                                ]);
+                            $absenceGradesCreated++;
                         }
                     }
 

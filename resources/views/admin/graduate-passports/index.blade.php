@@ -68,6 +68,13 @@
                                 Qidirish
                             </button>
                         </div>
+                        <div class="filter-item" style="min-width:180px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <button type="button" class="btn-apply" style="background:linear-gradient(135deg,#16a34a,#22c55e);box-shadow:0 2px 4px rgba(22,163,74,0.25);" onclick="downloadZip()">
+                                <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                Hujjatlarni yuklab olish
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -97,6 +104,8 @@
                                 <th style="text-align:center;">Holat</th>
                                 <th>Ma'lumotlar</th>
                                 <th style="text-align:center;">Fayllar</th>
+                                <th style="text-align:center;">Tekshiruv</th>
+                                <th style="text-align:center;">Amal</th>
                             </tr>
                         </thead>
                         <tbody id="table-body"></tbody>
@@ -111,6 +120,45 @@
     <script>
         var dataUrl = '{{ route("admin.graduate-passports.data") }}';
         var fileUrl = '{{ url("/admin/graduate-passports") }}';
+        var csrfToken = '{{ csrf_token() }}';
+
+        function approvePassport(gpId, btn) {
+            if (!confirm('Hujjatlarni tasdiqlaysizmi?')) return;
+            btn.disabled = true;
+            $.ajax({
+                url: fileUrl + '/' + gpId + '/approve',
+                type: 'POST',
+                headers: {'X-CSRF-TOKEN': csrfToken},
+                success: function() { applyFilter(); },
+                error: function(xhr) { alert(xhr.responseJSON?.message || 'Xato'); btn.disabled = false; }
+            });
+        }
+
+        var rejectGpId = null;
+        function openRejectModal(gpId) {
+            rejectGpId = gpId;
+            document.getElementById('reject-reason-input').value = '';
+            document.getElementById('reject-modal').style.display = 'flex';
+        }
+        function closeRejectModal() {
+            document.getElementById('reject-modal').style.display = 'none';
+            rejectGpId = null;
+        }
+        function submitReject() {
+            var reason = document.getElementById('reject-reason-input').value.trim();
+            if (!reason) { alert('Rad etish sababini yozing'); return; }
+            var btn = document.getElementById('reject-submit-btn');
+            btn.disabled = true;
+            $.ajax({
+                url: fileUrl + '/' + rejectGpId + '/reject',
+                type: 'POST',
+                headers: {'X-CSRF-TOKEN': csrfToken},
+                contentType: 'application/json',
+                data: JSON.stringify({rejection_reason: reason}),
+                success: function() { closeRejectModal(); btn.disabled = false; applyFilter(); },
+                error: function(xhr) { alert(xhr.responseJSON?.message || 'Xato'); btn.disabled = false; }
+            });
+        }
 
         function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -152,6 +200,15 @@
             }
 
             applyFilter();
+        }
+
+        function downloadZip() {
+            var params = [];
+            var fac = $('#faculty-select').val();
+            var grp = $('#group-select').val();
+            if (fac) params.push('faculty_id=' + encodeURIComponent(fac));
+            if (grp) params.push('group_id=' + encodeURIComponent(grp));
+            window.location.href = '{{ route("admin.graduate-passports.download-zip") }}' + (params.length ? '?' + params.join('&') : '');
         }
 
         function applyFilter() {
@@ -233,6 +290,38 @@
                     html += '<td style="text-align:center;">' + status + '</td>';
                     html += '<td>' + info + '</td>';
                     html += '<td style="text-align:center;">' + files + '</td>';
+
+                    // Tekshiruv holati
+                    var reviewStatus = '<span style="color:#cbd5e1;">—</span>';
+                    if (isFilled) {
+                        if (s.gp_status === 'approved') {
+                            reviewStatus = '<span class="badge-filled">Tasdiqlangan</span>';
+                            if (s.reviewed_by) reviewStatus += '<div style="font-size:10px;color:#64748b;margin-top:2px;">' + esc(s.reviewed_by) + '</div>';
+                        } else if (s.gp_status === 'rejected') {
+                            reviewStatus = '<span class="badge-empty" style="background:#fef2f2;color:#dc2626;border-color:#fecaca;">Rad etilgan</span>';
+                            if (s.rejection_reason) reviewStatus += '<div style="font-size:10px;color:#991b1b;margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(s.rejection_reason) + '">' + esc(s.rejection_reason) + '</div>';
+                        } else {
+                            reviewStatus = '<span style="padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fde68a;">Kutilmoqda</span>';
+                        }
+                    }
+                    html += '<td style="text-align:center;">' + reviewStatus + '</td>';
+
+                    // Amal tugmalari
+                    var actions = '<span style="color:#cbd5e1;">—</span>';
+                    if (isFilled && s.gp_id) {
+                        actions = '<div style="display:flex;gap:4px;justify-content:center;align-items:center;flex-wrap:wrap;">';
+                        if (s.gp_status !== 'approved') {
+                            actions += '<button onclick="approvePassport(' + s.gp_id + ',this)" class="file-btn" style="background:#dcfce7;color:#166534;border-color:#86efac;cursor:pointer;border:1px solid;">Qabul</button>';
+                        }
+                        if (s.gp_status !== 'rejected') {
+                            actions += '<button onclick="openRejectModal(' + s.gp_id + ')" class="file-btn" style="background:#fef2f2;color:#dc2626;border-color:#fecaca;cursor:pointer;border:1px solid;">Rad</button>';
+                        }
+                        if (s.gp_status === 'approved') actions += '<span style="font-size:10px;color:#16a34a;">✓</span>';
+                        if (s.gp_status === 'rejected') actions += '<span style="font-size:10px;color:#dc2626;">✗</span>';
+                        actions += '</div>';
+                    }
+                    html += '<td style="text-align:center;">' + actions + '</td>';
+
                     html += '</tr>';
                 }
                 $('#table-body').html(html);
@@ -306,4 +395,18 @@
         .file-btn-purple { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
         .file-btn-purple:hover { background: #ede9fe; border-color: #8b5cf6; }
     </style>
+
+    <div id="reject-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:12px;max-width:400px;width:100%;box-shadow:0 20px 40px rgba(0,0,0,0.2);overflow:hidden;">
+            <div style="padding:14px 18px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-size:15px;font-weight:700;">Rad etish</div>
+            <div style="padding:16px 18px;">
+                <label style="font-size:12px;font-weight:600;color:#475569;margin-bottom:6px;display:block;">Rad etish sababi</label>
+                <textarea id="reject-reason-input" rows="3" maxlength="500" placeholder="Sababni yozing..." style="width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font-size:13px;resize:vertical;"></textarea>
+                <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+                    <button onclick="closeRejectModal()" style="padding:8px 16px;background:#f1f5f9;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Bekor</button>
+                    <button id="reject-submit-btn" onclick="submitReject()" style="padding:8px 16px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;">Rad etish</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </x-app-layout>

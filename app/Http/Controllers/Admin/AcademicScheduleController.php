@@ -21,6 +21,7 @@ use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
 use App\Models\StudentNotification;
+use App\Services\ExamDateRoleService;
 use App\Services\TelegramService;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
@@ -41,6 +42,20 @@ class AcademicScheduleController extends Controller
      */
     public function index(Request $request)
     {
+        // Sahifaga kirish huquqini tekshirish (sozlamalardan kelib chiqib)
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $adminRoles = ExamDateRoleService::adminRoles();
+        $isAdmin = $user && in_array($activeRole, $adminRoles, true);
+        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+            abort(403, 'Bu sahifaga kirish uchun ruxsat yo\'q.');
+        }
+
+        // Ushbu rol uchun ruxsat etilgan kurs darajalari
+        $allowedLevelCodes = $isAdmin
+            ? array_keys(ExamDateRoleService::getMapping())
+            : ExamDateRoleService::levelsForRole($activeRole);
+
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
 
@@ -49,6 +64,12 @@ class AcademicScheduleController extends Controller
         $selectedDepartment = $request->get('department_id');
         $selectedSpecialty = $request->get('specialty_id');
         $selectedLevelCode = $request->get('level_code');
+
+        // Agar foydalanuvchi admin bo'lmasa va tanlagan kursi ruxsat etilgan
+        // ro'yxatda bo'lmasa — filtrni avtomatik tozalash
+        if (!$isAdmin && $selectedLevelCode && !in_array((string) $selectedLevelCode, $allowedLevelCodes, true)) {
+            $selectedLevelCode = null;
+        }
         $selectedSemester = $request->get('semester_code');
         $selectedGroup = $request->get('group_id');
         $selectedSubject = $request->get('subject_id');
@@ -71,6 +92,16 @@ class AcademicScheduleController extends Controller
                 $selectedLevelCode, $selectedSubject, $selectedStatus,
                 $currentSemesterToggle, false, $dateFrom, $dateTo
             );
+
+            // Admin bo'lmagan rol — faqat unga ruxsat etilgan kurs darajalari
+            if (!$isAdmin && !empty($allowedLevelCodes)) {
+                $scheduleData = $scheduleData->map(function ($items) use ($allowedLevelCodes) {
+                    return $items->filter(function ($item) use ($allowedLevelCodes) {
+                        $lvl = (string) ($item['group']->level_code ?? $item['level_code'] ?? '');
+                        return $lvl !== '' && in_array($lvl, $allowedLevelCodes, true);
+                    });
+                })->filter(fn($items) => $items->isNotEmpty());
+            }
 
             // OSKI sanasi bo'yicha filtr
             if ($oskiDateFrom || $oskiDateTo) {
@@ -100,12 +131,9 @@ class AcademicScheduleController extends Controller
         }
 
         $routePrefix = $this->routePrefix();
-        $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
-        $user = auth()->user() ?? auth('teacher')->user();
-        // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
-        $activeRole = session('active_role', $user?->getRoleNames()->first());
-        $canDelete = $user && in_array($activeRole, $adminRoles);
-        $canEdit = $canDelete || ($user && $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
+        $canDelete = $isAdmin;
+        // Edit huquqi: admin yoki sozlamalarda biror kurs uchun ruxsatga ega rol
+        $canEdit = $canDelete || !empty($allowedLevelCodes);
 
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
@@ -129,6 +157,7 @@ class AcademicScheduleController extends Controller
             'routePrefix',
             'canDelete',
             'canEdit',
+            'allowedLevelCodes',
         ));
     }
 
@@ -540,6 +569,13 @@ class AcademicScheduleController extends Controller
 
         if ($filteredGroups->isEmpty()) return collect();
 
+        // semester_code → level_code map (kurs darajasini aniqlash uchun)
+        $semesterLevelMap = $semesterFilter(Semester::query())
+            ->whereIn('curriculum_hemis_id', $curriculumIds)
+            ->select('code', 'level_code', 'curriculum_hemis_id')
+            ->get()
+            ->mapWithKeys(fn($s) => [$s->curriculum_hemis_id . '_' . $s->code => (string) $s->level_code]);
+
         // Mavjud jadvallar
         $scheduleQuery = ExamSchedule::query();
         if ($selectedDepartment) $scheduleQuery->where('department_hemis_id', $selectedDepartment);
@@ -581,6 +617,7 @@ class AcademicScheduleController extends Controller
                 $item = [
                     'group' => $group,
                     'subject' => $subject,
+                    'level_code' => $semesterLevelMap[$group->curriculum_hemis_id . '_' . $subject->semester_code] ?? null,
                     'specialty_name' => $group->specialty_name,
                     'lesson_start_date' => $lessonInfo?->lesson_start ? substr($lessonInfo->lesson_start, 0, 10) : null,
                     'lesson_end_date' => $lessonInfo?->lesson_end ? substr($lessonInfo->lesson_end, 0, 10) : null,
@@ -686,9 +723,47 @@ class AcademicScheduleController extends Controller
         // Admin roli uchun bugungi kunni ham belgilash mumkin
         $user = auth()->user() ?? auth('teacher')->user();
         $activeRole = session('active_role', $user?->getRoleNames()->first());
-        $isAdmin = $user && in_array($activeRole, ['superadmin', 'admin', 'kichik_admin']);
-        $canEditSaved = $isAdmin || ($user && $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
+        $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
+        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+            abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
+        }
+        // Saqlangan sanani o'zgartirish — admin yoki sozlamalarda ruxsat etilgan rol
+        $canEditSaved = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
         $minDate = $isAdmin ? $today : $today->copy()->addDay();
+
+        // Foydalanuvchi rolga ruxsat etilgan kurs darajalari
+        $allowedLevelCodes = $isAdmin
+            ? null // admin uchun cheklov yo'q
+            : ExamDateRoleService::levelsForRole($activeRole);
+
+        // (curriculum_hemis_id . '_' . semester_code) → level_code map (validatsiya uchun)
+        $semesterLevelMap = collect();
+        if (is_array($allowedLevelCodes)) {
+            $groupIds = collect($validSchedules)->pluck('group_hemis_id')->filter()->unique()->values();
+            $groupCurriculumMap = Group::whereIn('group_hemis_id', $groupIds)
+                ->pluck('curriculum_hemis_id', 'group_hemis_id');
+            $curriculumIds = $groupCurriculumMap->unique()->values();
+            $semesterCodes = collect($validSchedules)->pluck('semester_code')->filter()->unique()->values();
+
+            if ($curriculumIds->isNotEmpty() && $semesterCodes->isNotEmpty()) {
+                $semesterLevelMap = Semester::whereIn('curriculum_hemis_id', $curriculumIds)
+                    ->whereIn('code', $semesterCodes)
+                    ->get(['curriculum_hemis_id', 'code', 'level_code'])
+                    ->mapWithKeys(fn($s) => [$s->curriculum_hemis_id . '_' . $s->code => (string) $s->level_code]);
+            }
+
+            // Foydalanuvchi rolga ruxsat etilmagan kurslarga tegishli yozuvlarni rad etish
+            foreach ($validSchedules as $schedule) {
+                $curriculumId = $groupCurriculumMap[$schedule['group_hemis_id']] ?? null;
+                if (!$curriculumId) {
+                    continue;
+                }
+                $lvl = (string) ($semesterLevelMap[$curriculumId . '_' . $schedule['semester_code']] ?? '');
+                if ($lvl !== '' && !in_array($lvl, $allowedLevelCodes, true)) {
+                    return redirect()->back()->with('error', 'Sizning rolingizga ushbu kurs darajasi uchun YN sanasini belgilashga ruxsat yo\'q. Sozlamalardan tekshiring.');
+                }
+            }
+        }
 
         foreach ($validSchedules as $schedule) {
             $existingRec = $existingForValidation->get(
@@ -795,10 +870,10 @@ class AcademicScheduleController extends Controller
     public function clearDate(Request $request)
     {
         $user = auth()->user() ?? auth('teacher')->user();
-        $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
         // Faol rolni tekshirish (multi-role foydalanuvchilar uchun session active_role ishlatiladi)
         $activeRole = session('active_role', $user?->getRoleNames()->first());
-        $canEdit = $user && (in_array($activeRole, $adminRoles) || $activeRole === ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value);
+        $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
+        $canEdit = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
         if (!$canEdit) {
             abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
         }
@@ -810,6 +885,17 @@ class AcademicScheduleController extends Controller
 
         if (!$groupHemisId || !$subjectId || !$semesterCode || !in_array($dateType, ['oski', 'test'])) {
             return redirect()->back()->with('error', 'Noto\'g\'ri so\'rov.');
+        }
+
+        // Admin bo'lmagan rol — faqat sozlamalarda ruxsat etilgan kurs darajasidagi yozuvni o'chirishi mumkin
+        if (!$isAdmin) {
+            $curriculumId = Group::where('group_hemis_id', $groupHemisId)->value('curriculum_hemis_id');
+            $levelCode = $curriculumId
+                ? (string) (Semester::where('curriculum_hemis_id', $curriculumId)->where('code', $semesterCode)->value('level_code') ?? '')
+                : '';
+            if ($levelCode !== '' && !ExamDateRoleService::canEditLevel($activeRole, $levelCode)) {
+                abort(403, 'Sizning rolingizga ushbu kurs darajasi uchun YN sanasini o\'chirishga ruxsat yo\'q.');
+            }
         }
 
         $record = ExamSchedule::where('group_hemis_id', $groupHemisId)
@@ -930,6 +1016,18 @@ class AcademicScheduleController extends Controller
         $levelQuery = Semester::where($currentSemesterOnly ? 'current' : 'education_year', $currentSemesterOnly ? true : $currentEducationYear)
             ->whereIn('curriculum_hemis_id', $levelCurrIds);
         if ($semesterCode) $levelQuery->where('code', $semesterCode);
+
+        // Foydalanuvchi rolga ruxsat etilgan kurs darajalari (admin emas bo'lsa)
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
+        if (!$isAdmin) {
+            $allowedLevelCodes = ExamDateRoleService::levelsForRole($activeRole);
+            if (!empty($allowedLevelCodes)) {
+                $levelQuery->whereIn('level_code', $allowedLevelCodes);
+            }
+        }
+
         $levels = $levelQuery->select('level_code', 'level_name')
             ->distinct()->orderBy('level_code')->get();
 

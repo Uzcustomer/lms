@@ -112,6 +112,7 @@ class GraduatePassportController extends Controller
                 'gp.first_name_en', 'gp.last_name_en',
                 'gp.passport_series', 'gp.passport_number', 'gp.jshshir',
                 'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path',
+                'gp.status as gp_status', 'gp.reviewed_by', 'gp.rejection_reason',
                 'gp.created_at as gp_created_at'
             )
             ->orderBy('s.full_name')
@@ -135,6 +136,9 @@ class GraduatePassportController extends Controller
                     'has_front' => !empty($st->passport_front_path),
                     'has_back' => !empty($st->passport_back_path),
                     'has_foreign' => !empty($st->foreign_passport_path),
+                    'gp_status' => $st->gp_status ?? 'pending',
+                    'reviewed_by' => $st->reviewed_by ?? '',
+                    'rejection_reason' => $st->rejection_reason ?? '',
                     'created_at' => $st->gp_created_at ? date('d.m.Y', strtotime($st->gp_created_at)) : '',
                 ];
             });
@@ -168,5 +172,104 @@ class GraduatePassportController extends Controller
         if (!file_exists($path)) abort(404);
 
         return response()->file($path);
+    }
+
+    public function approve($id)
+    {
+        $gp = DB::table('graduate_student_passports')->where('id', $id)->first();
+        if (!$gp) abort(404);
+
+        $user = auth()->user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        DB::table('graduate_student_passports')->where('id', $id)->update([
+            'status' => 'approved',
+            'reviewed_by' => $reviewerName,
+            'reviewed_at' => now(),
+            'rejection_reason' => null,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Tasdiqlandi']);
+    }
+
+    public function reject(Request $request, $id)
+    {
+        $request->validate(['rejection_reason' => 'required|string|max:500']);
+
+        $gp = DB::table('graduate_student_passports')->where('id', $id)->first();
+        if (!$gp) abort(404);
+
+        $user = auth()->user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        DB::table('graduate_student_passports')->where('id', $id)->update([
+            'status' => 'rejected',
+            'reviewed_by' => $reviewerName,
+            'reviewed_at' => now(),
+            'rejection_reason' => $request->rejection_reason,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Rad etildi']);
+    }
+
+    public function downloadZip(Request $request)
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $query = DB::table('students as s')
+            ->join('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11');
+
+        if ($request->filled('faculty_id')) {
+            $query->where('s.department_id', $request->faculty_id);
+        }
+        if ($request->filled('group_id')) {
+            $query->where('s.group_id', $request->group_id);
+        }
+
+        $rows = $query->select(
+            's.full_name', 's.student_id_number', 's.group_name',
+            'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path'
+        )->orderBy('s.group_name')->orderBy('s.full_name')->get();
+
+        if ($rows->isEmpty()) {
+            return back()->with('error', 'Hujjatlar topilmadi.');
+        }
+
+        $zipName = 'Bitiruvchilar_hujjatlari_' . date('Y-m-d_H-i') . '.zip';
+        $zipPath = tempnam(sys_get_temp_dir(), 'grad_') . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return back()->with('error', 'ZIP fayl yaratib bo\'lmadi.');
+        }
+
+        $addedFiles = 0;
+        foreach ($rows as $row) {
+            $safeName = preg_replace('/[\/\\\\:*?"<>|]/', '', $row->full_name);
+            $folder = trim($row->group_name . '/' . $row->student_id_number . '_' . $safeName);
+
+            foreach (['passport_front_path' => 'passport_old', 'passport_back_path' => 'passport_orqa', 'foreign_passport_path' => 'xorijiy_passport'] as $field => $label) {
+                if (empty($row->$field)) continue;
+                $filePath = storage_path('app/public/' . $row->$field);
+                if (!file_exists($filePath)) continue;
+                $ext = pathinfo($filePath, PATHINFO_EXTENSION) ?: 'jpg';
+                $zip->addFile($filePath, $folder . '/' . $label . '.' . $ext);
+                $addedFiles++;
+            }
+        }
+
+        $zip->close();
+
+        if ($addedFiles === 0) {
+            @unlink($zipPath);
+            return back()->with('error', 'Yuklanadigan fayllar topilmadi.');
+        }
+
+        return response()->download($zipPath, $zipName, [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
     }
 }

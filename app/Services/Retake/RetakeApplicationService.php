@@ -35,6 +35,7 @@ class RetakeApplicationService
     public function __construct(
         private RetakeDebtService $debtService,
         private RetakeWindowService $windowService,
+        private RetakeDocumentService $documentService,
     ) {}
 
     /**
@@ -299,7 +300,10 @@ class RetakeApplicationService
 
             $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_REJECTED, $actor, $reason);
 
-            return $app->refresh();
+            $fresh = $app->refresh();
+            $this->maybeGenerateGroupDocuments($fresh, $actor);
+
+            return $fresh;
         });
     }
 
@@ -338,7 +342,10 @@ class RetakeApplicationService
                 'retake_group_id' => $retakeGroupId,
             ]);
 
-            return $app->refresh();
+            $fresh = $app->refresh();
+            $this->maybeGenerateGroupDocuments($fresh, $actor);
+
+            return $fresh;
         });
     }
 
@@ -365,12 +372,16 @@ class RetakeApplicationService
                 'HEMIS\'da baho paydo bo\'lgan, ariza avtomatik bekor qilindi'
             );
 
-            return $app->refresh();
+            $fresh = $app->refresh();
+            $this->maybeGenerateGroupDocuments($fresh);
+
+            return $fresh;
         });
     }
 
     /**
      * dean+registrator qarorlari asosida final_status'ni qayta hisoblash.
+     * Yakuniy holat o'zgarsa — guruh hujjatlari tayyor bo'lganini tekshiramiz.
      */
     private function recomputeFinalStatus(RetakeApplication $app): void
     {
@@ -380,6 +391,7 @@ class RetakeApplicationService
                 'final_status' => RetakeApplication::STATUS_REJECTED,
                 'rejected_by' => RetakeApplication::REJECTED_BY_DEAN,
             ]);
+            $this->maybeGenerateGroupDocuments($app);
             return;
         }
         if ($app->registrar_status === RetakeApplication::STATUS_REJECTED) {
@@ -387,14 +399,27 @@ class RetakeApplicationService
                 'final_status' => RetakeApplication::STATUS_REJECTED,
                 'rejected_by' => RetakeApplication::REJECTED_BY_REGISTRAR,
             ]);
+            $this->maybeGenerateGroupDocuments($app);
             return;
         }
 
         // Ikkalasi tasdiqlagan? → academic_dept'ga o'tadi (status pending qoladi)
         if ($app->isDualApproved() && $app->academic_dept_status === RetakeApplication::STATUS_PENDING) {
-            // academic_dept_status allaqachon pending — qo'shimcha o'zgarish kerak emas
             return;
         }
+    }
+
+    /**
+     * Ariza yakuniy holatga kelganda — guruhda barcha arizalar yakunlanganmi?
+     * Agar ha bo'lsa, hujjatlar (DOCX + PDF + QR) generatsiya qilinadi.
+     */
+    public function maybeGenerateGroupDocuments(RetakeApplication $app, ?Teacher $generator = null): void
+    {
+        $group = $app->group()->with('applications')->first();
+        if (!$group) {
+            return;
+        }
+        $this->documentService->generateForGroup($group, $generator);
     }
 
     private function assertReviewable(RetakeApplication $app): void

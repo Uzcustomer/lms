@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
 use App\Models\Department;
+use App\Models\ExamCapacityOverride;
 use App\Models\ExamSchedule;
 use App\Models\Attendance;
 use App\Models\Group;
@@ -798,8 +799,9 @@ class AcademicScheduleController extends Controller
         }
 
         // Kunlik sig'im validatsiyasi (har bir yangi/o'zgargan sana uchun)
-        $dailyCapacity = ExamCapacityService::dailyCapacity();
-        if ($dailyCapacity > 0) {
+        // Eslatma: har bir sananing o'z sig'imi pastda alohida hisoblanadi
+        $defaultDailyCapacity = ExamCapacityService::dailyCapacity();
+        if ($defaultDailyCapacity > 0) {
             // Aggregat: $dateStudents[$date] = qancha qo'shilayotgan talaba (ushbu so'rov ichida)
             $pendingByDate = [];
             $groupCountCache = [];
@@ -886,10 +888,11 @@ class AcademicScheduleController extends Controller
                 }
 
                 $combined = $existingTotal + ($info['students'] ?? 0);
-                if ($combined > $dailyCapacity) {
+                $perDayCapacity = ExamCapacityService::dailyCapacityForDate($date);
+                if ($perDayCapacity > 0 && $combined > $perDayCapacity) {
                     $dateFormatted = \Carbon\Carbon::parse($date)->format('d.m.Y');
                     return redirect()->back()->with('error',
-                        "Kun ustma-ust tushdi! {$dateFormatted} kuniga jami {$combined} talaba belgilanadi, lekin kunlik sig'im atigi {$dailyCapacity} ta. Boshqa kunni tanlang yoki sozlamalardan sig'imni oshiring.");
+                        "Kun ustma-ust tushdi! {$dateFormatted} kuniga jami {$combined} talaba belgilanadi, lekin kunlik sig'im atigi {$perDayCapacity} ta. Boshqa kunni tanlang yoki sozlamalardan sig'imni oshiring.");
                 }
             }
         }
@@ -1857,6 +1860,112 @@ class AcademicScheduleController extends Controller
         }
     }
 
+    /**
+     * Test markazi: berilgan kun uchun maxsus ish vaqti / tushlik / sig'im sozlamalarini olish
+     */
+    public function getDayOverride(Request $request)
+    {
+        $request->validate(['date' => 'required|date_format:Y-m-d']);
+        $date = $request->input('date');
+
+        $override = ExamCapacityOverride::where('date', $date)->first();
+        $defaults = ExamCapacityService::getSettings();
+        $effective = ExamCapacityService::getSettingsForDate($date);
+
+        return response()->json([
+            'date' => $date,
+            'defaults' => $defaults,
+            'effective' => $effective,
+            'override' => $override ? [
+                'work_hours_start' => $override->work_hours_start ? substr($override->work_hours_start, 0, 5) : null,
+                'work_hours_end' => $override->work_hours_end ? substr($override->work_hours_end, 0, 5) : null,
+                'lunch_start' => $override->lunch_start ? substr($override->lunch_start, 0, 5) : null,
+                'lunch_end' => $override->lunch_end ? substr($override->lunch_end, 0, 5) : null,
+                'computer_count' => $override->computer_count,
+                'test_duration_minutes' => $override->test_duration_minutes,
+                'note' => $override->note,
+            ] : null,
+            'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
+        ]);
+    }
+
+    /**
+     * Test markazi: berilgan kun uchun maxsus sozlamalarni saqlash (override)
+     */
+    public function saveDayOverride(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date_format:Y-m-d',
+            'work_hours_start' => 'nullable|date_format:H:i',
+            'work_hours_end' => 'nullable|date_format:H:i',
+            'lunch_start' => 'nullable|date_format:H:i',
+            'lunch_end' => 'nullable|date_format:H:i',
+            'computer_count' => 'nullable|integer|min:1|max:10000',
+            'test_duration_minutes' => 'nullable|integer|min:1|max:480',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        $date = $request->input('date');
+        $userId = auth()->id() ?? auth('teacher')->id();
+
+        // Effektiv sozlamalarni olib mantiqiy validatsiya qilish (default + override)
+        $defaults = ExamCapacityService::getSettings();
+        $workStart = $request->input('work_hours_start') ?: $defaults['work_hours_start'];
+        $workEnd = $request->input('work_hours_end') ?: $defaults['work_hours_end'];
+        if (\Carbon\Carbon::createFromFormat('H:i', $workEnd)->lte(\Carbon\Carbon::createFromFormat('H:i', $workStart))) {
+            return response()->json(['success' => false, 'message' => 'Ish vaqti tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
+        }
+        if ($request->filled('lunch_start') && $request->filled('lunch_end')) {
+            $ls = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_start'));
+            $le = \Carbon\Carbon::createFromFormat('H:i', $request->input('lunch_end'));
+            if ($le->lte($ls)) {
+                return response()->json(['success' => false, 'message' => 'Tushlik tugashi boshlanishidan keyin bo\'lishi kerak.'], 422);
+            }
+        }
+
+        // Hech qanday maydon to'ldirilmagan bo'lsa — override yozuvini o'chirib tashlash
+        $hasAny = $request->filled('work_hours_start')
+            || $request->filled('work_hours_end')
+            || $request->filled('lunch_start')
+            || $request->filled('lunch_end')
+            || $request->filled('computer_count')
+            || $request->filled('test_duration_minutes')
+            || $request->filled('note');
+
+        if (!$hasAny) {
+            ExamCapacityOverride::where('date', $date)->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Bu kun uchun maxsus sozlama olib tashlandi (default ishlatiladi).',
+                'effective' => ExamCapacityService::getSettingsForDate($date),
+                'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
+            ]);
+        }
+
+        $override = ExamCapacityOverride::firstOrNew(['date' => $date]);
+        $override->fill([
+            'work_hours_start' => $request->input('work_hours_start') ?: null,
+            'work_hours_end' => $request->input('work_hours_end') ?: null,
+            'lunch_start' => $request->input('lunch_start') ?: null,
+            'lunch_end' => $request->input('lunch_end') ?: null,
+            'computer_count' => $request->filled('computer_count') ? (int) $request->input('computer_count') : null,
+            'test_duration_minutes' => $request->filled('test_duration_minutes') ? (int) $request->input('test_duration_minutes') : null,
+            'note' => $request->input('note'),
+            'updated_by' => $userId,
+        ]);
+        if (!$override->exists) {
+            $override->created_by = $userId;
+        }
+        $override->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Bu kun uchun maxsus sozlama saqlandi.",
+            'effective' => ExamCapacityService::getSettingsForDate($date),
+            'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
+        ]);
+    }
+
     public function saveTestTime(Request $request)
     {
         $request->validate([
@@ -1888,7 +1997,12 @@ class AcademicScheduleController extends Controller
 
         // Sig'im va vaqt-ust-ust tushishini tekshirish
         if ($relatedDate) {
-            $capacity = ExamCapacityService::getSettings();
+            $relatedDateStr = $relatedDate instanceof \Carbon\Carbon
+                ? $relatedDate->format('Y-m-d')
+                : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
+
+            // Kun uchun maxsus sozlamalar (agar belgilangan bo'lsa) yoki default
+            $capacity = ExamCapacityService::getSettingsForDate($relatedDateStr);
             $computerCount = (int) $capacity['computer_count'];
             $duration = (int) $capacity['test_duration_minutes'];
             $workStart = $capacity['work_hours_start'];
@@ -1907,10 +2021,6 @@ class AcademicScheduleController extends Controller
                     'message' => "Tanlangan vaqt ish soatlaridan ({$workStart}–{$workEnd}) tashqarida. Test davomiyligi {$duration} daqiqa.",
                 ], 422);
             }
-
-            $relatedDateStr = $relatedDate instanceof \Carbon\Carbon
-                ? $relatedDate->format('Y-m-d')
-                : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
 
             // Tushlik vaqti bilan ustma-ust tushishini tekshirish
             if (ExamCapacityService::overlapsLunch($relatedDateStr, $newTime, $duration, $capacity)) {

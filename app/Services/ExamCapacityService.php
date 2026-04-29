@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ExamCapacityOverride;
 use App\Models\ExamSchedule;
 use App\Models\Setting;
 use App\Models\Student;
@@ -43,6 +44,52 @@ class ExamCapacityService
             return self::defaults();
         }
         return array_merge(self::defaults(), $decoded);
+    }
+
+    /**
+     * Berilgan kun uchun sozlamalar — agar shu kunga override bo'lsa, default ustiga
+     * faqat to'ldirilgan maydonlarni qo'shadi.
+     */
+    public static function getSettingsForDate(?string $date): array
+    {
+        $settings = self::getSettings();
+        if (!$date) {
+            return $settings;
+        }
+        try {
+            $normalizedDate = Carbon::parse($date)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return $settings;
+        }
+
+        $override = ExamCapacityOverride::where('date', $normalizedDate)->first();
+        if (!$override) {
+            return $settings;
+        }
+
+        // Faqat to'ldirilgan (null bo'lmagan) maydonlarni override qiladi
+        $overrides = [
+            'work_hours_start' => $override->work_hours_start ? substr($override->work_hours_start, 0, 5) : null,
+            'work_hours_end' => $override->work_hours_end ? substr($override->work_hours_end, 0, 5) : null,
+            'lunch_start' => $override->lunch_start ? substr($override->lunch_start, 0, 5) : null,
+            'lunch_end' => $override->lunch_end ? substr($override->lunch_end, 0, 5) : null,
+            'computer_count' => $override->computer_count,
+            'test_duration_minutes' => $override->test_duration_minutes,
+        ];
+
+        foreach ($overrides as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $settings[$key] = $value;
+            }
+        }
+
+        // Agar tushlik faqat bittasi to'ldirilsa — tushlik o'chiriladi
+        if (!empty($overrides['lunch_start']) xor !empty($overrides['lunch_end'])) {
+            // Bittasini override qilgan bo'lsa, ikkalasini ham yangilash kerak
+            // — bunda mantiqsiz holatdan qochish uchun originalni saqlaymiz
+        }
+
+        return $settings;
     }
 
     public static function setSettings(array $data): void
@@ -110,9 +157,9 @@ class ExamCapacityService
      * Bitta kunning maksimal sig'imi (talaba-test soni).
      * = ((ish_vaqti - tushlik) / davomiylik) * kompyuter_soni
      */
-    public static function dailyCapacity(): int
+    public static function dailyCapacity(?array $settings = null): int
     {
-        $s = self::getSettings();
+        $s = $settings ?? self::getSettings();
         $start = Carbon::createFromFormat('H:i', $s['work_hours_start']);
         $end = Carbon::createFromFormat('H:i', $s['work_hours_end']);
         $minutes = max(0, $end->diffInMinutes($start, false));
@@ -122,6 +169,11 @@ class ExamCapacityService
         }
         $slots = (int) floor($minutes / max(1, $s['test_duration_minutes']));
         return $slots * (int) $s['computer_count'];
+    }
+
+    public static function dailyCapacityForDate(?string $date): int
+    {
+        return self::dailyCapacity(self::getSettingsForDate($date));
     }
 
     /**
@@ -199,7 +251,7 @@ class ExamCapacityService
      */
     public static function concurrentStudentsForSlot(string $date, string $time, ?array $exclude = null): int
     {
-        $duration = (int) self::getSettings()['test_duration_minutes'];
+        $duration = (int) self::getSettingsForDate($date)['test_duration_minutes'];
         $start = Carbon::parse($date . ' ' . substr($time, 0, 5));
         $end = $start->copy()->addMinutes($duration);
 

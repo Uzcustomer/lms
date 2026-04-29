@@ -203,6 +203,26 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\Retake\RetakePeriodController::class, 'index'])->name('index');
                 Route::post('/', [\App\Http\Controllers\Admin\Retake\RetakePeriodController::class, 'store'])->name('store');
             });
+
+            // Dekan paneli
+            Route::prefix('dean')->name('dean.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'index'])->name('index');
+                Route::get('/{id}', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'show'])->whereNumber('id')->name('show');
+                Route::post('/{id}/approve', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'approve'])->whereNumber('id')->name('approve');
+                Route::post('/{id}/reject', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'reject'])->whereNumber('id')->name('reject');
+                Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\Retake\DeanRetakeController::class, 'downloadFile'])
+                    ->whereNumber('id')->whereIn('type', ['receipt', 'document', 'tasdiqnoma'])->name('download-file');
+            });
+
+            // Registrator paneli
+            Route::prefix('registrar')->name('registrar.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'index'])->name('index');
+                Route::get('/{id}', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'show'])->whereNumber('id')->name('show');
+                Route::post('/{id}/approve', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'approve'])->whereNumber('id')->name('approve');
+                Route::post('/{id}/reject', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'reject'])->whereNumber('id')->name('reject');
+                Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\Retake\RegistrarRetakeController::class, 'downloadFile'])
+                    ->whereNumber('id')->whereIn('type', ['receipt', 'document', 'tasdiqnoma'])->name('download-file');
+            });
         });
 
         // Kontraktlar ro'yxati (registrator_ofisi, admin, buxgalteriya)

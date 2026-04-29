@@ -33,7 +33,7 @@
                     </x-nav-link>
                 </div>
                 @endif
-                @if(!in_array($navActiveRole, ['tyutor', 'nazoratchi']))
+                @if($navActiveRole !== 'tyutor')
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                         {{ __('Jurnal') }}
@@ -51,7 +51,41 @@
                             ->limit(1)->exists();
                     }
                 @endphp
-                @if($navActiveRole !== 'oqituvchi' || $hasTutorGroups)
+                @if($navActiveRole === 'nazoratchi')
+                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <div class="flex items-center">
+                        <x-dropdown align="right" width="56">
+                            <x-slot name="trigger">
+                                <button
+                                    class="inline-flex items-center px-1 pt-1 text-sm font-medium leading-5 text-purple-700 transition duration-150 ease-in-out border-b-2 border-transparent hover:text-purple-900 hover:border-purple-300">
+                                    Hisobotlar
+                                    <svg class="w-4 h-4 ms-1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                    </svg>
+                                </button>
+                            </x-slot>
+                            <x-slot name="content">
+                                <x-dropdown-link :href="route('admin.absence_report.index')" :active="request()->routeIs('admin.absence_report.*')">
+                                    74 soat dars qoldirish
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.absence')" :active="request()->routeIs('admin.reports.absence*')">
+                                    25% sababsiz
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.load-vs-pair')" :active="request()->routeIs('admin.reports.load-vs-pair*')">
+                                    Yuklama vs Juftlik
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.debtors')" :active="request()->routeIs('admin.reports.debtors*')">
+                                    4&#8805;qarzdorlar
+                                </x-dropdown-link>
+                                <x-dropdown-link :href="route('admin.reports.top-students')" :active="request()->routeIs('admin.reports.top-students*')">
+                                    5 ga da'vogar
+                                </x-dropdown-link>
+                            </x-slot>
+                        </x-dropdown>
+                    </div>
+                </div>
+                @endif
+                @if($navActiveRole !== 'nazoratchi' && ($navActiveRole !== 'oqituvchi' || $hasTutorGroups))
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <div class="flex items-center">
                         <x-dropdown align="right" width="48">
@@ -510,10 +544,21 @@
                     {{ __('Baholar') }}
                 </x-responsive-nav-link>
                 @endif
-                @if(!in_array($navActiveRole, ['tyutor', 'nazoratchi']))
+                @if($navActiveRole !== 'tyutor')
                 <x-responsive-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                     {{ __('Jurnal') }}
                 </x-responsive-nav-link>
+                @endif
+
+                @if($navActiveRole === 'nazoratchi')
+                <div class="border-t border-gray-200 pt-2 mt-2">
+                    <div class="px-4 text-xs font-semibold text-purple-700 uppercase">Hisobotlar</div>
+                </div>
+                <x-responsive-nav-link :href="route('admin.absence_report.index')">74 soat dars qoldirish</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.absence')">25% sababsiz</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.load-vs-pair')">Yuklama vs Juftlik</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.debtors')">4&#8805;qarzdorlar</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.reports.top-students')">5 ga da'vogar</x-responsive-nav-link>
                 @endif
                 @if($hasTutorGroups ?? false)
                     <x-responsive-nav-link :href="route('teacher.reports.jn')">JN o'zlashtirish</x-responsive-nav-link>

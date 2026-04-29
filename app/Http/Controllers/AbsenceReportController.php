@@ -102,6 +102,15 @@ class AbsenceReportController extends Controller
             $query->where('s.group_id', $request->group);
         }
 
+        // Nazoratchi: faqat biriktirilgan guruhlar
+        if (is_active_nazoratchi()) {
+            $nazoratchiGroupHemisIds = get_nazoratchi_group_hemis_ids();
+            if (empty($nazoratchiGroupHemisIds)) {
+                return response()->json(['data' => [], 'total' => 0]);
+            }
+            $query->whereIn('s.group_id', $nazoratchiGroupHemisIds);
+        }
+
         $selectedEducationType = $request->get('education_type');
         if ($selectedEducationType) {
             $groupIds = DB::table('groups')

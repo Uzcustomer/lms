@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/loading_widget.dart';
+import '../../utils/page_transitions.dart';
 import 'teacher_journal_screen.dart';
 
 class TeacherDashboardScreen extends StatefulWidget {
@@ -160,7 +161,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
   void _openJournal(Map<String, dynamic> subject) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      SlideFadePageRoute(
         builder: (_) => TeacherJournalScreen(
           groupId: subject['group_id'] as int,
           groupName: subject['group_name']?.toString() ?? '',

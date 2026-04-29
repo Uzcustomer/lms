@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../../utils/page_transitions.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'attendance_stats_screen.dart';
@@ -144,7 +145,7 @@ class StudentUsefulScreen extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const StudentServicesScreen()),
+                      SlideFadePageRoute(builder: (_) => const StudentServicesScreen()),
                     ),
                     child: _ServicesHero(),
                   ),
@@ -298,7 +299,7 @@ class _GlassTile extends StatelessWidget {
             child: InkWell(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => item.screen),
+                SlideFadePageRoute(builder: (_) => item.screen),
               ),
               borderRadius: BorderRadius.circular(20),
               child: Stack(

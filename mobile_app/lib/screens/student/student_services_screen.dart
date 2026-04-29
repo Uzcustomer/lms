@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../../utils/page_transitions.dart';
 import 'absence_excuse_list_screen.dart';
 
 class StudentServicesScreen extends StatelessWidget {
@@ -20,7 +21,7 @@ class StudentServicesScreen extends StatelessWidget {
         color: AppTheme.primaryColor,
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const AbsenceExcuseListScreen()),
+          SlideFadePageRoute(builder: (_) => const AbsenceExcuseListScreen()),
         ),
       ),
     ];

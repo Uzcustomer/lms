@@ -9,6 +9,7 @@ import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import '../../utils/page_transitions.dart';
 import 'student_home_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {
@@ -648,7 +649,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(
+      SlideFadePageRoute(
         builder: (_) => _JnGradesPage(
           subjectId: subjectId is int ? subjectId : int.parse(subjectId.toString()),
           subjectName: subjectName,

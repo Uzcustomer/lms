@@ -18,6 +18,7 @@ class TeacherHomeScreen extends StatefulWidget {
 
 class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   int _currentIndex = 0;
+  int _previousIndex = 0;
 
   List<_NavItem> _getNavItems(String? activeRole, AppLocalizations l) {
     final items = <_NavItem>[
@@ -77,9 +78,32 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           _currentIndex = 0;
         }
 
+        final goingRight = _currentIndex > _previousIndex;
+        final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
+
         return Scaffold(
           extendBody: true,
-          body: _getScreen(navItems[_currentIndex].key),
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: slideBegin,
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<int>(_currentIndex),
+              child: _getScreen(navItems[_currentIndex].key),
+            ),
+          ),
           bottomNavigationBar: SafeArea(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -107,7 +131,10 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                         child: GestureDetector(
                           onTap: () {
                             if (index != _currentIndex) {
-                              setState(() => _currentIndex = index);
+                              setState(() {
+                                _previousIndex = _currentIndex;
+                                _currentIndex = index;
+                              });
                             }
                           },
                           behavior: HitTestBehavior.opaque,

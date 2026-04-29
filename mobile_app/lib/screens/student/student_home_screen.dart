@@ -26,6 +26,7 @@ class StudentHomeScreen extends StatefulWidget {
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 2;
+  int _previousIndex = 2;
 
   final _screens = const [
     StudentGradesScreen(),
@@ -38,6 +39,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   void _onTabTapped(int index) {
     if (index == _currentIndex) return;
     setState(() {
+      _previousIndex = _currentIndex;
       _currentIndex = index;
     });
   }
@@ -54,9 +56,32 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       _NavItem(Icons.person_outline, Icons.person, l.profile),
     ];
 
+    final goingRight = _currentIndex > _previousIndex;
+    final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
+
     return Scaffold(
       extendBody: true,
-      body: _screens[_currentIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 280),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: slideBegin,
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<int>(_currentIndex),
+          child: _screens[_currentIndex],
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

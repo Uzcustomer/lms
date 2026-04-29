@@ -3,6 +3,7 @@ import '../../config/api_config.dart';
 import '../../config/theme.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../utils/page_transitions.dart';
 import 'chat_conversation_screen.dart';
 import 'chat_group_screen.dart';
 
@@ -174,7 +175,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
           onTap: () async {
             await Navigator.push(
               context,
-              MaterialPageRoute(
+              SlideFadePageRoute(
                 builder: (_) => ChatConversationScreen(
                   contactId: contactId,
                   contactName: name,

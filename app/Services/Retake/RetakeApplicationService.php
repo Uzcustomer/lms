@@ -2,7 +2,6 @@
 
 namespace App\Services\Retake;
 
-use App\Models\AcademicRecord;
 use App\Models\RetakeApplication;
 use App\Models\RetakeApplicationGroup;
 use App\Models\RetakeApplicationLog;
@@ -132,7 +131,7 @@ class RetakeApplicationService
 
         // 6. Tanlangan fanlarning haqiqatan qarzdorlik ekanligini tekshirish
         $debts = $this->debtService->debts($student);
-        $debtsKeyed = $debts->keyBy(fn (AcademicRecord $r) => $r->subject_id . '|' . $r->semester_id);
+        $debtsKeyed = $debts->keyBy(fn ($r) => $r->subject_id . '|' . $r->semester_id);
 
         $resolved = [];
         foreach ($selectedSubjects as $sel) {
@@ -155,7 +154,7 @@ class RetakeApplicationService
 
         // 7. Hisob-kitob (kreditlar va summa)
         $creditPrice = RetakeSetting::creditPrice();
-        $totalCredits = array_sum(array_map(fn (AcademicRecord $r) => (float) $r->credit, $resolved));
+        $totalCredits = array_sum(array_map(fn ($r) => (float) $r->credit, $resolved));
         $amount = $totalCredits * $creditPrice;
 
         // 8. Kvitansiya faylini saqlash
@@ -177,7 +176,6 @@ class RetakeApplicationService
             ]);
 
             foreach ($resolved as $debt) {
-                /** @var AcademicRecord $debt */
                 $app = RetakeApplication::create([
                     'group_id' => $group->id,
                     'student_hemis_id' => $student->hemis_id,

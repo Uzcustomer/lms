@@ -37,7 +37,7 @@ class RetakeApprovalController extends Controller
         $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
-        $filter = $request->input('filter', 'pending_mine');
+        $filter = $request->input('filter', 'all');
         $search = trim((string) $request->input('search', ''));
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');

@@ -12,7 +12,7 @@ class GeminiService {
 
   GenerativeModel get model {
     _model ??= GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash',
       apiKey: _apiKey,
       systemInstruction: Content.text(
         'Sen TDTU (Toshkent Davlat Tibbiyot Universiteti) talabalariga '

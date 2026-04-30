@@ -81,9 +81,12 @@ class RetakeStatisticsController extends Controller
         ];
 
         $totalApplications = (clone $base)->count();
-        $totalAmount = (clone $base)
-            ->join('retake_application_groups', 'retake_application_groups.id', '=', 'retake_applications.group_id')
-            ->sum('retake_application_groups.receipt_amount');
+        // Summa har ariza-guruhi (group) bo'yicha bittadan, fanlar soniga
+        // ko'paymasligi uchun avval qaysi guruhlar filtrga tushganini olamiz.
+        $groupIds = (clone $base)->distinct()->pluck('group_id');
+        $totalAmount = $groupIds->isEmpty()
+            ? 0
+            : \App\Models\RetakeApplicationGroup::whereIn('id', $groupIds)->sum('receipt_amount');
 
         return view('teacher.academic-dept.retake-statistics.index', [
             'filters' => $filters,

@@ -141,6 +141,9 @@
         .row-uploaded { background: #dcfce7 !important; }
         .row-uploaded td { opacity: 0.85; }
 
+        .journal-view-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; transition: all .15s; text-decoration: none; }
+        .journal-view-btn:hover { background: #dbeafe; border-color: #3b82f6; color: #1e3a8a; }
+
         /* === BADGES === */
         .badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
@@ -308,6 +311,7 @@
                                         <th>Baho</th>
                                         <th>Sana</th>
                                         <th>Xulosa</th>
+                                        <th style="width:60px;">Jurnal</th>
                                     </tr>
                                     <tr class="filter-header-row">
                                         <th></th>
@@ -380,6 +384,7 @@
                                             </div>
                                         </th>
                                         <th><select class="col-filter" data-col="xulosa_code"><option value="">Barchasi</option></select></th>
+                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -660,6 +665,23 @@
             }
         });
 
+        var journalShowBaseUrl = @json(url('/admin/journal/show'));
+
+        function buildJournalBtn(r) {
+            if (!r.group_local_id || !r.fan_id || !r.semester_code || !r.student_hemis_id) {
+                return '<span style="color:#cbd5e1;font-size:11px;">—</span>';
+            }
+            var url = journalShowBaseUrl + '/' + encodeURIComponent(r.group_local_id) +
+                      '/' + encodeURIComponent(r.fan_id) +
+                      '/' + encodeURIComponent(r.semester_code) +
+                      '?highlight_student=' + encodeURIComponent(r.student_hemis_id);
+            return '<a href="' + url + '" target="_blank" rel="noopener" class="journal-view-btn" title="Jurnalda ko\'rish">' +
+                   '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align:middle;">' +
+                   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>' +
+                   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>' +
+                   '</svg></a>';
+        }
+
         // ========== JADVAL RENDERI ==========
         function renderTable(data) {
             var html = '';
@@ -694,6 +716,7 @@
                 html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
                 html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa, r.id) + '</td>';
+                html += '<td style="text-align:center;">' + buildJournalBtn(r) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);

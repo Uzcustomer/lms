@@ -7,7 +7,7 @@
 
     @include('partials._retake_tom_select')
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
         {{-- Filtrlar --}}
         <form method="GET" action="{{ route('admin.retake-statistics.index') }}"

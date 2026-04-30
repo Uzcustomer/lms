@@ -8,7 +8,7 @@
 
     @include('partials._retake_tom_select')
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
         @if(session('success'))
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>

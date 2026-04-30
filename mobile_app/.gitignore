@@ -46,3 +46,4 @@ app.*.map.json
 
 # API keys (local only, never commit)
 lib/config/api_keys.dart
+lib/config/api_key.dart

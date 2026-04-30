@@ -5,6 +5,8 @@
         </h2>
     </x-slot>
 
+    @include('partials._retake_tom_select')
+
     <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto"
          x-data="groupFormation({
              lookupUrl: '{{ route('admin.retake-groups.lookup') }}',
@@ -179,11 +181,9 @@
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("O'qituvchi") }} <span class="text-red-500">*</span></label>
                                 <select name="teacher_id" x-model="formData.teacher_id" required
-                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                        x-ref="teacherSelect"
+                                        class="tom-select w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                     <option value="">— {{ __("Tanlang") }} —</option>
-                                    <template x-for="t in teachers" :key="t.id">
-                                        <option :value="t.id" x-text="t.full_name + (t.department ? ' — ' + t.department : '')"></option>
-                                    </template>
                                 </select>
                             </div>
 
@@ -285,6 +285,29 @@
                         this.applications = json.applications || [];
                         this.teachers = json.teachers || [];
                         this.selected = this.applications.map(a => a.id);
+
+                        this.$nextTick(() => this.syncTeacherOptions());
+                    },
+
+                    syncTeacherOptions() {
+                        const sel = this.$refs.teacherSelect;
+                        if (!sel) return;
+                        // TomSelect endi init bo'lmagan bo'lsa, init qilamiz
+                        if (!sel.tomselect && window.initTomSelects) {
+                            window.initTomSelects(sel.parentElement);
+                        }
+                        const ts = sel.tomselect;
+                        if (!ts) return;
+                        ts.clear();
+                        ts.clearOptions();
+                        ts.addOption({ value: '', text: '— {{ __("Tanlang") }} —' });
+                        this.teachers.forEach(t => {
+                            ts.addOption({
+                                value: String(t.id),
+                                text: t.full_name + (t.department ? ' — ' + t.department : ''),
+                            });
+                        });
+                        ts.refreshOptions(false);
                     },
 
                     closeFormation() { this.showFormation = false; },

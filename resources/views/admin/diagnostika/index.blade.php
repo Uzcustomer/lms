@@ -421,7 +421,9 @@
         // Xulosa code -> label mapping
         var xulosaCodes = {
             'ok': 'Yuklasa bo\'ladi',
-            'uploaded': 'Oldin yuklangan',
+            'uploaded': 'Jurnalga yuklangan',
+            'mavzu_uploaded': 'Jurnalga yuklangan (mavzu)',
+            'has_other_grade': 'Bahosi bor',
             '2O': '2O',
             '2T': '2T',
             'not_in_curriculum': 'Jadvalda yo\'q',
@@ -441,6 +443,8 @@
                 'ok':               'background:#dcfce7;color:#166534;border:1px solid #86efac;',
                 'mavzu':            'background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;',
                 'uploaded':         'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+                'mavzu_uploaded':   'background:#dcfce7;color:#166534;border:1px solid #86efac;',
+                'has_other_grade':  'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 '2O':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 '2T':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 'not_in_curriculum':'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
@@ -553,14 +557,16 @@
 
             renderTable(filteredData);
             // Statistika
-            var okCount = 0, mavzuCount = 0, errCount = 0;
+            var okCount = 0, mavzuCount = 0, uploadedCount = 0, errCount = 0;
             filteredData.forEach(function(r) {
                 if (r.xulosa_code === 'ok') okCount++;
                 else if (r.xulosa_code === 'mavzu') mavzuCount++;
+                else if (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') uploadedCount++;
                 else errCount++;
             });
             var parts = 'Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>';
             if (mavzuCount > 0) parts += ' | <span style="color:#0369a1;">Mavzu retake: ' + mavzuCount + '</span>';
+            if (uploadedCount > 0) parts += ' | <span style="color:#16a34a;">Jurnalda: ' + uploadedCount + '</span>';
             $('#total-info').html(parts).show();
             updateButtons();
         }
@@ -694,7 +700,7 @@
                         : esc(r.yn_turi));
 
                 var isOk = r.xulosa_code === 'ok';
-                var rowClass = r.xulosa_code === 'uploaded' ? 'journal-row row-uploaded' : 'journal-row';
+                var rowClass = (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') ? 'journal-row row-uploaded' : 'journal-row';
 
                 var nameCell = '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
                 var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';

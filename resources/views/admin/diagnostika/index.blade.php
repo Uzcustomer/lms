@@ -1079,7 +1079,8 @@
                     } else if (g.yn_turi) {
                         html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;' + (g.yn_turi === 'oski' ? 'background:#dbeafe;color:#1e40af;' : 'background:#d1fae5;color:#065f46;') + '">' + (g.yn_turi === 'oski' ? 'OSKI' : 'Test') + '</span>';
                     } else {
-                        html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;background:#fef2f2;">';
+                        // Dinamik: 1-mavzu..N-mavzu opsiyalari yuklanadigan fanning lesson_count'iga qarab to'ladi
+                        html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;background:#fef2f2;min-width:120px;">';
                         html += '<option value="">Tanlang</option>';
                         html += '<option value="oski">OSKI</option>';
                         html += '<option value="test">Test</option>';
@@ -1097,7 +1098,7 @@
 
                         // Agar Moodle ID ro'yxatda bo'lmasa — yuqoriga "Moodle (jadvalda yo'q)" qator qo'shamiz
                         if (!foundOriginal) {
-                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" selected style="color:#dc2626;">';
+                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" data-lesson-count="0" selected style="color:#dc2626;">';
                             selectHtml += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
                             selectHtml += '</option>';
                             selectHtml += '<option disabled>──── Joriy semestr fanlari ────</option>';
@@ -1105,10 +1106,11 @@
 
                         g.available_subjects.forEach(function(s) {
                             var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
-                            selectHtml += '<option value="' + esc(s.subject_id) + '"' + (selected ? ' selected' : '') + '>';
+                            var lc = s.lesson_count || 0;
+                            selectHtml += '<option value="' + esc(s.subject_id) + '" data-lesson-count="' + lc + '"' + (selected ? ' selected' : '') + '>';
                             selectHtml += esc(s.subject_name);
                             if (s.subject_code) selectHtml += ' [' + esc(s.subject_code) + ']';
-                            selectHtml += ' (ID: ' + s.subject_id + ')';
+                            selectHtml += ' (ID: ' + s.subject_id + (lc > 0 ? ', ' + lc + ' ta dars' : '') + ')';
                             selectHtml += '</option>';
                         });
                         selectHtml += '</select>';
@@ -1127,6 +1129,39 @@
                 html += '</div>';
                 html += '</div></div>';
                 $('body').append(html);
+
+                // YN turi dropdownini fan tanloviga qarab yangilash:
+                // OSKI, Test + tanlangan fanning lesson_count'iga qarab 1-mavzu..N-mavzu
+                function refreshYnTuriOptions(key) {
+                    var ynSel = $('.reupload-yn-turi-select[data-key="' + $.escapeSelector(key) + '"]');
+                    if (ynSel.length === 0) return;
+                    var fanSel = $('.reupload-subject-select[data-key="' + $.escapeSelector(key) + '"]');
+                    var lc = parseInt(fanSel.find(':selected').data('lesson-count')) || 0;
+                    var current = ynSel.val() || '';
+
+                    var optsHtml = '<option value="">Tanlang</option>';
+                    optsHtml += '<option value="oski"' + (current === 'oski' ? ' selected' : '') + '>OSKI</option>';
+                    optsHtml += '<option value="test"' + (current === 'test' ? ' selected' : '') + '>Test</option>';
+                    if (lc > 0) {
+                        optsHtml += '<option disabled>───── Mavzular ─────</option>';
+                        for (var i = 1; i <= lc; i++) {
+                            var v = 'mavzu_' + i;
+                            // Joriy tanlov amal qiladigan oraliqda bo'lsa, saqlab qolamiz
+                            optsHtml += '<option value="' + v + '"' + (current === v ? ' selected' : '') + '>' + i + '-mavzu</option>';
+                        }
+                    }
+                    ynSel.html(optsHtml);
+                }
+
+                // Boshlang'ich render (har bir mavjud yn_turi select uchun)
+                $('.reupload-yn-turi-select').each(function() {
+                    refreshYnTuriOptions($(this).data('key'));
+                });
+
+                // Fan o'zgarganda — shu qator uchun YN turi opsiyalari yangilanadi
+                $('.reupload-subject-select').on('change', function() {
+                    refreshYnTuriOptions($(this).data('key'));
+                });
 
                 $('#reupload-modal-submit').on('click', function() {
                     var overrides = {};

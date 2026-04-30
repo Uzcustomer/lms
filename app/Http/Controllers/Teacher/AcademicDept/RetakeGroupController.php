@@ -34,13 +34,25 @@ class RetakeGroupController extends Controller
 
         // Mavjud guruhlar
         $statusFilter = $request->input('status', 'all');
+        $search = trim((string) $request->input('search', ''));
+
         $groupsQuery = RetakeGroup::query()
             ->with('teacher')
             ->withCount(['applications as students_count'])
             ->orderByDesc('created_at');
 
-        if ($statusFilter !== 'all') {
+        if ($statusFilter !== 'all'
+            && in_array($statusFilter, ['forming', 'scheduled', 'in_progress', 'completed'], true)
+        ) {
             $groupsQuery->where('status', $statusFilter);
+        }
+
+        if ($search !== '') {
+            $groupsQuery->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('subject_name', 'like', "%{$search}%")
+                  ->orWhere('teacher_name', 'like', "%{$search}%");
+            });
         }
 
         $groups = $groupsQuery->paginate(20)->withQueryString();
@@ -49,6 +61,7 @@ class RetakeGroupController extends Controller
             'aggregations' => $aggregations,
             'groups' => $groups,
             'statusFilter' => $statusFilter,
+            'search' => $search,
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
         ]);
     }

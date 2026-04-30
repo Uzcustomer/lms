@@ -22,14 +22,41 @@ class RetakeWindowController extends Controller
         private RetakeWindowService $windowService,
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
         $this->authorizeAccess();
 
-        $windows = RetakeApplicationWindow::query()
+        $statusFilter = $request->input('status', 'all');
+        $departmentId = $request->input('department_id');
+        $levelCode = $request->input('level_code');
+
+        $windowsQuery = RetakeApplicationWindow::query()
             ->withCount('applicationGroups as applications_count')
-            ->orderByDesc('start_date')
-            ->paginate(30);
+            ->orderByDesc('start_date');
+
+        if ($statusFilter !== 'all') {
+            $today = now()->toDateString();
+            match ($statusFilter) {
+                'upcoming' => $windowsQuery->whereDate('start_date', '>', $today),
+                'active' => $windowsQuery->whereDate('start_date', '<=', $today)
+                    ->whereDate('end_date', '>=', $today),
+                'closed' => $windowsQuery->whereDate('end_date', '<', $today),
+                default => null,
+            };
+        }
+
+        if ($departmentId) {
+            // department → specialty larni topib filter qilamiz
+            $specialtyIds = Specialty::where('department_hemis_id', $departmentId)
+                ->pluck('specialty_hemis_id');
+            $windowsQuery->whereIn('specialty_id', $specialtyIds);
+        }
+
+        if ($levelCode) {
+            $windowsQuery->where('level_code', $levelCode);
+        }
+
+        $windows = $windowsQuery->paginate(30)->withQueryString();
 
         // Yo'nalish bo'yicha fakultet nomini topish uchun map
         $specialtyToFaculty = Specialty::query()
@@ -54,6 +81,9 @@ class RetakeWindowController extends Controller
             'specialties' => $specialties,
             'levels' => $levels,
             'semesters' => $semesters,
+            'statusFilter' => $statusFilter,
+            'departmentIdFilter' => $departmentId,
+            'levelCodeFilter' => $levelCode,
             'canOverride' => $this->canOverride(),
         ]);
     }

@@ -5,6 +5,8 @@
         </h2>
     </x-slot>
 
+    @include('partials._retake_tom_select')
+
     <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto"
          x-data="{ showCreate: false, overrideId: null, overrideStart: '', overrideEnd: '' }">
 
@@ -22,7 +24,7 @@
             </div>
         @endif
 
-        <div class="flex justify-between items-center mb-4">
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
             <p class="text-sm text-gray-500">
                 {{ __("Har yo'nalish + kurs + semestr uchun alohida oyna ochiladi") }}
             </p>
@@ -31,6 +33,43 @@
                     class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 + {{ __("Yangi oyna ochish") }}
             </button>
+        </div>
+
+        {{-- Filtrlar --}}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4">
+            <form method="GET" action="{{ route('admin.retake-windows.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
+                    <select name="status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
+                        <option value="all" {{ ($statusFilter ?? 'all') === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
+                        <option value="upcoming" {{ ($statusFilter ?? '') === 'upcoming' ? 'selected' : '' }}>{{ __("Kelmoqda") }}</option>
+                        <option value="active" {{ ($statusFilter ?? '') === 'active' ? 'selected' : '' }}>{{ __("Faol") }}</option>
+                        <option value="closed" {{ ($statusFilter ?? '') === 'closed' ? 'selected' : '' }}>{{ __("Yopilgan") }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">{{ __("Fakultet") }}</label>
+                    <select name="department_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
+                        <option value="">— {{ __("Barchasi") }} —</option>
+                        @foreach($departments as $d)
+                            <option value="{{ $d->department_hemis_id }}" {{ (string)($departmentIdFilter ?? '') === (string)$d->department_hemis_id ? 'selected' : '' }}>{{ $d->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">{{ __("Kurs") }}</label>
+                    <select name="level_code" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
+                        <option value="">— {{ __("Barchasi") }} —</option>
+                        @foreach($levels as $lv)
+                            <option value="{{ $lv['code'] }}" {{ ($levelCodeFilter ?? '') === $lv['code'] ? 'selected' : '' }}>{{ $lv['name'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
+                    <a href="{{ route('admin.retake-windows.index') }}" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">{{ __("Tozalash") }}</a>
+                </div>
+            </form>
         </div>
 
         {{-- Mavjud oynalar jadvali --}}

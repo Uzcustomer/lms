@@ -73,14 +73,21 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100">
             <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <h3 class="text-sm font-semibold text-gray-900">{{ __("Mavjud guruhlar") }}</h3>
-                <form method="GET" action="{{ route('admin.retake-groups.index') }}">
-                    <select name="status" onchange="this.form.submit()" class="px-3 py-1.5 text-xs border border-gray-300 rounded">
+                <form method="GET" action="{{ route('admin.retake-groups.index') }}" class="flex gap-2 items-center flex-wrap">
+                    <input type="text" name="search" value="{{ $search ?? '' }}"
+                           placeholder="{{ __('Nom, fan yoki o\'qituvchi') }}"
+                           class="px-3 py-1.5 text-xs border border-gray-300 rounded w-56">
+                    <select name="status" class="px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="all" {{ $statusFilter === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
                         <option value="forming" {{ $statusFilter === 'forming' ? 'selected' : '' }}>{{ __("Shakllantirilmoqda") }}</option>
                         <option value="scheduled" {{ $statusFilter === 'scheduled' ? 'selected' : '' }}>{{ __("Tasdiqlangan") }}</option>
                         <option value="in_progress" {{ $statusFilter === 'in_progress' ? 'selected' : '' }}>{{ __("Borayotgan") }}</option>
                         <option value="completed" {{ $statusFilter === 'completed' ? 'selected' : '' }}>{{ __("Tugagan") }}</option>
                     </select>
+                    <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
+                    @if(($search ?? '') !== '' || $statusFilter !== 'all')
+                        <a href="{{ route('admin.retake-groups.index') }}" class="text-xs text-gray-500 hover:underline">{{ __("Tozalash") }}</a>
+                    @endif
                 </form>
             </div>
 

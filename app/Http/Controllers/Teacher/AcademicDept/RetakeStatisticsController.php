@@ -140,13 +140,23 @@ class RetakeStatisticsController extends Controller
             $q->where('semester_id', $filters['semester_id']);
         }
 
-        $hasStudentFilter = !empty($filters['department_id']) || !empty($filters['specialty_id']) || !empty($filters['level_code']);
+        $hasStudentFilter = !empty($filters['department_id'])
+            || !empty($filters['specialty_id'])
+            || !empty($filters['level_code']);
         if ($hasStudentFilter) {
-            $studentIds = Student::query();
-            if (!empty($filters['department_id'])) $studentIds->where('department_id', $filters['department_id']);
-            if (!empty($filters['specialty_id']))  $studentIds->where('specialty_id', $filters['specialty_id']);
-            if (!empty($filters['level_code']))    $studentIds->where('level_code', $filters['level_code']);
-            $q->whereIn('student_hemis_id', $studentIds->pluck('hemis_id'));
+            $studentQuery = Student::query();
+            if (!empty($filters['department_id'])) {
+                $studentQuery->where('department_id', $filters['department_id']);
+            }
+            if (!empty($filters['specialty_id'])) {
+                $studentQuery->where('specialty_id', $filters['specialty_id']);
+            }
+            if (!empty($filters['level_code'])) {
+                $studentQuery->where('level_code', $filters['level_code']);
+            }
+
+            // Subquery — performance: pluck o'rniga whereIn subquery
+            $q->whereIn('student_hemis_id', $studentQuery->select('hemis_id'));
         }
 
         return $q;

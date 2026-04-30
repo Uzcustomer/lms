@@ -5,6 +5,8 @@
         </h2>
     </x-slot>
 
+    @include('partials._retake_tom_select')
+
     <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
 
         {{-- Filtrlar --}}
@@ -41,7 +43,7 @@
                 </div>
                 <div>
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Fakultet") }}</label>
-                    <select name="department_id" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
+                    <select name="department_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="">— {{ __("Barchasi") }} —</option>
                         @foreach($departments as $d)
                             <option value="{{ $d->department_hemis_id }}" @selected((string)($filters['department_id'] ?? '') === (string)$d->department_hemis_id)>{{ $d->name }}</option>
@@ -50,7 +52,7 @@
                 </div>
                 <div>
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Yo'nalish") }}</label>
-                    <select name="specialty_id" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
+                    <select name="specialty_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="">— {{ __("Barchasi") }} —</option>
                         @foreach($specialties as $s)
                             <option value="{{ $s->specialty_hemis_id }}" @selected((string)($filters['specialty_id'] ?? '') === (string)$s->specialty_hemis_id)>{{ $s->name }}</option>

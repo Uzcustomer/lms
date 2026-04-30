@@ -513,6 +513,10 @@ class QuizResultController extends Controller
                 }
             }
 
+            // Mavzu (N-mavzu) shakldagi natijalar uchun jurnal holatini oldindan tayyorlash
+            // Har bir (student, fan, mavzu_n) uchun jurnaldagi state: NB / Baho / Retake / Bo'sh
+            $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
+
             // ====== DATA TAYYORLASH ======
             $data = [];
             $rowNum = 0;
@@ -540,7 +544,8 @@ class QuizResultController extends Controller
                     $uploadedResultIds, $duplicateMap,
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
-                    $testTypes, $oskiTypes
+                    $testTypes, $oskiTypes,
+                    [], null, $mavzuStates
                 );
 
                 $rowNum++;
@@ -1087,27 +1092,28 @@ class QuizResultController extends Controller
                 }
             }
 
-            // OSKI baholar (training_type_code = 101) — jurnal logikasi: MAX(grade) + semester filtri
-            $oskiGrades = []; // student_hemis_id|subject_id => max grade (pre-computed)
-            $allSemCodesForOski = !empty($studentSubjectSemester) ? array_unique(array_values($studentSubjectSemester)) : [];
+            // OSKI/Test baholar — jurnal logikasi: MAX(grade), faqat JORIY semestr, YN turi bo'yicha alohida
+            $oskiGrades = []; // hemis|subject_id|semester|YN_turi => max grade
+            $currentSemCodes = $students->pluck('semester_code')->filter()->unique()->values()->toArray();
 
-            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($allSemCodesForOski)) {
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($currentSemCodes)) {
                 foreach (array_chunk($studentHemisIds, 500) as $chunk) {
                     $oskiRows = DB::table('student_grades')
                         ->whereNull('deleted_at')
                         ->whereIn('student_hemis_id', $chunk)
                         ->whereIn('subject_id', $fanIds)
-                        ->whereIn('semester_code', $allSemCodesForOski)
+                        ->whereIn('semester_code', $currentSemCodes)
                         ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', 'subject_name', DB::raw('MAX(grade) as grade'))
-                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name')
+                        ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code')
                         ->get();
 
                     foreach ($oskiRows as $row) {
-                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $ttype = (int) $row->training_type_code === 101 ? 'O' : 'T';
+                        $k = $row->student_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $ttype;
                         $oskiGrades[$k] = (float) $row->grade;
-                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name);
+                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name) . '|' . $row->semester_code . '|' . $ttype;
                         if (!isset($oskiGrades[$kName])) {
                             $oskiGrades[$kName] = (float) $row->grade;
                         }
@@ -1115,6 +1121,9 @@ class QuizResultController extends Controller
                     unset($oskiRows);
                 }
             }
+
+            // Mavzu (N-mavzu) shakldagi natijalar uchun jurnal holati
+            $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
             // 4) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
             $markingSystemCodes = $students
@@ -1174,7 +1183,7 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    $studentScoreLookup, $defaultScore
+                    $studentScoreLookup, $defaultScore, $mavzuStates
                 );
 
                 $rowNum++;
@@ -1234,7 +1243,8 @@ class QuizResultController extends Controller
         $jnGrades, $mtGrades, $oskiGrades,
         $curriculumSubjects, $groups,
         $testTypes, $oskiTypes,
-        $studentScoreLookup = [], $defaultScore = null
+        $studentScoreLookup = [], $defaultScore = null,
+        $mavzuStates = []
     ) {
         $jnAvg = null;
         $mtAvg = null;
@@ -1299,7 +1309,30 @@ class QuizResultController extends Controller
                 return ['code' => 'no_student', 'text' => 'Talaba guruhi topilmadi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
 
-            // Mavzu retake uchun tayyor — aniq upload paytida yana tekshiriladi
+            // Jurnaldagi mavzu holatini ko'rsatish (NB / Baho / Retake / Bo'sh)
+            preg_match('/^(\d+)-mavzu$/i', $result->shakl, $mavzuMatch);
+            $mavzuN = (int) ($mavzuMatch[1] ?? 0);
+            $mavzuKey = $student->hemis_id . '|' . $result->fan_id . '|' . $mavzuN;
+            $state = $mavzuStates[$mavzuKey] ?? null;
+
+            if ($state) {
+                if ($state['type'] === 'retake') {
+                    $orig = $state['grade'] !== null ? round($state['grade']) : null;
+                    $rt = round($state['retake']);
+                    $txt = $orig !== null
+                        ? 'Retake bor: ' . $result->shakl . ' (' . $orig . '→' . $rt . ')'
+                        : 'Retake bor: ' . $result->shakl . ' (' . $rt . ')';
+                    return ['code' => 'mavzu_grade', 'text' => $txt, 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+                }
+                if ($state['type'] === 'grade') {
+                    return ['code' => 'mavzu_grade', 'text' => 'Baho bor: ' . $result->shakl . ' (' . round($state['grade']) . ')', 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+                }
+                if ($state['type'] === 'nb') {
+                    return ['code' => 'mavzu_nb', 'text' => 'NB bor: ' . $result->shakl, 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+                }
+            }
+
+            // Jurnalda yozuv yo'q — yuklash mumkin
             return ['code' => 'mavzu', 'text' => 'Mavzu retake: ' . $result->shakl, 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
         }
 
@@ -1386,6 +1419,125 @@ class QuizResultController extends Controller
 
         // 10) Hammasi joyida
         return ['code' => 'ok', 'text' => 'Yuklasa bo\'ladi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+    }
+
+    /**
+     * Mavzu shakldagi natijalar uchun jurnal holatini bulk yuklash.
+     * Har bir (student_hemis_id, fan_id, mavzu_n) uchun state qaytaradi:
+     *   ['type' => 'retake'|'grade'|'nb'|'empty', 'grade' => ?, 'retake' => ?]
+     * Mavzu raqami — talabaning JORIY semestridagi xronologik amaliy darslar tartibi.
+     */
+    private function buildMavzuStates($results, array $studentLookup, $students): array
+    {
+        $states = [];
+
+        // 1) Mavzu shakldagi natijalar uchun (student, fan, group, semester) ro'yxat
+        $pairs = []; // hemis|fan_id => ['hemis'=>, 'fan'=>, 'group'=>, 'sem'=>]
+        foreach ($results as $r) {
+            if (!$r->shakl || !preg_match('/^\d+-mavzu$/i', $r->shakl)) continue;
+            $student = $studentLookup[$r->student_id] ?? null;
+            if (!$student || !$r->fan_id || !$student->semester_code || !$student->group_id) continue;
+            $key = $student->hemis_id . '|' . $r->fan_id;
+            if (!isset($pairs[$key])) {
+                $pairs[$key] = [
+                    'hemis' => $student->hemis_id,
+                    'fan'   => $r->fan_id,
+                    'group' => $student->group_id,
+                    'sem'   => $student->semester_code,
+                ];
+            }
+        }
+
+        if (empty($pairs)) return $states;
+
+        $excludedTypes = [11, 17, 99, 100, 101, 102, 103];
+
+        // 2) Schedules — har (group, fan, semester) uchun xronologik dars sanalari
+        $groupIds = array_unique(array_column($pairs, 'group'));
+        $fanIds   = array_unique(array_column($pairs, 'fan'));
+        $semCodes = array_unique(array_column($pairs, 'sem'));
+
+        $scheduleRows = DB::table('schedules')
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', $excludedTypes)
+            ->whereIn('group_id', $groupIds)
+            ->whereIn('subject_id', $fanIds)
+            ->whereIn('semester_code', $semCodes)
+            ->select('group_id', 'subject_id', 'semester_code', DB::raw('DATE(lesson_date) as d'))
+            ->distinct()
+            ->orderBy('d')
+            ->get();
+
+        $datesByTriple = []; // group|fan|sem => [d1, d2, ...]
+        foreach ($scheduleRows as $row) {
+            $k = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
+            $datesByTriple[$k][] = $row->d;
+        }
+
+        // 3) student_grades — hozirgi semestr, mavzu rolidagi yozuvlar
+        $hemisIds = array_unique(array_column($pairs, 'hemis'));
+        $gradeRows = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', $excludedTypes)
+            ->whereIn('student_hemis_id', $hemisIds)
+            ->whereIn('subject_id', $fanIds)
+            ->whereIn('semester_code', $semCodes)
+            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status')
+            ->get();
+
+        $gradesByDate = []; // hemis|fan|sem|date => [rows]
+        foreach ($gradeRows as $g) {
+            $date = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            $k = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code . '|' . $date;
+            $gradesByDate[$k][] = $g;
+        }
+
+        // 4) Har bir pair uchun mavzu_n ni state ga aylantirish
+        foreach ($results as $r) {
+            if (!$r->shakl || !preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) continue;
+            $student = $studentLookup[$r->student_id] ?? null;
+            if (!$student || !$r->fan_id) continue;
+
+            $mavzuN = (int) $m[1];
+            $tripleKey = $student->group_id . '|' . $r->fan_id . '|' . $student->semester_code;
+            $dates = $datesByTriple[$tripleKey] ?? [];
+
+            if (!isset($dates[$mavzuN - 1])) continue;
+            $targetDate = $dates[$mavzuN - 1];
+
+            $gKey = $student->hemis_id . '|' . $r->fan_id . '|' . $student->semester_code . '|' . $targetDate;
+            $rows = $gradesByDate[$gKey] ?? [];
+
+            if (empty($rows)) continue;
+
+            $maxGrade = null;
+            $maxRetake = null;
+            $hasNb = false;
+
+            foreach ($rows as $gr) {
+                if ($gr->reason === 'absent' && $gr->grade === null && $gr->retake_grade === null) {
+                    $hasNb = true;
+                    continue;
+                }
+                if ($gr->grade !== null) {
+                    $maxGrade = $maxGrade === null ? $gr->grade : max($maxGrade, $gr->grade);
+                }
+                if ($gr->retake_grade !== null) {
+                    $maxRetake = $maxRetake === null ? $gr->retake_grade : max($maxRetake, $gr->retake_grade);
+                }
+            }
+
+            $stateKey = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
+            if ($maxRetake !== null) {
+                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake];
+            } elseif ($maxGrade !== null) {
+                $states[$stateKey] = ['type' => 'grade', 'grade' => $maxGrade, 'retake' => null];
+            } elseif ($hasNb) {
+                $states[$stateKey] = ['type' => 'nb', 'grade' => null, 'retake' => null];
+            }
+        }
+
+        return $states;
     }
 
     /**

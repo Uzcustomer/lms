@@ -424,6 +424,8 @@
             'uploaded': 'Jurnalga yuklangan',
             'mavzu_uploaded': 'Jurnalga yuklangan (mavzu)',
             'has_other_grade': 'Bahosi bor',
+            'mavzu_nb': 'NB bor',
+            'mavzu_grade': 'Baho bor',
             '2O': '2O',
             '2T': '2T',
             'not_in_curriculum': 'Jadvalda yo\'q',
@@ -445,6 +447,8 @@
                 'uploaded':         'background:#dcfce7;color:#166534;border:1px solid #86efac;',
                 'mavzu_uploaded':   'background:#dcfce7;color:#166534;border:1px solid #86efac;',
                 'has_other_grade':  'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
+                'mavzu_nb':         'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
+                'mavzu_grade':      'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 '2O':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 '2T':               'background:#fef3c7;color:#92400e;border:1px solid #fde68a;',
                 'not_in_curriculum':'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
@@ -1005,20 +1009,9 @@
                         $('#upload-result').html(html).show();
 
                         if (data.success_count > 0) {
-                            // Yuklangan qatorlarni yangilash
-                            okIds.forEach(function(id) {
-                                var hasError = false;
-                                if (data.errors) { data.errors.forEach(function(err) { if (err.id == id) hasError = true; }); }
-                                if (!hasError) {
-                                    $('#row-' + id).addClass('row-uploaded').find('.row-checkbox').prop('checked', false).prop('disabled', true);
-                                    // allData da xulosa yangilash
-                                    var row = allData.find(function(r) { return r.id === id; });
-                                    if (row) { row.xulosa_code = 'uploaded'; row.xulosa = 'Oldin yuklangan'; }
-                                    // xulosa badge yangilash
-                                    $('#row-' + id).find('td:last').html(getXulosaBadge('uploaded', 'Oldin yuklangan'));
-                                }
-                            });
-                            updateButtons();
+                            // Server bilan to'liq qayta sinxronlash — xulosa kodlari, baholar, holatlar
+                            // (mavzu_uploaded, uploaded, has_other_grade va h.k. server tomonida hisoblanadi)
+                            loadTartibgaSol();
                         }
                     },
                     error: function(xhr) {
@@ -1177,23 +1170,10 @@
                             }
                             $('#upload-result').html(html).show();
 
-                            // Yuklangan qatorlarni yashil rangga bo'yash (huddi /upload kabi)
                             if (data.success_count > 0) {
-                                ids.forEach(function(id) {
-                                    var hasError = false;
-                                    if (data.errors) {
-                                        data.errors.forEach(function(err) { if (err.id == id) hasError = true; });
-                                    }
-                                    if (!hasError) {
-                                        $('#row-' + id).addClass('row-uploaded')
-                                            .find('.row-checkbox').prop('checked', false).prop('disabled', true);
-                                        var row = allData.find(function(r) { return r.id === id; });
-                                        if (row) { row.xulosa_code = 'uploaded'; row.xulosa = 'Oldin yuklangan'; }
-                                        $('#row-' + id).find('td:last').html(getXulosaBadge('uploaded', 'Oldin yuklangan'));
-                                    }
-                                });
+                                // Server bilan to'liq qayta sinxronlash
+                                loadTartibgaSol();
                             }
-                            updateButtons();
                         },
                         error: function(xhr) {
                             var msg = xhr.responseJSON?.message || 'Server xatosi';
@@ -1267,17 +1247,8 @@
                         $('#upload-result').html(html).show();
 
                         if (data.deleted_count > 0) {
-                            // O'chirilgan qatorlarning xulosa ni yangilash
-                            ids.forEach(function(id) {
-                                var row = allData.find(function(r) { return r.id === id; });
-                                if (row && row.xulosa_code === 'uploaded') {
-                                    row.xulosa_code = 'ok';
-                                    row.xulosa = 'Yuklasa bo\'ladi';
-                                    $('#row-' + id).removeClass('row-uploaded').find('.row-checkbox').prop('checked', false);
-                                    $('#row-' + id).find('td:last').html(getXulosaBadge('ok', 'Yuklasa bo\'ladi'));
-                                }
-                            });
-                            updateButtons();
+                            // Server bilan qayta sinxronlash
+                            loadTartibgaSol();
                         }
                     },
                     error: function(xhr) {

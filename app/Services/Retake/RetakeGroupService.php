@@ -32,6 +32,9 @@ class RetakeGroupService
             ->where('academic_dept_status', 'pending')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
+            ->whereHas('group', function ($q) {
+                $q->whereNotNull('payment_uploaded_at');
+            })
             ->with('group.student')
             ->orderBy('subject_name')
             ->get();
@@ -65,6 +68,9 @@ class RetakeGroupService
             ->where('academic_dept_status', 'pending')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
+            ->whereHas('group', function ($q) {
+                $q->whereNotNull('payment_uploaded_at');
+            })
             ->with('group.student')
             ->get();
     }

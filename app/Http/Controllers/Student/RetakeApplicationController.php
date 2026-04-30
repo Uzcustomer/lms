@@ -58,6 +58,12 @@ class RetakeApplicationController extends Controller
         $creditPrice = RetakeSetting::creditPrice();
         $receiptMaxMb = RetakeSetting::receiptMaxMb();
 
+        // To'lov yuklash kerak bo'lgan guruhlar (dekan + registrator tasdiqlagan,
+        // hali to'lov yuklanmagan).
+        $groupsAwaitingPayment = $history->filter(function (RetakeApplicationGroup $g) {
+            return $g->requires_payment;
+        })->values();
+
         return view('student.retake.index', [
             'student' => $student,
             'window' => $window,
@@ -68,7 +74,43 @@ class RetakeApplicationController extends Controller
             'creditPrice' => $creditPrice,
             'receiptMaxMb' => $receiptMaxMb,
             'maxSubjectsPerApplication' => RetakeApplicationService::MAX_SUBJECTS_PER_APPLICATION,
+            'groupsAwaitingPayment' => $groupsAwaitingPayment,
+            'paymentMaxMb' => RetakeApplicationService::PAYMENT_RECEIPT_MAX_MB,
         ]);
+    }
+
+    /**
+     * Talaba to'lov chekini yuklaydi (dekan + registrator tasdiqidan keyin).
+     */
+    public function uploadPayment(Request $request, int $groupId)
+    {
+        /** @var Student $student */
+        $student = Auth::guard('student')->user();
+
+        $maxMb = RetakeApplicationService::PAYMENT_RECEIPT_MAX_MB;
+
+        $request->validate([
+            'payment' => "required|file|mimes:pdf,jpg,jpeg,png|max:" . ($maxMb * 1024),
+        ]);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+
+        if ((int) $group->student_hemis_id !== (int) $student->hemis_id) {
+            abort(403);
+        }
+
+        try {
+            $this->applicationService->uploadPayment(
+                $student,
+                $group,
+                $request->file('payment'),
+            );
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        return redirect()->route('student.retake.index')
+            ->with('success', "Arizangiz o'quv bo'limiga yuborildi");
     }
 
     public function store(Request $request)

@@ -944,6 +944,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::prefix('retake')->name('retake.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'index'])->name('index');
             Route::post('/store', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'store'])->name('store');
+            Route::post('/{groupId}/payment', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'uploadPayment'])->name('upload-payment');
             Route::get('/{groupId}/docx', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'downloadDocx'])->name('download-docx');
             Route::get('/{groupId}/certificate', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'downloadCertificate'])->name('download-certificate');
         });

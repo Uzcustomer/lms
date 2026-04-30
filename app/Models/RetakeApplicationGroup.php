@@ -19,11 +19,14 @@ class RetakeApplicationGroup extends Model
         'docx_path',
         'pdf_certificate_path',
         'verification_token',
+        'payment_receipt_path',
+        'payment_uploaded_at',
     ];
 
     protected $casts = [
         'receipt_amount' => 'decimal:2',
         'credit_price_at_time' => 'decimal:2',
+        'payment_uploaded_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -63,5 +66,28 @@ class RetakeApplicationGroup extends Model
             return $statuses->first(); // hammasi bir xil holatda
         }
         return 'mixed'; // turli holatlar
+    }
+
+    /**
+     * Talaba to'lov chekini yuklashi kerakmi?
+     * Hech bo'lmaganda bitta ariza dual-approved bo'lib, hali to'lov yuklanmagan bo'lsa.
+     */
+    public function getRequiresPaymentAttribute(): bool
+    {
+        if ($this->payment_uploaded_at !== null) {
+            return false;
+        }
+
+        return $this->applications->contains(function (RetakeApplication $a) {
+            return $a->dean_status === RetakeApplication::STATUS_APPROVED
+                && $a->registrar_status === RetakeApplication::STATUS_APPROVED
+                && $a->academic_dept_status === RetakeApplication::STATUS_PENDING
+                && $a->final_status === RetakeApplication::STATUS_PENDING;
+        });
+    }
+
+    public function getIsPaidAttribute(): bool
+    {
+        return $this->payment_uploaded_at !== null;
     }
 }

@@ -253,11 +253,9 @@ class RetakeApprovalController extends Controller
 
     private function applyFilter($query, string $filter, string $role): void
     {
-        // Mening tasdiqimni kutyapti: men hali qaror qilmaganman VA boshqalar
-        // arizani rad etmagan (final_status hali pending — aksariyat hollarda
-        // boshqa rolning qarorini kutmoqda yoki o'quv bo'limi bosqichida).
+        $myStatusColumn = $role === 'dean' ? 'dean_status' : 'registrar_status';
+
         if ($filter === 'pending_mine') {
-            $myStatusColumn = $role === 'dean' ? 'dean_status' : 'registrar_status';
             $query->whereHas('applications', function ($q) use ($myStatusColumn) {
                 $q->where($myStatusColumn, 'pending')
                   ->where('final_status', 'pending');
@@ -266,12 +264,12 @@ class RetakeApprovalController extends Controller
         }
 
         if ($filter === 'approved') {
-            $query->whereHas('applications', fn ($q) => $q->where('final_status', 'approved'));
+            $query->whereHas('applications', fn ($q) => $q->where($myStatusColumn, 'approved'));
             return;
         }
 
         if ($filter === 'rejected') {
-            $query->whereHas('applications', fn ($q) => $q->where('final_status', 'rejected'));
+            $query->whereHas('applications', fn ($q) => $q->where($myStatusColumn, 'rejected'));
             return;
         }
 

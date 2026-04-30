@@ -90,7 +90,10 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                       Expanded(
                         child: _loadingGrades
                             ? const Center(child: CircularProgressIndicator())
-                            : _buildContent(isDark, txt, sub),
+                            : RefreshIndicator(
+                                onRefresh: () => _loadGrades(_selectedSubjectId!),
+                                child: _buildContent(isDark, txt, sub),
+                              ),
                       ),
                     if (_selectedSubjectId == null)
                       Expanded(

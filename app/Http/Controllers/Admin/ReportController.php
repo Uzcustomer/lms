@@ -3814,6 +3814,16 @@ class ReportController extends Controller
             $scheduleQuery->where('sch.group_id', $request->group);
         }
 
+        // Nazoratchi: faqat biriktirilgan guruhlar
+        if (is_active_nazoratchi()) {
+            $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
+            if (empty($nazoratchiHemisIds)) {
+                $fatalCaught = true;
+                return response()->json(['data' => [], 'total' => 0]);
+            }
+            $scheduleQuery->whereIn('sch.group_id', $nazoratchiHemisIds);
+        }
+
         // Kafedra filtri: schedules.department_id bo'yicha filter
         if ($request->filled('department')) {
             $scheduleQuery->where('sch.department_id', $request->department);
@@ -4361,6 +4371,10 @@ class ReportController extends Controller
      */
     public function loadVsPairReport(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
+
         $faculties = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name')
@@ -4422,6 +4436,10 @@ class ReportController extends Controller
      */
     public function loadVsPairReportData(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
+
         try {
             $cl = 'utf8mb4_unicode_ci';
 
@@ -4764,6 +4782,15 @@ class ReportController extends Controller
             }
             if ($request->filled('student_type')) {
                 $studentQuery->where('s.student_type_code', $request->student_type);
+            }
+
+            // Nazoratchi: faqat biriktirilgan guruhlar
+            if (is_active_nazoratchi()) {
+                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
+                if (empty($nazoratchiHemisIds)) {
+                    return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+                }
+                $studentQuery->whereIn('s.group_id', $nazoratchiHemisIds);
             }
 
             $students = $studentQuery->get();
@@ -6212,6 +6239,15 @@ class ReportController extends Controller
                 if (!empty($deptSubjectIds)) {
                     $scheduleQuery->whereIn('sch.subject_id', $deptSubjectIds);
                 }
+            }
+
+            // Nazoratchi: faqat biriktirilgan guruhlar
+            if (is_active_nazoratchi()) {
+                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
+                if (empty($nazoratchiHemisIds)) {
+                    return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+                }
+                $scheduleQuery->whereIn('sch.group_id', $nazoratchiHemisIds);
             }
 
             $scheduleCombos = $scheduleQuery->get();

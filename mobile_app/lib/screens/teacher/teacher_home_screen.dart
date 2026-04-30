@@ -18,6 +18,7 @@ class TeacherHomeScreen extends StatefulWidget {
 
 class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   int _currentIndex = 0;
+  int _previousIndex = 0;
 
   List<_NavItem> _getNavItems(String? activeRole, AppLocalizations l) {
     final items = <_NavItem>[
@@ -77,9 +78,32 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           _currentIndex = 0;
         }
 
+        final goingRight = _currentIndex > _previousIndex;
+        final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
+
         return Scaffold(
           extendBody: true,
-          body: _getScreen(navItems[_currentIndex].key),
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 380),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: slideBegin,
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<int>(_currentIndex),
+              child: _getScreen(navItems[_currentIndex].key),
+            ),
+          ),
           bottomNavigationBar: SafeArea(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -107,45 +131,16 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                         child: GestureDetector(
                           onTap: () {
                             if (index != _currentIndex) {
-                              setState(() => _currentIndex = index);
+                              setState(() {
+                                _previousIndex = _currentIndex;
+                                _currentIndex = index;
+                              });
                             }
                           },
                           behavior: HitTestBehavior.opaque,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: isActive
-                                      ? Colors.white
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  isActive ? item.activeIcon : item.icon,
-                                  color: isActive
-                                      ? Colors.black
-                                      : Colors.white,
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                item.label,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: isActive
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                  color: isActive
-                                      ? Colors.white
-                                      : Colors.white70,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                          child: _NavItemWidget(
+                            isActive: isActive,
+                            item: item,
                           ),
                         ),
                       );
@@ -168,4 +163,99 @@ class _NavItem {
   final String key;
 
   const _NavItem(this.icon, this.activeIcon, this.label, this.key);
+}
+
+class _NavItemWidget extends StatefulWidget {
+  final bool isActive;
+  final _NavItem item;
+
+  const _NavItemWidget({
+    required this.isActive,
+    required this.item,
+  });
+
+  @override
+  State<_NavItemWidget> createState() => _NavItemWidgetState();
+}
+
+class _NavItemWidgetState extends State<_NavItemWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bounceController;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.82), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.82, end: 1.18), weight: 35),
+      TweenSequenceItem(tween: Tween(begin: 1.18, end: 1.0), weight: 40),
+    ]).animate(CurvedAnimation(
+      parent: _bounceController,
+      curve: Curves.easeOutCubic,
+    ));
+    if (widget.isActive) {
+      _bounceController.value = 1.0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _NavItemWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _bounceController.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _bounceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: _scale,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: widget.isActive ? _scale.value : 1.0,
+              child: child,
+            );
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: widget.isActive ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              widget.isActive ? widget.item.activeIcon : widget.item.icon,
+              color: widget.isActive ? Colors.black : Colors.white,
+              size: 22,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          widget.item.label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight:
+                widget.isActive ? FontWeight.w600 : FontWeight.normal,
+            color: widget.isActive ? Colors.white : Colors.white70,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
 }

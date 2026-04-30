@@ -100,8 +100,10 @@ class TeacherMainController extends Controller
             return $this->studentsAdmin($request);
         }
 
-        // Tyutor guruhlari mavjud bo'lsa, guruh bo'yicha talabalarni ko'rsat
-        $tutorGroups = $teacher->groups()->where('active', true)->orderBy('name')->get();
+        // Tyutor va nazoratchi guruhlari mavjud bo'lsa, guruh bo'yicha talabalarni ko'rsat
+        $tutorGroups = $teacher->groups()->where('active', true)->get();
+        $supervisorGroups = $teacher->nazoratchiGroups()->where('active', true)->get();
+        $tutorGroups = $tutorGroups->concat($supervisorGroups)->unique('id')->sortBy('name')->values();
 
         // Schedule orqali biriktirilgan guruhlarni ham qo'shish
         if ($tutorGroups->isEmpty() && $teacher->hemis_id) {
@@ -209,9 +211,11 @@ class TeacherMainController extends Controller
     {
         $teacher = auth()->guard('teacher')->user();
 
-        // Tyutor faqat o'z guruhidagi talabalarni ko'rishi mumkin
+        // Tyutor / nazoratchi faqat o'z guruhidagi talabalarni ko'rishi mumkin
         $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
-        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+        $supervisorGroupHemisIds = $teacher->nazoratchiGroups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        $allowedGroupHemisIds = array_unique(array_merge($tutorGroupHemisIds, $supervisorGroupHemisIds));
+        if (!in_array($student->group_id, $allowedGroupHemisIds)) {
             abort(403, 'Bu talaba sizga biriktirilgan guruhda emas.');
         }
 

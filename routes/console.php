@@ -99,3 +99,16 @@ Schedule::command('chat:purge --days=14')->dailyAt('04:00');
 // Kunlik baho o'zgarishlari digesti — har kuni ertalab 08:00 da admin chatiga
 // (otrabotka baholari + o'zgartirilgan baholar jadvali; oxirgi 24 soat)
 Schedule::command('grades:send-daily-changes-digest')->dailyAt('08:00');
+
+// ─── Qayta o'qish arizalari (retake) ─────────────────────────────────
+// Guruh holat o'tishlari: scheduled→in_progress, in_progress→completed.
+// Har kuni 00:05 da ishga tushadi.
+Schedule::command('retake:transition-group-statuses')->dailyAt('00:05')->withoutOverlapping(30);
+
+// HEMIS academic-records sync 02:00 da, ungandan keyin auto-cancel:
+// baho paydo bo'lgan yoki retraining_status o'zgargan arizalar bekor qilinadi.
+Schedule::command('retake:auto-cancel-hemis')->dailyAt('02:30')->withoutOverlapping(60);
+
+// Stale guruhlar monitoringi (cron buzilganini erta aniqlash).
+// Har kuni 12:00 da. Agar muammo bo'lsa admin chatiga Telegram xabar.
+Schedule::command('retake:monitor-stale-groups')->dailyAt('12:00');

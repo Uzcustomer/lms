@@ -5,6 +5,7 @@ import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/settings_provider.dart';
+import '../../utils/page_transitions.dart';
 import 'verify_2fa_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -58,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen>
 
     if (authProvider.state == AuthState.requires2fa) {
       Navigator.of(context).push(
-        MaterialPageRoute(
+        SlideFadePageRoute(
           builder: (_) => Verify2faScreen(login: _loginController.text.trim()),
         ),
       );

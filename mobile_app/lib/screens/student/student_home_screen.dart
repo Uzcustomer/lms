@@ -15,12 +15,18 @@ class StudentHomeScreen extends StatefulWidget {
     state?._onTabTapped(2);
   }
 
+  static void switchToGrades(BuildContext context) {
+    final state = context.findAncestorStateOfType<_StudentHomeScreenState>();
+    state?._onTabTapped(0);
+  }
+
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 2;
+  int _previousIndex = 2;
 
   final _screens = const [
     StudentGradesScreen(),
@@ -33,6 +39,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   void _onTabTapped(int index) {
     if (index == _currentIndex) return;
     setState(() {
+      _previousIndex = _currentIndex;
       _currentIndex = index;
     });
   }
@@ -49,18 +56,41 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       _NavItem(Icons.person_outline, Icons.person, l.profile),
     ];
 
+    final goingRight = _currentIndex > _previousIndex;
+    final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
+
     return Scaffold(
       extendBody: true,
-      body: _screens[_currentIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 380),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: slideBegin,
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<int>(_currentIndex),
+          child: _screens[_currentIndex],
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF0D47A1),
+            color: const Color(0xFF0A1A3A),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0D47A1).withAlpha(50),
+                color: const Color(0xFF0A1A3A).withAlpha(50),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -103,7 +133,7 @@ class _NavItem {
   const _NavItem(this.icon, this.activeIcon, this.label);
 }
 
-class _NavItemWidget extends StatelessWidget {
+class _NavItemWidget extends StatefulWidget {
   final bool isActive;
   final _NavItem item;
 
@@ -113,32 +143,86 @@ class _NavItemWidget extends StatelessWidget {
   });
 
   @override
+  State<_NavItemWidget> createState() => _NavItemWidgetState();
+}
+
+class _NavItemWidgetState extends State<_NavItemWidget>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _bounceController;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.82), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.82, end: 1.18), weight: 35),
+      TweenSequenceItem(tween: Tween(begin: 1.18, end: 1.0), weight: 40),
+    ]).animate(CurvedAnimation(
+      parent: _bounceController,
+      curve: Curves.easeOutCubic,
+    ));
+    if (widget.isActive) {
+      _bounceController.value = 1.0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _NavItemWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _bounceController.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _bounceController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: isActive
-                ? Colors.white.withAlpha(20)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            isActive ? item.activeIcon : item.icon,
-            color: isActive ? const Color(0xFFFF9800) : Colors.white70,
-            size: 26,
+        AnimatedBuilder(
+          animation: _scale,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: widget.isActive ? _scale.value : 1.0,
+              child: child,
+            );
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: widget.isActive
+                  ? Colors.white.withAlpha(20)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              widget.isActive ? widget.item.activeIcon : widget.item.icon,
+              color: widget.isActive
+                  ? const Color(0xFFFF9800)
+                  : Colors.white70,
+              size: 26,
+            ),
           ),
         ),
         const SizedBox(height: 2),
         Text(
-          item.label,
+          widget.item.label,
           style: TextStyle(
             fontSize: 10,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.normal,
-            color: isActive ? Colors.white : Colors.white70,
+            fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.normal,
+            color: widget.isActive ? Colors.white : Colors.white70,
           ),
           overflow: TextOverflow.ellipsis,
         ),

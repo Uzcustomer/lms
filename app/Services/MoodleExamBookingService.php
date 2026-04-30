@@ -324,7 +324,16 @@ class MoodleExamBookingService
 
     private function buildQuizIdnumber(string $ynType, string $langCode): string
     {
-        return strtoupper($ynType) . ' (' . $langCode . ')_' . self::ATTEMPT_LABEL;
+        $template = (string) config(
+            'services.moodle.quiz_idnumber_template',
+            'YN {yn} ({lang})_{attempt}-urinish'
+        );
+        return strtr($template, [
+            '{yn}' => strtolower($ynType),
+            '{YN}' => strtoupper($ynType),
+            '{lang}' => $langCode,
+            '{attempt}' => '1',
+        ]);
     }
 
     /**

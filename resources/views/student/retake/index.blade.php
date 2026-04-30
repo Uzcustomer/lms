@@ -7,16 +7,27 @@
 
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 pb-10"
          x-data="retakeApplicationPage({
-             debts: @js($debts->map(fn($d) => [
-                 'subject_id' => $d->subject_id,
-                 'subject_name' => $d->subject_name,
-                 'semester_id' => $d->semester_id,
-                 'semester_name' => $d->semester_name,
-                 'credit' => (float) $d->credit,
-                 'active_status' => optional($activeApplications->get($d->subject_id . '|' . $d->semester_id))->studentDisplayStatus(),
-                 'is_active' => $activeApplications->has($d->subject_id . '|' . $d->semester_id),
-                 'final_status' => optional($activeApplications->get($d->subject_id . '|' . $d->semester_id))->final_status,
-             ])),
+             debts: @js($debts->map(function($d) use ($activeApplications) {
+                 $key = $d->subject_id . '|' . $d->semester_id;
+                 $app = $activeApplications->get($key);
+                 $rg = $app?->retakeGroup;
+                 return [
+                     'subject_id' => $d->subject_id,
+                     'subject_name' => $d->subject_name,
+                     'semester_id' => $d->semester_id,
+                     'semester_name' => $d->semester_name,
+                     'credit' => (float) $d->credit,
+                     'active_status' => optional($app)->studentDisplayStatus(),
+                     'is_active' => $activeApplications->has($key),
+                     'final_status' => optional($app)->final_status,
+                     'retake_group' => $rg ? [
+                         'name' => $rg->name,
+                         'teacher_name' => $rg->teacher_name ?? ($rg->teacher?->full_name ?? null),
+                         'start_date' => optional($rg->start_date)->format('Y-m-d'),
+                         'end_date' => optional($rg->end_date)->format('Y-m-d'),
+                     ] : null,
+                 ];
+             })),
              remainingSlots: {{ $remainingSlots }},
              maxPerApplication: {{ $maxSubjectsPerApplication }},
              creditPrice: {{ $creditPrice }},
@@ -135,6 +146,27 @@
                                 <td class="px-3 py-2.5 text-xs text-gray-700" x-text="d.semester_name"></td>
                                 <td class="px-3 py-2.5">
                                     <span class="text-sm text-gray-900" x-text="d.subject_name"></span>
+                                    <template x-if="d.is_active && d.final_status === 'approved' && d.retake_group">
+                                        <div class="mt-1 text-[11px] text-gray-600 leading-relaxed">
+                                            <div>
+                                                <span class="text-gray-500">{{ __("O'qituvchi") }}:</span>
+                                                <span class="font-medium text-gray-800" x-text="d.retake_group.teacher_name || '—'"></span>
+                                            </div>
+                                            <div x-show="d.retake_group.start_date">
+                                                <span class="text-gray-500">{{ __("Sanalar") }}:</span>
+                                                <span class="text-gray-800" x-text="d.retake_group.start_date + ' → ' + d.retake_group.end_date"></span>
+                                            </div>
+                                            <div x-show="d.retake_group.name">
+                                                <span class="text-gray-500">{{ __("Guruh") }}:</span>
+                                                <span class="text-gray-800" x-text="d.retake_group.name"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template x-if="d.is_active && d.final_status === 'approved' && !d.retake_group">
+                                        <div class="mt-1 text-[11px] text-amber-700">
+                                            {{ __("Guruh hali shakllantirilmagan — tez orada o'qituvchi va sanalar tayinlanadi") }}
+                                        </div>
+                                    </template>
                                 </td>
                                 <td class="px-3 py-2.5 text-right text-sm text-gray-700" x-text="d.credit.toFixed(1)"></td>
                                 <td class="px-3 py-2.5">

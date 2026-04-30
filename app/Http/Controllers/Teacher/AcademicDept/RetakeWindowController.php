@@ -34,8 +34,8 @@ class RetakeWindowController extends Controller
         // Yo'nalish bo'yicha fakultet nomini topish uchun map
         $specialtyToFaculty = Specialty::query()
             ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
-            ->select('specialties.specialty_hemis_id', 'departments.name as faculty_name')
-            ->pluck('departments.name', 'specialties.specialty_hemis_id');
+            ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
+            ->pluck('faculty_name', 'sp_hemis_id');
 
         // Form uchun ma'lumotlar — faqat fakultetlar (structure_type_code = 11)
         $departments = Department::where('structure_type_code', 11)

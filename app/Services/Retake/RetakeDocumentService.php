@@ -43,37 +43,35 @@ class RetakeDocumentService
             return $group;
         }
 
-        $resolved = $group->applications->every(fn (RetakeApplication $a) => $a->final_status !== 'pending');
-        if (!$resolved) {
-            return $group; // hali yakunlanmagan
-        }
-
-        $approved = $group->applications->where('final_status', 'approved');
-        if ($approved->isEmpty()) {
-            return $group; // tasdiqnomaga loyiq emas
-        }
-
-        // 1. DOCX (ariza shabloni — barcha yuborilgan fanlar bilan)
+        // 1. DOCX (ariza shabloni) — qarorlarga bog'liq emas, har doim mavjud bo'lsin
         if (!$group->docx_path) {
             $group->docx_path = $this->generateDocx($group);
         }
 
-        // 2. Verification token + DocumentVerification yozuvi
-        if (!$group->verification_token) {
-            $verification = $this->createVerification($group, $approved, $generator);
-            $group->verification_token = $verification->token;
-        }
+        // 2. PDF tasdiqnoma — kamida bitta tasdiqlangan ariza bo'lsa generatsiya qilinadi.
+        //    Yangi tasdiqlangan ariza qo'shilsa, PDF qayta yaratiladi (eski signature
+        //    pdf_signature ustunida saqlanib turadi va o'zgarishi tekshiriladi).
+        $approved = $group->applications->where('final_status', 'approved');
+        if ($approved->isNotEmpty()) {
+            $signature = $approved->pluck('id')->sort()->values()->implode(',');
+            $needsRegen = !$group->pdf_certificate_path
+                || $group->pdf_signature !== $signature;
 
-        // 3. PDF tasdiqnoma (faqat tasdiqlangan fanlar bilan, QR kod ichida)
-        if (!$group->pdf_certificate_path) {
-            $group->pdf_certificate_path = $this->generatePdfCertificate($group, $approved);
+            if ($needsRegen) {
+                $verification = null;
+                if (!$group->verification_token) {
+                    $verification = $this->createVerification($group, $approved, $generator);
+                    $group->verification_token = $verification->token;
+                } else {
+                    $verification = DocumentVerification::where('token', $group->verification_token)->first();
+                }
 
-            // DocumentVerification.document_path ham yangilanadi (inline ko'rish uchun)
-            if (isset($verification)) {
-                $verification->update(['document_path' => $group->pdf_certificate_path]);
-            } elseif ($group->verification_token) {
-                DocumentVerification::where('token', $group->verification_token)
-                    ->update(['document_path' => $group->pdf_certificate_path]);
+                $group->pdf_certificate_path = $this->generatePdfCertificate($group, $approved);
+                $group->pdf_signature = $signature;
+
+                if ($verification) {
+                    $verification->update(['document_path' => $group->pdf_certificate_path]);
+                }
             }
         }
 

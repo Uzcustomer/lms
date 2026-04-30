@@ -27,7 +27,7 @@
             </p>
         </div>
         <div class="flex gap-2">
-            <a href="{{ \Illuminate\Support\Facades\Storage::url($group->receipt_path) }}"
+            <a href="{{ route('admin.retake.receipt', $group->id) }}"
                target="_blank"
                class="text-xs text-blue-600 hover:underline">{{ __('Kvitansiya') }}</a>
         </div>

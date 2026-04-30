@@ -156,6 +156,35 @@ class RetakeApprovalController extends Controller
         return redirect()->back()->with('success', 'Qaror muvaffaqiyatli yozildi');
     }
 
+    /**
+     * Kvitansiyani ko'rib chiqish (faqat ruxsati bo'lganlar).
+     * Nginx /storage/* ni static qilib serve qilmagani uchun Laravel orqali
+     * uzatamiz, shu bilan birga ruxsat tekshiruvi ham bajariladi.
+     */
+    public function receipt(int $groupId)
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+        $this->authorizeGroupView($user, $role, $group);
+
+        if (!$group->receipt_path) {
+            abort(404, 'Kvitansiya fayli yo\'q');
+        }
+
+        $absPath = \Illuminate\Support\Facades\Storage::disk('public')->path($group->receipt_path);
+        if (!file_exists($absPath)) {
+            abort(404, 'Kvitansiya fayli topilmadi');
+        }
+
+        $mime = mime_content_type($absPath) ?: 'application/octet-stream';
+        return response()->file($absPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="kvitansiya_' . $group->id . '"',
+        ]);
+    }
+
     // ──────────────────────────────────────────────────────────────────
 
     /**

@@ -192,6 +192,17 @@ class RetakeApplicationService
             }
 
             $loaded = $group->load('applications', 'student');
+
+            // Talaba arizasini darhol DOCX qilib generatsiya qilamiz —
+            // ariza shabloni qarorlarga bog'liq emas, talaba uni hozir yuklab olib
+            // chop etishi mumkin.
+            try {
+                $loaded->docx_path = $this->documentService->generateDocx($loaded);
+                $loaded->save();
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
             $this->notificationService->notifyNewSubmission($loaded);
 
             return $loaded;

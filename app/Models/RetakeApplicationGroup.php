@@ -18,6 +18,7 @@ class RetakeApplicationGroup extends Model
         'comment',
         'docx_path',
         'pdf_certificate_path',
+        'pdf_signature',
         'verification_token',
     ];
 

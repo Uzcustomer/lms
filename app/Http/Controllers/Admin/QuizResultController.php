@@ -1243,30 +1243,41 @@ class QuizResultController extends Controller
             return ['code' => 'no_student', 'text' => 'Talaba topilmadi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 1.5) Oldin yuklangan (quiz_result_id orqali yoki DB da OSKI/Test baho bor)
-        if (isset($uploadedResultIds[$result->id])) {
-            return ['code' => 'uploaded', 'text' => 'Oldin yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
-        }
-        $existingOskiGrade = null;
-        if ($result->fan_id) {
-            $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
-            if (isset($oskiGrades[$gradeCheckKey])) {
-                $existingOskiGrade = $oskiGrades[$gradeCheckKey];
-            }
-        }
-        if ($existingOskiGrade === null && $result->fan_name) {
-            $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name);
-            if (isset($oskiGrades[$gradeCheckKeyName])) {
-                $existingOskiGrade = $oskiGrades[$gradeCheckKeyName];
-            }
-        }
-        if ($existingOskiGrade !== null) {
-            return ['code' => 'uploaded', 'text' => 'Oldin yuklangan (' . $existingOskiGrade . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $existingOskiGrade];
-        }
-
-        // 2) Mavzu formatini aniqlash (shakl: "N-mavzu")
+        // Mavzu formatini oldindan aniqlash (uploaded tekshiruvi va existingOskiGrade uchun farq qiladi)
         $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
 
+        // 1.5) Aynan shu Moodle natija (quiz_result_id) jurnalga yuklangan
+        // Mavzu uchun: shu sanadagi student_grade da retake_grade saqlangan
+        // OSKI/Test uchun: reason='quiz_result' bilan yangi yozuv yaratilgan
+        if (isset($uploadedResultIds[$result->id])) {
+            if ($isMavzuShakl) {
+                return ['code' => 'mavzu_uploaded', 'text' => 'Jurnalga yuklangan: ' . $result->shakl, 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+            }
+            return ['code' => 'uploaded', 'text' => 'Jurnalga yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        }
+
+        // 1.6) OSKI/Test uchun: jurnalda boshqa OSKI/Test bahosi bor — informativ
+        // (mavzuga aloqasi yo'q, mavzu JN ustuniga tushadi, bu yerda tekshirilmaydi)
+        if (!$isMavzuShakl) {
+            $existingOskiGrade = null;
+            if ($result->fan_id) {
+                $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
+                if (isset($oskiGrades[$gradeCheckKey])) {
+                    $existingOskiGrade = $oskiGrades[$gradeCheckKey];
+                }
+            }
+            if ($existingOskiGrade === null && $result->fan_name) {
+                $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name);
+                if (isset($oskiGrades[$gradeCheckKeyName])) {
+                    $existingOskiGrade = $oskiGrades[$gradeCheckKeyName];
+                }
+            }
+            if ($existingOskiGrade !== null) {
+                return ['code' => 'has_other_grade', 'text' => 'Bahosi bor (' . $existingOskiGrade . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $existingOskiGrade];
+            }
+        }
+
+        // 2) Mavzu formati uchun maxsus xulosa
         if ($isMavzuShakl) {
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
                 return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];

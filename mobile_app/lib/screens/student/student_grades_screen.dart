@@ -135,8 +135,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     double bestGrade = 0;
     for (final s in subjects) {
       if (s is! Map<String, dynamic>) continue;
-      final t = _getSubjectTotal(s);
-      if (t > bestGrade) { bestGrade = t; best = s; }
+      final yn = _computeYn(s);
+      if (yn != null && yn > bestGrade) { bestGrade = yn; best = s; }
     }
     return best;
   }
@@ -371,7 +371,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
   Widget _buildBestSubjectCard(Map<String, dynamic> subject, bool isDark) {
     final name = subject['subject_name']?.toString() ?? '';
-    final grade = _getSubjectTotal(subject).round();
+    final grade = _computeYn(subject)?.round() ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _buildGlassCard(

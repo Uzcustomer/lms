@@ -48,30 +48,24 @@ class RetakeDocumentService
             $group->docx_path = $this->generateDocx($group);
         }
 
-        // 2. PDF tasdiqnoma — kamida bitta tasdiqlangan ariza bo'lsa generatsiya qilinadi.
-        //    Yangi tasdiqlangan ariza qo'shilsa, PDF qayta yaratiladi (eski signature
-        //    pdf_signature ustunida saqlanib turadi va o'zgarishi tekshiriladi).
+        // 2. PDF tasdiqnoma — kamida bitta tasdiqlangan ariza bo'lsa generatsiya
+        //    qilinadi. Har safar qayta generatsiya qilinadi, chunki har bir yangi
+        //    tasdiqlangan fan PDF tarkibiga qo'shilishi kerak (signature kesh
+        //    ishlatishni biz hozir yodda saqlamaymiz — PDF yaratish arzon).
         $approved = $group->applications->where('final_status', 'approved');
         if ($approved->isNotEmpty()) {
-            $signature = $approved->pluck('id')->sort()->values()->implode(',');
-            $needsRegen = !$group->pdf_certificate_path
-                || $group->pdf_signature !== $signature;
+            $verification = null;
+            if (!$group->verification_token) {
+                $verification = $this->createVerification($group, $approved, $generator);
+                $group->verification_token = $verification->token;
+            } else {
+                $verification = DocumentVerification::where('token', $group->verification_token)->first();
+            }
 
-            if ($needsRegen) {
-                $verification = null;
-                if (!$group->verification_token) {
-                    $verification = $this->createVerification($group, $approved, $generator);
-                    $group->verification_token = $verification->token;
-                } else {
-                    $verification = DocumentVerification::where('token', $group->verification_token)->first();
-                }
+            $group->pdf_certificate_path = $this->generatePdfCertificate($group, $approved);
 
-                $group->pdf_certificate_path = $this->generatePdfCertificate($group, $approved);
-                $group->pdf_signature = $signature;
-
-                if ($verification) {
-                    $verification->update(['document_path' => $group->pdf_certificate_path]);
-                }
+            if ($verification) {
+                $verification->update(['document_path' => $group->pdf_certificate_path]);
             }
         }
 

@@ -11,7 +11,9 @@
          x-data="groupFormation({
              lookupUrl: '{{ route('admin.retake-groups.lookup') }}',
              storeUrl: '{{ route('admin.retake-groups.store') }}',
+             rejectUrlBase: '{{ url('/admin/retake-groups/applications') }}',
              csrf: '{{ csrf_token() }}',
+             minReasonLength: {{ \App\Models\RetakeSetting::rejectReasonMinLength() }},
          })">
 
         @if(session('success'))
@@ -219,16 +221,22 @@
                                     <span class="text-xs font-medium text-gray-700">{{ __("Barchasini tanlash") }}</span>
                                 </div>
                                 <template x-for="app in applications" :key="app.id">
-                                    <label class="flex items-start px-3 py-2 hover:bg-gray-50 border-b border-gray-100 cursor-pointer">
-                                        <input type="checkbox" name="application_ids[]" :value="app.id" x-model="selected" class="mt-0.5 rounded">
-                                        <span class="ml-2 flex-1 text-xs">
-                                            <span class="font-medium text-gray-900" x-text="app.student_name"></span>
-                                            <span class="text-gray-500" x-text="' · ' + app.student_hemis_id"></span>
-                                            <span class="block text-[11px] text-gray-500"
-                                                  x-text="(app.department_name || '') + ' · ' + (app.specialty_name || '') + ' · ' + (app.level_name || '') + ' · ' + (app.group_name || '')"></span>
-                                        </span>
-                                        <span class="text-xs text-gray-500" x-text="app.credit + ' kr'"></span>
-                                    </label>
+                                    <div class="flex items-start px-3 py-2 hover:bg-gray-50 border-b border-gray-100">
+                                        <label class="flex items-start flex-1 cursor-pointer">
+                                            <input type="checkbox" name="application_ids[]" :value="app.id" x-model="selected" class="mt-0.5 rounded">
+                                            <span class="ml-2 flex-1 text-xs">
+                                                <span class="font-medium text-gray-900" x-text="app.student_name"></span>
+                                                <span class="text-gray-500" x-text="' · ' + app.student_hemis_id"></span>
+                                                <span class="block text-[11px] text-gray-500"
+                                                      x-text="(app.department_name || '') + ' · ' + (app.specialty_name || '') + ' · ' + (app.level_name || '') + ' · ' + (app.group_name || '')"></span>
+                                            </span>
+                                            <span class="text-xs text-gray-500 mr-2" x-text="app.credit + ' kr'"></span>
+                                        </label>
+                                        <button type="button" @click="rejectApp(app)"
+                                                class="ml-2 text-[11px] text-red-600 hover:underline whitespace-nowrap">
+                                            {{ __("Rad etish") }}
+                                        </button>
+                                    </div>
                                 </template>
                             </div>
                         </div>
@@ -253,9 +261,9 @@
 
     @push('scripts')
         <script>
-            function groupFormation({ lookupUrl, storeUrl, csrf }) {
+            function groupFormation({ lookupUrl, storeUrl, csrf, rejectUrlBase, minReasonLength }) {
                 return {
-                    lookupUrl, storeUrl, csrf,
+                    lookupUrl, storeUrl, csrf, rejectUrlBase, minReasonLength,
                     showFormation: false,
                     formData: { subject_id: '', subject_name: '', semester_id: '', semester_name: '', name: '', teacher_id: '' },
                     applications: [],
@@ -314,6 +322,36 @@
 
                     toggleAll(checked) {
                         this.selected = checked ? this.applications.map(a => a.id) : [];
+                    },
+
+                    rejectApp(app) {
+                        const promptMsg = "{{ __('Rad etish sababi (kamida') }} " + this.minReasonLength + " {{ __('belgi):') }}\n\n" + app.student_name;
+                        const reason = window.prompt(promptMsg, '');
+                        if (reason === null) return;
+                        const trimmed = reason.trim();
+                        if (trimmed.length < this.minReasonLength) {
+                            alert("{{ __('Sabab juda qisqa. Kamida') }} " + this.minReasonLength + " {{ __('belgi bo\'lishi kerak.') }}");
+                            return;
+                        }
+
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = `${this.rejectUrlBase}/${app.id}/reject`;
+
+                        const csrfInput = document.createElement('input');
+                        csrfInput.type = 'hidden';
+                        csrfInput.name = '_token';
+                        csrfInput.value = this.csrf;
+                        form.appendChild(csrfInput);
+
+                        const reasonInput = document.createElement('input');
+                        reasonInput.type = 'hidden';
+                        reasonInput.name = 'reason';
+                        reasonInput.value = trimmed;
+                        form.appendChild(reasonInput);
+
+                        document.body.appendChild(form);
+                        form.submit();
                     },
                 };
             }

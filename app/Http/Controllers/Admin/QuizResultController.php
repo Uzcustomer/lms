@@ -482,27 +482,29 @@ class QuizResultController extends Controller
                 }
             }
 
-            // OSKI baholar (training_type_code = 101) — jurnal logikasi: MAX(grade) + semester filtri
+            // OSKI/Test baholar — jurnal logikasi: MAX(grade), faqat JORIY semestr, YN turi bo'yicha alohida
+            // Lookup kaliti: hemis|subject_id|semester|YN_turi (O=OSKI/101, T=Test/102)
             $oskiGrades = [];
-            $allSemCodesForOski = !empty($studentSubjectSemester) ? array_unique(array_values($studentSubjectSemester)) : [];
+            $currentSemCodes = $students->pluck('semester_code')->filter()->unique()->values()->toArray();
 
-            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($allSemCodesForOski)) {
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($currentSemCodes)) {
                 foreach (array_chunk($studentHemisIds, 500) as $chunk) {
                     $oskiRows = DB::table('student_grades')
                         ->whereNull('deleted_at')
                         ->whereIn('student_hemis_id', $chunk)
                         ->whereIn('subject_id', $fanIds)
-                        ->whereIn('semester_code', $allSemCodesForOski)
+                        ->whereIn('semester_code', $currentSemCodes)
                         ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', 'subject_name', DB::raw('MAX(grade) as grade'))
-                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name')
+                        ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code')
                         ->get();
 
                     foreach ($oskiRows as $row) {
-                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $ttype = (int) $row->training_type_code === 101 ? 'O' : 'T';
+                        $k = $row->student_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $ttype;
                         $oskiGrades[$k] = (float) $row->grade;
-                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name);
+                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name) . '|' . $row->semester_code . '|' . $ttype;
                         if (!isset($oskiGrades[$kName])) {
                             $oskiGrades[$kName] = (float) $row->grade;
                         }
@@ -1256,18 +1258,21 @@ class QuizResultController extends Controller
             return ['code' => 'uploaded', 'text' => 'Jurnalga yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 1.6) OSKI/Test uchun: jurnalda boshqa OSKI/Test bahosi bor — informativ
-        // (mavzuga aloqasi yo'q, mavzu JN ustuniga tushadi, bu yerda tekshirilmaydi)
+        // 1.6) OSKI/Test uchun: jurnalda shu YN turi (OSKI yoki Test) bahosi bor — informativ
+        // (mavzuga aloqasi yo'q, mavzu JN ustuniga tushadi)
+        // Faqat talabaning JORIY semestri va aynan shu YN turi bo'yicha tekshiriladi
         if (!$isMavzuShakl) {
             $existingOskiGrade = null;
-            if ($result->fan_id) {
-                $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id;
+            $currentSem = $student->semester_code;
+            $ttype = $ynTuri === 'OSKI' ? 'O' : ($ynTuri === 'Test' ? 'T' : null);
+            if ($ttype && $currentSem && $result->fan_id) {
+                $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id . '|' . $currentSem . '|' . $ttype;
                 if (isset($oskiGrades[$gradeCheckKey])) {
                     $existingOskiGrade = $oskiGrades[$gradeCheckKey];
                 }
             }
-            if ($existingOskiGrade === null && $result->fan_name) {
-                $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name);
+            if ($existingOskiGrade === null && $ttype && $currentSem && $result->fan_name) {
+                $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name) . '|' . $currentSem . '|' . $ttype;
                 if (isset($oskiGrades[$gradeCheckKeyName])) {
                     $existingOskiGrade = $oskiGrades[$gradeCheckKeyName];
                 }

@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);
             Route::post('/complete-profile/telegram', [StudentApiController::class, 'saveTelegram']);
             Route::get('/complete-profile/telegram/check', [StudentApiController::class, 'checkTelegramVerification']);
+            Route::post('/exam-language', [StudentApiController::class, 'saveExamLanguage']);
 
             // Absence excuses
             Route::get('/excuses/reasons', [AbsenceExcuseApiController::class, 'reasons']);

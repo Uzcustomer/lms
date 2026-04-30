@@ -1136,6 +1136,30 @@ class StudentApiController extends Controller
     }
 
     /**
+     * Talaba imtihon tilini tanlaydi (group default ustidan).
+     * Allowed values: keys/values of services.moodle.lang_map (uz/ru/en yoki uzb/rus/eng).
+     */
+    public function saveExamLanguage(Request $request): JsonResponse
+    {
+        $map = (array) config('services.moodle.lang_map', []);
+        $allowed = array_values(array_unique(array_merge(array_keys($map), array_values($map))));
+
+        $request->validate([
+            'language_code' => ['nullable', 'string', 'in:' . implode(',', $allowed ?: ['uzb', 'rus', 'eng'])],
+        ]);
+
+        $student = $request->user();
+        $student->exam_language_code = $request->input('language_code') ?: null;
+        $student->save();
+
+        return response()->json([
+            'ok' => true,
+            'exam_language_code' => $student->exam_language_code,
+            'group_default_language_code' => optional(\App\Models\Group::where('group_hemis_id', $student->group_id)->first())->education_lang_code,
+        ]);
+    }
+
+    /**
      * Contract — shartnoma ma'lumotlari (lokal DB dan)
      */
     public function contract(Request $request): JsonResponse

@@ -13,6 +13,8 @@ use App\Services\Retake\RetakeApplicationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -174,6 +176,52 @@ class RetakeApprovalController extends Controller
         }
 
         return redirect()->back()->with('success', 'Qaror muvaffaqiyatli yozildi');
+    }
+
+    /**
+     * Tanlangan ariza-guruhlarini ommaviy o'chirish.
+     * Faqat registrator ofisi (va super-admin) — dekan o'chira olmaydi.
+     * `retake_applications.group_id` va `retake_application_logs.application_id`
+     * cascade qilingani uchun, ariza va loglar avtomatik o'chadi.
+     * Kvitansiya/DOCX/PDF fayllarini storage'dan qo'lda o'chiramiz.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        if ($role !== 'registrar') {
+            abort(403, 'Bu amalga ruxsat yo\'q');
+        }
+
+        $data = $request->validate([
+            'group_ids' => 'required|array|min:1',
+            'group_ids.*' => 'integer',
+        ]);
+
+        $groups = RetakeApplicationGroup::whereIn('id', $data['group_ids'])->get();
+
+        if ($groups->isEmpty()) {
+            return redirect()->back()->with('error', 'O\'chirish uchun ariza topilmadi');
+        }
+
+        $deleted = 0;
+
+        DB::transaction(function () use ($groups, &$deleted) {
+            foreach ($groups as $group) {
+                foreach (['receipt_path', 'docx_path', 'pdf_certificate_path'] as $col) {
+                    $path = $group->{$col};
+                    if ($path && Storage::disk('public')->exists($path)) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+
+                $group->delete();
+                $deleted++;
+            }
+        });
+
+        return redirect()->back()->with('success', $deleted . ' ta ariza o\'chirildi');
     }
 
     /**

@@ -4804,13 +4804,26 @@ class ReportController extends Controller
             // 2-QADAM: Curriculum subjects olish (barcha talabalarning curriculum_id lari uchun)
             $curriculumIds = $students->pluck('curriculum_id')->unique()->filter()->values()->toArray();
 
-            $currSubjects = DB::table('curriculum_subjects')
-                ->whereIn('curricula_hemis_id', $curriculumIds)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('curricula_hemis_id', 'semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
-                ->distinct()
-                ->get();
+            // Jurnal getSubjects() bilan bir xil mantiq:
+            // curriculum_subjects → curricula → semesters bo'yicha join qilib,
+            // baho qo'yilmaydigan fan namunalarini chiqarib tashlaymiz.
+            // is_active va subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->whereIn('cs.curricula_hemis_id', $curriculumIds)
+                ->select('cs.curricula_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
+                ->distinct();
+
+            $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+            foreach ($excludedPatterns as $pattern) {
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+
+            $currSubjects = $currSubjectsQuery->get();
 
             // 3-QADAM: Academic records olish — faqat mavjudligini tekshirish uchun
             $arExistsLookup = [];

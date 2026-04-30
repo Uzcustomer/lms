@@ -32,8 +32,8 @@ Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 // quiz natijalari LMSga keladi.
 Schedule::command('moodle:trigger-sync')->dailyAt('04:30');
 
-// Akademik ma'lumotnoma: HEMIS dan academic records import (har kuni 02:00 da)
-Schedule::command('import:academic-records')->dailyAt('02:00')->withoutOverlapping(120);
+// Akademik ma'lumotnoma: HEMIS dan academic records import (oyda bir marta — 1-sana, 02:00 da)
+Schedule::command('import:academic-records')->monthlyOn(1, '02:00')->withoutOverlapping(120);
 
 // Attendance backfill: oxirgi 30 kunlik davomatni HEMIS dan qayta sinxronlash.
 // Faqat o'zgargan yozuvlarni yangilaydi, qolganini skip qiladi.

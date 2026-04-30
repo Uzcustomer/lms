@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
+import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
@@ -12,7 +15,8 @@ class StudentServicesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
+    final statusBarH = MediaQuery.of(context).padding.top;
 
     final services = [
       _ServiceItem(
@@ -28,35 +32,55 @@ class StudentServicesScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(l.services),
-        centerTitle: true,
-        leading: Navigator.canPop(context)
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.pop(context),
-              )
-            : const Padding(
-                padding: EdgeInsets.all(12),
-                child: Icon(Icons.account_balance, size: 28),
+      backgroundColor: auroraBase(aurora, isDark),
+      body: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
+            height: statusBarH + 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFF0A1A3A),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
               ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.0,
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: Text(
+                    l.services,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(width: 48),
+              ],
+            ),
           ),
-          itemCount: services.length,
-          itemBuilder: (context, index) {
-            final item = services[index];
-            return _ServiceCard(item: item, isDark: isDark);
-          },
-        ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: services.length,
+                itemBuilder: (context, index) {
+                  final item = services[index];
+                  return _ServiceCard(item: item, isDark: isDark);
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

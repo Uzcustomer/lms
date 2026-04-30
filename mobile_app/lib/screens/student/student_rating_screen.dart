@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 
@@ -57,16 +60,44 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppTheme.darkBackground : const Color(0xFFF5F7FB);
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
+    final statusBarH = MediaQuery.of(context).padding.top;
     final card = isDark ? AppTheme.darkCard : Colors.white;
     final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
     return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(title: const Text('Talabalar reytingi')),
+      backgroundColor: auroraBase(aurora, isDark),
       body: Column(
         children: [
+          Container(
+            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
+            height: statusBarH + 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFF0A1A3A),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+              ),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                const Expanded(
+                  child: Text(
+                    'Talabalar reytingi',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(width: 48),
+              ],
+            ),
+          ),
+
           // My rank card
           _buildMyRankCard(isDark),
 

@@ -9,20 +9,40 @@ class GeminiService {
 
   GenerativeModel? _model;
   ChatSession? _chat;
+  String? _studentContext;
+
+  String _buildSystemPrompt() {
+    final base = 'Sen TDTU (Toshkent Davlat Tibbiyot Universiteti) talabasining '
+        'shaxsiy AI yordamchisisan. Ismingiz "TDTU AI Yordamchi". '
+        'Talaba sening egang — uning ma\'lumotlari sen uchun ochiq va shaxsiy '
+        'emas. Sen uning baholari, davomati, jadvali va boshqa o\'quv '
+        'ma\'lumotlarini tahlil qilib, savollariga javob berishing kerak.\n\n'
+        'Qoidalar:\n'
+        '- O\'zbek tilida javob ber, foydalanuvchi boshqa tilda yozsa o\'sha tilda javob ber\n'
+        '- Aniq, qisqa, foydali javoblar ber\n'
+        '- Ma\'lumotni tahlil qilganda raqamlar va statistika bilan ko\'rsat\n'
+        '- Tibbiyot, anatomiya, fiziologiya, farmakologiya bo\'yicha ham yordam ber\n'
+        '- Agar ma\'lumot yetarli bo\'lmasa, qaysi sahifaga borish kerakligini tushuntir\n'
+        '- "Men shaxsiy ma\'lumotlarga ega emasman" deb javob berma — ma\'lumotlar quyida\n';
+
+    if (_studentContext == null || _studentContext!.isEmpty) {
+      return '$base\n\nTalaba ma\'lumotlari hali yuklanmagan.';
+    }
+
+    return '$base\n\n=== TALABA MA\'LUMOTLARI ===\n$_studentContext\n=== MA\'LUMOTLAR TUGADI ===';
+  }
+
+  void setStudentContext(String context) {
+    _studentContext = context;
+    _model = null;
+    _chat = null;
+  }
 
   GenerativeModel get model {
     _model ??= GenerativeModel(
       model: 'gemini-2.5-flash',
       apiKey: _apiKey,
-      systemInstruction: Content.text(
-        'Sen TDTU (Toshkent Davlat Tibbiyot Universiteti) talabalariga '
-        'yordam beruvchi AI assistantisan. Ismingiz "TDTU AI Yordamchi". '
-        'Tibbiyot fanlari, anatomiya, fiziologiya, farmakologiya va boshqa '
-        'tibbiy mavzularda savolarga javob bering. '
-        'O\'zbek tilida javob bering, lekin foydalanuvchi boshqa tilda yozsa '
-        'o\'sha tilda javob bering. Javoblaringiz aniq, qisqa va foydali bo\'lsin. '
-        'Matematika, fizika, kimyo va boshqa fanlar bo\'yicha ham yordam bera olasiz.',
-      ),
+      systemInstruction: Content.text(_buildSystemPrompt()),
       generationConfig: GenerationConfig(
         temperature: 0.7,
         topP: 0.95,
@@ -40,7 +60,6 @@ class GeminiService {
 
   void resetChat() {
     _chat = null;
-    _model = null;
   }
 
   Stream<String> sendMessageStream(String message) async* {
@@ -68,10 +87,10 @@ class GeminiService {
 
   String _friendlyError(String msg) {
     if (msg.contains('quota') || msg.contains('429')) {
-      return 'API limit tugadi. Google AI Studio sahifasida billing yoqilganligini tekshiring yoki biroz kutib qayta urinib ko\'ring.';
+      return 'API limit tugadi. Biroz kutib qayta urinib ko\'ring.';
     }
     if (msg.contains('API key') || msg.contains('401') || msg.contains('403')) {
-      return 'API kalit noto\'g\'ri yoki faol emas. Google AI Studio sahifasida kalitni tekshiring.';
+      return 'API kalit noto\'g\'ri yoki faol emas.';
     }
     return msg;
   }

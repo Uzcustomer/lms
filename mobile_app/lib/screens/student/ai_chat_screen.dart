@@ -5,7 +5,10 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../config/aurora_themes.dart';
 import '../../providers/settings_provider.dart';
+import '../../services/api_service.dart';
 import '../../services/gemini_service.dart';
+import '../../services/student_context_builder.dart';
+import '../../services/student_service.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
@@ -22,6 +25,37 @@ class _AiChatScreenState extends State<AiChatScreen>
   final _gemini = GeminiService();
   final List<_ChatMessage> _messages = [];
   bool _isStreaming = false;
+  bool _contextLoading = true;
+  bool _contextLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudentContext();
+  }
+
+  Future<void> _loadStudentContext() async {
+    try {
+      final api = ApiService();
+      final service = StudentService(api);
+      final builder = StudentContextBuilder(service);
+      final context = await builder.build();
+      _gemini.setStudentContext(context);
+      if (mounted) {
+        setState(() {
+          _contextLoading = false;
+          _contextLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _contextLoading = false;
+          _contextLoaded = false;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -45,7 +79,7 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _isStreaming) return;
+    if (text.isEmpty || _isStreaming || _contextLoading) return;
 
     setState(() {
       _messages.add(_ChatMessage(text: text, isUser: true));
@@ -172,11 +206,11 @@ class _AiChatScreenState extends State<AiChatScreen>
                 child: const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'AI Yordamchi',
                       style: TextStyle(
                         fontSize: 15,
@@ -184,9 +218,34 @@ class _AiChatScreenState extends State<AiChatScreen>
                         color: Colors.white,
                       ),
                     ),
-                    Text(
-                      'Gemini · TDTU',
-                      style: TextStyle(fontSize: 11, color: Colors.white60),
+                    Row(
+                      children: [
+                        if (_contextLoading) ...[
+                          const SizedBox(
+                            width: 8,
+                            height: 8,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 1.5, color: Colors.white60),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Ma\'lumot yuklanmoqda...',
+                            style: TextStyle(fontSize: 10.5, color: Colors.white60),
+                          ),
+                        ] else if (_contextLoaded) ...[
+                          const Icon(Icons.check_circle_rounded,
+                              size: 11, color: Color(0xFF64FFDA)),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Ma\'lumotlaringiz bilan tayyor',
+                            style: TextStyle(fontSize: 10.5, color: Colors.white70),
+                          ),
+                        ] else
+                          const Text(
+                            'Gemini · TDTU',
+                            style: TextStyle(fontSize: 11, color: Colors.white60),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -207,12 +266,31 @@ class _AiChatScreenState extends State<AiChatScreen>
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
 
-    final suggestions = [
-      _Suggestion(Icons.science_outlined, 'Anatomiya', 'Yurak tuzilishi haqida tushuntiring'),
-      _Suggestion(Icons.medication_outlined, 'Farmakologiya', 'Antibiotiklar klassifikatsiyasi'),
-      _Suggestion(Icons.biotech_outlined, 'Fiziologiya', 'Qon aylanish doiralari'),
-      _Suggestion(Icons.school_outlined, 'Imtihonga tayyorlanish', 'Patologik anatomiyadan savollar'),
-    ];
+    final suggestions = _contextLoaded
+        ? [
+            _Suggestion(Icons.bar_chart_rounded, 'Mening baholarim',
+                'Barcha fanlardan baholarimni umumlashtirib bering'),
+            _Suggestion(Icons.trending_up_rounded, 'Eng yaxshi/yomon fanim',
+                'Qaysi fanda eng yaxshi va qaysida yomon natija bor?'),
+            _Suggestion(Icons.warning_amber_rounded, 'Diqqat qilishim kerak',
+                'Qaysi fanlarga ko\'proq e\'tibor berishim kerak?'),
+            _Suggestion(Icons.calendar_month_rounded, 'Imtihon jadvalim',
+                'Yaqinlashayotgan imtihonlarim qachon?'),
+            _Suggestion(Icons.event_available_rounded, 'Davomatim',
+                'Davomat statistikasini tahlil qiling'),
+            _Suggestion(Icons.lightbulb_outline_rounded, 'Maslahat bering',
+                'Reytingimni yaxshilash uchun nima qilishim kerak?'),
+          ]
+        : [
+            _Suggestion(Icons.science_outlined, 'Anatomiya',
+                'Yurak tuzilishi haqida tushuntiring'),
+            _Suggestion(Icons.medication_outlined, 'Farmakologiya',
+                'Antibiotiklar klassifikatsiyasi'),
+            _Suggestion(Icons.biotech_outlined, 'Fiziologiya',
+                'Qon aylanish doiralari'),
+            _Suggestion(Icons.school_outlined, 'Imtihon',
+                'Patologik anatomiyadan savollar'),
+          ];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -550,18 +628,18 @@ class _AiChatScreenState extends State<AiChatScreen>
           const SizedBox(width: 8),
           Container(
             decoration: BoxDecoration(
-              gradient: _isStreaming
+              gradient: (_isStreaming || _contextLoading)
                   ? null
                   : const LinearGradient(
                       colors: [Color(0xFF4A6CF7), Color(0xFF6C63FF)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-              color: _isStreaming
+              color: (_isStreaming || _contextLoading)
                   ? (isDark ? Colors.white12 : Colors.grey.shade300)
                   : null,
               shape: BoxShape.circle,
-              boxShadow: _isStreaming
+              boxShadow: (_isStreaming || _contextLoading)
                   ? null
                   : [
                       BoxShadow(
@@ -576,7 +654,7 @@ class _AiChatScreenState extends State<AiChatScreen>
               shape: const CircleBorder(),
               child: InkWell(
                 customBorder: const CircleBorder(),
-                onTap: _isStreaming ? null : _send,
+                onTap: (_isStreaming || _contextLoading) ? null : _send,
                 child: Padding(
                   padding: const EdgeInsets.all(11),
                   child: _isStreaming

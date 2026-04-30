@@ -35,6 +35,11 @@ class RetakeApprovalController extends Controller
         $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
+        $filter = $request->input('filter', 'pending_mine');
+        $search = trim((string) $request->input('search', ''));
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
         // Ariza-guruhlari joiniga ariza-bog'liq filtr
         $query = RetakeApplicationGroup::query()
             ->with([
@@ -49,8 +54,8 @@ class RetakeApprovalController extends Controller
             ->orderByDesc('created_at');
 
         // Dekan — faqat o'z fakulteti talabalari
-        if ($role === 'dean') {
-            $facultyIds = $user->deanFacultyIds; // department_hemis_id ro'yxati
+        if ($role === 'dean' && $user instanceof Teacher) {
+            $facultyIds = array_map('intval', $user->deanFacultyIds);
             if (empty($facultyIds)) {
                 $query->whereRaw('1=0');
             } else {
@@ -62,21 +67,34 @@ class RetakeApprovalController extends Controller
             }
         }
 
-        // Filtrlar
-        if ($filter = $request->input('filter', 'pending_mine')) {
-            $this->applyFilter($query, $filter, $role);
+        // Holat filtri
+        $this->applyFilter($query, $filter, $role);
+
+        // F.I.SH yoki HEMIS ID bo'yicha qidirish
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('student', function ($sq) use ($search) {
+                    $sq->where('full_name', 'like', "%{$search}%");
+                });
+
+                // Faqat raqamli qidiruv → HEMIS ID bo'yicha
+                if (ctype_digit($search)) {
+                    $q->orWhere('student_hemis_id', $search);
+                }
+            });
         }
 
-        if ($search = $request->input('search')) {
-            $query->whereHas('student', function ($q) use ($search) {
-                $q->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('hemis_id', 'like', "%{$search}%");
-            });
+        // Sana oralig'i (yuborilgan sana bo'yicha)
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
         }
 
         $groups = $query->paginate(20)->withQueryString();
 
-        // Statistika
+        // Statistika (faqat rolga tegishli arizalar bo'yicha)
         $stats = $this->calculateStats($role, $user);
 
         return view('teacher.retake.index', [
@@ -84,6 +102,8 @@ class RetakeApprovalController extends Controller
             'role' => $role,
             'filter' => $filter,
             'search' => $search,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
             'stats' => $stats,
             'minReasonLength' => \App\Models\RetakeSetting::rejectReasonMinLength(),
         ]);
@@ -233,15 +253,29 @@ class RetakeApprovalController extends Controller
 
     private function applyFilter($query, string $filter, string $role): void
     {
-        match ($filter) {
-            'pending_mine' => $role === 'dean'
-                ? $query->whereHas('applications', fn ($q) => $q->where('dean_status', 'pending'))
-                : $query->whereHas('applications', fn ($q) => $q->where('registrar_status', 'pending')),
-            'approved' => $query->whereHas('applications', fn ($q) => $q->where('final_status', 'approved')),
-            'rejected' => $query->whereHas('applications', fn ($q) => $q->where('final_status', 'rejected')),
-            'all' => null,
-            default => null,
-        };
+        // Mening tasdiqimni kutyapti: men hali qaror qilmaganman VA boshqalar
+        // arizani rad etmagan (final_status hali pending — aksariyat hollarda
+        // boshqa rolning qarorini kutmoqda yoki o'quv bo'limi bosqichida).
+        if ($filter === 'pending_mine') {
+            $myStatusColumn = $role === 'dean' ? 'dean_status' : 'registrar_status';
+            $query->whereHas('applications', function ($q) use ($myStatusColumn) {
+                $q->where($myStatusColumn, 'pending')
+                  ->where('final_status', 'pending');
+            });
+            return;
+        }
+
+        if ($filter === 'approved') {
+            $query->whereHas('applications', fn ($q) => $q->where('final_status', 'approved'));
+            return;
+        }
+
+        if ($filter === 'rejected') {
+            $query->whereHas('applications', fn ($q) => $q->where('final_status', 'rejected'));
+            return;
+        }
+
+        // 'all' yoki noma'lum filtr — barcha arizalarni ko'rsatamiz
     }
 
     private function calculateStats(string $role, \Illuminate\Database\Eloquent\Model $user): array

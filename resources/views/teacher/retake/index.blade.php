@@ -28,8 +28,8 @@
 
         {{-- Filtrlar --}}
         <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <form method="GET" action="{{ route('admin.retake.index') }}" class="flex flex-wrap gap-3 items-end">
-                <div class="flex-1 min-w-[200px]">
+            <form method="GET" action="{{ route('admin.retake.index') }}" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                <div class="md:col-span-2">
                     <label class="block text-xs text-gray-600 mb-1">{{ __('Qidirish') }}</label>
                     <input type="text"
                            name="search"
@@ -39,16 +39,31 @@
                 </div>
                 <div>
                     <label class="block text-xs text-gray-600 mb-1">{{ __('Holat') }}</label>
-                    <select name="filter" class="px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                    <select name="filter" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                         <option value="pending_mine" {{ $filter === 'pending_mine' ? 'selected' : '' }}>{{ __('Tasdiqimni kutyapti') }}</option>
                         <option value="approved" {{ $filter === 'approved' ? 'selected' : '' }}>{{ __('Tasdiqlangan') }}</option>
                         <option value="rejected" {{ $filter === 'rejected' ? 'selected' : '' }}>{{ __('Rad etilgan') }}</option>
                         <option value="all" {{ $filter === 'all' ? 'selected' : '' }}>{{ __('Barchasi') }}</option>
                     </select>
                 </div>
-                <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    {{ __('Filtrlash') }}
-                </button>
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">{{ __('Sanadan') }}</label>
+                    <input type="date" name="date_from" value="{{ $dateFrom ?? '' }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">{{ __('Sanagacha') }}</label>
+                    <input type="date" name="date_to" value="{{ $dateTo ?? '' }}"
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                </div>
+                <div class="md:col-span-5 flex gap-2">
+                    <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        {{ __('Filtrlash') }}
+                    </button>
+                    <a href="{{ route('admin.retake.index') }}" class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                        {{ __('Tozalash') }}
+                    </a>
+                </div>
             </form>
         </div>
 

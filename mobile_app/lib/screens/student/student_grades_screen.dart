@@ -86,6 +86,39 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return vals.isNotEmpty ? vals.reduce((a, b) => a + b) / vals.length : 0;
   }
 
+  static const Map<String, num> _defaultWeights = {
+    'jn': 50, 'mt': 20, 'on': 0, 'oski': 15, 'test': 15,
+  };
+
+  Map<String, num> _getWeights(Map<String, dynamic> subject) {
+    final raw = subject['weights'] ?? subject['coefficients'] ?? subject['koef'];
+    if (raw is Map) {
+      final result = <String, num>{};
+      for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
+        final w = raw[k];
+        if (w is num) result[k] = w;
+      }
+      if (result.isNotEmpty) return result;
+    }
+    return _defaultWeights;
+  }
+
+  double? _computeYn(Map<String, dynamic> subject) {
+    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
+    final weights = _getWeights(subject);
+    double sum = 0;
+    bool hasAny = false;
+    for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
+      final v = grades[k];
+      final w = weights[k] ?? 0;
+      if (v is num) {
+        sum += v * (w / 100);
+        hasAny = true;
+      }
+    }
+    return hasAny ? sum : null;
+  }
+
   double _calculateSemesterAvg(List subjects) {
     double sum = 0;
     int count = 0;
@@ -422,8 +455,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   Widget _buildSubjectCard(BuildContext context, Map<String, dynamic> subject, int index, bool isDark, AppLocalizations l) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final name = subject['subject_name']?.toString() ?? '';
-    final ynValue = grades['total'];
-    final total = (ynValue != null && ynValue is num) ? ynValue.round() : _getSubjectTotal(subject).round();
+    final computedYn = _computeYn(subject);
+    final total = computedYn?.round() ?? 0;
     final isCompleted = _isSubjectCompleted(subject);
     final attendance = _getAttendancePercent(subject);
 
@@ -488,7 +521,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             Row(
               children: List.generate(6, (i) {
                 final key = gradeKeys[i];
-                final value = key == 'total' ? null : grades[key];
+                final value = key == 'total' ? computedYn?.round() : grades[key];
                 final hasValue = value != null;
                 final color = _gradeBoxColors[i];
                 return Expanded(

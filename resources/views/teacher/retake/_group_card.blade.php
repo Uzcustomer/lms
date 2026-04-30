@@ -253,7 +253,7 @@
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">
-                                            {{ __('Joriy ta\'lim') }} <span class="text-red-500">*</span>
+                                            {{ __('Joriy bahosi') }} <span class="text-red-500">*</span>
                                         </label>
                                         <input type="number"
                                                name="previous_joriy_grade"
@@ -265,7 +265,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">
-                                            {{ __('Mustaqil ta\'lim') }} <span class="text-red-500">*</span>
+                                            {{ __('Mustaqil ta\'lim bahosi') }} <span class="text-red-500">*</span>
                                         </label>
                                         <input type="number"
                                                name="previous_mustaqil_grade"

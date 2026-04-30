@@ -1,5 +1,5 @@
 <x-guest-layout>
-    <div class="mb-4 text-sm text-gray-600">
+    <div class="mb-4 text-sm text-white/80">
         {{ __("Xavfsizlik uchun vaqtinchalik parol bilan kirgansiz. Davom etishdan oldin yangi parol o'rnating.") }}
     </div>
 
@@ -14,19 +14,19 @@
         @method('PUT')
 
         <div>
-            <x-input-label for="current_password" :value="__('Vaqtinchalik parol')" />
+            <x-input-label for="current_password" :value="__('Vaqtinchalik parol')" class="!text-white" />
             <x-text-input id="current_password" class="block mt-1 w-full" type="password" name="current_password" required autocomplete="current-password" />
             <x-input-error :messages="$errors->get('current_password')" class="mt-2" />
         </div>
 
         <div class="mt-4">
-            <x-input-label for="password" :value="__('Yangi parol')" />
+            <x-input-label for="password" :value="__('Yangi parol')" class="!text-white" />
             <x-text-input id="password" class="block mt-1 w-full" type="password" name="password" required autocomplete="new-password" />
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
         <div class="mt-4">
-            <x-input-label for="password_confirmation" :value="__('Yangi parolni tasdiqlang')" />
+            <x-input-label for="password_confirmation" :value="__('Yangi parolni tasdiqlang')" class="!text-white" />
             <x-text-input id="password_confirmation" class="block mt-1 w-full" type="password" name="password_confirmation" required autocomplete="new-password" />
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>

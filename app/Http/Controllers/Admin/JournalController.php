@@ -548,6 +548,10 @@ class JournalController extends Controller
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
             }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
+                return ['grade' => $row->retake_grade, 'is_retake' => true];
+            }
             // status = recorded → use grade
             if ($row->status === 'recorded') {
                 return ['grade' => $row->grade, 'is_retake' => false];
@@ -4983,6 +4987,10 @@ class JournalController extends Controller
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
             }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
+                return $row->retake_grade;
+            }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
             if ($row->retake_grade !== null) return $row->retake_grade;
@@ -5480,6 +5488,10 @@ class JournalController extends Controller
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
+            }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
+                return $row->retake_grade;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
@@ -6329,6 +6341,10 @@ class JournalController extends Controller
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $retakeGrade === null) {
                 return null;
+            }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $retakeGrade !== null) {
+                return $retakeGrade;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;

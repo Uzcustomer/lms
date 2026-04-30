@@ -1158,229 +1158,340 @@ class _JnGradesPageState extends State<_JnGradesPage> {
     return result;
   }
 
-  String _formatDateShort(String dateKey) {
-    try {
-      final date = DateTime.parse(dateKey);
-      return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
-    } catch (_) {
-      return dateKey;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
+    final statusBarH = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(
-          widget.subjectName,
-          style: const TextStyle(fontSize: 15),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        centerTitle: true,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_error!, style: TextStyle(color: secondaryText)),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadGrades,
-                        child: const Text('Qayta yuklash'),
-                      ),
-                    ],
-                  ),
-                )
-              : _allDates.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.school_outlined, size: 48, color: secondaryText),
-                          const SizedBox(height: 12),
-                          Text('Ma\'lumot topilmadi', style: TextStyle(color: secondaryText)),
-                        ],
-                      ),
-                    )
-                  : _buildHorizontalTable(isDark, textColor, secondaryText),
-    );
-  }
-
-  Widget _buildHorizontalTable(bool isDark, Color textColor, Color secondaryText) {
-    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
-    final headerBg = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF5F7FA);
-    final cellBg = isDark ? AppTheme.darkCard : Colors.white;
-
-    // Separate dates for amaliy and maruza
-    final amaliyDates = _allDates.where((d) => _amaliyByDate.containsKey(d) || _amaliyByDate.keys.isEmpty).toList();
-    final maruzaDates = _allDates.where((d) => _maruzaByDate.containsKey(d) || _maruzaByDate.keys.isEmpty).toList();
-
-    // Use all dates for the table, showing both rows
-    final hasAmaliy = _amaliyByDate.isNotEmpty;
-    final hasMaruza = _maruzaByDate.isNotEmpty;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: auroraBase(aurora, isDark),
+      body: Column(
         children: [
-          if (hasAmaliy) ...[
-            Text(
-              'Amaliy mashg\'ulotlar',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
+          Container(
+            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
+            height: statusBarH + 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFF0A1A3A),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+              ),
             ),
-            const SizedBox(height: 8),
-            _buildScrollableGrid(
-              _amaliyByDate,
-              _allDates.where((d) =>
-                _amaliyByDate.containsKey(d) ||
-                !_maruzaByDate.containsKey(d)
-              ).toList()..removeWhere((d) => _maruzaByDate.containsKey(d) && !_amaliyByDate.containsKey(d)),
-              borderColor, headerBg, cellBg, textColor, secondaryText, isDark,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: Text(
+                    widget.subjectName,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(width: 48),
+              ],
             ),
-          ],
-          if (hasMaruza) ...[
-            const SizedBox(height: 20),
-            Text(
-              'Ma\'ruzalar',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor),
-            ),
-            const SizedBox(height: 8),
-            _buildScrollableGrid(
-              _maruzaByDate,
-              _allDates.where((d) =>
-                _maruzaByDate.containsKey(d) ||
-                !_amaliyByDate.containsKey(d)
-              ).toList()..removeWhere((d) => _amaliyByDate.containsKey(d) && !_maruzaByDate.containsKey(d)),
-              borderColor, headerBg, cellBg, textColor, secondaryText, isDark,
-            ),
-          ],
-          if (!hasAmaliy && !hasMaruza) ...[
-            _buildScrollableGrid(
-              {},
-              _allDates,
-              borderColor, headerBg, cellBg, textColor, secondaryText, isDark,
-            ),
-          ],
+          ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(_error!, style: TextStyle(color: secondaryText)),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadGrades,
+                              child: const Text('Qayta yuklash'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _allDates.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.school_outlined, size: 48, color: secondaryText),
+                                const SizedBox(height: 12),
+                                Text('Ma\'lumot topilmadi', style: TextStyle(color: secondaryText)),
+                              ],
+                            ),
+                          )
+                        : _buildVerticalTable(isDark, textColor, secondaryText),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildScrollableGrid(
-    Map<String, dynamic> gradesByDate,
-    List<String> dates,
-    Color borderColor,
-    Color headerBg,
-    Color cellBg,
-    Color textColor,
-    Color secondaryText,
-    bool isDark,
-  ) {
-    if (dates.isEmpty) return const SizedBox.shrink();
-    const double colWidth = 56;
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: borderColor),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          children: [
-            // Date header row (vertical text)
-            Row(
-              children: dates.map((dateKey) {
-                return Container(
-                  width: colWidth,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: headerBg,
-                    border: Border(
-                      right: BorderSide(color: borderColor, width: 0.5),
-                    ),
-                  ),
-                  child: RotatedBox(
-                    quarterTurns: 3,
-                    child: Text(
-                      _formatDateShort(dateKey),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            // Grade row
-            Container(
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: borderColor)),
+  Widget _glassCard({required Widget child, required bool isDark, Color hueColor = const Color(0xFF1565C0)}) {
+    final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
+    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: surface,
+            border: Border.all(color: border),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1A1340).withOpacity(0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-              child: Row(
-                children: dates.map((dateKey) {
-                  final val = gradesByDate[dateKey];
-                  String text;
-                  Color color;
-
-                  if (val == null) {
-                    text = '-';
-                    color = secondaryText;
-                  } else if (val == 'NB') {
-                    text = 'NB';
-                    color = AppTheme.errorColor;
-                  } else if (val is int) {
-                    text = val.toString();
-                    color = val >= 70
-                        ? const Color(0xFF43A047)
-                        : val > 0
-                            ? const Color(0xFF1E88E5)
-                            : secondaryText;
-                  } else {
-                    text = '-';
-                    color = secondaryText;
-                  }
-
-                  return Container(
-                    width: colWidth,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                top: -50,
+                right: -50,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Container(
+                    width: 140,
+                    height: 140,
                     decoration: BoxDecoration(
-                      color: cellBg,
-                      border: Border(
-                        right: BorderSide(color: borderColor, width: 0.5),
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [hueColor.withOpacity(isDark ? 0.4 : 0.32), hueColor.withOpacity(0)],
+                        stops: const [0.0, 0.7],
                       ),
                     ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      text,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                    ),
-                  );
-                }).toList(),
+                  ),
+                ),
               ),
-            ),
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVerticalTable(bool isDark, Color textColor, Color secondaryText) {
+    final hasAmaliy = _amaliyByDate.isNotEmpty;
+    final hasMaruza = _maruzaByDate.isNotEmpty;
+
+    final amaliyDates = _allDates
+        .where((d) => _amaliyByDate.containsKey(d) || !_maruzaByDate.containsKey(d))
+        .toList()
+      ..removeWhere((d) => _maruzaByDate.containsKey(d) && !_amaliyByDate.containsKey(d));
+    final maruzaDates = _allDates
+        .where((d) => _maruzaByDate.containsKey(d) || !_amaliyByDate.containsKey(d))
+        .toList()
+      ..removeWhere((d) => _amaliyByDate.containsKey(d) && !_maruzaByDate.containsKey(d));
+
+    return RefreshIndicator(
+      onRefresh: _loadGrades,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (hasAmaliy) ...[
+              _buildSectionCard(
+                title: 'Amaliy mashg\'ulotlar',
+                icon: Icons.assignment_turned_in_rounded,
+                hueColor: const Color(0xFF43A047),
+                gradesByDate: _amaliyByDate,
+                dates: amaliyDates,
+                isDark: isDark,
+                textColor: textColor,
+                secondaryText: secondaryText,
+              ),
+              const SizedBox(height: 14),
+            ],
+            if (hasMaruza) ...[
+              _buildSectionCard(
+                title: 'Ma\'ruzalar',
+                icon: Icons.menu_book_rounded,
+                hueColor: const Color(0xFF1565C0),
+                gradesByDate: _maruzaByDate,
+                dates: maruzaDates,
+                isDark: isDark,
+                textColor: textColor,
+                secondaryText: secondaryText,
+              ),
+            ],
+            if (!hasAmaliy && !hasMaruza)
+              _buildSectionCard(
+                title: 'Baholar',
+                icon: Icons.school_outlined,
+                hueColor: const Color(0xFF7C4DFF),
+                gradesByDate: const {},
+                dates: _allDates,
+                isDark: isDark,
+                textColor: textColor,
+                secondaryText: secondaryText,
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required Color hueColor,
+    required Map<String, dynamic> gradesByDate,
+    required List<String> dates,
+    required bool isDark,
+    required Color textColor,
+    required Color secondaryText,
+  }) {
+    return _glassCard(
+      isDark: isDark,
+      hueColor: hueColor,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: hueColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: hueColor, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textColor),
+                  ),
+                ),
+                Text(
+                  '${dates.length}',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: secondaryText),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (dates.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('Ma\'lumot yo\'q', style: TextStyle(fontSize: 13, color: secondaryText)),
+              )
+            else
+              ...dates.asMap().entries.map((e) {
+                final isLast = e.key == dates.length - 1;
+                return _buildGradeRow(
+                  dateKey: e.value,
+                  value: gradesByDate[e.value],
+                  isDark: isDark,
+                  textColor: textColor,
+                  secondaryText: secondaryText,
+                  showDivider: !isLast,
+                );
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGradeRow({
+    required String dateKey,
+    required dynamic value,
+    required bool isDark,
+    required Color textColor,
+    required Color secondaryText,
+    required bool showDivider,
+  }) {
+    String text;
+    Color valueColor;
+    Color chipBg;
+
+    if (value == null) {
+      text = '—';
+      valueColor = secondaryText;
+      chipBg = isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04);
+    } else if (value == 'NB') {
+      text = 'NB';
+      valueColor = Colors.white;
+      chipBg = AppTheme.errorColor;
+    } else if (value is int) {
+      text = value.toString();
+      if (value >= 70) {
+        valueColor = Colors.white;
+        chipBg = const Color(0xFF43A047);
+      } else if (value > 0) {
+        valueColor = Colors.white;
+        chipBg = const Color(0xFFFF9800);
+      } else {
+        text = '—';
+        valueColor = secondaryText;
+        chipBg = isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04);
+      }
+    } else {
+      text = '—';
+      valueColor = secondaryText;
+      chipBg = isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04);
+    }
+
+    final divider = isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06);
+
+    return Container(
+      decoration: BoxDecoration(
+        border: showDivider ? Border(bottom: BorderSide(color: divider)) : null,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.event_outlined, size: 16, color: secondaryText),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _formatDateLong(dateKey),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textColor),
+            ),
+          ),
+          Container(
+            constraints: const BoxConstraints(minWidth: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: chipBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: valueColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateLong(String dateKey) {
+    try {
+      final date = DateTime.parse(dateKey);
+      const months = ['Yan', 'Fev', 'Mar', 'Apr', 'May', 'Iyn', 'Iyl', 'Avg', 'Sen', 'Okt', 'Noy', 'Dek'];
+      final m = months[date.month - 1];
+      return '${date.day.toString().padLeft(2, '0')} $m ${date.year}';
+    } catch (_) {
+      return dateKey;
+    }
   }
 }

@@ -14,6 +14,7 @@ import 'gpa_calculator_screen.dart';
 import 'student_rating_screen.dart';
 import 'chat_contacts_screen.dart';
 import 'library_webview_screen.dart';
+import 'ai_chat_screen.dart';
 import 'student_home_screen.dart';
 
 class StudentUsefulScreen extends StatelessWidget {
@@ -29,6 +30,13 @@ class StudentUsefulScreen extends StatelessWidget {
     final statusBarH = MediaQuery.of(context).padding.top;
 
     final services = [
+      _ServiceCard(
+        icon: Icons.auto_awesome,
+        title: 'AI Yordamchi',
+        subtitle: 'Gemini AI bilan savol-javob',
+        color: const Color(0xFF9C27B0),
+        screen: const AiChatScreen(),
+      ),
       _ServiceCard(
         icon: Icons.calculate_outlined,
         title: 'GPA Kalkulyator',

@@ -53,6 +53,39 @@ class AppServiceProvider extends ServiceProvider
                 }
             } catch (\Throwable $e) {}
             $view->with('pendingAppealsCount', $pendingAppeals);
+
+            $pendingRetake = 0;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('retake_applications')) {
+                    $activeRole = (string) session('active_role', '');
+                    $teacher = \Illuminate\Support\Facades\Auth::guard('teacher')->user();
+
+                    $registrarLikeRoles = [
+                        \App\Enums\ProjectRole::REGISTRAR_OFFICE->value,
+                        \App\Enums\ProjectRole::SUPERADMIN->value,
+                        \App\Enums\ProjectRole::ADMIN->value,
+                    ];
+
+                    if ($activeRole === \App\Enums\ProjectRole::DEAN->value && $teacher instanceof \App\Models\Teacher) {
+                        $facultyIds = array_map('intval', $teacher->deanFacultyIds);
+                        if (!empty($facultyIds)) {
+                            $pendingRetake = \App\Models\RetakeApplication::query()
+                                ->where('dean_status', 'pending')
+                                ->where('final_status', 'pending')
+                                ->whereIn('student_hemis_id', function ($q) use ($facultyIds) {
+                                    $q->select('hemis_id')->from('students')->whereIn('department_id', $facultyIds);
+                                })
+                                ->count();
+                        }
+                    } elseif (in_array($activeRole, $registrarLikeRoles, true)) {
+                        $pendingRetake = \App\Models\RetakeApplication::query()
+                            ->where('registrar_status', 'pending')
+                            ->where('final_status', 'pending')
+                            ->count();
+                    }
+                }
+            } catch (\Throwable $e) {}
+            $view->with('pendingRetakeCount', $pendingRetake);
         });
 
         // Carbon diffForHumans() uchun o'zbek lotin alifbosida

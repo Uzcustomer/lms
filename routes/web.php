@@ -756,43 +756,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::post('/logout', [AdminAuthController::class, 'logout'])->name('logout');
 
-    });
-
-    // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
-    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
-        // Server debug & monitoring
-        Route::get('/server-debug', [ServerDebugController::class, 'index'])->name('server-debug');
-        Route::get('/server-debug/ping', [ServerDebugController::class, 'ping'])->name('server-debug.ping');
-        Route::post('/server-debug/clear-logs', [ServerDebugController::class, 'clearLogs'])->name('server-debug.clear-logs');
-        // Old routes — redirect to unified settings
-        Route::get('/password-settings', fn () => redirect()->route('admin.settings', ['tab' => 'password']))->name('password-settings.index');
-        Route::post('/password-settings', [SettingsController::class, 'updatePassword'])->name('password-settings.update');
-        Route::get('/synchronizes', fn () => redirect()->route('admin.settings', ['tab' => 'sync']))->name('synchronizes');
-        Route::post('/synchronize', [DashboardController::class, 'importSchedulesPartialy'])->name('synchronize');
-        Route::post('/synchronize/curricula', [DashboardController::class, 'importCurricula'])->name('synchronize.curricula');
-        Route::post('/synchronize/curriculum-subjects', [DashboardController::class, 'importCurriculumSubjects'])->name('synchronize.curriculum-subjects');
-        Route::post('/synchronize/groups', [DashboardController::class, 'importGroups'])->name('synchronize.groups');
-        Route::post('/synchronize/semesters', [DashboardController::class, 'importSemesters'])->name('synchronize.semesters');
-        Route::post('/synchronize/specialties-departments', [DashboardController::class, 'importSpecialtiesDepartments'])->name('synchronize.specialties-departments');
-        Route::post('/synchronize/students', [DashboardController::class, 'importStudents'])->name('synchronize.students');
-        Route::post('/synchronize/teachers', [DashboardController::class, 'importTeachers'])->name('synchronize.teachers');
-        Route::post('/synchronize/attendance-controls', [DashboardController::class, 'importAttendanceControls'])->name('synchronize.attendance-controls');
-        Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
-        Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
-    });
-
-    // Faqat superadmin uchun — Xodimlarni baholash
-    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
-        Route::get('/staff-evaluation', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'index'])->name('staff-evaluation.index');
-        Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
-        Route::delete('/staff-evaluation/delete-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteAllQr'])->name('staff-evaluation.delete-all-qr');
-        Route::get('/staff-evaluation/{teacher}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
-        Route::post('/staff-evaluation/{teacher}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');
-        Route::delete('/staff-evaluation/{teacher}/delete-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteQr'])->name('staff-evaluation.delete-qr');
-        Route::post('/staff-evaluation/{teacher}/regenerate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'regenerateQr'])->name('staff-evaluation.regenerate-qr');
-        Route::get('/staff-evaluation/{teacher}/download-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'downloadQr'])->name('staff-evaluation.download-qr');
-        Route::get('/staff-evaluation/{teacher}/export-excel', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'exportExcel'])->name('staff-evaluation.export-excel');
-
         // ─── Qayta o'qish arizalari ──────────────────────────────────
         // Dekan + Registrator paneli (rol auto-detect)
         Route::prefix('retake')->name('retake.')->group(function () {
@@ -832,6 +795,43 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'index'])->name('index');
             Route::put('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'update'])->name('update');
         });
+
+    });
+
+    // Faqat admin uchun sinxronizatsiya va sozlamalar route'lari
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin'])->group(function () {
+        // Server debug & monitoring
+        Route::get('/server-debug', [ServerDebugController::class, 'index'])->name('server-debug');
+        Route::get('/server-debug/ping', [ServerDebugController::class, 'ping'])->name('server-debug.ping');
+        Route::post('/server-debug/clear-logs', [ServerDebugController::class, 'clearLogs'])->name('server-debug.clear-logs');
+        // Old routes — redirect to unified settings
+        Route::get('/password-settings', fn () => redirect()->route('admin.settings', ['tab' => 'password']))->name('password-settings.index');
+        Route::post('/password-settings', [SettingsController::class, 'updatePassword'])->name('password-settings.update');
+        Route::get('/synchronizes', fn () => redirect()->route('admin.settings', ['tab' => 'sync']))->name('synchronizes');
+        Route::post('/synchronize', [DashboardController::class, 'importSchedulesPartialy'])->name('synchronize');
+        Route::post('/synchronize/curricula', [DashboardController::class, 'importCurricula'])->name('synchronize.curricula');
+        Route::post('/synchronize/curriculum-subjects', [DashboardController::class, 'importCurriculumSubjects'])->name('synchronize.curriculum-subjects');
+        Route::post('/synchronize/groups', [DashboardController::class, 'importGroups'])->name('synchronize.groups');
+        Route::post('/synchronize/semesters', [DashboardController::class, 'importSemesters'])->name('synchronize.semesters');
+        Route::post('/synchronize/specialties-departments', [DashboardController::class, 'importSpecialtiesDepartments'])->name('synchronize.specialties-departments');
+        Route::post('/synchronize/students', [DashboardController::class, 'importStudents'])->name('synchronize.students');
+        Route::post('/synchronize/teachers', [DashboardController::class, 'importTeachers'])->name('synchronize.teachers');
+        Route::post('/synchronize/attendance-controls', [DashboardController::class, 'importAttendanceControls'])->name('synchronize.attendance-controls');
+        Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
+        Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
+    });
+
+    // Faqat superadmin uchun — Xodimlarni baholash
+    Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
+        Route::get('/staff-evaluation', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'index'])->name('staff-evaluation.index');
+        Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
+        Route::delete('/staff-evaluation/delete-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteAllQr'])->name('staff-evaluation.delete-all-qr');
+        Route::get('/staff-evaluation/{teacher}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
+        Route::post('/staff-evaluation/{teacher}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');
+        Route::delete('/staff-evaluation/{teacher}/delete-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteQr'])->name('staff-evaluation.delete-qr');
+        Route::post('/staff-evaluation/{teacher}/regenerate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'regenerateQr'])->name('staff-evaluation.regenerate-qr');
+        Route::get('/staff-evaluation/{teacher}/download-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'downloadQr'])->name('staff-evaluation.download-qr');
+        Route::get('/staff-evaluation/{teacher}/export-excel', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'exportExcel'])->name('staff-evaluation.export-excel');
     });
 });
 

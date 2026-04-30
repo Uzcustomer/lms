@@ -214,17 +214,38 @@ class RetakeNotificationService
         ?int $refId = null,
         ?string $url = null,
     ): void {
+        $link = $url ?? route('admin.retake.index');
+
         try {
             TeacherNotification::create([
                 'teacher_id' => $teacher->id,
                 'type' => $type,
                 'title' => $title,
                 'message' => $message,
-                'link' => $url ?? route('admin.retake.index'),
+                'link' => $link,
                 'data' => $refId ? ['retake_ref_id' => $refId] : null,
             ]);
         } catch (\Throwable $e) {
             Log::warning("[RetakeNotification] TeacherNotification: " . $e->getMessage());
+        }
+
+        // Yuqori bell ikonasidagi xabarlar paneli `Notification` modelidan o'qiydi —
+        // shuning uchun retake bildirishnomalari u yerda ham ko'rinishi uchun yozamiz.
+        try {
+            \App\Models\Notification::create([
+                'recipient_id' => $teacher->id,
+                'recipient_type' => Teacher::class,
+                'subject' => $title,
+                'body' => $message,
+                'type' => $type,
+                'url' => $link,
+                'data' => $refId ? ['retake_ref_id' => $refId] : null,
+                'is_read' => false,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("[RetakeNotification] Notification: " . $e->getMessage());
         }
 
         if (!empty($teacher->telegram_chat_id)) {

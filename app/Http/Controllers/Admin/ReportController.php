@@ -5191,16 +5191,27 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
-            // Curriculum subjects — shu semestrga tegishli barcha fanlar
-            $currSubjects = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $student->curriculum_id)
-                ->where('semester_code', $semesterCode)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('subject_id', 'subject_name', 'semester_name', 'credit', 'total_acload')
+            // Curriculum subjects — shu semestrga tegishli barcha fanlar.
+            // Jurnal getSubjects() bilan bir xil mantiq: curricula+semesters JOIN +
+            // baho qo'yilmaydigan fan namunalari chiqarib tashlanadi. is_active va
+            // subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->where('cs.semester_code', $semesterCode)
+                ->select('cs.subject_id', 'cs.subject_name', 'cs.semester_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
-                ->orderBy('subject_name')
-                ->get();
+                ->orderBy('cs.subject_name');
+
+            foreach (config('app.excluded_rating_subject_patterns', []) as $pattern) {
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+
+            $currSubjects = $currSubjectsQuery->get();
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 

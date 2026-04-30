@@ -6143,6 +6143,9 @@ class ReportController extends Controller
      */
     public function topStudents(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
         $dekanFacultyId = get_dekan_faculty_id();
 
         $facultyQuery = Department::where('structure_type_code', 11)
@@ -6220,6 +6223,9 @@ class ReportController extends Controller
      */
     public function topStudentsData(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
         $dekanFacultyId = get_dekan_faculty_id();
         if ($dekanFacultyId && !$request->filled('faculty')) {
             $request->merge(['faculty' => $dekanFacultyId]);
@@ -6280,15 +6286,6 @@ class ReportController extends Controller
                 if (!empty($deptSubjectIds)) {
                     $scheduleQuery->whereIn('sch.subject_id', $deptSubjectIds);
                 }
-            }
-
-            // Nazoratchi: faqat biriktirilgan guruhlar
-            if (is_active_nazoratchi()) {
-                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
-                if (empty($nazoratchiHemisIds)) {
-                    return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
-                }
-                $scheduleQuery->whereIn('sch.group_id', $nazoratchiHemisIds);
             }
 
             $scheduleCombos = $scheduleQuery->get();

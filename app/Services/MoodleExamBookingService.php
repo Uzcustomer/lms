@@ -20,25 +20,13 @@ class MoodleExamBookingService
         private readonly ?string $wsToken = null,
     ) {}
 
-    // Far-future timestamp used to "lock" further attempt starts after the cutoff.
-    // 4102444800 = 2100-01-01 00:00:00 UTC.
-    private const LOCKOUT_TIMEOPEN = 4102444800;
-
     /**
      * Book a single (schedule, yn_type) on Moodle and persist the outcome on the schedule.
-     *
-     * Two phases (idempotent on the Moodle side, no plugin change required):
-     *   - Initial book ($lockMode = false): timeopen = exam_time - open_window,
-     *     timeclose = exam_time + open_window + close_buffer. Schedules a delayed
-     *     LockMoodleStartCutoff job that fires at exam_time + open_window.
-     *   - Lockout pass ($lockMode = true): re-books the same students with
-     *     timeopen pushed to year 2100. Moodle then refuses to start NEW attempts
-     *     while letting in-progress attempts run out their own timelimit.
      *
      * @param string $ynType "oski" or "test"
      * @return array{ok:bool, skipped?:bool, reason?:string, calls?:array}
      */
-    public function book(ExamSchedule $schedule, string $ynType, bool $lockMode = false): array
+    public function book(ExamSchedule $schedule, string $ynType): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
@@ -68,11 +56,8 @@ class MoodleExamBookingService
         }
 
         $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
-        $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', 30));
-        $timeclose = $startsAt->copy()->addMinutes($window + $closeBuffer)->getTimestamp();
-        $timeopen = $lockMode
-            ? self::LOCKOUT_TIMEOPEN
-            : $startsAt->copy()->subMinutes($window)->getTimestamp();
+        $timeopen = $startsAt->copy()->subMinutes($window)->getTimestamp();
+        $timeclose = $startsAt->copy()->addMinutes($window)->getTimestamp();
         $timelimit = max(0, (int) config('services.moodle.timelimit_seconds', 0));
 
         $courseIdnumber = $this->resolveCourseIdnumber($schedule, $ynType);
@@ -119,7 +104,6 @@ class MoodleExamBookingService
 
         $result = [
             'ok' => $allOk,
-            'lock_mode' => $lockMode,
             'course_idnumber' => $courseIdnumber,
             'timeopen' => $timeopen,
             'timeclose' => $timeclose,
@@ -128,16 +112,6 @@ class MoodleExamBookingService
         ];
 
         $this->persistResult($schedule, $ynType, $result);
-
-        // After a successful initial booking, schedule the lockout pass to fire
-        // at exam_time + open_window (the "no new starts after this" cutoff).
-        if (!$lockMode && $allOk) {
-            $cutoffAt = $startsAt->copy()->addMinutes($window);
-            if ($cutoffAt->isFuture()) {
-                \App\Jobs\LockMoodleStartCutoff::dispatch($schedule->id, $ynType)
-                    ->delay($cutoffAt);
-            }
-        }
 
         return $result;
     }

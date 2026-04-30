@@ -71,10 +71,6 @@ return [
         'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
         // Window around exam start during which a student may begin attempt (minutes)
         'open_window_minutes' => (int) env('MOODLE_OPEN_WINDOW_MINUTES', 10),
-        // After the start cutoff (exam_time + open_window), how many extra minutes
-        // remain before timeclose. This must be >= the Moodle quiz timelimit so that
-        // students who started right before the cutoff get their full time.
-        'close_buffer_minutes' => (int) env('MOODLE_CLOSE_BUFFER_MINUTES', 30),
         // 0 = use Moodle quiz default; otherwise seconds to override per-attempt limit
         'timelimit_seconds' => (int) env('MOODLE_TIMELIMIT_SECONDS', 0),
         // Quiz idnumber template. Placeholders: {yn} (lowercase: test/oski),

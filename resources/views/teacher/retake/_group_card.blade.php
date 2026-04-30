@@ -3,12 +3,26 @@
     $myStatusField = $role === 'dean' ? 'dean_status' : 'registrar_status';
     $otherStatusField = $role === 'dean' ? 'registrar_status' : 'dean_status';
     $otherLabel = $role === 'dean' ? __('Registrator') : __('Dekan');
+    $canBulkDelete = $canBulkDelete ?? false;
 @endphp
 
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
      x-data="{ openReject: null }">
     <div class="p-4 border-b border-gray-100 flex items-start justify-between flex-wrap gap-3">
-        <div>
+        @if($canBulkDelete)
+            <label class="flex items-center pt-1 cursor-pointer">
+                <input type="checkbox"
+                       :checked="selected.includes({{ $group->id }})"
+                       @change="if ($event.target.checked) {
+                            if (!selected.includes({{ $group->id }})) selected.push({{ $group->id }});
+                        } else {
+                            const idx = selected.indexOf({{ $group->id }});
+                            if (idx > -1) selected.splice(idx, 1);
+                        }"
+                       class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+            </label>
+        @endif
+        <div class="flex-1">
             <p class="text-sm font-semibold text-gray-900">
                 {{ $student?->full_name ?? '— talaba topilmadi —' }}
                 <span class="text-xs text-gray-500 font-normal">

@@ -73,6 +73,11 @@
                 {{ session('success') }}
             </div>
         @endif
+        @if(session('error'))
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-800">
+                {{ session('error') }}
+            </div>
+        @endif
 
         {{-- Arizalar ro'yxati --}}
         @if($groups->count() === 0)
@@ -80,11 +85,88 @@
                 <p class="text-gray-500">{{ __('Tanlangan filtr bo\'yicha arizalar topilmadi') }}</p>
             </div>
         @else
-            <div class="space-y-3">
-                @foreach($groups as $group)
-                    @include('teacher.retake._group_card', ['group' => $group, 'role' => $role, 'minReasonLength' => $minReasonLength])
-                @endforeach
-            </div>
+            @php $canBulkDelete = $role === 'registrar'; @endphp
+
+            @if($canBulkDelete)
+                <div x-data="{
+                        selected: [],
+                        get pageIds() { return @js($groups->pluck('id')->values()->all()); },
+                        get allChecked() { return this.pageIds.length > 0 && this.pageIds.every(id => this.selected.includes(id)); },
+                        toggleAll(ev) {
+                            if (ev.target.checked) {
+                                this.pageIds.forEach(id => {
+                                    if (!this.selected.includes(id)) this.selected.push(id);
+                                });
+                            } else {
+                                this.pageIds.forEach(id => {
+                                    const idx = this.selected.indexOf(id);
+                                    if (idx > -1) this.selected.splice(idx, 1);
+                                });
+                            }
+                        },
+                        confirmDelete(ev) {
+                            if (this.selected.length === 0) {
+                                ev.preventDefault();
+                                return;
+                            }
+                            if (!confirm(this.selected.length + ' ta arizani butunlay o\'chirishni tasdiqlaysizmi? Bu amal qaytarib bo\'lmaydi.')) {
+                                ev.preventDefault();
+                            }
+                        }
+                    }">
+                    {{-- Bulk panel --}}
+                    <div class="bg-white rounded-xl shadow-sm p-3 mb-3 flex items-center justify-between flex-wrap gap-3">
+                        <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox"
+                                   :checked="allChecked"
+                                   @change="toggleAll($event)"
+                                   class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <span>{{ __('Sahifadagi barchasini tanlash') }}</span>
+                            <span class="text-xs text-gray-500" x-show="selected.length > 0">
+                                (<span x-text="selected.length"></span> {{ __('ta tanlangan') }})
+                            </span>
+                        </label>
+
+                        <form method="POST"
+                              action="{{ route('admin.retake.bulk-delete') }}"
+                              @submit="confirmDelete($event)">
+                            @csrf
+                            <template x-for="id in selected" :key="id">
+                                <input type="hidden" name="group_ids[]" :value="id">
+                            </template>
+                            <button type="submit"
+                                    :disabled="selected.length === 0"
+                                    :class="selected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'"
+                                    class="px-4 py-2 text-sm font-medium rounded-lg">
+                                {{ __('Tanlanganlarni o\'chirish') }}
+                                <span x-show="selected.length > 0">(<span x-text="selected.length"></span>)</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="space-y-3">
+                        @foreach($groups as $group)
+                            @include('teacher.retake._group_card', [
+                                'group' => $group,
+                                'role' => $role,
+                                'minReasonLength' => $minReasonLength,
+                                'canBulkDelete' => true,
+                            ])
+                        @endforeach
+                    </div>
+                </div>
+            @else
+                <div class="space-y-3">
+                    @foreach($groups as $group)
+                        @include('teacher.retake._group_card', [
+                            'group' => $group,
+                            'role' => $role,
+                            'minReasonLength' => $minReasonLength,
+                            'canBulkDelete' => false,
+                        ])
+                    @endforeach
+                </div>
+            @endif
 
             <div class="mt-4">
                 {{ $groups->links() }}

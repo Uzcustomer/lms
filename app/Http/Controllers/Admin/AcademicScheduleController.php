@@ -25,6 +25,7 @@ use App\Models\StudentNotification;
 use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
 use App\Services\TelegramService;
+use App\Jobs\BookMoodleGroupExam;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -898,6 +899,7 @@ class AcademicScheduleController extends Controller
         }
 
         DB::beginTransaction();
+        $bookingsToDispatch = [];
         try {
             foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
@@ -954,9 +956,25 @@ class AcademicScheduleController extends Controller
                     $record->created_by = $userId;
                 }
 
+                $oskiDateChanged = $record->isDirty('oski_date') || $record->isDirty('oski_na');
+                $testDateChanged = $record->isDirty('test_date') || $record->isDirty('test_na');
+
                 $record->save();
+
+                // Queue Moodle booking when date is set, time already exists, and not N/A.
+                // Time is set by saveTestTime(); store() only triggers when both are present.
+                if ($oskiDateChanged && $newOskiDate && !$newOskiNa && $record->oski_time) {
+                    $bookingsToDispatch[] = [$record->id, 'oski'];
+                }
+                if ($testDateChanged && $newTestDate && !$newTestNa && $record->test_time) {
+                    $bookingsToDispatch[] = [$record->id, 'test'];
+                }
             }
             DB::commit();
+
+            foreach ($bookingsToDispatch as [$id, $yn]) {
+                BookMoodleGroupExam::dispatch($id, $yn);
+            }
 
             return redirect()->back()->with('success', 'Imtihon sanalari muvaffaqiyatli saqlandi!');
         } catch (\Exception $e) {
@@ -2083,6 +2101,13 @@ class AcademicScheduleController extends Controller
         }
 
         $examSchedule->update([$timeColumn => $request->test_time]);
+
+        // Both date and time are now set → push the booking to Moodle.
+        $ynKey = $ynType === 'OSKI' ? 'oski' : 'test';
+        $naFlag = $ynKey === 'oski' ? $examSchedule->oski_na : $examSchedule->test_na;
+        if ($relatedDate && !$naFlag) {
+            BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
+        }
 
         // Shu guruhdagi Telegram tasdiqlangan talabalarga notification yuborish
         $students = Student::where('group_id', $request->group_hemis_id)

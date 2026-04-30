@@ -64,6 +64,21 @@ return [
         'ssh_port' => env('MOODLE_SSH_PORT', 22),
         'push_script' => env('MOODLE_PUSH_SCRIPT', '/opt/scripts/moodle_to_lmsttatf_push.php'),
         'sync_secret' => env('MOODLE_SYNC_SECRET'),
+
+        // local_hemisexport plugin web service
+        'ws_url' => env('MOODLE_WS_URL'),
+        'ws_token' => env('MOODLE_WS_TOKEN'),
+        'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
+        // Window around exam start during which a student may begin attempt (minutes)
+        'open_window_minutes' => (int) env('MOODLE_OPEN_WINDOW_MINUTES', 10),
+        // 0 = use Moodle quiz default; otherwise seconds to override per-attempt limit
+        'timelimit_seconds' => (int) env('MOODLE_TIMELIMIT_SECONDS', 0),
+        // HEMIS educationLang.code → Moodle quiz_idnumber language token
+        'lang_map' => [
+            'uz' => env('MOODLE_LANG_UZ', 'uzb'),
+            'ru' => env('MOODLE_LANG_RU', 'rus'),
+            'en' => env('MOODLE_LANG_EN', 'eng'),
+        ],
     ],
 
     'face_compare' => [

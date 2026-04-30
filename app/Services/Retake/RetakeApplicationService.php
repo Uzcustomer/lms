@@ -320,6 +320,7 @@ class RetakeApplicationService
                 $update['previous_mustaqil_grade'] = (float) $details['previous_mustaqil_grade'];
                 $update['has_oske'] = !empty($details['has_oske']);
                 $update['has_test'] = !empty($details['has_test']);
+                $update['has_sinov'] = !empty($details['has_sinov']);
             }
 
             $app->update($update);

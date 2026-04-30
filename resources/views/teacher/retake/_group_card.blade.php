@@ -253,7 +253,7 @@
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">
-                                            {{ __('Joriy ta\'lim') }} <span class="text-red-500">*</span>
+                                            {{ __('Joriy bahosi') }} <span class="text-red-500">*</span>
                                         </label>
                                         <input type="number"
                                                name="previous_joriy_grade"
@@ -265,7 +265,7 @@
                                     </div>
                                     <div>
                                         <label class="block text-xs font-medium text-gray-700 mb-1">
-                                            {{ __('Mustaqil ta\'lim') }} <span class="text-red-500">*</span>
+                                            {{ __('Mustaqil ta\'lim bahosi') }} <span class="text-red-500">*</span>
                                         </label>
                                         <input type="number"
                                                name="previous_mustaqil_grade"
@@ -291,6 +291,11 @@
                                                class="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
                                         <span>{{ __('TEST') }}</span>
                                     </label>
+                                    <label class="flex items-center gap-2 text-xs text-gray-700">
+                                        <input type="checkbox" name="has_sinov" value="1"
+                                               class="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>{{ __('Sinov fan') }}</span>
+                                    </label>
                                 </div>
 
                                 <div class="flex gap-2 pt-2">
@@ -309,20 +314,24 @@
                     </div>
                 @endif
 
-                {{-- Tasdiqlangandan keyin: oldingi baholar va OSKE/TEST flaglarini ko'rsatish --}}
-                @if($app->registrar_status === 'approved' && ($app->previous_joriy_grade !== null || $app->has_oske || $app->has_test))
+                {{-- Tasdiqlangandan keyin: oldingi baholar va OSKE/TEST/Sinov fan flaglarini ko'rsatish --}}
+                @if($app->registrar_status === 'approved' && ($app->previous_joriy_grade !== null || $app->has_oske || $app->has_test || $app->has_sinov))
                     <div class="mt-2 text-[11px] text-gray-700 bg-gray-50 rounded-md px-2 py-1.5">
                         @if($app->previous_joriy_grade !== null)
                             <span>{{ __('Joriy') }}: <span class="font-medium">{{ rtrim(rtrim(number_format($app->previous_joriy_grade, 2, '.', ''), '0'), '.') }}</span></span>
                             <span class="mx-1 text-gray-300">·</span>
                             <span>{{ __('Mustaqil') }}: <span class="font-medium">{{ rtrim(rtrim(number_format($app->previous_mustaqil_grade, 2, '.', ''), '0'), '.') }}</span></span>
                         @endif
-                        @if($app->has_oske || $app->has_test)
+                        @if($app->has_oske || $app->has_test || $app->has_sinov)
+                            @php
+                                $tags = [];
+                                if ($app->has_oske) $tags[] = 'OSKE';
+                                if ($app->has_test) $tags[] = 'TEST';
+                                if ($app->has_sinov) $tags[] = __('Sinov fan');
+                            @endphp
                             <span class="mx-1 text-gray-300">·</span>
                             <span class="text-amber-700">{{ __("Qayta topshiriladi") }}:
-                                @if($app->has_oske) <span class="font-medium">OSKE</span> @endif
-                                @if($app->has_oske && $app->has_test), @endif
-                                @if($app->has_test) <span class="font-medium">TEST</span> @endif
+                                <span class="font-medium">{{ implode(', ', $tags) }}</span>
                             </span>
                         @endif
                     </div>

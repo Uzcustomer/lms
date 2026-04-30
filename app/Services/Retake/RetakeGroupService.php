@@ -8,7 +8,8 @@ use App\Models\RetakeApplicationLog;
 use App\Models\RetakeGroup;
 use App\Models\RetakeSetting;
 use App\Models\Teacher;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -247,9 +248,9 @@ class RetakeGroupService
      * Monitoring: scheduled bo'lib turgan guruhda boshlanish sanasi 1 kundan
      * ortiq o'tib ketganlar (cron buzilgan bo'lishi mumkin).
      *
-     * @return Collection<RetakeGroup>
+     * @return EloquentCollection<RetakeGroup>
      */
-    public function staleScheduledGroups(): Collection
+    public function staleScheduledGroups(): EloquentCollection
     {
         return RetakeGroup::query()
             ->where('status', RetakeGroup::STATUS_SCHEDULED)

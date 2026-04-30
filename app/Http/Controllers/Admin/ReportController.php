@@ -5260,14 +5260,25 @@ class ReportController extends Controller
             // Talabaning joriy semester kodi
             $studentSemesterCode = $student->semester_code ? (string) $student->semester_code : null;
 
-            $records = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $student->curriculum_id)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('semester_code', 'semester_name', 'subject_name')
+            $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+
+            // Jurnal getSubjects() bilan bir xil mantiq:
+            // curricula → semesters join, baho qo'yilmaydigan fan namunalari chiqarib tashlanadi.
+            // is_active va subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            $semesterListQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_name')
                 ->distinct()
-                ->orderBy('semester_code')
-                ->get();
+                ->orderBy('cs.semester_code');
+            foreach ($excludedPatterns as $pattern) {
+                $semesterListQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+            $records = $semesterListQuery->get();
 
             // Guruh suffiksi bo'yicha filtr
             $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
@@ -5290,15 +5301,21 @@ class ReportController extends Controller
                     ];
                 })->values();
 
-            $currSubjects = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $student->curriculum_id)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
-                ->orderBy('semester_code')
-                ->orderBy('subject_name')
-                ->get();
+                ->orderBy('cs.semester_code')
+                ->orderBy('cs.subject_name');
+            foreach ($excludedPatterns as $pattern) {
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+            $currSubjects = $currSubjectsQuery->get();
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 

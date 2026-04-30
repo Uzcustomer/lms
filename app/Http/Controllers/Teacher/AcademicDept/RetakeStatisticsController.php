@@ -66,8 +66,10 @@ class RetakeStatisticsController extends Controller
             ->orderByDesc('total')
             ->get();
 
-        // Form filterlari uchun manbalar
-        $departments = Department::orderBy('name')->get(['department_hemis_id', 'name']);
+        // Form filterlari uchun manbalar — faqat fakultetlar (structure_type_code = 11)
+        $departments = Department::where('structure_type_code', 11)
+            ->orderBy('name')
+            ->get(['department_hemis_id', 'name']);
         $specialties = Specialty::orderBy('name')->get(['specialty_hemis_id', 'name']);
         $levels = [
             ['code' => '11', 'name' => '1-kurs'],

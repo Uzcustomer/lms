@@ -31,8 +31,10 @@ class RetakeWindowController extends Controller
             ->orderByDesc('start_date')
             ->paginate(30);
 
-        // Form uchun ma'lumotlar
-        $departments = Department::orderBy('name')->get(['department_hemis_id', 'name']);
+        // Form uchun ma'lumotlar — faqat fakultetlar (structure_type_code = 11)
+        $departments = Department::where('structure_type_code', 11)
+            ->orderBy('name')
+            ->get(['department_hemis_id', 'name']);
         $specialties = Specialty::orderBy('name')
             ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id']);
         $levels = $this->levels();

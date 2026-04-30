@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import '../config/api_keys.dart';
 
 class GeminiAttachment {
   final String name;
@@ -19,7 +20,7 @@ class GeminiAttachment {
 }
 
 class GeminiService {
-  static const _apiKey = 'AIzaSyAIWqLr1y_ViAtzVGjev0fRRg822oAAFzc';
+  static const _apiKey = ApiKeys.geminiApiKey;
 
   static final GeminiService _instance = GeminiService._();
   factory GeminiService() => _instance;

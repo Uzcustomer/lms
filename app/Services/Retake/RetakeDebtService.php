@@ -39,9 +39,10 @@ class RetakeDebtService
                 'ss.subject_id',
                 'ss.subject_name',
                 'ss.semester_id',
-                DB::raw('COALESCE(ar.semester_name, sem.name) as semester_name'),
+                'ss.curriculum_subject_hemis_id',
+                DB::raw('COALESCE(ar.semester_name, sem.name, cs.semester_name) as semester_name'),
                 'ar.id as ar_id',
-                'ar.credit',
+                DB::raw('COALESCE(ar.credit, cs.credit) as credit'),
                 'ar.grade',
                 'ar.retraining_status',
             ])
@@ -50,6 +51,7 @@ class RetakeDebtService
                      ->on('ar.subject_id', '=', 'ss.subject_id')
                      ->on('ar.semester_id', '=', 'ss.semester_id');
             })
+            ->leftJoin('curriculum_subjects as cs', 'cs.curriculum_subject_hemis_id', '=', 'ss.curriculum_subject_hemis_id')
             ->leftJoin('semesters as sem', 'sem.code', '=', 'ss.semester_id')
             ->where('ss.student_hemis_id', $student->hemis_id)
             ->when($currentSemesterId, fn ($q) => $q->where('ss.semester_id', '!=', $currentSemesterId))

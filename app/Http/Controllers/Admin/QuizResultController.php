@@ -542,10 +542,14 @@ class QuizResultController extends Controller
                 );
 
                 $rowNum++;
+                $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;
                 $data[] = [
                     'id' => $result->id,
                     'row_num' => $rowNum,
                     'student_id' => $result->student_id,
+                    'student_hemis_id' => $student ? $student->hemis_id : null,
+                    'group_local_id' => $studentGroup ? $studentGroup->id : null,
+                    'semester_code' => $student ? $student->semester_code : null,
                     'full_name' => $student ? $student->full_name : $result->student_name,
                     'faculty' => $student ? $student->department_name : '-',
                     'direction' => $student ? $student->specialty_name : '-',
@@ -1172,10 +1176,14 @@ class QuizResultController extends Controller
                 );
 
                 $rowNum++;
+                $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;
                 $data[] = [
                     'id' => $result->id,
                     'row_num' => $rowNum,
                     'student_id' => $result->student_id,
+                    'student_hemis_id' => $student ? $student->hemis_id : null,
+                    'group_local_id' => $studentGroup ? $studentGroup->id : null,
+                    'semester_code' => $student ? $student->semester_code : null,
                     'full_name' => $student ? $student->full_name : $result->student_name,
                     'faculty' => $student ? $student->department_name : '-',
                     'direction' => $student ? $student->specialty_name : '-',
@@ -1796,35 +1804,56 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            StudentGrade::create([
-                'student_id' => $student->id,
-                'student_hemis_id' => $student->hemis_id,
-                'hemis_id' => 999999999,
-                'semester_code' => $semester->code ?? $student->semester_code,
-                'semester_name' => $semester->name ?? $student->semester_name,
-                'subject_schedule_id' => 0,
-                'subject_id' => $subject->subject_id,
-                'subject_name' => $subject->subject_name,
-                'subject_code' => $subject->subject_code ?? '',
-                'training_type_code' => $trainingTypeCode,
-                'training_type_name' => $trainingTypeName,
-                'employee_id' => 0,
-                'employee_name' => auth()->user()->name ?? 'Test markazi',
-                'lesson_pair_name' => '',
-                'lesson_pair_code' => '',
-                'lesson_pair_start_time' => '',
-                'lesson_pair_end_time' => '',
-                'lesson_date' => $result->date_finish ?? now(),
-                'created_at_api' => $result->created_at ?? now(),
-                'reason' => 'quiz_result',
-                'status' => 'recorded',
-                'grade' => round($result->grade),
-                'deadline' => now(),
-                'quiz_result_id' => $result->id,
-                'is_final' => true,
-            ]);
+            try {
+                $created = StudentGrade::create([
+                    'student_id' => $student->id,
+                    'student_hemis_id' => $student->hemis_id,
+                    'hemis_id' => 999999999,
+                    'semester_code' => $semester->code ?? $student->semester_code,
+                    'semester_name' => $semester->name ?? $student->semester_name,
+                    'subject_schedule_id' => 0,
+                    'subject_id' => $subject->subject_id,
+                    'subject_name' => $subject->subject_name,
+                    'subject_code' => $subject->subject_code ?? '',
+                    'training_type_code' => $trainingTypeCode,
+                    'training_type_name' => $trainingTypeName,
+                    'employee_id' => 0,
+                    'employee_name' => auth()->user()->name ?? 'Test markazi',
+                    'lesson_pair_name' => '',
+                    'lesson_pair_code' => '',
+                    'lesson_pair_start_time' => '',
+                    'lesson_pair_end_time' => '',
+                    'lesson_date' => $result->date_finish ?? now(),
+                    'created_at_api' => $result->created_at ?? now(),
+                    'reason' => 'quiz_result',
+                    'status' => 'recorded',
+                    'grade' => round($result->grade),
+                    'deadline' => now(),
+                    'quiz_result_id' => $result->id,
+                    'is_final' => true,
+                ]);
 
-            $successCount++;
+                if (!$created || !$created->exists || !$created->id) {
+                    throw new \RuntimeException('StudentGrade saqlanmadi');
+                }
+
+                $verify = StudentGrade::where('quiz_result_id', $result->id)->exists();
+                if (!$verify) {
+                    throw new \RuntimeException('Yozuv DB da topilmadi');
+                }
+
+                $successCount++;
+            } catch (\Throwable $e) {
+                Log::error('uploadToGrades create failed', [
+                    'quiz_result_id' => $result->id,
+                    'student_id' => $student->id,
+                    'subject_id' => $subject->subject_id,
+                    'error' => $e->getMessage(),
+                ]);
+                $rowInfo['error'] = "Saqlashda xato: " . $e->getMessage();
+                $errors[] = $rowInfo;
+                continue;
+            }
         }
 
         return response()->json([
@@ -2034,8 +2063,21 @@ class QuizResultController extends Controller
 
             if (!$updates) continue;
 
-            DB::table('student_grades')->where('id', $sg->id)->update($updates);
-            $updatedAnyPair = true;
+            try {
+                $affected = DB::table('student_grades')->where('id', $sg->id)->update($updates);
+                if ($affected === 0) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: update 0 qator (yozuv yo'qolgan?)";
+                    continue;
+                }
+                $updatedAnyPair = true;
+            } catch (\Throwable $e) {
+                Log::error('uploadMavzuRetake update failed', [
+                    'sg_id' => $sg->id,
+                    'quiz_result_id' => $result->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $skipReasons[] = "juftlik {$sg->lesson_pair_code}: saqlashda xato — " . $e->getMessage();
+            }
         }
 
         if ($updatedAnyPair) {

@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'dart:ui';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -24,9 +26,16 @@ class _AiChatScreenState extends State<AiChatScreen>
   final _focusNode = FocusNode();
   final _gemini = GeminiService();
   final List<_ChatMessage> _messages = [];
+  final List<GeminiAttachment> _pendingAttachments = [];
   bool _isStreaming = false;
   bool _contextLoading = true;
   bool _contextLoaded = false;
+  bool _picking = false;
+
+  static const _maxFileSize = 18 * 1024 * 1024;
+  static const _imageExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
+  static const _audioExt = ['mp3', 'wav', 'aiff', 'aac', 'ogg', 'flac', 'm4a'];
+  static const _videoExt = ['mp4', 'mpeg', 'mov', 'avi', 'webm', '3gp'];
 
   @override
   void initState() {
@@ -79,19 +88,33 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || _isStreaming || _contextLoading) return;
+    final hasAttachments = _pendingAttachments.isNotEmpty;
+    if ((text.isEmpty && !hasAttachments) || _isStreaming || _contextLoading) {
+      return;
+    }
+
+    final attachments = List<GeminiAttachment>.from(_pendingAttachments);
+    final messageText = text.isEmpty ? 'Yuborilgan faylni tahlil qiling' : text;
 
     setState(() {
-      _messages.add(_ChatMessage(text: text, isUser: true));
+      _messages.add(_ChatMessage(
+        text: text,
+        isUser: true,
+        attachments: attachments,
+      ));
       _messages.add(_ChatMessage(text: '', isUser: false));
       _isStreaming = true;
+      _pendingAttachments.clear();
     });
     _controller.clear();
     _scrollToBottom();
 
     try {
       final aiIndex = _messages.length - 1;
-      await for (final chunk in _gemini.sendMessageStream(text)) {
+      await for (final chunk in _gemini.sendMessageStream(
+        messageText,
+        attachments: attachments,
+      )) {
         if (!mounted) return;
         setState(() {
           _messages[aiIndex] = _ChatMessage(
@@ -117,6 +140,220 @@ class _AiChatScreenState extends State<AiChatScreen>
     } finally {
       if (mounted) setState(() => _isStreaming = false);
     }
+  }
+
+  Future<void> _pickFile(FileType type, {List<String>? extensions}) async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: type,
+        allowedExtensions: extensions,
+        withData: true,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      Uint8List? bytes = file.bytes;
+      if (bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Faylni o\'qib bo\'lmadi')),
+          );
+        }
+        return;
+      }
+
+      if (bytes.length > _maxFileSize) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Fayl hajmi 18MB dan katta. Kichikroq fayl tanlang')),
+          );
+        }
+        return;
+      }
+
+      final ext = (file.extension ?? '').toLowerCase();
+      final mimeType = _mimeFromExtension(ext);
+
+      if (mounted) {
+        setState(() {
+          _pendingAttachments.add(GeminiAttachment(
+            name: file.name,
+            mimeType: mimeType,
+            bytes: bytes!,
+          ));
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Xatolik: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  String _mimeFromExtension(String ext) {
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      case 'heif':
+        return 'image/heif';
+      case 'pdf':
+        return 'application/pdf';
+      case 'mp3':
+        return 'audio/mp3';
+      case 'wav':
+        return 'audio/wav';
+      case 'aiff':
+        return 'audio/aiff';
+      case 'aac':
+        return 'audio/aac';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'flac':
+        return 'audio/flac';
+      case 'm4a':
+        return 'audio/mp4';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mpeg':
+        return 'video/mpeg';
+      case 'mov':
+        return 'video/mov';
+      case 'avi':
+        return 'video/avi';
+      case 'webm':
+        return 'video/webm';
+      case '3gp':
+        return 'video/3gpp';
+      case 'txt':
+        return 'text/plain';
+      case 'md':
+        return 'text/markdown';
+      case 'csv':
+        return 'text/csv';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  void _showAttachMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Container(
+          padding: EdgeInsets.only(
+            top: 16,
+            bottom: MediaQuery.of(ctx).padding.bottom + 16,
+          ),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkCard : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 18),
+              _attachOption(Icons.image_outlined, 'Rasm', 'JPG, PNG, WEBP',
+                  const Color(0xFF4A6CF7), () {
+                Navigator.pop(ctx);
+                _pickFile(FileType.custom, extensions: _imageExt);
+              }),
+              _attachOption(Icons.picture_as_pdf_outlined, 'PDF',
+                  'Hujjatlar va kitoblar', const Color(0xFFE53935), () {
+                Navigator.pop(ctx);
+                _pickFile(FileType.custom, extensions: ['pdf']);
+              }),
+              _attachOption(Icons.audiotrack_outlined, 'Audio',
+                  'MP3, WAV, M4A', const Color(0xFFF97316), () {
+                Navigator.pop(ctx);
+                _pickFile(FileType.custom, extensions: _audioExt);
+              }),
+              _attachOption(Icons.videocam_outlined, 'Video',
+                  'MP4, MOV, WEBM', const Color(0xFF8B5CF6), () {
+                Navigator.pop(ctx);
+                _pickFile(FileType.custom, extensions: _videoExt);
+              }),
+              _attachOption(Icons.insert_drive_file_outlined, 'Boshqa fayl',
+                  'TXT, CSV, MD', const Color(0xFF14B8A6), () {
+                Navigator.pop(ctx);
+                _pickFile(FileType.any);
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _attachOption(
+      IconData icon, String title, String subtitle, Color color, VoidCallback onTap) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(isDark ? 0.2 : 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: txt)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: TextStyle(fontSize: 11.5, color: sub)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: sub),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _removeAttachment(int index) {
+    setState(() => _pendingAttachments.removeAt(index));
   }
 
   void _clearChat() {
@@ -525,14 +762,95 @@ class _AiChatScreenState extends State<AiChatScreen>
             ),
           ],
         ),
-        child: Text(
-          msg.text,
-          style: const TextStyle(
-            fontSize: 14,
-            color: Colors.white,
-            height: 1.45,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (msg.attachments.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(bottom: msg.text.isEmpty ? 0 : 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: msg.attachments
+                      .map((a) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: _buildBubbleAttachment(a),
+                          ))
+                      .toList(),
+                ),
+              ),
+            if (msg.text.isNotEmpty)
+              Text(
+                msg.text,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.white,
+                  height: 1.45,
+                ),
+              ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBubbleAttachment(GeminiAttachment a) {
+    if (a.isImage) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.memory(
+          a.bytes,
+          width: 220,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+    IconData icon;
+    if (a.isPdf) {
+      icon = Icons.picture_as_pdf_rounded;
+    } else if (a.isAudio) {
+      icon = Icons.audiotrack_rounded;
+    } else if (a.isVideo) {
+      icon = Icons.videocam_rounded;
+    } else {
+      icon = Icons.insert_drive_file_rounded;
+    }
+    final sizeKb = (a.bytes.length / 1024).round();
+    final sizeStr = sizeKb > 1024
+        ? '${(sizeKb / 1024).toStringAsFixed(1)} MB'
+        : '$sizeKb KB';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  a.name,
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                Text(sizeStr,
+                    style: const TextStyle(
+                        fontSize: 10.5, color: Colors.white70)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -563,12 +881,13 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   Widget _buildInput(bool isDark) {
     final inputBg = isDark ? AppTheme.darkCard : Colors.white;
+    final disabled = _isStreaming || _contextLoading;
 
     return Container(
       padding: EdgeInsets.only(
-        left: 12,
-        right: 12,
-        top: 10,
+        left: 8,
+        right: 8,
+        top: 8,
         bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
       decoration: BoxDecoration(
@@ -586,91 +905,249 @@ class _AiChatScreenState extends State<AiChatScreen>
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: isDark ? Colors.white12 : Colors.grey.shade300,
+          if (_pendingAttachments.isNotEmpty)
+            _buildAttachmentPreview(isDark),
+          Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: disabled
+                      ? (isDark ? Colors.white10 : Colors.grey.shade200)
+                      : const Color(0xFF4A6CF7).withOpacity(isDark ? 0.2 : 0.1),
+                  shape: BoxShape.circle,
                 ),
-              ),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                textCapitalization: TextCapitalization.sentences,
-                maxLines: 4,
-                minLines: 1,
-                decoration: InputDecoration(
-                  hintText: 'Savol yozing...',
-                  hintStyle: TextStyle(
-                    color: isDark
-                        ? AppTheme.darkTextSecondary
-                        : AppTheme.textSecondary,
-                    fontSize: 14,
-                  ),
-                  filled: true,
-                  fillColor: isDark
-                      ? AppTheme.darkBackground
-                      : const Color(0xFFF5F7FA),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                onSubmitted: (_) => _send(),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            decoration: BoxDecoration(
-              gradient: (_isStreaming || _contextLoading)
-                  ? null
-                  : const LinearGradient(
-                      colors: [Color(0xFF4A6CF7), Color(0xFF6C63FF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: disabled ? null : _showAttachMenu,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: _picking
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF4A6CF7),
+                              ),
+                            )
+                          : Icon(
+                              Icons.add_rounded,
+                              color: disabled
+                                  ? (isDark
+                                      ? Colors.white38
+                                      : Colors.grey.shade400)
+                                  : const Color(0xFF4A6CF7),
+                              size: 22,
+                            ),
                     ),
-              color: (_isStreaming || _contextLoading)
-                  ? (isDark ? Colors.white12 : Colors.grey.shade300)
-                  : null,
-              shape: BoxShape.circle,
-              boxShadow: (_isStreaming || _contextLoading)
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: const Color(0xFF4A6CF7).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              shape: const CircleBorder(),
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: (_isStreaming || _contextLoading) ? null : _send,
-                child: Padding(
-                  padding: const EdgeInsets.all(11),
-                  child: _isStreaming
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.send_rounded,
-                          color: Colors.white, size: 20),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark ? Colors.white12 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLines: 4,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      hintText: _pendingAttachments.isNotEmpty
+                          ? 'Fayl haqida savol yozing...'
+                          : 'Savol yozing...',
+                      hintStyle: TextStyle(
+                        color: isDark
+                            ? AppTheme.darkTextSecondary
+                            : AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                      filled: true,
+                      fillColor: isDark
+                          ? AppTheme.darkBackground
+                          : const Color(0xFFF5F7FA),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (_) => _send(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: disabled
+                      ? null
+                      : const LinearGradient(
+                          colors: [Color(0xFF4A6CF7), Color(0xFF6C63FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                  color: disabled
+                      ? (isDark ? Colors.white12 : Colors.grey.shade300)
+                      : null,
+                  shape: BoxShape.circle,
+                  boxShadow: disabled
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: const Color(0xFF4A6CF7).withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: disabled ? null : _send,
+                    child: Padding(
+                      padding: const EdgeInsets.all(11),
+                      child: _isStreaming
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.send_rounded,
+                              color: Colors.white, size: 20),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAttachmentPreview(bool isDark) {
+    return Container(
+      height: 80,
+      margin: const EdgeInsets.only(bottom: 8, left: 4, right: 4),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _pendingAttachments.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final a = _pendingAttachments[i];
+          return _buildPreviewChip(a, i, isDark);
+        },
+      ),
+    );
+  }
+
+  Widget _buildPreviewChip(GeminiAttachment a, int index, bool isDark) {
+    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final sizeKb = (a.bytes.length / 1024).round();
+    final sizeStr = sizeKb > 1024
+        ? '${(sizeKb / 1024).toStringAsFixed(1)}MB'
+        : '${sizeKb}KB';
+
+    Widget content;
+    if (a.isImage) {
+      content = ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.memory(
+          a.bytes,
+          width: 80,
+          height: 80,
+          fit: BoxFit.cover,
+        ),
+      );
+    } else {
+      IconData icon;
+      Color iconColor;
+      if (a.isPdf) {
+        icon = Icons.picture_as_pdf_rounded;
+        iconColor = const Color(0xFFE53935);
+      } else if (a.isAudio) {
+        icon = Icons.audiotrack_rounded;
+        iconColor = const Color(0xFFF97316);
+      } else if (a.isVideo) {
+        icon = Icons.videocam_rounded;
+        iconColor = const Color(0xFF8B5CF6);
+      } else {
+        icon = Icons.insert_drive_file_rounded;
+        iconColor = const Color(0xFF14B8A6);
+      }
+      content = Container(
+        width: 140,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white10 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 26),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(a.name,
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: txt),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1),
+                  const SizedBox(height: 2),
+                  Text(sizeStr,
+                      style: TextStyle(fontSize: 10, color: sub)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        content,
+        Positioned(
+          top: -4,
+          right: -4,
+          child: Material(
+            color: Colors.black87,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => _removeAttachment(index),
+              child: const Padding(
+                padding: EdgeInsets.all(2),
+                child:
+                    Icon(Icons.close_rounded, size: 14, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -679,11 +1156,13 @@ class _ChatMessage {
   final String text;
   final bool isUser;
   final bool isError;
+  final List<GeminiAttachment> attachments;
 
   const _ChatMessage({
     required this.text,
     required this.isUser,
     this.isError = false,
+    this.attachments = const [],
   });
 }
 

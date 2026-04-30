@@ -1,4 +1,22 @@
+import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
+
+class GeminiAttachment {
+  final String name;
+  final String mimeType;
+  final Uint8List bytes;
+
+  const GeminiAttachment({
+    required this.name,
+    required this.mimeType,
+    required this.bytes,
+  });
+
+  bool get isImage => mimeType.startsWith('image/');
+  bool get isAudio => mimeType.startsWith('audio/');
+  bool get isPdf => mimeType == 'application/pdf';
+  bool get isVideo => mimeType.startsWith('video/');
+}
 
 class GeminiService {
   static const _apiKey = 'AIzaSyAIWqLr1y_ViAtzVGjev0fRRg822oAAFzc';
@@ -22,6 +40,7 @@ class GeminiService {
         '- Aniq, qisqa, foydali javoblar ber\n'
         '- Ma\'lumotni tahlil qilganda raqamlar va statistika bilan ko\'rsat\n'
         '- Tibbiyot, anatomiya, fiziologiya, farmakologiya bo\'yicha ham yordam ber\n'
+        '- Foydalanuvchi rasm, PDF, audio yoki video yuborsa, uni diqqat bilan tahlil qil\n'
         '- Agar ma\'lumot yetarli bo\'lmasa, qaysi sahifaga borish kerakligini tushuntir\n'
         '- "Men shaxsiy ma\'lumotlarga ega emasman" deb javob berma — ma\'lumotlar quyida\n';
 
@@ -62,9 +81,26 @@ class GeminiService {
     _chat = null;
   }
 
-  Stream<String> sendMessageStream(String message) async* {
+  Content _buildContent(String message, List<GeminiAttachment> attachments) {
+    if (attachments.isEmpty) return Content.text(message);
+
+    final parts = <Part>[];
+    for (final att in attachments) {
+      parts.add(DataPart(att.mimeType, att.bytes));
+    }
+    if (message.isNotEmpty) {
+      parts.add(TextPart(message));
+    }
+    return Content.multi(parts);
+  }
+
+  Stream<String> sendMessageStream(
+    String message, {
+    List<GeminiAttachment> attachments = const [],
+  }) async* {
     try {
-      final response = chat.sendMessageStream(Content.text(message));
+      final content = _buildContent(message, attachments);
+      final response = chat.sendMessageStream(content);
       await for (final chunk in response) {
         final text = chunk.text;
         if (text != null && text.isNotEmpty) {
@@ -76,9 +112,13 @@ class GeminiService {
     }
   }
 
-  Future<String> sendMessage(String message) async {
+  Future<String> sendMessage(
+    String message, {
+    List<GeminiAttachment> attachments = const [],
+  }) async {
     try {
-      final response = await chat.sendMessage(Content.text(message));
+      final content = _buildContent(message, attachments);
+      final response = await chat.sendMessage(content);
       return response.text ?? '';
     } on GenerativeAIException catch (e) {
       throw _friendlyError(e.message);
@@ -91,6 +131,9 @@ class GeminiService {
     }
     if (msg.contains('API key') || msg.contains('401') || msg.contains('403')) {
       return 'API kalit noto\'g\'ri yoki faol emas.';
+    }
+    if (msg.contains('size') || msg.contains('too large')) {
+      return 'Fayl hajmi juda katta. 20MB dan kichikroq fayl yuklang.';
     }
     return msg;
   }

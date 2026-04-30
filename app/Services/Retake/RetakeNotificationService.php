@@ -83,6 +83,48 @@ class RetakeNotificationService
         $this->sendToStudent($student, 'retake_academic_decision', $title, $body, $app->id);
     }
 
+    /**
+     * Talaba dekan + registrator tasdig'idan keyin to'lov chekini yuklashi kerak.
+     */
+    public function notifyPaymentRequired(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "To'lov chekingizni yuklang";
+        $body = "Dekan va registrator arizangizni tasdiqlashdi. Jarayonni davom ettirish uchun to'lov qog'ozini yuklang (max 5 MB).";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_required',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
+    /**
+     * To'lov yuklandi — ariza o'quv bo'limiga jo'natildi.
+     */
+    public function notifyPaymentSubmitted(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "Arizangiz o'quv bo'limiga yuborildi";
+        $body = "To'lov chekingiz qabul qilindi. Endi ariza o'quv bo'limi tomonidan ko'rib chiqiladi.";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_submitted',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
     public function notifyAutoCancelled(RetakeApplication $app): void
     {
         $student = Student::where('hemis_id', $app->student_hemis_id)->first();

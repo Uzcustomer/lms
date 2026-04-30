@@ -105,6 +105,55 @@
             </div>
         @endif
 
+        {{-- To'lov yuklash kerak bo'lgan arizalar --}}
+        @foreach(($groupsAwaitingPayment ?? []) as $awaitingGroup)
+            <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 mb-4"
+                 x-data="{ paymentFile: null }">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-semibold text-amber-900">
+                            {{ __("To'lov chekingizni yuklang") }}
+                        </h3>
+                        <p class="text-xs text-amber-800 mt-1">
+                            {{ __("Dekan va registrator arizangizni tasdiqlashdi. Jarayonni davom ettirish uchun to'lov qog'ozini yuklang.") }}
+                        </p>
+                        <p class="text-[11px] text-amber-700 mt-1">
+                            {{ __("Ariza") }} #{{ $awaitingGroup->id }} ·
+                            {{ __("Summa") }}: <span class="font-semibold">{{ number_format($awaitingGroup->receipt_amount, 0, '.', ' ') }} UZS</span> ·
+                            {{ $awaitingGroup->applications->where('dean_status','approved')->where('registrar_status','approved')->count() }} {{ __("ta fan") }}
+                        </p>
+
+                        <form method="POST"
+                              action="{{ route('student.retake.upload-payment', $awaitingGroup->id) }}"
+                              enctype="multipart/form-data"
+                              class="mt-3 flex flex-wrap items-center gap-2">
+                            @csrf
+                            <input type="file"
+                                   name="payment"
+                                   accept=".pdf,.jpg,.jpeg,.png"
+                                   required
+                                   @change="paymentFile = $event.target.files[0]"
+                                   class="block text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200">
+                            <button type="submit"
+                                    :disabled="!paymentFile"
+                                    :class="paymentFile ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+                                    class="px-4 py-1.5 text-xs font-medium rounded-md">
+                                {{ __("Yuborish") }}
+                            </button>
+                            <span class="text-[11px] text-amber-700">
+                                PDF, JPG, PNG · max {{ $paymentMaxMb ?? 5 }} MB
+                            </span>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endforeach
+
         {{-- Qarzdor fanlar --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
             <div class="px-5 py-4 border-b border-gray-100">

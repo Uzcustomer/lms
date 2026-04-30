@@ -31,6 +31,13 @@ class RetakeApplicationService
     public const MAX_SUBJECTS_PER_APPLICATION = 3;
     public const MAX_COMMENT_LENGTH = 500;
 
+    /**
+     * To'lov cheki uchun maksimal hajm (MB).
+     * Bu qiymatni sozlamalarga ko'chirish o'rniga konstant qoldirildi —
+     * mahsulot talabida aniq 5 MB belgilangan.
+     */
+    public const PAYMENT_RECEIPT_MAX_MB = 5;
+
     public function __construct(
         private RetakeDebtService $debtService,
         private RetakeWindowService $windowService,
@@ -246,9 +253,7 @@ class RetakeApplicationService
 
             $fresh = $app->refresh();
             $this->notificationService->notifyDeanDecision($fresh);
-            if ($fresh->isDualApproved() && $fresh->academic_dept_status === RetakeApplication::STATUS_PENDING) {
-                $this->notificationService->notifyAcademicReady($fresh);
-            }
+            $this->maybeNotifyPaymentRequired($fresh);
 
             return $fresh;
         });
@@ -291,9 +296,7 @@ class RetakeApplicationService
 
             $fresh = $app->refresh();
             $this->notificationService->notifyRegistrarDecision($fresh);
-            if ($fresh->isDualApproved() && $fresh->academic_dept_status === RetakeApplication::STATUS_PENDING) {
-                $this->notificationService->notifyAcademicReady($fresh);
-            }
+            $this->maybeNotifyPaymentRequired($fresh);
 
             return $fresh;
         });
@@ -410,6 +413,106 @@ class RetakeApplicationService
 
             return $fresh;
         });
+    }
+
+    /**
+     * Talaba dekan + registrator tasdig'idan keyin to'lov chekini yuklaydi.
+     * Yuklangandan so'ng — guruhdagi dual_approved arizalar o'quv bo'limiga jo'natiladi.
+     */
+    public function uploadPayment(
+        Student $student,
+        RetakeApplicationGroup $group,
+        UploadedFile $file,
+    ): RetakeApplicationGroup {
+        // 1. Egalik tekshiruvi
+        if ((int) $group->student_hemis_id !== (int) $student->hemis_id) {
+            throw ValidationException::withMessages([
+                'group' => 'Bu ariza sizga tegishli emas',
+            ]);
+        }
+
+        // 2. Allaqachon yuklanganmi?
+        if ($group->payment_uploaded_at !== null) {
+            throw ValidationException::withMessages([
+                'payment' => 'To\'lov cheki allaqachon yuklangan',
+            ]);
+        }
+
+        // 3. Group dual-approved holatdami?
+        $loaded = $group->load('applications');
+        if (!$loaded->requires_payment) {
+            throw ValidationException::withMessages([
+                'payment' => 'To\'lov cheki yuklash hozircha talab qilinmaydi',
+            ]);
+        }
+
+        // 4. Fayl tekshirish
+        $maxBytes = self::PAYMENT_RECEIPT_MAX_MB * 1024 * 1024;
+        if ($file->getSize() > $maxBytes) {
+            throw ValidationException::withMessages([
+                'payment' => "To'lov cheki hajmi " . self::PAYMENT_RECEIPT_MAX_MB . " MB dan oshmasligi kerak",
+            ]);
+        }
+        $allowedExt = ['pdf', 'jpg', 'jpeg', 'png'];
+        $ext = strtolower($file->getClientOriginalExtension());
+        if (!in_array($ext, $allowedExt, true)) {
+            throw ValidationException::withMessages([
+                'payment' => 'Faqat PDF, JPG, PNG fayllar yuklanishi mumkin',
+            ]);
+        }
+
+        // 5. Saqlash + holatni o'zgartirish
+        $path = $file->store("retake/payment_receipts/{$student->hemis_id}", 'public');
+
+        return DB::transaction(function () use ($loaded, $path, $student) {
+            $loaded->update([
+                'payment_receipt_path' => $path,
+                'payment_uploaded_at' => now(),
+            ]);
+
+            $loaded->refresh()->load('applications');
+
+            // Dual-approved arizalar uchun o'quv bo'limiga xabar
+            foreach ($loaded->applications as $app) {
+                if ($app->isDualApproved() && $app->academic_dept_status === RetakeApplication::STATUS_PENDING) {
+                    $this->log($app, RetakeApplicationLog::ACTION_SUBMITTED, $student, null, [
+                        'payment_uploaded' => true,
+                    ]);
+                    $this->notificationService->notifyAcademicReady($app);
+                }
+            }
+
+            // Talabaga tasdiq xabari
+            $this->notificationService->notifyPaymentSubmitted($loaded);
+
+            return $loaded;
+        });
+    }
+
+    /**
+     * Agar guruh dual-approved holatga kelgan bo'lsa va to'lov hali yuklanmagan
+     * bo'lsa — talabaga to'lov chekini yuklash kerakligi haqida xabar yuboriladi.
+     * Har bir guruh uchun bir martagina yuborilishi kerak — `notifyPaymentRequired`
+     * ichida buni boshqaramiz (yangi log action emas).
+     */
+    private function maybeNotifyPaymentRequired(RetakeApplication $app): void
+    {
+        if (!$app->isDualApproved()) {
+            return;
+        }
+        if ($app->academic_dept_status !== RetakeApplication::STATUS_PENDING) {
+            return;
+        }
+
+        $group = $app->group()->with('applications')->first();
+        if (!$group) {
+            return;
+        }
+        if ($group->payment_uploaded_at !== null) {
+            return;
+        }
+
+        $this->notificationService->notifyPaymentRequired($group);
     }
 
     /**

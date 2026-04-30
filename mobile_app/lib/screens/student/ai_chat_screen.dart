@@ -70,13 +70,15 @@ class _AiChatScreenState extends State<AiChatScreen>
     } catch (e) {
       if (mounted) {
         final aiIndex = _messages.length - 1;
+        final errMsg = e.toString().replaceFirst('Exception: ', '');
         setState(() {
           _messages[aiIndex] = _ChatMessage(
-            text: 'Xatolik yuz berdi: ${e.toString().length > 100 ? '${e.toString().substring(0, 100)}...' : e}',
+            text: errMsg.length > 200 ? '${errMsg.substring(0, 200)}...' : errMsg,
             isUser: false,
             isError: true,
           );
         });
+        _gemini.resetChat();
       }
     } finally {
       if (mounted) setState(() => _isStreaming = false);

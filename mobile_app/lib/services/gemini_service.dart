@@ -12,7 +12,7 @@ class GeminiService {
 
   GenerativeModel get model {
     _model ??= GenerativeModel(
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       apiKey: _apiKey,
       systemInstruction: Content.text(
         'Sen TDTU (Toshkent Davlat Tibbiyot Universiteti) talabalariga '
@@ -40,20 +40,39 @@ class GeminiService {
 
   void resetChat() {
     _chat = null;
+    _model = null;
   }
 
   Stream<String> sendMessageStream(String message) async* {
-    final response = chat.sendMessageStream(Content.text(message));
-    await for (final chunk in response) {
-      final text = chunk.text;
-      if (text != null && text.isNotEmpty) {
-        yield text;
+    try {
+      final response = chat.sendMessageStream(Content.text(message));
+      await for (final chunk in response) {
+        final text = chunk.text;
+        if (text != null && text.isNotEmpty) {
+          yield text;
+        }
       }
+    } on GenerativeAIException catch (e) {
+      throw _friendlyError(e.message);
     }
   }
 
   Future<String> sendMessage(String message) async {
-    final response = await chat.sendMessage(Content.text(message));
-    return response.text ?? '';
+    try {
+      final response = await chat.sendMessage(Content.text(message));
+      return response.text ?? '';
+    } on GenerativeAIException catch (e) {
+      throw _friendlyError(e.message);
+    }
+  }
+
+  String _friendlyError(String msg) {
+    if (msg.contains('quota') || msg.contains('429')) {
+      return 'API limit tugadi. Google AI Studio sahifasida billing yoqilganligini tekshiring yoki biroz kutib qayta urinib ko\'ring.';
+    }
+    if (msg.contains('API key') || msg.contains('401') || msg.contains('403')) {
+      return 'API kalit noto\'g\'ri yoki faol emas. Google AI Studio sahifasida kalitni tekshiring.';
+    }
+    return msg;
   }
 }

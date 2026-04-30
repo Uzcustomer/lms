@@ -370,13 +370,17 @@
                                             {{ __("Mustaqil") }} <span class="font-medium">{{ rtrim(rtrim(number_format($a->previous_mustaqil_grade, 2, '.', ''), '0'), '.') }}</span>
                                         </div>
                                     @endif
-                                    @if($a->has_oske || $a->has_test)
+                                    @if($a->has_oske || $a->has_test || $a->has_sinov)
+                                        @php
+                                            $reminderTags = [];
+                                            if ($a->has_oske) $reminderTags[] = 'OSKE';
+                                            if ($a->has_test) $reminderTags[] = 'TEST';
+                                            if ($a->has_sinov) $reminderTags[] = __('Sinov fan');
+                                        @endphp
                                         <div class="text-[11px] ml-2 mt-1 text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                                             <span class="font-medium">{{ __("Eslatma") }}:</span>
                                             {{ __("Qayta o'qish davomida") }}
-                                            @if($a->has_oske)<span class="font-semibold">OSKE</span>@endif
-                                            @if($a->has_oske && $a->has_test) {{ __("va") }} @endif
-                                            @if($a->has_test)<span class="font-semibold">TEST</span>@endif
+                                            <span class="font-semibold">{{ implode(', ', $reminderTags) }}</span>
                                             {{ __("qaytadan topshirilishi kerak.") }}
                                         </div>
                                     @endif

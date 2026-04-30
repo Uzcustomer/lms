@@ -168,6 +168,7 @@ class RetakeApprovalController extends Controller
             $rules['previous_mustaqil_grade'] = 'required|numeric|min:0|max:100';
             $rules['has_oske'] = 'sometimes|boolean';
             $rules['has_test'] = 'sometimes|boolean';
+            $rules['has_sinov'] = 'sometimes|boolean';
         }
 
         $data = $request->validate($rules);
@@ -195,6 +196,7 @@ class RetakeApprovalController extends Controller
                         'previous_mustaqil_grade' => $data['previous_mustaqil_grade'] ?? null,
                         'has_oske' => (bool) ($data['has_oske'] ?? false),
                         'has_test' => (bool) ($data['has_test'] ?? false),
+                        'has_sinov' => (bool) ($data['has_sinov'] ?? false),
                     ],
                 );
             }

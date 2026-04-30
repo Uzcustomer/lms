@@ -31,6 +31,7 @@ class RetakeApplication extends Model
         'previous_mustaqil_grade',
         'has_oske',
         'has_test',
+        'has_sinov',
 
         'dean_status', 'dean_user_id', 'dean_user_name', 'dean_decision_at', 'dean_reason',
         'registrar_status', 'registrar_user_id', 'registrar_user_name', 'registrar_decision_at', 'registrar_reason',
@@ -47,6 +48,7 @@ class RetakeApplication extends Model
         'previous_mustaqil_grade' => 'decimal:2',
         'has_oske' => 'boolean',
         'has_test' => 'boolean',
+        'has_sinov' => 'boolean',
         'dean_decision_at' => 'datetime',
         'registrar_decision_at' => 'datetime',
         'academic_dept_decision_at' => 'datetime',

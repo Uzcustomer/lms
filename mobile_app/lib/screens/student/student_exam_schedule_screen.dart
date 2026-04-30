@@ -1,7 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 
@@ -85,7 +88,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackground : const Color(0xFFF5F7FB);
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
+    final statusBarH = MediaQuery.of(context).padding.top;
     final cardColor = isDark ? AppTheme.darkCard : Colors.white;
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
@@ -97,11 +101,37 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
         selectedDateStr != null ? _examsForDate(selectedDateStr) : <dynamic>[];
 
     return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: const Text('Imtihon sanalari'),
-      ),
-      body: GestureDetector(
+      backgroundColor: auroraBase(aurora, isDark),
+      body: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
+            height: statusBarH + 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFF0A1A3A),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+              ),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                const Expanded(
+                  child: Text(
+                    'Imtihon sanalari',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(width: 48),
+              ],
+            ),
+          ),
+          Expanded(child: GestureDetector(
         onTap: () {
           if (_showHint) _dismissHint();
         },
@@ -281,6 +311,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                     ),
                 ],
               ),
+      )),
+        ],
       ),
     );
   }

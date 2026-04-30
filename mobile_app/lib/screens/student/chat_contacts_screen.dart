@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/api_config.dart';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../utils/page_transitions.dart';
@@ -54,40 +57,66 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppTheme.darkBackground : const Color(0xFFF0F4F8);
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
+    final statusBarH = MediaQuery.of(context).padding.top;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
     return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        title: const Text('Xabarlar'),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w400),
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.person_outline, size: 20),
-              text: 'Foydalanuvchilar',
-            ),
-            Tab(
-              icon: Icon(Icons.group_outlined, size: 20),
-              text: 'Guruh',
-            ),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
+      backgroundColor: auroraBase(aurora, isDark),
+      body: Column(
         children: [
-          _buildContactsTab(isDark, sub),
-          const ChatGroupScreen(),
+          Container(
+            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0A1A3A),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: statusBarH > 0 ? 0 : 8),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const Expanded(
+                      child: Text(
+                        'Xabarlar',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                  ],
+                ),
+                TabBar(
+                  controller: _tabController,
+                  indicatorColor: Colors.white,
+                  indicatorWeight: 3,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white60,
+                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+                  tabs: const [
+                    Tab(text: 'Foydalanuvchilar'),
+                    Tab(text: 'Guruh'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildContactsTab(isDark, sub),
+              const ChatGroupScreen(),
+            ],
+          )),
         ],
       ),
     );

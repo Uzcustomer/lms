@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/aurora_themes.dart';
+import '../../providers/settings_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
@@ -70,51 +72,82 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppTheme.darkBackground : const Color(0xFFF0F4F8);
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
+    final statusBarH = MediaQuery.of(context).padding.top;
     final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
     return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(title: const Text('Davomat statistikasi')),
-      body: _loadingSubjects
-          ? const Center(child: CircularProgressIndicator())
-          : _subjects.isEmpty
-              ? Center(
-                  child: Text('Fanlar topilmadi',
-                      style: TextStyle(color: sub, fontSize: 15)))
-              : Column(
-                  children: [
-                    _buildSubjectDropdown(isDark, txt, sub),
-                    if (_selectedSubjectId != null)
-                      Expanded(
-                        child: _loadingGrades
-                            ? const Center(child: CircularProgressIndicator())
-                            : RefreshIndicator(
-                                onRefresh: () => _loadGrades(_selectedSubjectId!),
-                                child: _buildContent(isDark, txt, sub),
-                              ),
-                      ),
-                    if (_selectedSubjectId == null)
-                      Expanded(
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.touch_app_outlined,
-                                  size: 48, color: sub.withOpacity(0.5)),
-                              const SizedBox(height: 12),
-                              Text('Fanni tanlang',
-                                  style: TextStyle(
-                                      color: sub,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500)),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
+      backgroundColor: auroraBase(aurora, isDark),
+      body: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
+            height: statusBarH + 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFF0A1A3A),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+              ),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                  onPressed: () => Navigator.pop(context),
                 ),
+                const Expanded(
+                  child: Text(
+                    'Davomat statistikasi',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(width: 48),
+              ],
+            ),
+          ),
+          if (_loadingSubjects)
+            const Expanded(child: Center(child: CircularProgressIndicator()))
+          else if (_subjects.isEmpty)
+            Expanded(
+              child: Center(
+                child: Text('Fanlar topilmadi',
+                    style: TextStyle(color: sub, fontSize: 15))),
+            )
+          else ...[
+            _buildSubjectDropdown(isDark, txt, sub),
+            if (_selectedSubjectId != null)
+              Expanded(
+                child: _loadingGrades
+                    ? const Center(child: CircularProgressIndicator())
+                    : RefreshIndicator(
+                        onRefresh: () => _loadGrades(_selectedSubjectId!),
+                        child: _buildContent(isDark, txt, sub),
+                      ),
+              ),
+            if (_selectedSubjectId == null)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.touch_app_outlined,
+                          size: 48, color: sub.withOpacity(0.5)),
+                      const SizedBox(height: 12),
+                      Text('Fanni tanlang',
+                          style: TextStyle(
+                              color: sub,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 

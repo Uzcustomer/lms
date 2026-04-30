@@ -61,6 +61,8 @@
                             <span class="text-gray-500">{{ $otherLabel }}:</span>
                             @php
                                 $otherStatus = $app->{$otherStatusField};
+                                $otherUserName = $role === 'dean' ? $app->registrar_user_name : $app->dean_user_name;
+                                $otherDecisionAt = $role === 'dean' ? $app->registrar_decision_at : $app->dean_decision_at;
                                 $otherColor = match($otherStatus) {
                                     'approved' => 'text-green-700',
                                     'rejected' => 'text-red-700',
@@ -73,10 +75,37 @@
                                 };
                             @endphp
                             <span class="font-medium {{ $otherColor }}">{{ $otherText }}</span>
+                            @if($otherStatus !== 'pending' && $otherUserName)
+                                <span class="text-gray-700">— {{ $otherUserName }}</span>
+                                @if($otherDecisionAt)
+                                    <span class="text-gray-400">({{ \Carbon\Carbon::parse($otherDecisionAt)->format('Y-m-d H:i') }})</span>
+                                @endif
+                            @endif
                             @if($otherStatus === 'rejected')
-                                <span class="text-gray-500">— {{ $role === 'dean' ? $app->registrar_reason : $app->dean_reason }}</span>
+                                <br>
+                                <span class="text-gray-500">{{ __('Sabab') }}: {{ $role === 'dean' ? $app->registrar_reason : $app->dean_reason }}</span>
                             @endif
                         </p>
+
+                        {{-- O'quv bo'limi qarori (agar belgilangan bo'lsa) --}}
+                        @if($app->academic_dept_status !== 'pending' && $app->academic_dept_user_name)
+                            <p class="text-[11px] mt-1">
+                                <span class="text-gray-500">{{ __("O'quv bo'limi") }}:</span>
+                                @php
+                                    $adColor = $app->academic_dept_status === 'approved' ? 'text-green-700' : 'text-red-700';
+                                    $adText = $app->academic_dept_status === 'approved' ? '✓ Tasdiqlagan' : '✗ Rad etgan';
+                                @endphp
+                                <span class="font-medium {{ $adColor }}">{{ $adText }}</span>
+                                <span class="text-gray-700">— {{ $app->academic_dept_user_name }}</span>
+                                @if($app->academic_dept_decision_at)
+                                    <span class="text-gray-400">({{ \Carbon\Carbon::parse($app->academic_dept_decision_at)->format('Y-m-d H:i') }})</span>
+                                @endif
+                                @if($app->academic_dept_status === 'rejected' && $app->academic_dept_reason)
+                                    <br>
+                                    <span class="text-gray-500">{{ __('Sabab') }}: {{ $app->academic_dept_reason }}</span>
+                                @endif
+                            </p>
+                        @endif
 
                         {{-- Yakuniy holat (agar belgilangan bo'lsa) --}}
                         @if($app->final_status === 'rejected')
@@ -110,10 +139,20 @@
                                 </button>
                             </div>
                         @else
+                            @php
+                                $myUserName = $role === 'dean' ? $app->dean_user_name : $app->registrar_user_name;
+                                $myDecisionAt = $role === 'dean' ? $app->dean_decision_at : $app->registrar_decision_at;
+                            @endphp
                             <span class="px-3 py-1 text-xs font-medium rounded-full
                                 {{ $myStatus === 'approved' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
                                 {{ $myStatus === 'approved' ? __('✓ Siz tasdiqlagansiz') : __('✗ Siz rad etgansiz') }}
                             </span>
+                            @if($myUserName)
+                                <span class="text-[11px] text-gray-600 mt-0.5">{{ $myUserName }}</span>
+                            @endif
+                            @if($myDecisionAt)
+                                <span class="text-[10px] text-gray-400">{{ \Carbon\Carbon::parse($myDecisionAt)->format('Y-m-d H:i') }}</span>
+                            @endif
                             @if($myStatus === 'rejected' && $app->{$role . '_reason'})
                                 <span class="text-[11px] text-gray-500 max-w-xs text-right">
                                     {{ $role === 'dean' ? $app->dean_reason : $app->registrar_reason }}

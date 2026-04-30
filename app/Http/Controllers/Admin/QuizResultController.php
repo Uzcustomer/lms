@@ -1874,6 +1874,20 @@ class QuizResultController extends Controller
                 'grade' => $result->grade,
             ];
 
+            // YN turi override (modaldan) — "mavzu_N" bo'lsa, mavzu retake sifatida yuklanadi
+            // (NB shakl yoki noaniq quiz_type uchun foydalanuvchi qo'lda tanlagan bo'ladi)
+            $ynTuriOverridesAll = $request->input('yn_turi_overrides', []);
+            $studentForKey = Student::where('hemis_id', $result->student_id)
+                ->orWhere('student_id_number', $result->student_id)
+                ->first();
+            $ynOverrideKey = $result->fan_id . '_' . ($studentForKey->group_id ?? '');
+            $ynManualOverride = $ynTuriOverridesAll[$ynOverrideKey] ?? null;
+
+            if ($ynManualOverride && preg_match('/^mavzu_(\d+)$/i', $ynManualOverride, $mvm)) {
+                $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides, (int) $mvm[1]);
+                continue;
+            }
+
             // Mavzu formatini aniqlash — shakl "N-mavzu" bo'lsa, mavzu retake sifatida yuklanadi
             $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
             if ($isMavzuShakl) {
@@ -2046,15 +2060,19 @@ class QuizResultController extends Controller
      *     Mavjud baho >= Moodle: skip
      *     YN qulflangan: skip
      */
-    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors, array $subjectOverrides = []): void
+    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors, array $subjectOverrides = [], int $mavzuNOverride = 0): void
     {
-        // Mavzu raqamini olish
-        if (!preg_match('/^(\d+)-mavzu$/i', $result->shakl, $m)) {
-            $rowInfo['error'] = "Mavzu raqami topilmadi: '{$result->shakl}'";
-            $errors[] = $rowInfo;
-            return;
+        // Mavzu raqamini aniqlash: foydalanuvchi modaldan tanlagan bo'lsa undan, aks holda shakl'dan
+        if ($mavzuNOverride > 0) {
+            $mavzuN = $mavzuNOverride;
+        } else {
+            if (!preg_match('/^(\d+)-mavzu$/i', $result->shakl, $m)) {
+                $rowInfo['error'] = "Mavzu raqami topilmadi: '{$result->shakl}'";
+                $errors[] = $rowInfo;
+                return;
+            }
+            $mavzuN = (int) $m[1];
         }
-        $mavzuN = (int) $m[1];
 
         if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
             $rowInfo['error'] = "Baho noto'g'ri: {$result->grade}";
@@ -2395,7 +2413,55 @@ class QuizResultController extends Controller
                 'subject_name' => $s->subject_name,
                 'subject_code' => $s->subject_code,
                 'semester_name' => $s->semester_name,
+                'lesson_count' => 0,
             ])->toArray();
+        }
+        unset($g);
+
+        // Har bir (group, available_subject, semester) uchun mavzu (amaliy dars) sonini hisoblash
+        // Bu son YN turi dropdownida 1-mavzu..N-mavzu opsiyalarini ko'rsatish uchun ishlatiladi
+        $excludedSchedTypes = [11, 17, 99, 100, 101, 102, 103];
+        $countTriples = [];
+        foreach ($groups as $g) {
+            foreach ($g['available_subjects'] as $s) {
+                $key = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $g['semester_code'];
+                $countTriples[$key] = [
+                    'group' => $g['group_hemis_id'],
+                    'subject' => $s['subject_id'],
+                    'sem' => $g['semester_code'],
+                ];
+            }
+        }
+        $lessonCounts = [];
+        if (!empty($countTriples)) {
+            $cGroups = array_unique(array_column($countTriples, 'group'));
+            $cSubjects = array_unique(array_column($countTriples, 'subject'));
+            $cSems = array_unique(array_filter(array_column($countTriples, 'sem')));
+
+            if (!empty($cGroups) && !empty($cSubjects) && !empty($cSems)) {
+                $countRows = DB::table('schedules')
+                    ->whereNull('deleted_at')
+                    ->whereNotIn('training_type_code', $excludedSchedTypes)
+                    ->whereIn('group_id', $cGroups)
+                    ->whereIn('subject_id', $cSubjects)
+                    ->whereIn('semester_code', $cSems)
+                    ->select('group_id', 'subject_id', 'semester_code', DB::raw('COUNT(DISTINCT DATE(lesson_date)) as cnt'))
+                    ->groupBy('group_id', 'subject_id', 'semester_code')
+                    ->get();
+
+                foreach ($countRows as $r) {
+                    $k = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    $lessonCounts[$k] = (int) $r->cnt;
+                }
+            }
+        }
+
+        foreach ($groups as &$g) {
+            foreach ($g['available_subjects'] as &$s) {
+                $k = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $g['semester_code'];
+                $s['lesson_count'] = $lessonCounts[$k] ?? 0;
+            }
+            unset($s);
         }
         unset($g);
 

@@ -29,6 +29,19 @@
             <p class="text-xs text-gray-500">{{ __("Akkreditatsiya bahosi mavjud bo'lmagan fanlar uchun ariza yuboring") }}</p>
         </div>
 
+        {{-- Cheklov haqida ogohlantirish --}}
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 flex items-start gap-3">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="text-xs text-amber-900 leading-relaxed">
+                <span class="font-semibold">{{ __("Hurmatli talaba!") }}</span>
+                {{ __("Siz bitta arizada eng ko'pi") }}
+                <span class="font-bold">{{ $maxSubjectsPerApplication }} ta</span>
+                {{ __("fanga ariza yubora olasiz. Aktiv (kutilayotgan + tasdiqlangan) arizalaringiz bilan birga jami 3 dan oshmasligi kerak. Rad etilgan arizalar bu hisobga kirmaydi va qaytadan yuborish mumkin.") }}
+            </div>
+        </div>
+
         {{-- Oyna holati --}}
         @if($window)
             <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 mb-4">

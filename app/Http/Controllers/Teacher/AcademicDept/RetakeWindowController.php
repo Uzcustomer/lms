@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Teacher\AcademicDept;
 
 use App\Http\Controllers\Controller;
+use App\Models\Department;
 use App\Models\RetakeApplicationWindow;
 use App\Models\Semester;
 use App\Models\Specialty;
@@ -31,13 +32,16 @@ class RetakeWindowController extends Controller
             ->paginate(30);
 
         // Form uchun ma'lumotlar
-        $specialties = Specialty::orderBy('name')->get(['id', 'specialty_hemis_id', 'name']);
+        $departments = Department::orderBy('name')->get(['department_hemis_id', 'name']);
+        $specialties = Specialty::orderBy('name')
+            ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id']);
         $levels = $this->levels();
-        $semesters = Semester::orderByDesc('education_year')->orderBy('code')
-            ->get(['id', 'code', 'name', 'level_code', 'education_year']);
+        // Faqat 12 ta unikal semestr (1-semestr ... 12-semestr)
+        $semesters = $this->semesters();
 
         return view('teacher.academic-dept.retake-windows.index', [
             'windows' => $windows,
+            'departments' => $departments,
             'specialties' => $specialties,
             'levels' => $levels,
             'semesters' => $semesters,
@@ -147,5 +151,18 @@ class RetakeWindowController extends Controller
             ['code' => '15', 'name' => '5-kurs'],
             ['code' => '16', 'name' => '6-kurs'],
         ];
+    }
+
+    /**
+     * 12 ta unikal semestr (curriculum/yil bo'yicha takrorlanmasdan).
+     * code: '1', '2', ..., '12' va name: '1-semestr' ... '12-semestr'.
+     */
+    private function semesters(): array
+    {
+        $items = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $items[] = ['code' => (string) $i, 'name' => $i . '-semestr'];
+        }
+        return $items;
     }
 }

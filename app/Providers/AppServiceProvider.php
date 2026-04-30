@@ -82,6 +82,15 @@ class AppServiceProvider extends ServiceProvider
                             ->where('registrar_status', 'pending')
                             ->where('final_status', 'pending')
                             ->count();
+
+                        // To'lov cheki tasdig'i kutilayotgan guruhlar — registrator
+                        // tekshiradi, shuning uchun ular ham hisoblanishi kerak.
+                        if (\Illuminate\Support\Facades\Schema::hasColumn('retake_application_groups', 'payment_verification_status')) {
+                            $pendingRetake += \App\Models\RetakeApplicationGroup::query()
+                                ->whereNotNull('payment_uploaded_at')
+                                ->where('payment_verification_status', 'pending')
+                                ->count();
+                        }
                     }
                 }
             } catch (\Throwable $e) {}

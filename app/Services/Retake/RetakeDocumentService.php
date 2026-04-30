@@ -211,43 +211,98 @@ class RetakeDocumentService
     /**
      * Tasdiqnoma PDF generatsiyasi (QR kod bilan, faqat tasdiqlangan fanlar).
      */
-    public function generatePdfCertificate(RetakeApplicationGroup $group, $approvedApps): string
+    public function generatePdfCertificate(RetakeApplicationGroup $group, $approvedApps, string $locale = 'uz'): string
     {
         $student = $group->student;
         $verifyUrl = route('document.verify', $group->verification_token);
 
-        // QR kod SVG sifatida (PDF ichiga to'g'ridan-to'g'ri quyiladi)
+        // QR kodni SVG fayl sifatida saqlab, dompdf'ga absolyut yo'l beramiz —
+        // dompdf SVG'ni inline emas, <img src="abs/path"> orqali ishonchli ko'rsatadi.
         $qrSvg = QrCode::format('svg')
-            ->size(150)
+            ->size(220)
             ->margin(1)
-            ->errorCorrection('M')
+            ->errorCorrection('H')
             ->generate($verifyUrl);
 
-        // QR'ni base64 PNG sifatida ham saqlaymiz (PDF tashqarisidan ham foydalanish uchun)
         $qrFileName = sprintf('qr_%d.svg', $group->id);
-        $qrPath = self::QR_DIR . '/' . $qrFileName;
-        Storage::disk(self::STORAGE_DISK)->put($qrPath, $qrSvg);
+        $qrRelPath = self::QR_DIR . '/' . $qrFileName;
+        Storage::disk(self::STORAGE_DISK)->put($qrRelPath, $qrSvg);
+        $qrAbsPath = Storage::disk(self::STORAGE_DISK)->path($qrRelPath);
 
-        $pdf = Pdf::loadView('pdf.retake-certificate', [
-            'group' => $group,
-            'student' => $student,
-            'approvedApps' => $approvedApps,
-            'verifyUrl' => $verifyUrl,
-            'qrSvg' => $qrSvg,
-            'verificationToken' => $group->verification_token,
-            'totalCredits' => $approvedApps->sum(fn ($a) => (float) $a->credit),
-            'totalAmount' => (float) $group->receipt_amount,
-        ])->setPaper('A4');
+        $signers = $this->collectSigners($approvedApps);
+        $logoAbsPath = $this->resolveLogoPath();
 
-        $fileName = sprintf('tasdiqnoma_%d_%s.pdf', $group->id, Str::slug($student->full_name ?: 'talaba'));
-        $relPath = self::PDF_DIR . '/' . $fileName;
-        $absPath = Storage::disk(self::STORAGE_DISK)->path($relPath);
+        // Lokal'ni vaqtincha o'rnatamiz, render tugagach qaytaramiz.
+        $previousLocale = app()->getLocale();
+        app()->setLocale($locale);
 
-        $this->ensureDirectoryExists(dirname($absPath));
+        try {
+            $pdf = Pdf::loadView('pdf.retake-certificate', [
+                'group' => $group,
+                'student' => $student,
+                'approvedApps' => $approvedApps,
+                'verifyUrl' => $verifyUrl,
+                'qrAbsPath' => $qrAbsPath,
+                'logoAbsPath' => $logoAbsPath,
+                'signers' => $signers,
+                'verificationToken' => $group->verification_token,
+                'totalCredits' => $approvedApps->sum(fn ($a) => (float) $a->credit),
+                'totalAmount' => (float) $group->receipt_amount,
+                'locale' => $locale,
+            ])->setPaper('A4');
 
-        $pdf->save($absPath);
+            $suffix = $locale === 'uz' ? '' : '_' . $locale;
+            $fileName = sprintf('ruxsatnoma_%d_%s%s.pdf', $group->id, Str::slug($student->full_name ?: 'talaba'), $suffix);
+            $relPath = self::PDF_DIR . '/' . $fileName;
+            $absPath = Storage::disk(self::STORAGE_DISK)->path($relPath);
 
-        return $relPath;
+            $this->ensureDirectoryExists(dirname($absPath));
+            $pdf->save($absPath);
+
+            return $relPath;
+        } finally {
+            app()->setLocale($previousLocale);
+        }
+    }
+
+    /**
+     * Dekan / Registrator / O'quv bo'limi imzolari uchun F.I.Sh. va sanani yig'adi.
+     */
+    private function collectSigners($approvedApps): array
+    {
+        $first = $approvedApps->first();
+        if (!$first) {
+            return ['dean' => null, 'registrar' => null, 'academic' => null];
+        }
+
+        return [
+            'dean' => [
+                'name' => $first->dean_user_name,
+                'date' => optional($first->dean_decision_at)->format('Y-m-d'),
+            ],
+            'registrar' => [
+                'name' => $first->registrar_user_name,
+                'date' => optional($first->registrar_decision_at)->format('Y-m-d'),
+            ],
+            'academic' => [
+                'name' => $first->academic_dept_user_name,
+                'date' => optional($first->academic_dept_decision_at)->format('Y-m-d'),
+            ],
+        ];
+    }
+
+    /**
+     * Universitet logotipini topish — public/logo.png yoki public/images/logo.png.
+     */
+    private function resolveLogoPath(): ?string
+    {
+        foreach (['logo.png', 'images/logo.png', 'logo.svg'] as $rel) {
+            $abs = public_path($rel);
+            if (is_file($abs)) {
+                return $abs;
+            }
+        }
+        return null;
     }
 
     /**

@@ -235,14 +235,16 @@
                                         {{ number_format($g->receipt_amount, 0, '.', ' ') }} UZS
                                     </p>
                                 </div>
-                                <div class="flex gap-2">
+                                <div class="flex flex-wrap gap-2">
                                     @if($g->docx_path)
                                         <a href="{{ route('student.retake.download-docx', $g->id) }}"
                                            class="text-xs text-blue-600 hover:underline">DOCX</a>
                                     @endif
                                     @if($g->pdf_certificate_path)
-                                        <a href="{{ route('student.retake.download-certificate', $g->id) }}"
-                                           class="text-xs text-blue-600 hover:underline">{{ __("Tasdiqnoma PDF") }}</a>
+                                        <a href="{{ route('student.retake.download-certificate', $g->id) }}?lang=uz"
+                                           class="text-xs text-blue-600 hover:underline">{{ __("Ruxsatnoma PDF") }} (UZ)</a>
+                                        <a href="{{ route('student.retake.download-certificate', $g->id) }}?lang=en"
+                                           class="text-xs text-blue-600 hover:underline">{{ __("Permit PDF") }} (EN)</a>
                                     @endif
                                 </div>
                             </div>

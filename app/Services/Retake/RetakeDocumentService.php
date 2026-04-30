@@ -119,47 +119,38 @@ class RetakeDocumentService
             'marginRight' => 1134,  // ~2 sm
         ]);
 
-        // ─── Yuqori o'ng — manzil bloki (jadval ichida toza ko'rinadi) ───
-        // Ikki ustunli: chap ustun bo'sh, o'ng ustun manzilni saqlaydi.
-        // Bu yondashuv right-aligned lentaning notekis ko'rinishini bartaraf etadi.
+        $deanDisplay = $deanName !== '' ? $deanName : '_______________________';
+
+        // ─── Yuqori o'ng — manzil bloki (border'siz 2-ustunli jadval) ───
+        // Chap ustun bo'sh, o'ng ustunda manzil ikki paragrafda justified ravishda
+        // joylashadi (har bir paragraf o'z ichida tabiiy oqib ketadi).
         $phpWord->addTableStyle('arizaAddressTable', [
             'borderSize' => 0,
             'cellMargin' => 0,
-            'alignment' => Jc::END,
         ]);
 
         $addressTable = $section->addTable('arizaAddressTable');
         $addressTable->addRow();
-        $addressTable->addCell(3500); // chap ustun, bo'sh
-        $rightCell = $addressTable->addCell(5800);
+        $addressTable->addCell(4500); // chap bo'sh
+        $rightCell = $addressTable->addCell(5500);
 
-        $addrTextStyle = ['spaceAfter' => 60, 'lineHeight' => 1.2];
-        $addrParaStyle = ['alignment' => Jc::CENTER, 'spaceAfter' => 60, 'lineHeight' => 1.2];
+        $addrParaStyle = ['alignment' => Jc::BOTH, 'spaceAfter' => 120, 'lineHeight' => 1.15];
 
-        $rightCell->addText('Toshkent davlat tibbiyot universiteti', null, $addrParaStyle);
-        $rightCell->addText('Termiz filiali', null, $addrParaStyle);
-        $rightCell->addText("{$facultyBase} fakulteti dekani", null, $addrParaStyle);
+        // 1-paragraf: institut + fakultet + dekan + F.I.Sh. + "ga"
+        $p1 = $rightCell->addTextRun($addrParaStyle);
+        $p1->addText("Toshkent davlat tibbiyot universiteti Termiz filiali {$facultyBase} fakulteti dekani ");
+        $p1->addText($deanDisplay . 'ga', ['bold' => true]);
 
-        // Dekan F.I.Sh. + "ga" — bitta qatorda, butunlay qalin
-        $deanLine = $rightCell->addTextRun($addrParaStyle);
-        $deanLine->addText(
-            ($deanName !== '' ? $deanName : '_______________________') . 'ga',
-            ['bold' => true]
-        );
+        // 2-paragraf: fakultet + guruh + talaba F.I.Sh. + "tomonidan"
+        $p2 = $rightCell->addTextRun($addrParaStyle);
+        $p2->addText("{$facultyBase} fakulteti {$groupName} guruh talabasi ");
+        $p2->addText($studentFullName, ['bold' => true]);
+        $p2->addText(' (F.I.Sh.) tomonidan');
 
-        $rightCell->addTextBreak(1);
-
-        $rightCell->addText("{$facultyBase} fakulteti", null, $addrParaStyle);
-        $rightCell->addText("{$groupName}-guruh talabasi", null, $addrParaStyle);
-
-        // Talaba F.I.Sh. + "dan" — qalin
-        $stuLine = $rightCell->addTextRun($addrParaStyle);
-        $stuLine->addText($studentFullName . 'dan', ['bold' => true]);
-
-        $section->addTextBreak(2);
+        $section->addTextBreak(1);
 
         // ─── ARIZA sarlavhasi ───
-        $section->addText('ARIZA', ['bold' => true, 'size' => 16], [
+        $section->addText('ARIZA', ['bold' => true, 'size' => 14], [
             'alignment' => Jc::CENTER,
             'spaceAfter' => 240,
         ]);
@@ -173,42 +164,24 @@ class RetakeDocumentService
         ];
 
         $section->addText(
-            "Men, {$facultyBase} fakulteti {$groupName}-guruh talabasi {$studentFullName}, "
+            "Men, {$facultyBase} fakulteti {$groupName} guruh talabasi {$studentFullName} (F.I.Sh.), "
             . "ushbu ariza orqali shuni ma'lum qilamanki, akademik qarzdorligim mavjud bo'lgan "
-            . "{$subjectsList} fan(lar)ini o'z hisobimdan qayta o'qish uchun ruxsat berishingizni so'rayman.",
+            . "{$subjectsList} fan(i/lar)ini o'z hisobimdan qayta o'qish uchun ruxsat berishingizni so'rayman.",
             null,
             $bodyStyle
         );
 
-        $section->addText(
-            "Mazkur qayta o'qish uchun to'lov xabarnomasi ilova qilinadi.",
-            null,
-            $bodyStyle
-        );
+        $body2 = $section->addTextRun($bodyStyle);
+        $body2->addText('Mazkur qayta o\'qish uchun to\'lov xabarnomasi (');
+        $body2->addText('qayta o\'qish', ['italic' => true]);
+        $body2->addText(') ilova qilinadi.');
 
-        $section->addTextBreak(3);
+        $section->addTextBreak(4);
 
-        // ─── Imzo bloki: jadval — talaba (chap) | sana (o'ng) ───
-        $phpWord->addTableStyle('arizaSignTable', [
-            'borderSize' => 0,
-            'cellMargin' => 0,
-        ]);
-        $signTable = $section->addTable('arizaSignTable');
-        $signTable->addRow();
-
-        $signLeft = $signTable->addCell(5500);
-        $signLeft->addText(
-            'Talaba:  ' . $studentFullName,
-            null,
-            ['alignment' => Jc::START, 'spaceAfter' => 0]
-        );
-
-        $signRight = $signTable->addCell(3800);
-        $signRight->addText(
-            $submissionDate,
-            null,
-            ['alignment' => Jc::END, 'spaceAfter' => 0]
-        );
+        // ─── Imzo bloki: chap tomonda talaba F.I.Sh., undan keyingi qatorda sana ───
+        $signParaStyle = ['alignment' => Jc::START, 'spaceAfter' => 0, 'lineHeight' => 1.3];
+        $section->addText('Talaba:  ' . $studentFullName . ' F.I.Sh.', null, $signParaStyle);
+        $section->addText($submissionDate, null, $signParaStyle);
 
         // Saqlash
         $fileName = sprintf('ariza_%d_%s.docx', $group->id, Str::slug($studentFullName ?: 'talaba'));

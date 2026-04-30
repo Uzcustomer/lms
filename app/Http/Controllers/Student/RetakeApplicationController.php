@@ -126,9 +126,9 @@ class RetakeApplicationController extends Controller
     }
 
     /**
-     * Tasdiqnoma PDF faylini yuklab olish.
+     * Ruxsatnoma PDF faylini yuklab olish (uzbek yoki english versiyasi).
      */
-    public function downloadCertificate(int $groupId): Response
+    public function downloadCertificate(int $groupId, Request $request): Response
     {
         /** @var Student $student */
         $student = Auth::guard('student')->user();
@@ -139,13 +139,37 @@ class RetakeApplicationController extends Controller
             abort(403);
         }
 
-        if (!$group->pdf_certificate_path || !Storage::disk('public')->exists($group->pdf_certificate_path)) {
-            abort(404, 'Tasdiqnoma hali generatsiya qilinmagan');
+        $lang = $request->input('lang', app()->getLocale() === 'en' ? 'en' : 'uz');
+        if (!in_array($lang, ['uz', 'en'], true)) {
+            $lang = 'uz';
         }
 
+        // Uzbekcha versiya — generatsiya qilingan fayldan beriladi (mavjud bo'lsa).
+        if ($lang === 'uz') {
+            if (!$group->pdf_certificate_path || !Storage::disk('public')->exists($group->pdf_certificate_path)) {
+                abort(404, 'Ruxsatnoma hali generatsiya qilinmagan');
+            }
+            return Storage::disk('public')->download(
+                $group->pdf_certificate_path,
+                "ruxsatnoma_{$group->id}.pdf"
+            );
+        }
+
+        // Inglizcha versiya — talab paytida generatsiya qilinadi.
+        $approved = $group->applications()
+            ->with('retakeGroup.teacher')
+            ->where('final_status', 'approved')
+            ->get();
+        if ($approved->isEmpty()) {
+            abort(404, 'Tasdiqlangan fanlar yo\'q');
+        }
+
+        $relPath = app(\App\Services\Retake\RetakeDocumentService::class)
+            ->generatePdfCertificate($group->load('student'), $approved, 'en');
+
         return Storage::disk('public')->download(
-            $group->pdf_certificate_path,
-            "tasdiqnoma_{$group->id}.pdf"
+            $relPath,
+            "permit_{$group->id}.pdf"
         );
     }
 }

@@ -141,7 +141,7 @@ class RetakeNotificationService
             });
 
         foreach ($deans as $dean) {
-            $this->sendToTeacher($dean, 'retake_new_submission', $title, $body, $group->id, route('teacher.retake.index'));
+            $this->sendToTeacher($dean, 'retake_new_submission', $title, $body, $group->id, route('admin.retake.index'));
         }
 
         // Registrator ofisi (universitet bo'yicha hammaga)
@@ -150,7 +150,7 @@ class RetakeNotificationService
             ->get();
 
         foreach ($registrars as $r) {
-            $this->sendToTeacher($r, 'retake_new_submission', $title, $body, $group->id, route('teacher.retake.index'));
+            $this->sendToTeacher($r, 'retake_new_submission', $title, $body, $group->id, route('admin.retake.index'));
         }
     }
 
@@ -171,7 +171,7 @@ class RetakeNotificationService
         ])->where('status', true)->get();
 
         foreach ($academicStaff as $t) {
-            $this->sendToTeacher($t, 'retake_academic_ready', $title, $body, $app->id, route('teacher.retake-groups.index'));
+            $this->sendToTeacher($t, 'retake_academic_ready', $title, $body, $app->id, route('admin.retake-groups.index'));
         }
     }
 
@@ -220,7 +220,7 @@ class RetakeNotificationService
                 'type' => $type,
                 'title' => $title,
                 'message' => $message,
-                'link' => $url ?? route('teacher.retake.index'),
+                'link' => $url ?? route('admin.retake.index'),
                 'data' => $refId ? ['retake_ref_id' => $refId] : null,
             ]);
         } catch (\Throwable $e) {

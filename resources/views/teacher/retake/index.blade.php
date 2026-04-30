@@ -8,7 +8,7 @@
         </h2>
     </x-slot>
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
         {{-- Statistika kartlari --}}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

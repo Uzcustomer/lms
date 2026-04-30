@@ -7,7 +7,7 @@
 
     @include('partials._retake_tom_select')
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto"
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full"
          x-data="{ showCreate: false, overrideId: null, overrideStart: '', overrideEnd: '' }">
 
         @if(session('success'))

@@ -115,29 +115,38 @@
                     <h3 class="text-base font-bold text-gray-900 mb-4">{{ __("Yangi qabul oynasi") }}</h3>
                     <form method="POST"
                           action="{{ route('admin.retake-windows.store') }}"
-                          x-data="{
-                              specialtyId: '',
-                              specialtyName: '',
-                              levelCode: '',
-                              levelName: '',
-                              semesterCode: '',
-                              semesterName: '',
-                          }"
+                          x-data="windowForm({
+                              specialties: @js($specialties->map(fn($s) => ['id' => (string)$s->specialty_hemis_id, 'name' => $s->name, 'department_hemis_id' => (string)($s->department_hemis_id ?? '')])->values()->all()),
+                          })"
                           class="space-y-3">
                         @csrf
 
-                        {{-- Yo'nalish --}}
+                        {{-- Fakultet --}}
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Fakultet") }} <span class="text-red-500">*</span></label>
+                            <select x-model="departmentId"
+                                    required
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <option value="">— {{ __("Tanlang") }} —</option>
+                                @foreach($departments as $d)
+                                    <option value="{{ $d->department_hemis_id }}">{{ $d->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        {{-- Yo'nalish (fakultet bo'yicha filtrlanadi) --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
                             <select name="specialty_id"
                                     x-model="specialtyId"
-                                    @change="specialtyName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
+                                    @change="onSpecialtyChange($event)"
                                     required
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <option value="">— {{ __("Tanlang") }} —</option>
-                                @foreach($specialties as $sp)
-                                    <option value="{{ $sp->specialty_hemis_id }}" data-name="{{ $sp->name }}">{{ $sp->name }}</option>
-                                @endforeach
+                                    :disabled="!departmentId"
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                                <option value="">— {{ __("Avval fakultetni tanlang") }} —</option>
+                                <template x-for="sp in filteredSpecialties" :key="sp.id">
+                                    <option :value="sp.id" :data-name="sp.name" x-text="sp.name"></option>
+                                </template>
                             </select>
                             <input type="hidden" name="specialty_name" :value="specialtyName">
                         </div>
@@ -158,7 +167,7 @@
                             <input type="hidden" name="level_name" :value="levelName">
                         </div>
 
-                        {{-- Semestr --}}
+                        {{-- Semestr (12 ta unikal) --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Semestr") }} <span class="text-red-500">*</span></label>
                             <select name="semester_code"
@@ -168,9 +177,7 @@
                                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                 <option value="">— {{ __("Tanlang") }} —</option>
                                 @foreach($semesters as $s)
-                                    <option value="{{ $s->code }}" data-name="{{ $s->education_year }} - {{ $s->name }}">
-                                        {{ $s->education_year }} - {{ $s->name }}
-                                    </option>
+                                    <option value="{{ $s['code'] }}" data-name="{{ $s['name'] }}">{{ $s['name'] }}</option>
                                 @endforeach
                             </select>
                             <input type="hidden" name="semester_name" :value="semesterName">
@@ -236,4 +243,32 @@
             </div>
         @endif
     </div>
+
+    @push('scripts')
+        <script>
+            function windowForm({ specialties }) {
+                return {
+                    allSpecialties: specialties || [],
+                    departmentId: '',
+                    specialtyId: '',
+                    specialtyName: '',
+                    levelCode: '',
+                    levelName: '',
+                    semesterCode: '',
+                    semesterName: '',
+
+                    get filteredSpecialties() {
+                        if (!this.departmentId) return [];
+                        return this.allSpecialties.filter(sp =>
+                            String(sp.department_hemis_id) === String(this.departmentId)
+                        );
+                    },
+
+                    onSpecialtyChange(e) {
+                        this.specialtyName = e.target.options[e.target.selectedIndex]?.dataset.name || '';
+                    },
+                };
+            }
+        </script>
+    @endpush
 </x-teacher-app-layout>

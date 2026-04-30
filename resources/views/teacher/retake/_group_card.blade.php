@@ -122,7 +122,7 @@
                     {{-- Mening qarorim --}}
                     <div class="flex flex-col items-end gap-1.5">
                         @php $myStatus = $app->{$myStatusField}; @endphp
-                        @if($myStatus === 'pending')
+                        @if($myStatus === 'pending' && $app->final_status === 'pending')
                             <div class="flex gap-2">
                                 <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}" class="inline">
                                     @csrf
@@ -138,6 +138,14 @@
                                     {{ __('Rad etish') }}
                                 </button>
                             </div>
+                        @elseif($myStatus === 'pending' && $app->final_status === 'rejected')
+                            {{-- Boshqa rol rad etgan, mening qarorimga ehtiyoj yo'q --}}
+                            <span class="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">
+                                {{ __("Qaror talab qilinmaydi") }}
+                            </span>
+                            <span class="text-[11px] text-gray-500 max-w-xs text-right">
+                                {{ __("Boshqa rol arizani rad etgan") }}
+                            </span>
                         @else
                             @php
                                 $myUserName = $role === 'dean' ? $app->dean_user_name : $app->registrar_user_name;

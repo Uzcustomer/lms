@@ -522,5 +522,9 @@
     "Shahar nomini kiriting": "Enter city name",
     "Hozirgi yashash manzili": "Current residential address",
     "Boshqa manzil": "Other address",
-    "To'liq manzilni kiriting": "Enter full address"
+    "To'liq manzilni kiriting": "Enter full address",
+    "Dekanat tasdig'idagi tushuntirish xati": "Explanatory note approved by the Dean's office",
+    "Dekanat tomonidan tasdiqlangan tushuntirish xati yuklansin.": "Upload an explanatory note approved by the Dean's office.",
+    "Uning haqiqiyligi dekan tomonidan tekshiriladi.": "Its authenticity will be verified by the Dean.",
+    "Izoh": "Note"
 }

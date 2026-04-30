@@ -330,5 +330,9 @@
     "Sana oralig'i": "Диапазон дат",
     "Nazoratlar tekshirilmoqda...": "Проверка контрольных...",
     "Har bir nazorat uchun qayta topshirish sanasini tanlang": "Выберите дату пересдачи для каждого контрольного",
-    "Til": "Язык"
+    "Til": "Язык",
+    "Dekanat tasdig'idagi tushuntirish xati": "Объяснительная записка, утверждённая деканатом",
+    "Dekanat tomonidan tasdiqlangan tushuntirish xati yuklansin.": "Загрузите объяснительную записку, утверждённую деканатом.",
+    "Uning haqiqiyligi dekan tomonidan tekshiriladi.": "Её подлинность проверяется деканом.",
+    "Izoh": "Примечание"
 }

@@ -89,18 +89,22 @@ class RetakeDocumentService
         $student = $group->student;
         $applications = $group->applications->sortBy('semester_id')->values();
 
-        // Dekan ismini birinchi tasdiqlangan arizadan olish (ko'pchilikda dekan bitta bo'ladi)
+        // Dekan F.I.Sh. ni topish: avval ariza ustidan (allaqachon qaror qilingan
+        // bo'lsa), aks holda — talaba fakultetiga biriktirilgan dekan teacher.
         $deanName = $applications
             ->pluck('dean_user_name')
             ->filter()
-            ->first() ?? '';
+            ->first();
+        if (!$deanName) {
+            $deanName = $this->lookupFacultyDeanName($student) ?? '';
+        }
 
-        $facultyName = $student->department_name ?? '';
+        $facultyBase = $this->stripFacultetiSuffix($student->department_name ?? '');
         $groupName = $student->group_name ?? '';
         $studentFullName = $student->full_name ?? '';
         $submissionDate = $group->created_at->format('Y-m-d');
 
-        // {{subjects_list}}: "1-semestr Anatomiya (6.0 kr), 2-semestr Patanatomiya (5.0 kr)"
+        // "1-semestr Anatomiya (6.0 kr), 2-semestr Patanatomiya (5.0 kr)"
         $subjectsList = $applications
             ->map(fn (RetakeApplication $a) => sprintf(
                 '%s %s (%.1f kr)',
@@ -115,37 +119,36 @@ class RetakeDocumentService
         $phpWord->setDefaultFontSize(12);
 
         $section = $phpWord->addSection([
-            'marginTop' => 1134,    // ~2 sm
+            'marginTop' => 1134,
             'marginBottom' => 1134,
-            'marginLeft' => 1700,   // ~3 sm
+            'marginLeft' => 1700,
             'marginRight' => 1134,
         ]);
 
-        // Yuqori o'ng — tepa yozuv (manzil)
+        // Yuqori o'ng — manzil
         $headerStyle = ['alignment' => Jc::END, 'spaceAfter' => 0, 'lineHeight' => 1.15];
         $section->addText("Toshkent davlat tibbiyot universiteti Termiz filiali", null, $headerStyle);
-        $section->addText("{$facultyName} fakulteti dekani", null, $headerStyle);
-        $section->addText("{$deanName}ga", null, $headerStyle);
-        $section->addText("{$facultyName} fakulteti", null, $headerStyle);
-        $section->addText("{$groupName} guruh talabasi", null, $headerStyle);
-        $section->addText($studentFullName, null, $headerStyle);
-        $section->addText("(F.I.SH) tomonidan", null, $headerStyle);
-
-        $section->addTextBreak(2);
-
-        // ARIZA (markaz, qalin)
-        $section->addText('ARIZA', ['bold' => true, 'size' => 13], ['alignment' => Jc::CENTER]);
+        $section->addText("{$facultyBase} fakulteti dekani", null, $headerStyle);
+        $section->addText(($deanName !== '' ? $deanName : '_______________________') . "ga", ['bold' => true], $headerStyle);
 
         $section->addTextBreak(1);
 
-        // Asosiy matn — Variant A: semester_number olib tashlangan, har fan
-        // o'z semestri bilan subjects_list ichida.
+        $section->addText("{$facultyBase} fakulteti {$groupName}-guruh talabasi", null, $headerStyle);
+        $section->addText($studentFullName . "dan", ['bold' => true], $headerStyle);
+
+        $section->addTextBreak(2);
+
+        // ARIZA
+        $section->addText('ARIZA', ['bold' => true, 'size' => 14], ['alignment' => Jc::CENTER]);
+
+        $section->addTextBreak(1);
+
         $bodyStyle = ['alignment' => Jc::BOTH, 'indentation' => ['firstLine' => 720], 'lineHeight' => 1.5];
 
         $section->addText(
-            "Men, {$facultyName} fakulteti {$groupName} guruh talabasi {$studentFullName} (F.I.Sh.), "
+            "Men, {$facultyBase} fakulteti {$groupName}-guruh talabasi {$studentFullName}, "
             . "ushbu ariza orqali shuni ma'lum qilamanki, akademik qarzdorligim mavjud bo'lgan "
-            . "{$subjectsList} fan(i/lar)ini o'z hisobimdan qayta o'qish uchun ruxsat berishingizni so'rayman.",
+            . "{$subjectsList} fan(lar)ini o'z hisobimdan qayta o'qish uchun ruxsat berishingizni so'rayman.",
             null,
             $bodyStyle
         );
@@ -153,21 +156,23 @@ class RetakeDocumentService
         $section->addTextBreak(1);
 
         $section->addText(
-            "Mazkur qayta o'qish uchun to'lov xabarnomasi (qayta o'qish) ilova qilinadi.",
+            "Mazkur qayta o'qish uchun to'lov xabarnomasi ilova qilinadi.",
             null,
             $bodyStyle
         );
 
         $section->addTextBreak(4);
 
-        // Talaba imzo qatori
-        $signatureRow = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
-        $signatureRow->addRow();
-        $cellStyle = ['valign' => 'center'];
-        $left = $signatureRow->addCell(7000, $cellStyle);
-        $left->addText("Talaba:  {$studentFullName} F.I.SH", null, ['alignment' => Jc::START]);
-        $right = $signatureRow->addCell(3000, $cellStyle);
-        $right->addText($submissionDate, null, ['alignment' => Jc::END]);
+        // Imzo qatori — chap tomonda talaba, o'ng tomonda sana, kvadratsiz.
+        $signatureStyle = [
+            'alignment' => Jc::BOTH,
+            'tabs' => [new \PhpOffice\PhpWord\Style\Tab('right', 9072)], // ~16 sm
+        ];
+        $section->addText(
+            "Talaba:  {$studentFullName}\t{$submissionDate}",
+            null,
+            $signatureStyle
+        );
 
         // Saqlash
         $fileName = sprintf('ariza_%d_%s.docx', $group->id, Str::slug($studentFullName ?: 'talaba'));
@@ -180,6 +185,33 @@ class RetakeDocumentService
         $writer->save($absPath);
 
         return $relPath;
+    }
+
+    /**
+     * Talaba fakultetiga biriktirilgan dekanning F.I.Sh.ni topadi (dean_faculties).
+     */
+    private function lookupFacultyDeanName(?Student $student): ?string
+    {
+        if (!$student || !$student->department_id) {
+            return null;
+        }
+
+        $dean = Teacher::query()
+            ->where('status', true)
+            ->whereHas('roles', fn ($q) => $q->where('name', \App\Enums\ProjectRole::DEAN->value))
+            ->whereHas('deanFaculties', fn ($q) => $q->where('departments.department_hemis_id', $student->department_id))
+            ->first();
+
+        return $dean?->full_name;
+    }
+
+    /**
+     * "Xalqaro talim fakulteti" → "Xalqaro talim". Boshqa joyda " fakulteti" qo'shilsa,
+     * takrorlanmasligi uchun nomdan oxirgi " fakulteti" so'zi olib tashlanadi.
+     */
+    private function stripFacultetiSuffix(string $name): string
+    {
+        return trim(preg_replace('/\s*fakulteti\s*$/iu', '', $name));
     }
 
     /**

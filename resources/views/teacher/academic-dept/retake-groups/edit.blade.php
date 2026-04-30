@@ -6,6 +6,8 @@
         </h2>
     </x-slot>
 
+    @include('partials._retake_tom_select')
+
     <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
 
         @if(session('success'))
@@ -55,7 +57,7 @@
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("O'qituvchi") }}</label>
                     <select name="teacher_id" {{ $editable ? '' : 'disabled' }}
-                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                            class="tom-select w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
                         @foreach($teachers as $t)
                             <option value="{{ $t->id }}" {{ $group->teacher_id == $t->id ? 'selected' : '' }}>
                                 {{ $t->full_name }}{{ $t->department ? ' — ' . $t->department : '' }}

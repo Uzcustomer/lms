@@ -5,6 +5,8 @@
         </h2>
     </x-slot>
 
+    @include('partials._retake_tom_select')
+
     <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto"
          x-data="{ showCreate: false, overrideId: null, overrideStart: '', overrideEnd: '' }">
 
@@ -47,7 +49,7 @@
                 </div>
                 <div>
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Fakultet") }}</label>
-                    <select name="department_id" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
+                    <select name="department_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="">— {{ __("Barchasi") }} —</option>
                         @foreach($departments as $d)
                             <option value="{{ $d->department_hemis_id }}" {{ (string)($departmentIdFilter ?? '') === (string)$d->department_hemis_id ? 'selected' : '' }}>{{ $d->name }}</option>

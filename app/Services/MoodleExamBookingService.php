@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ExamSchedule;
 use App\Models\Group;
 use App\Models\HemisQuizResult;
+use App\Models\Semester;
 use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -130,10 +131,17 @@ class MoodleExamBookingService
 
     /**
      * Find the Moodle course_idnumber for this (group, subject) pair.
-     * Strategy: pick the most recently synced hemis_quiz_results row whose student
-     * belongs to this group and whose fan_id matches the subject. The plugin uses
-     * tokens 2 (OSKI/TEST) inside course_idnumber, so we swap that token to match
-     * the requested yn_type.
+     *
+     * Format used by local_hemisexport:
+     *   {fan_id}_{OSKI|TEST}_{N}-SEM_{spec}_{form}
+     *
+     * Strategy:
+     *  1) Direct: find a hemis_quiz_results row matching (fan_id=subject_id) for any
+     *     student in this group; swap token 2 to the requested yn_type.
+     *  2) Fallback: this group hasn't taken this subject yet, but the suffix
+     *     (tokens 4+) and N-SEM are group-/semester-specific, so we extract them
+     *     from the group's *other* quiz history and rebuild the idnumber with
+     *     the schedule's subject_id at token 1.
      */
     private function resolveCourseIdnumber(ExamSchedule $schedule, string $ynType): ?string
     {
@@ -145,7 +153,7 @@ class MoodleExamBookingService
             return null;
         }
 
-        $idnumber = HemisQuizResult::query()
+        $direct = HemisQuizResult::query()
             ->whereNotNull('course_idnumber')
             ->where('fan_id', $schedule->subject_id)
             ->whereIn('student_id', $groupStudentIds)
@@ -153,11 +161,96 @@ class MoodleExamBookingService
             ->orderByDesc('id')
             ->value('course_idnumber');
 
-        if (!$idnumber) {
+        if ($direct) {
+            return $this->swapYnToken((string) $direct, $ynType);
+        }
+
+        return $this->buildCourseIdnumberFromGroupPattern($schedule, $ynType, $groupStudentIds);
+    }
+
+    /**
+     * Build a course_idnumber by extracting the suffix + N-SEM from the group's
+     * other course_idnumber records and substituting the requested subject_id and
+     * yn_type at the front.
+     *
+     * @param array<int, string> $studentIds
+     */
+    private function buildCourseIdnumberFromGroupPattern(
+        ExamSchedule $schedule,
+        string $ynType,
+        array $studentIds,
+    ): ?string {
+        $rows = HemisQuizResult::query()
+            ->whereNotNull('course_idnumber')
+            ->whereIn('student_id', $studentIds)
+            ->select('course_idnumber', 'semester')
+            ->get();
+        if ($rows->isEmpty()) {
             return null;
         }
 
-        return $this->swapYnToken((string) $idnumber, $ynType);
+        $suffixCounts = [];
+        $nSemBySemester = [];
+        $nSemTotals = [];
+
+        foreach ($rows as $row) {
+            $tokens = explode('_', (string) $row->course_idnumber);
+            if (count($tokens) < 4) {
+                continue;
+            }
+            $nSem = $tokens[2];
+            $suffix = implode('_', array_slice($tokens, 3));
+            $suffixCounts[$suffix] = ($suffixCounts[$suffix] ?? 0) + 1;
+            $nSemTotals[$nSem] = ($nSemTotals[$nSem] ?? 0) + 1;
+            if (!empty($row->semester)) {
+                $nSemBySemester[(string) $row->semester][$nSem] =
+                    ($nSemBySemester[(string) $row->semester][$nSem] ?? 0) + 1;
+            }
+        }
+
+        if (empty($suffixCounts) || empty($nSemTotals)) {
+            return null;
+        }
+
+        arsort($suffixCounts);
+        $suffix = (string) array_key_first($suffixCounts);
+
+        // Resolve N-SEM, in order of confidence:
+        //  1) Authoritative: from semesters table — name like "10-semestr" → "10-SEM"
+        //  2) From group's records whose `semester` column matches schedule.semester_code
+        //  3) Most common N-SEM in group's history
+        $nSem = $this->nSemFromSemesterCode((string) $schedule->semester_code);
+
+        if (!$nSem) {
+            $semKey = (string) $schedule->semester_code;
+            if (!empty($nSemBySemester[$semKey])) {
+                arsort($nSemBySemester[$semKey]);
+                $nSem = (string) array_key_first($nSemBySemester[$semKey]);
+            }
+        }
+
+        if (!$nSem) {
+            arsort($nSemTotals);
+            $nSem = (string) array_key_first($nSemTotals);
+        }
+
+        return $schedule->subject_id . '_' . strtoupper($ynType) . '_' . $nSem . '_' . $suffix;
+    }
+
+    /**
+     * Map LMS semester_code to the "{N}-SEM" token used in Moodle course_idnumber.
+     * The semesters table stores name like "10-semestr"; we extract the leading number.
+     */
+    private function nSemFromSemesterCode(string $semesterCode): ?string
+    {
+        $name = Semester::where('code', $semesterCode)->value('name');
+        if (!$name) {
+            return null;
+        }
+        if (preg_match('/(\d+)/', (string) $name, $m)) {
+            return $m[1] . '-SEM';
+        }
+        return null;
     }
 
     /**
@@ -262,7 +355,7 @@ class MoodleExamBookingService
     {
         $prefix = $ynType;
         $errorText = null;
-        if (!$result['ok']) {
+        if (!($result['ok'] ?? false)) {
             $errors = [];
             foreach ($result['calls'] ?? [] as $c) {
                 if (!($c['ok'] ?? false)) {
@@ -274,7 +367,16 @@ class MoodleExamBookingService
                     );
                 }
             }
-            $errorText = implode(' | ', $errors) ?: 'unknown error';
+            // Top-level `error` (e.g. "course_idnumber not found") wins when there
+            // are no per-language calls; otherwise prepend it to per-call details.
+            $topLevel = (string) ($result['error'] ?? '');
+            if ($topLevel !== '' && empty($errors)) {
+                $errorText = $topLevel;
+            } elseif ($topLevel !== '') {
+                $errorText = $topLevel . ' | ' . implode(' | ', $errors);
+            } else {
+                $errorText = implode(' | ', $errors) ?: 'unknown error';
+            }
         }
 
         $schedule->forceFill([

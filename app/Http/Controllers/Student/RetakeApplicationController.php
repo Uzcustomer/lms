@@ -59,9 +59,14 @@ class RetakeApplicationController extends Controller
         $receiptMaxMb = RetakeSetting::receiptMaxMb();
 
         // To'lov yuklash kerak bo'lgan guruhlar (dekan + registrator tasdiqlagan,
-        // hali to'lov yuklanmagan).
+        // hali to'lov yuklanmagan yoki rejected bo'lib qayta yuklash kerak).
         $groupsAwaitingPayment = $history->filter(function (RetakeApplicationGroup $g) {
             return $g->requires_payment;
+        })->values();
+
+        // To'lov yuklangan, ammo registrator tasdiqi kutilmoqda.
+        $groupsPaymentVerifying = $history->filter(function (RetakeApplicationGroup $g) {
+            return $g->payment_awaiting_verification;
         })->values();
 
         return view('student.retake.index', [
@@ -75,6 +80,7 @@ class RetakeApplicationController extends Controller
             'receiptMaxMb' => $receiptMaxMb,
             'maxSubjectsPerApplication' => RetakeApplicationService::MAX_SUBJECTS_PER_APPLICATION,
             'groupsAwaitingPayment' => $groupsAwaitingPayment,
+            'groupsPaymentVerifying' => $groupsPaymentVerifying,
             'paymentMaxMb' => RetakeApplicationService::PAYMENT_RECEIPT_MAX_MB,
         ]);
     }

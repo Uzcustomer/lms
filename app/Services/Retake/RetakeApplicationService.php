@@ -261,9 +261,26 @@ class RetakeApplicationService
 
     /**
      * Registrator tasdiqlaydi/rad etadi.
+     *
+     * Tasdiqlashda registrator quyidagilarni majburiy to'ldirishi kerak:
+     *  - previous_joriy_grade (oldingi semestrdagi joriy ta'lim bahosi)
+     *  - previous_mustaqil_grade (oldingi semestrdagi mustaqil ta'lim bahosi)
+     *  - has_oske / has_test (qayta o'qishda OSKE / TEST topshiriladimi?)
+     *
+     * @param  array{
+     *     previous_joriy_grade?: float|null,
+     *     previous_mustaqil_grade?: float|null,
+     *     has_oske?: bool,
+     *     has_test?: bool,
+     * }  $details
      */
-    public function registrarDecide(RetakeApplication $app, Teacher $actor, string $decision, ?string $reason = null): RetakeApplication
-    {
+    public function registrarDecide(
+        RetakeApplication $app,
+        Teacher $actor,
+        string $decision,
+        ?string $reason = null,
+        array $details = [],
+    ): RetakeApplication {
         $this->assertReviewable($app);
         $this->assertDecision($decision);
 
@@ -271,16 +288,41 @@ class RetakeApplicationService
             $this->assertReason($reason);
         }
 
-        return DB::transaction(function () use ($app, $actor, $decision, $reason) {
+        if ($decision === RetakeApplication::STATUS_APPROVED) {
+            // Joriy va mustaqil ta'lim baholari majburiy
+            $joriy = $details['previous_joriy_grade'] ?? null;
+            $mustaqil = $details['previous_mustaqil_grade'] ?? null;
+            if ($joriy === null || $joriy === '' || $mustaqil === null || $mustaqil === '') {
+                throw ValidationException::withMessages([
+                    'previous_grades' => 'Joriy va mustaqil ta\'lim baholarini to\'ldirish majburiy',
+                ]);
+            }
+            if ((float) $joriy < 0 || (float) $joriy > 100 || (float) $mustaqil < 0 || (float) $mustaqil > 100) {
+                throw ValidationException::withMessages([
+                    'previous_grades' => 'Baholar 0 dan 100 gacha bo\'lishi kerak',
+                ]);
+            }
+        }
+
+        return DB::transaction(function () use ($app, $actor, $decision, $reason, $details) {
             $from = $app->registrar_status;
 
-            $app->update([
+            $update = [
                 'registrar_status' => $decision,
                 'registrar_user_id' => $actor->id,
                 'registrar_user_name' => $actor->full_name,
                 'registrar_decision_at' => now(),
                 'registrar_reason' => $reason,
-            ]);
+            ];
+
+            if ($decision === RetakeApplication::STATUS_APPROVED) {
+                $update['previous_joriy_grade'] = (float) $details['previous_joriy_grade'];
+                $update['previous_mustaqil_grade'] = (float) $details['previous_mustaqil_grade'];
+                $update['has_oske'] = !empty($details['has_oske']);
+                $update['has_test'] = !empty($details['has_test']);
+            }
+
+            $app->update($update);
 
             $this->log(
                 $app,
@@ -468,22 +510,77 @@ class RetakeApplicationService
             $loaded->update([
                 'payment_receipt_path' => $path,
                 'payment_uploaded_at' => now(),
+                // Qayta yuklash holati uchun (avval rejected bo'lgan bo'lsa) — pending'ga qaytaradi
+                'payment_verification_status' => RetakeApplicationGroup::PAYMENT_VERIFICATION_PENDING,
+                'payment_verified_by_user_id' => null,
+                'payment_verified_by_name' => null,
+                'payment_verified_at' => null,
+                'payment_rejection_reason' => null,
             ]);
 
             $loaded->refresh()->load('applications');
 
-            // Dual-approved arizalar uchun o'quv bo'limiga xabar
-            foreach ($loaded->applications as $app) {
-                if ($app->isDualApproved() && $app->academic_dept_status === RetakeApplication::STATUS_PENDING) {
-                    $this->log($app, RetakeApplicationLog::ACTION_SUBMITTED, $student, null, [
-                        'payment_uploaded' => true,
-                    ]);
-                    $this->notificationService->notifyAcademicReady($app);
-                }
-            }
-
-            // Talabaga tasdiq xabari
+            // Talabaga: ariza registratorga yuborildi (haqiqiyligi tekshiriladi)
             $this->notificationService->notifyPaymentSubmitted($loaded);
+            // Registrator ofisiga: yangi to'lov cheki tekshirilsin
+            $this->notificationService->notifyPaymentToVerify($loaded);
+
+            return $loaded;
+        });
+    }
+
+    /**
+     * Registrator ofisi to'lov chekining haqiqiyligini tasdiqlaydi yoki rad etadi.
+     * Faqat tasdiqlangandan keyin ariza o'quv bo'limiga jo'natiladi.
+     */
+    public function verifyPayment(
+        RetakeApplicationGroup $group,
+        Teacher $actor,
+        string $decision,
+        ?string $reason = null,
+    ): RetakeApplicationGroup {
+        if (!in_array($decision, ['approved', 'rejected'], true)) {
+            throw ValidationException::withMessages(['decision' => 'Noto\'g\'ri qaror']);
+        }
+
+        if ($group->payment_uploaded_at === null) {
+            throw ValidationException::withMessages([
+                'payment' => 'Talaba hali to\'lov chekini yuklamagan',
+            ]);
+        }
+
+        if ($group->payment_verification_status !== RetakeApplicationGroup::PAYMENT_VERIFICATION_PENDING) {
+            throw ValidationException::withMessages([
+                'payment' => 'To\'lov cheki allaqachon ko\'rib chiqilgan',
+            ]);
+        }
+
+        if ($decision === 'rejected') {
+            $this->assertReason($reason);
+        }
+
+        return DB::transaction(function () use ($group, $actor, $decision, $reason) {
+            $group->update([
+                'payment_verification_status' => $decision,
+                'payment_verified_by_user_id' => $actor->id,
+                'payment_verified_by_name' => $actor->full_name,
+                'payment_verified_at' => now(),
+                'payment_rejection_reason' => $decision === 'rejected' ? $reason : null,
+            ]);
+
+            $loaded = $group->refresh()->load('applications');
+
+            if ($decision === 'approved') {
+                // Endi o'quv bo'limiga jo'natamiz
+                foreach ($loaded->applications as $app) {
+                    if ($app->isDualApproved() && $app->academic_dept_status === RetakeApplication::STATUS_PENDING) {
+                        $this->notificationService->notifyAcademicReady($app);
+                    }
+                }
+                $this->notificationService->notifyPaymentVerified($loaded);
+            } else {
+                $this->notificationService->notifyPaymentRejected($loaded, $reason);
+            }
 
             return $loaded;
         });

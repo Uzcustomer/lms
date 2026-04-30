@@ -99,6 +99,15 @@ class RetakeApprovalController extends Controller
         // Statistika (faqat rolga tegishli arizalar bo'yicha)
         $stats = $this->calculateStats($role, $user);
 
+        // Registrator uchun: to'lov cheki tekshirilishi kutilayotganlar soni
+        $paymentToVerifyCount = 0;
+        if ($role === 'registrar') {
+            $paymentToVerifyCount = RetakeApplicationGroup::query()
+                ->whereNotNull('payment_uploaded_at')
+                ->where('payment_verification_status', 'pending')
+                ->count();
+        }
+
         return view('teacher.retake.index', [
             'groups' => $groups,
             'role' => $role,
@@ -107,6 +116,7 @@ class RetakeApprovalController extends Controller
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
             'stats' => $stats,
+            'paymentToVerifyCount' => $paymentToVerifyCount,
             'minReasonLength' => \App\Models\RetakeSetting::rejectReasonMinLength(),
         ]);
     }
@@ -140,16 +150,27 @@ class RetakeApprovalController extends Controller
 
     /**
      * Ariza bo'yicha qaror (tasdiqlash yoki rad etish).
+     * Registrator tasdiqlasa — joriy/mustaqil ta'lim baholari va OSKE/TEST flaglari
+     * majburiy.
      */
     public function decide(Request $request, int $applicationId): RedirectResponse
     {
         $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
-        $data = $request->validate([
+        $rules = [
             'decision' => 'required|in:approved,rejected',
             'reason' => 'nullable|string|min:' . \App\Models\RetakeSetting::rejectReasonMinLength() . '|max:1000',
-        ]);
+        ];
+
+        if ($role === 'registrar' && $request->input('decision') === 'approved') {
+            $rules['previous_joriy_grade'] = 'required|numeric|min:0|max:100';
+            $rules['previous_mustaqil_grade'] = 'required|numeric|min:0|max:100';
+            $rules['has_oske'] = 'sometimes|boolean';
+            $rules['has_test'] = 'sometimes|boolean';
+        }
+
+        $data = $request->validate($rules);
 
         $app = RetakeApplication::findOrFail($applicationId);
 
@@ -169,6 +190,12 @@ class RetakeApprovalController extends Controller
                     $user,
                     $data['decision'],
                     $data['reason'] ?? null,
+                    [
+                        'previous_joriy_grade' => $data['previous_joriy_grade'] ?? null,
+                        'previous_mustaqil_grade' => $data['previous_mustaqil_grade'] ?? null,
+                        'has_oske' => (bool) ($data['has_oske'] ?? false),
+                        'has_test' => (bool) ($data['has_test'] ?? false),
+                    ],
                 );
             }
         } catch (ValidationException $e) {
@@ -176,6 +203,70 @@ class RetakeApprovalController extends Controller
         }
 
         return redirect()->back()->with('success', 'Qaror muvaffaqiyatli yozildi');
+    }
+
+    /**
+     * Registrator ofisi to'lov chekini tasdiqlaydi yoki rad etadi.
+     */
+    public function verifyPayment(Request $request, int $groupId): RedirectResponse
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        if ($role !== 'registrar') {
+            abort(403, 'Faqat registrator ofisi to\'lov chekini tekshira oladi');
+        }
+
+        $data = $request->validate([
+            'decision' => 'required|in:approved,rejected',
+            'reason' => 'nullable|string|min:' . \App\Models\RetakeSetting::rejectReasonMinLength() . '|max:1000',
+        ]);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+
+        try {
+            $this->applicationService->verifyPayment(
+                $group,
+                $user,
+                $data['decision'],
+                $data['reason'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        $msg = $data['decision'] === 'approved'
+            ? 'To\'lov cheki tasdiqlandi va ariza o\'quv bo\'limiga jo\'natildi'
+            : 'To\'lov cheki rad etildi, talaba xabardor qilindi';
+
+        return redirect()->back()->with('success', $msg);
+    }
+
+    /**
+     * To'lov chekini ko'rib chiqish (registrator tekshiradi).
+     */
+    public function paymentReceipt(int $groupId)
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+        $this->authorizeGroupView($user, $role, $group);
+
+        if (!$group->payment_receipt_path) {
+            abort(404, 'To\'lov cheki yo\'q');
+        }
+
+        $absPath = \Illuminate\Support\Facades\Storage::disk('public')->path($group->payment_receipt_path);
+        if (!file_exists($absPath)) {
+            abort(404, 'To\'lov cheki fayli topilmadi');
+        }
+
+        $mime = mime_content_type($absPath) ?: 'application/octet-stream';
+        return response()->file($absPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="tolov_cheki_' . $group->id . '"',
+        ]);
     }
 
     /**
@@ -302,6 +393,13 @@ class RetakeApprovalController extends Controller
     private function applyFilter($query, string $filter, string $role): void
     {
         $myStatusColumn = $role === 'dean' ? 'dean_status' : 'registrar_status';
+
+        // Registrator uchun: to'lov cheki tekshirish kutilayotganlar
+        if ($filter === 'payment_to_verify' && $role === 'registrar') {
+            $query->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'pending');
+            return;
+        }
 
         if ($filter === 'pending_mine') {
             $query->whereHas('applications', function ($q) use ($myStatusColumn) {

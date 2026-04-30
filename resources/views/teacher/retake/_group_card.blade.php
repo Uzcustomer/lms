@@ -7,7 +7,7 @@
 @endphp
 
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
-     x-data="{ openReject: null }">
+     x-data="{ openReject: null, openApprove: null, openVerifyReject: false }">
     <div class="p-4 border-b border-gray-100 flex items-start justify-between flex-wrap gap-3">
         @if($canBulkDelete)
             <label class="flex items-center pt-1 cursor-pointer">
@@ -138,14 +138,24 @@
                         @php $myStatus = $app->{$myStatusField}; @endphp
                         @if($myStatus === 'pending' && $app->final_status === 'pending')
                             <div class="flex gap-2">
-                                <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}" class="inline">
-                                    @csrf
-                                    <input type="hidden" name="decision" value="approved">
-                                    <button type="submit"
+                                @if($role === 'registrar')
+                                    {{-- Registrator: grade va OSKE/TEST modali orqali tasdiqlaydi --}}
+                                    <button type="button"
+                                            @click="openApprove = {{ $app->id }}"
                                             class="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-md hover:bg-green-700">
                                         {{ __('Tasdiqlash') }}
                                     </button>
-                                </form>
+                                @else
+                                    {{-- Dekan: darhol tasdiqlaydi --}}
+                                    <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}" class="inline">
+                                        @csrf
+                                        <input type="hidden" name="decision" value="approved">
+                                        <button type="submit"
+                                                class="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-md hover:bg-green-700">
+                                            {{ __('Tasdiqlash') }}
+                                        </button>
+                                    </form>
+                                @endif
                                 <button type="button"
                                         @click="openReject = {{ $app->id }}"
                                         class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-md hover:bg-red-700">
@@ -221,7 +231,188 @@
                         </form>
                     </div>
                 </div>
+
+                {{-- Registrator tasdiqlash modal: baho va OSKE/TEST flaglari --}}
+                @if($role === 'registrar')
+                    <div x-show="openApprove === {{ $app->id }}"
+                         x-cloak
+                         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                         @keydown.escape.window="openApprove = null">
+                        <div class="fixed inset-0 bg-black bg-opacity-50" @click="openApprove = null"></div>
+                        <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-5 z-10">
+                            <h4 class="text-sm font-bold text-gray-900 mb-2">
+                                {{ __('Tasdiqlash — oldingi baholar') }}
+                            </h4>
+                            <p class="text-xs text-gray-500 mb-4">
+                                {{ $app->subject_name }} ({{ $app->semester_name }})
+                            </p>
+                            <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}" class="space-y-3">
+                                @csrf
+                                <input type="hidden" name="decision" value="approved">
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">
+                                            {{ __('Joriy ta\'lim') }} <span class="text-red-500">*</span>
+                                        </label>
+                                        <input type="number"
+                                               name="previous_joriy_grade"
+                                               step="0.1"
+                                               min="0"
+                                               max="100"
+                                               required
+                                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">
+                                            {{ __('Mustaqil ta\'lim') }} <span class="text-red-500">*</span>
+                                        </label>
+                                        <input type="number"
+                                               name="previous_mustaqil_grade"
+                                               step="0.1"
+                                               min="0"
+                                               max="100"
+                                               required
+                                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                    </div>
+                                </div>
+
+                                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                                    <p class="text-[11px] font-medium text-amber-900">
+                                        {{ __("Qayta o'qishda topshiriladi") }}:
+                                    </p>
+                                    <label class="flex items-center gap-2 text-xs text-gray-700">
+                                        <input type="checkbox" name="has_oske" value="1"
+                                               class="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>{{ __('OSKE') }}</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-xs text-gray-700">
+                                        <input type="checkbox" name="has_test" value="1"
+                                               class="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                                        <span>{{ __('TEST') }}</span>
+                                    </label>
+                                </div>
+
+                                <div class="flex gap-2 pt-2">
+                                    <button type="button"
+                                            @click="openApprove = null"
+                                            class="flex-1 px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                                        {{ __('Bekor qilish') }}
+                                    </button>
+                                    <button type="submit"
+                                            class="flex-1 px-3 py-2 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                        {{ __('Tasdiqlash') }}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Tasdiqlangandan keyin: oldingi baholar va OSKE/TEST flaglarini ko'rsatish --}}
+                @if($app->registrar_status === 'approved' && ($app->previous_joriy_grade !== null || $app->has_oske || $app->has_test))
+                    <div class="mt-2 text-[11px] text-gray-700 bg-gray-50 rounded-md px-2 py-1.5">
+                        @if($app->previous_joriy_grade !== null)
+                            <span>{{ __('Joriy') }}: <span class="font-medium">{{ rtrim(rtrim(number_format($app->previous_joriy_grade, 2, '.', ''), '0'), '.') }}</span></span>
+                            <span class="mx-1 text-gray-300">·</span>
+                            <span>{{ __('Mustaqil') }}: <span class="font-medium">{{ rtrim(rtrim(number_format($app->previous_mustaqil_grade, 2, '.', ''), '0'), '.') }}</span></span>
+                        @endif
+                        @if($app->has_oske || $app->has_test)
+                            <span class="mx-1 text-gray-300">·</span>
+                            <span class="text-amber-700">{{ __("Qayta topshiriladi") }}:
+                                @if($app->has_oske) <span class="font-medium">OSKE</span> @endif
+                                @if($app->has_oske && $app->has_test), @endif
+                                @if($app->has_test) <span class="font-medium">TEST</span> @endif
+                            </span>
+                        @endif
+                    </div>
+                @endif
             </div>
         @endforeach
     </div>
+
+    {{-- To'lov cheki tasdiqlash bloki (faqat registrator) --}}
+    @if($role === 'registrar' && $group->payment_uploaded_at)
+        <div class="border-t-2 px-4 py-3
+                    {{ $group->payment_verification_status === 'pending' ? 'bg-amber-50 border-amber-200' : '' }}
+                    {{ $group->payment_verification_status === 'approved' ? 'bg-green-50 border-green-200' : '' }}
+                    {{ $group->payment_verification_status === 'rejected' ? 'bg-red-50 border-red-200' : '' }}">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="text-xs">
+                    <span class="font-semibold">{{ __("To'lov cheki") }}:</span>
+                    <a href="{{ route('admin.retake.payment-receipt', $group->id) }}"
+                       target="_blank"
+                       class="text-blue-600 hover:underline">{{ __("Ko'rish") }}</a>
+                    <span class="text-gray-500 ml-2">
+                        ({{ __("Yuklangan") }}: {{ $group->payment_uploaded_at->format('Y-m-d H:i') }})
+                    </span>
+
+                    @if($group->payment_verification_status === 'approved')
+                        <span class="ml-2 text-green-700 font-medium">✓ {{ __("Tasdiqlangan") }}</span>
+                        @if($group->payment_verified_by_name)
+                            <span class="text-gray-600">— {{ $group->payment_verified_by_name }}</span>
+                        @endif
+                    @elseif($group->payment_verification_status === 'rejected')
+                        <span class="ml-2 text-red-700 font-medium">✗ {{ __("Rad etilgan") }}</span>
+                        @if($group->payment_rejection_reason)
+                            <div class="text-gray-700 mt-1">{{ __("Sabab") }}: {{ $group->payment_rejection_reason }}</div>
+                        @endif
+                    @endif
+                </div>
+
+                @if($group->payment_verification_status === 'pending')
+                    <div class="flex gap-2">
+                        <form method="POST" action="{{ route('admin.retake.verify-payment', $group->id) }}" class="inline">
+                            @csrf
+                            <input type="hidden" name="decision" value="approved">
+                            <button type="submit"
+                                    class="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-md hover:bg-green-700">
+                                {{ __("Haqiqiy") }}
+                            </button>
+                        </form>
+                        <button type="button"
+                                @click="openVerifyReject = true"
+                                class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-md hover:bg-red-700">
+                            {{ __("Rad etish") }}
+                        </button>
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- To'lov rad etish modal --}}
+        <div x-show="openVerifyReject"
+             x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             @keydown.escape.window="openVerifyReject = false">
+            <div class="fixed inset-0 bg-black bg-opacity-50" @click="openVerifyReject = false"></div>
+            <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-5 z-10">
+                <h4 class="text-sm font-bold text-gray-900 mb-3">
+                    {{ __("To'lov chekini rad etish sababi") }}
+                </h4>
+                <form method="POST" action="{{ route('admin.retake.verify-payment', $group->id) }}">
+                    @csrf
+                    <input type="hidden" name="decision" value="rejected">
+                    <textarea name="reason"
+                              rows="4"
+                              required
+                              minlength="{{ $minReasonLength }}"
+                              maxlength="1000"
+                              placeholder="{{ __('Sababni yozing (eng kamida') }} {{ $minReasonLength }} {{ __('belgi)') }}"
+                              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"></textarea>
+                    <div class="flex gap-2 mt-3">
+                        <button type="button"
+                                @click="openVerifyReject = false"
+                                class="flex-1 px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                            {{ __('Bekor qilish') }}
+                        </button>
+                        <button type="submit"
+                                class="flex-1 px-3 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            {{ __('Rad etish') }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endif
 </div>

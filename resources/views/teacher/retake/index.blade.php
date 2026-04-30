@@ -41,6 +41,12 @@
                     <label class="block text-xs text-gray-600 mb-1">{{ __('Holat') }}</label>
                     <select name="filter" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                         <option value="pending_mine" {{ $filter === 'pending_mine' ? 'selected' : '' }}>{{ __('Tasdiqimni kutyapti') }}</option>
+                        @if($role === 'registrar')
+                            <option value="payment_to_verify" {{ $filter === 'payment_to_verify' ? 'selected' : '' }}>
+                                {{ __("To'lov cheki tekshirilishi kutilmoqda") }}
+                                @if(($paymentToVerifyCount ?? 0) > 0) ({{ $paymentToVerifyCount }}) @endif
+                            </option>
+                        @endif
                         <option value="approved" {{ $filter === 'approved' ? 'selected' : '' }}>{{ __('Tasdiqlangan') }}</option>
                         <option value="rejected" {{ $filter === 'rejected' ? 'selected' : '' }}>{{ __('Rad etilgan') }}</option>
                         <option value="all" {{ $filter === 'all' ? 'selected' : '' }}>{{ __('Barchasi') }}</option>

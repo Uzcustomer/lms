@@ -117,10 +117,19 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="text-sm font-semibold text-amber-900">
-                            {{ __("To'lov chekingizni yuklang") }}
+                            @if($awaitingGroup->payment_verification_status === 'rejected')
+                                {{ __("To'lov chekingiz rad etildi — qaytadan yuklang") }}
+                            @else
+                                {{ __("To'lov chekingizni yuklang") }}
+                            @endif
                         </h3>
                         <p class="text-xs text-amber-800 mt-1">
-                            {{ __("Dekan va registrator arizangizni tasdiqlashdi. Jarayonni davom ettirish uchun to'lov qog'ozini yuklang.") }}
+                            @if($awaitingGroup->payment_verification_status === 'rejected')
+                                {{ __("Sabab") }}:
+                                <span class="font-medium">{{ $awaitingGroup->payment_rejection_reason ?? '—' }}</span>
+                            @else
+                                {{ __("Dekan va registrator arizangizni tasdiqlashdi. Jarayonni davom ettirish uchun to'lov qog'ozini yuklang.") }}
+                            @endif
                         </p>
                         <p class="text-[11px] text-amber-700 mt-1">
                             {{ __("Ariza") }} #{{ $awaitingGroup->id }} ·
@@ -149,6 +158,31 @@
                                 PDF, JPG, PNG · max {{ $paymentMaxMb ?? 5 }} MB
                             </span>
                         </form>
+                    </div>
+                </div>
+            </div>
+        @endforeach
+
+        {{-- To'lov tasdiqi kutilmoqda --}}
+        @foreach(($groupsPaymentVerifying ?? []) as $verifyingGroup)
+            <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-4">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-semibold text-blue-900">
+                            {{ __("To'lov chekingiz tekshirilmoqda") }}
+                        </h3>
+                        <p class="text-xs text-blue-800 mt-1">
+                            {{ __("Registrator ofisi to'lov chekingizning haqiqiyligini tekshirmoqda. Tasdiqlanganidan so'ng ariza o'quv bo'limiga jo'natiladi.") }}
+                        </p>
+                        <p class="text-[11px] text-blue-700 mt-1">
+                            {{ __("Ariza") }} #{{ $verifyingGroup->id }} ·
+                            {{ __("Yuklangan") }}: {{ $verifyingGroup->payment_uploaded_at->format('Y-m-d H:i') }}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -325,6 +359,25 @@
                                     @if($a->final_status === 'rejected' && $a->rejectionReason())
                                         <div class="text-[11px] text-red-600 ml-2">
                                             {{ __("Sabab") }}: {{ $a->rejectionReason() }}
+                                        </div>
+                                    @endif
+
+                                    {{-- Registrator tasdiqlagan bo'lsa: oldingi baholar va OSKE/TEST eslatmasi --}}
+                                    @if($a->registrar_status === 'approved' && $a->previous_joriy_grade !== null)
+                                        <div class="text-[11px] text-gray-700 ml-2 mt-1">
+                                            <span class="text-gray-500">{{ __("Oldingi baholar") }}:</span>
+                                            {{ __("Joriy") }} <span class="font-medium">{{ rtrim(rtrim(number_format($a->previous_joriy_grade, 2, '.', ''), '0'), '.') }}</span>,
+                                            {{ __("Mustaqil") }} <span class="font-medium">{{ rtrim(rtrim(number_format($a->previous_mustaqil_grade, 2, '.', ''), '0'), '.') }}</span>
+                                        </div>
+                                    @endif
+                                    @if($a->has_oske || $a->has_test)
+                                        <div class="text-[11px] ml-2 mt-1 text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                            <span class="font-medium">{{ __("Eslatma") }}:</span>
+                                            {{ __("Qayta o'qish davomida") }}
+                                            @if($a->has_oske)<span class="font-semibold">OSKE</span>@endif
+                                            @if($a->has_oske && $a->has_test) {{ __("va") }} @endif
+                                            @if($a->has_test)<span class="font-semibold">TEST</span>@endif
+                                            {{ __("qaytadan topshirilishi kerak.") }}
                                         </div>
                                     @endif
                                 @endforeach

@@ -31,6 +31,12 @@ class RetakeWindowController extends Controller
             ->orderByDesc('start_date')
             ->paginate(30);
 
+        // Yo'nalish bo'yicha fakultet nomini topish uchun map
+        $specialtyToFaculty = Specialty::query()
+            ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
+            ->select('specialties.specialty_hemis_id', 'departments.name as faculty_name')
+            ->pluck('departments.name', 'specialties.specialty_hemis_id');
+
         // Form uchun ma'lumotlar — faqat fakultetlar (structure_type_code = 11)
         $departments = Department::where('structure_type_code', 11)
             ->orderBy('name')
@@ -43,6 +49,7 @@ class RetakeWindowController extends Controller
 
         return view('teacher.academic-dept.retake-windows.index', [
             'windows' => $windows,
+            'specialtyToFaculty' => $specialtyToFaculty,
             'departments' => $departments,
             'specialties' => $specialties,
             'levels' => $levels,

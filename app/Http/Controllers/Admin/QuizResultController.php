@@ -2404,12 +2404,16 @@ class QuizResultController extends Controller
         foreach ($groups as &$g) {
             $qt = $g['quiz_type'] ?? '';
             $sh = $g['shakl'] ?? '';
-            if (preg_match('/^\d+-mavzu$/i', $sh)) {
+            $shLower = mb_strtolower($sh);
+            // NB shakli: talaba qatnashmagan — foydalanuvchi fan va YN turini o'zi tanlasin
+            if ($shLower === 'nb') {
+                $g['yn_turi'] = null;
+            } elseif (preg_match('/^\d+-mavzu$/i', $sh)) {
                 $g['yn_turi'] = 'jn_mavzu';
                 $g['mavzu_shakl'] = $sh;
-            } elseif (in_array($qt, $oskiTypes) || mb_strtolower($sh) === 'oski' || stripos($qt, 'OSKI') !== false) {
+            } elseif (in_array($qt, $oskiTypes) || $shLower === 'oski' || stripos($qt, 'OSKI') !== false) {
                 $g['yn_turi'] = 'oski';
-            } elseif (in_array($qt, $testTypes) || stripos(mb_strtolower($sh), 'test') !== false || stripos($qt, 'test') !== false) {
+            } elseif (in_array($qt, $testTypes) || stripos($shLower, 'test') !== false || stripos($qt, 'test') !== false) {
                 $g['yn_turi'] = 'test';
             } else {
                 $g['yn_turi'] = null;

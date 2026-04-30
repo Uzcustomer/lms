@@ -21,13 +21,23 @@ class RetakeApplicationGroup extends Model
         'verification_token',
         'payment_receipt_path',
         'payment_uploaded_at',
+        'payment_verification_status',
+        'payment_verified_by_user_id',
+        'payment_verified_by_name',
+        'payment_verified_at',
+        'payment_rejection_reason',
     ];
 
     protected $casts = [
         'receipt_amount' => 'decimal:2',
         'credit_price_at_time' => 'decimal:2',
         'payment_uploaded_at' => 'datetime',
+        'payment_verified_at' => 'datetime',
     ];
+
+    public const PAYMENT_VERIFICATION_PENDING = 'pending';
+    public const PAYMENT_VERIFICATION_APPROVED = 'approved';
+    public const PAYMENT_VERIFICATION_REJECTED = 'rejected';
 
     protected static function booted(): void
     {
@@ -70,24 +80,46 @@ class RetakeApplicationGroup extends Model
 
     /**
      * Talaba to'lov chekini yuklashi kerakmi?
-     * Hech bo'lmaganda bitta ariza dual-approved bo'lib, hali to'lov yuklanmagan bo'lsa.
+     * Hech bo'lmaganda bitta ariza dual-approved bo'lib, hali to'lov yuklanmagan
+     * yoki registrator tomonidan rad etilgan bo'lsa — qayta yuklash kerak.
      */
     public function getRequiresPaymentAttribute(): bool
     {
-        if ($this->payment_uploaded_at !== null) {
-            return false;
-        }
-
-        return $this->applications->contains(function (RetakeApplication $a) {
+        $hasDualApprovedActive = $this->applications->contains(function (RetakeApplication $a) {
             return $a->dean_status === RetakeApplication::STATUS_APPROVED
                 && $a->registrar_status === RetakeApplication::STATUS_APPROVED
                 && $a->academic_dept_status === RetakeApplication::STATUS_PENDING
                 && $a->final_status === RetakeApplication::STATUS_PENDING;
         });
+
+        if (!$hasDualApprovedActive) {
+            return false;
+        }
+
+        // Hali yuklamagan
+        if ($this->payment_uploaded_at === null) {
+            return true;
+        }
+
+        // Yuklagan, ammo registrator rad etgan — qayta yuklash kerak
+        if ($this->payment_verification_status === self::PAYMENT_VERIFICATION_REJECTED) {
+            return true;
+        }
+
+        return false;
     }
 
-    public function getIsPaidAttribute(): bool
+    /**
+     * To'lov yuklangan, ammo registrator hali tasdiqlamagan.
+     */
+    public function getPaymentAwaitingVerificationAttribute(): bool
     {
-        return $this->payment_uploaded_at !== null;
+        return $this->payment_uploaded_at !== null
+            && $this->payment_verification_status === self::PAYMENT_VERIFICATION_PENDING;
+    }
+
+    public function getIsPaymentVerifiedAttribute(): bool
+    {
+        return $this->payment_verification_status === self::PAYMENT_VERIFICATION_APPROVED;
     }
 }

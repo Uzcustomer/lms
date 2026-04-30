@@ -105,19 +105,81 @@ class RetakeNotificationService
     }
 
     /**
-     * To'lov yuklandi — ariza o'quv bo'limiga jo'natildi.
+     * To'lov yuklandi — talabaga: registrator tekshirishi kutilmoqda.
      */
     public function notifyPaymentSubmitted(RetakeApplicationGroup $group): void
     {
         $student = $group->student;
         if (!$student) return;
 
-        $title = "Arizangiz o'quv bo'limiga yuborildi";
-        $body = "To'lov chekingiz qabul qilindi. Endi ariza o'quv bo'limi tomonidan ko'rib chiqiladi.";
+        $title = "To'lov chekingiz qabul qilindi";
+        $body = "Registrator ofisi to'lov chekining haqiqiyligini tekshiradi. Tasdiqlanganidan so'ng ariza o'quv bo'limiga jo'natiladi.";
 
         $this->sendToStudent(
             $student,
             'retake_payment_submitted',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
+    /**
+     * Registrator ofisiga: yangi to'lov cheki tekshirish uchun keldi.
+     */
+    public function notifyPaymentToVerify(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "To'lov cheki tekshirilishi kutilmoqda";
+        $body = "{$student->full_name} ({$student->level_name}) qayta o'qish uchun to'lov chekini yukladi. Haqiqiyligini tekshiring.";
+
+        $registrars = Teacher::role(\App\Enums\ProjectRole::REGISTRAR_OFFICE->value)
+            ->where('status', true)
+            ->get();
+
+        foreach ($registrars as $r) {
+            $this->sendToTeacher($r, 'retake_payment_to_verify', $title, $body, $group->id, route('admin.retake.index'));
+        }
+    }
+
+    /**
+     * Registrator to'lov chekini tasdiqladi — ariza o'quv bo'limiga jo'natildi.
+     */
+    public function notifyPaymentVerified(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "Arizangiz o'quv bo'limiga yuborildi";
+        $body = "To'lov chekingiz registrator tomonidan tasdiqlandi. Endi ariza o'quv bo'limi tomonidan ko'rib chiqiladi.";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_verified',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
+    /**
+     * Registrator to'lov chekini rad etdi — talabaga sabab bilan xabar.
+     */
+    public function notifyPaymentRejected(RetakeApplicationGroup $group, ?string $reason = null): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "To'lov chekingiz rad etildi";
+        $body = "Registrator to'lov chekingizni rad etdi. Sabab: " . ($reason ?? '—') . ". Iltimos, to'lov chekini qayta yuklang.";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_rejected',
             $title,
             $body,
             $group->id,

@@ -27,6 +27,11 @@ class RetakeApplication extends Model
         'semester_name',
         'credit',
 
+        'previous_joriy_grade',
+        'previous_mustaqil_grade',
+        'has_oske',
+        'has_test',
+
         'dean_status', 'dean_user_id', 'dean_user_name', 'dean_decision_at', 'dean_reason',
         'registrar_status', 'registrar_user_id', 'registrar_user_name', 'registrar_decision_at', 'registrar_reason',
         'academic_dept_status', 'academic_dept_user_id', 'academic_dept_user_name', 'academic_dept_decision_at', 'academic_dept_reason',
@@ -38,6 +43,10 @@ class RetakeApplication extends Model
 
     protected $casts = [
         'credit' => 'decimal:2',
+        'previous_joriy_grade' => 'decimal:2',
+        'previous_mustaqil_grade' => 'decimal:2',
+        'has_oske' => 'boolean',
+        'has_test' => 'boolean',
         'dean_decision_at' => 'datetime',
         'registrar_decision_at' => 'datetime',
         'academic_dept_decision_at' => 'datetime',

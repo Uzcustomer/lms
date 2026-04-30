@@ -422,7 +422,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   Widget _buildSubjectCard(BuildContext context, Map<String, dynamic> subject, int index, bool isDark, AppLocalizations l) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final name = subject['subject_name']?.toString() ?? '';
-    final total = _getSubjectTotal(subject).round();
+    final ynValue = grades['total'];
+    final total = (ynValue != null && ynValue is num) ? ynValue.round() : _getSubjectTotal(subject).round();
     final isCompleted = _isSubjectCompleted(subject);
     final attendance = _getAttendancePercent(subject);
 
@@ -566,9 +567,16 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 Text('Mustaqil ta\'lim yuklash', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white : AppTheme.textPrimary)),
                 Text(
-                  hasSubmission ? 'Yuklangan · qayta yuklash mumkin' : 'Yuklanmagan',
+                  hasSubmission
+                      ? (canSubmit ? 'Yuklangan · qayta yuklash mumkin' : 'Yuklangan')
+                      : 'Yuklanmagan',
                   style: TextStyle(fontSize: 11, color: isDark ? Colors.white38 : Colors.black38),
                 ),
+                if (hasSubmission && mt['submitted_at'] != null)
+                  Text(
+                    mt['submitted_at'].toString(),
+                    style: TextStyle(fontSize: 10, color: isDark ? Colors.white30 : Colors.black26),
+                  ),
               ],
             ),
           ),

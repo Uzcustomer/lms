@@ -73,11 +73,17 @@ return [
         'open_window_minutes' => (int) env('MOODLE_OPEN_WINDOW_MINUTES', 10),
         // 0 = use Moodle quiz default; otherwise seconds to override per-attempt limit
         'timelimit_seconds' => (int) env('MOODLE_TIMELIMIT_SECONDS', 0),
-        // HEMIS educationLang.code → Moodle quiz_idnumber language token
+        // HEMIS educationLang.code → Moodle quiz_idnumber language token.
+        // HEMIS uses both alpha (uz/ru/en) and numeric codes (11/12/13/14/15).
         'lang_map' => [
             'uz' => env('MOODLE_LANG_UZ', 'uzb'),
             'ru' => env('MOODLE_LANG_RU', 'rus'),
             'en' => env('MOODLE_LANG_EN', 'eng'),
+            '11' => env('MOODLE_LANG_11', 'uzb'),
+            '12' => env('MOODLE_LANG_12', 'uzb'),
+            '13' => env('MOODLE_LANG_13', 'rus'),
+            '14' => env('MOODLE_LANG_14', 'eng'),
+            '15' => env('MOODLE_LANG_15', 'uzb'),
         ],
     ],
 

@@ -242,6 +242,8 @@ class _LoginScreenState extends State<LoginScreen> {
         },
         decoration: const InputDecoration(
           isDense: true,
+          filled: true,
+          fillColor: Colors.white,
           contentPadding: EdgeInsets.zero,
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
@@ -297,6 +299,8 @@ class _LoginScreenState extends State<LoginScreen> {
               },
               decoration: const InputDecoration(
                 isDense: true,
+                filled: true,
+                fillColor: Colors.white,
                 contentPadding: EdgeInsets.zero,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,

@@ -1528,7 +1528,7 @@ class StudentController extends Controller
         return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli saqlandi');
     }
 
-    public function examSchedule()
+    public function examSchedule(\Illuminate\Http\Request $request)
     {
         $student = Auth::guard('student')->user();
 
@@ -1554,7 +1554,16 @@ class StudentController extends Controller
             ->get()
             ->keyBy(fn($a) => $a->exam_schedule_id . ':' . $a->yn_type);
 
-        return view('student.exam-schedule', compact('examSchedules', 'student', 'assignments'));
+        // Resolve the physical computer the student is currently on
+        // (test markazi network IP → registered PC number).
+        $currentComputerNumber = \App\Models\Computer::numberByIp($request->ip());
+
+        return view('student.exam-schedule', compact(
+            'examSchedules',
+            'student',
+            'assignments',
+            'currentComputerNumber'
+        ));
     }
 
     /**

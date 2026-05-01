@@ -21,6 +21,14 @@
                         </p>
                     </div>
 
+                    @if(!empty($currentComputerNumber))
+                        <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <p class="text-sm text-green-800">
+                                {{ __('Hozir siz') }} <strong>№{{ $currentComputerNumber }}</strong> {{ __('kompyuterda turibsiz.') }}
+                            </p>
+                        </div>
+                    @endif
+
                     @if($examSchedules->isEmpty())
                         <div class="text-center py-12">
                             <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

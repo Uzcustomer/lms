@@ -294,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (v == null || v.isEmpty) return 'Parol kiriting';
                 return null;
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
                 border: InputBorder.none,
@@ -302,8 +302,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 focusedBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
-                hintText: '••••••••',
-                errorStyle: TextStyle(
+                hintText: 'Parolni kiriting',
+                hintStyle: TextStyle(color: _ink.withOpacity(0.3)),
+                errorStyle: const TextStyle(
                   fontSize: 11,
                   color: Color(0xFFB91C1C),
                   height: 1.2,
@@ -311,15 +312,15 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-          IconButton(
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-            iconSize: 18,
-            color: _ink.withOpacity(0.55),
-            icon: Icon(_showPw
-                ? Icons.visibility_off_outlined
-                : Icons.visibility_outlined),
-            onPressed: () => setState(() => _showPw = !_showPw),
+          GestureDetector(
+            onTap: () => setState(() => _showPw = !_showPw),
+            child: Icon(
+              _showPw
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              size: 18,
+              color: _ink.withOpacity(0.55),
+            ),
           ),
         ],
       ),

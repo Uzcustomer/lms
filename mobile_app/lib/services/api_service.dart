@@ -20,10 +20,11 @@ class ApiService {
       return prefs.getString(key);
     }
     try {
-      return await _secureStorage.read(key: key);
-    } catch (_) {
-      return null;
-    }
+      final value = await _secureStorage.read(key: key);
+      if (value != null) return value;
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key);
   }
 
   Future<void> _write(String key, String value) async {

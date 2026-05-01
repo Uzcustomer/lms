@@ -98,9 +98,8 @@ class StudentServicesScreen extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: GridView.builder(
+                child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,
@@ -112,7 +111,6 @@ class StudentServicesScreen extends StatelessWidget {
                       final item = services[index];
                       return _ServiceCard(item: item, isDark: isDark);
                     },
-                  ),
                 ),
               ),
             ],

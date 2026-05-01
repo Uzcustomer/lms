@@ -69,6 +69,10 @@
                                             } else {
                                                 $rowClass = '';
                                             }
+
+                                            $assignmentsCol = isset($assignments) ? $assignments : collect();
+                                            $oskiAssign = $assignmentsCol->get($schedule->id . ':oski');
+                                            $testAssign = $assignmentsCol->get($schedule->id . ':test');
                                         @endphp
                                         <tr class="{{ $rowClass }}">
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ $index + 1 }}</td>
@@ -94,7 +98,6 @@
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
-                                                @php($oskiAssign = ($assignments ?? collect())->get($schedule->id . ':oski'))
                                                 @if($oskiAssign)
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-600 text-white">
                                                         №{{ $oskiAssign->computer_number }}
@@ -124,7 +127,6 @@
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
-                                                @php($testAssign = ($assignments ?? collect())->get($schedule->id . ':test'))
                                                 @if($testAssign)
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white">
                                                         №{{ $testAssign->computer_number }}
@@ -198,6 +200,10 @@
                                     } else {
                                         $cardBorder = 'border-gray-200 bg-white';
                                     }
+
+                                    $assignmentsCol = isset($assignments) ? $assignments : collect();
+                                    $oskiAssign = $assignmentsCol->get($schedule->id . ':oski');
+                                    $testAssign = $assignmentsCol->get($schedule->id . ':test');
                                 @endphp
                                 <div class="border rounded-lg p-4 {{ $cardBorder }}">
                                     <div class="flex items-start justify-between mb-2">
@@ -249,10 +255,6 @@
                                             <span class="font-medium ml-1 text-blue-700">{{ \Carbon\Carbon::parse($schedule->test_time)->format('H:i') }}</span>
                                         </div>
                                         @endif
-                                        @php
-                                            $oskiAssign = ($assignments ?? collect())->get($schedule->id . ':oski');
-                                            $testAssign = ($assignments ?? collect())->get($schedule->id . ':test');
-                                        @endphp
                                         @if($oskiAssign)
                                         <div>
                                             <span class="text-gray-500">{{ __('OSKI kompyuter') }}:</span>

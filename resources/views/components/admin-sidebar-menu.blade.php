@@ -647,6 +647,7 @@
             4≥qarzdorlar
         </a>
 
+        @if(!$hasActiveRole('nazoratchi'))
         <a href="{{ route('admin.reports.top-students') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.top-students') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -654,6 +655,7 @@
             </svg>
             5 ga da'vogar
         </a>
+        @endif
 
         @if(!$hasActiveRole(['dekan']))
         <a href="{{ route('admin.reports.sababli-check') }}"

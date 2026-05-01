@@ -26,6 +26,7 @@ use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
 use App\Services\TelegramService;
 use App\Jobs\BookMoodleGroupExam;
+use App\Jobs\AssignComputersJob;
 use App\Enums\ProjectRole;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -973,6 +974,7 @@ class AcademicScheduleController extends Controller
             DB::commit();
 
             foreach ($bookingsToDispatch as [$id, $yn]) {
+                AssignComputersJob::dispatch($id, $yn);
                 BookMoodleGroupExam::dispatch($id, $yn);
             }
 
@@ -2102,10 +2104,11 @@ class AcademicScheduleController extends Controller
 
         $examSchedule->update([$timeColumn => $request->test_time]);
 
-        // Both date and time are now set → push the booking to Moodle.
+        // Both date and time are now set → assign computers + book on Moodle.
         $ynKey = $ynType === 'OSKI' ? 'oski' : 'test';
         $naFlag = $ynKey === 'oski' ? $examSchedule->oski_na : $examSchedule->test_na;
         if ($relatedDate && !$naFlag) {
+            AssignComputersJob::dispatch($examSchedule->id, $ynKey);
             BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
         }
 

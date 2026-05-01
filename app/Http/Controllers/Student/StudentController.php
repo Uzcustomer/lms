@@ -1546,7 +1546,15 @@ class StudentController extends Controller
             ->orderBy('test_date')
             ->get();
 
-        return view('student.exam-schedule', compact('examSchedules', 'student'));
+        // Personal computer assignments for this student. Keyed as
+        // "{schedule_id}:{yn_type}" so the view can quickly look them up.
+        $assignments = \App\Models\ComputerAssignment::query()
+            ->whereIn('exam_schedule_id', $examSchedules->pluck('id'))
+            ->where('student_id_number', $student->student_id_number)
+            ->get()
+            ->keyBy(fn($a) => $a->exam_schedule_id . ':' . $a->yn_type);
+
+        return view('student.exam-schedule', compact('examSchedules', 'student', 'assignments'));
     }
 
     /**

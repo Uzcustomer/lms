@@ -77,6 +77,13 @@ return [
         'close_buffer_minutes' => (int) env('MOODLE_CLOSE_BUFFER_MINUTES', 30),
         // 0 = use Moodle quiz default; otherwise seconds to override per-attempt limit
         'timelimit_seconds' => (int) env('MOODLE_TIMELIMIT_SECONDS', 0),
+        // Total computers in the test centre (used by ComputerAssignmentService)
+        'total_computers' => (int) env('MOODLE_TOTAL_COMPUTERS', 60),
+        // Quiz timelimit used to compute planned_end of each computer assignment.
+        // Should match the actual Moodle quiz timelimit (in minutes).
+        'quiz_duration_minutes' => (int) env('MOODLE_QUIZ_DURATION_MINUTES', 25),
+        // Buffer between two students sharing the same computer (in minutes)
+        'computer_buffer_minutes' => (int) env('MOODLE_COMPUTER_BUFFER_MINUTES', 5),
         // Quiz idnumber template. Placeholders: {yn} (lowercase: test/oski),
         // {YN} (uppercase), {lang} (uzb/rus/eng), {attempt} (1).
         'quiz_idnumber_template' => env(

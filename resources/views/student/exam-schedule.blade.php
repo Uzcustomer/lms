@@ -39,8 +39,10 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Fan nomi') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('OSKI sanasi') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('OSKI vaqti') }}</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('OSKI №') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Test sanasi') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Test vaqti') }}</th>
+                                        <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Test №') }}</th>
                                         <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">{{ __('Holat') }}</th>
                                     </tr>
                                 </thead>
@@ -92,6 +94,16 @@
                                                 @endif
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                                                @php($oskiAssign = ($assignments ?? collect())->get($schedule->id . ':oski'))
+                                                @if($oskiAssign)
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-600 text-white">
+                                                        №{{ $oskiAssign->computer_number }}
+                                                    </span>
+                                                @else
+                                                    <span class="text-gray-400">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
                                                 @if($schedule->test_na)
                                                     <span class="text-gray-400">-</span>
                                                 @elseif($schedule->test_date)
@@ -106,6 +118,16 @@
                                                 @if($schedule->test_time)
                                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                                         {{ \Carbon\Carbon::parse($schedule->test_time)->format('H:i') }}
+                                                    </span>
+                                                @else
+                                                    <span class="text-gray-400">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                                                @php($testAssign = ($assignments ?? collect())->get($schedule->id . ':test'))
+                                                @if($testAssign)
+                                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white">
+                                                        №{{ $testAssign->computer_number }}
                                                     </span>
                                                 @else
                                                     <span class="text-gray-400">—</span>
@@ -225,6 +247,22 @@
                                         <div>
                                             <span class="text-gray-500">{{ __('Test vaqti') }}:</span>
                                             <span class="font-medium ml-1 text-blue-700">{{ \Carbon\Carbon::parse($schedule->test_time)->format('H:i') }}</span>
+                                        </div>
+                                        @endif
+                                        @php
+                                            $oskiAssign = ($assignments ?? collect())->get($schedule->id . ':oski');
+                                            $testAssign = ($assignments ?? collect())->get($schedule->id . ':test');
+                                        @endphp
+                                        @if($oskiAssign)
+                                        <div>
+                                            <span class="text-gray-500">{{ __('OSKI kompyuter') }}:</span>
+                                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-600 text-white">№{{ $oskiAssign->computer_number }}</span>
+                                        </div>
+                                        @endif
+                                        @if($testAssign)
+                                        <div>
+                                            <span class="text-gray-500">{{ __('Test kompyuter') }}:</span>
+                                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-600 text-white">№{{ $testAssign->computer_number }}</span>
                                         </div>
                                         @endif
                                     </div>

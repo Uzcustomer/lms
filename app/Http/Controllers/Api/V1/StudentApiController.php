@@ -1246,36 +1246,54 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
 
-        $exams = ExamSchedule::where('group_hemis_id', $student->group_id)
+        $schedules = ExamSchedule::where('group_hemis_id', $student->group_id)
             ->where('semester_code', $student->semester_code)
             ->where(function ($query) use ($student) {
                 $query->where('education_year', $student->education_year_code)
                     ->orWhereNull('education_year');
             })
+            ->get();
+
+        // Personal computer assignments for this student across the schedules above
+        $assignments = \App\Models\ComputerAssignment::query()
+            ->whereIn('exam_schedule_id', $schedules->pluck('id'))
+            ->where('student_id_number', $student->student_id_number)
             ->get()
-            ->flatMap(function ($exam) {
-                $items = [];
+            ->keyBy(fn($a) => $a->exam_schedule_id . ':' . $a->yn_type);
 
-                if (!$exam->oski_na && $exam->oski_date) {
-                    $items[] = [
-                        'subject_name' => $exam->subject_name,
-                        'exam_type' => 'OSKI',
-                        'date' => $exam->oski_date->format('Y-m-d'),
-                        'time' => $exam->oski_time,
-                    ];
-                }
+        $exams = $schedules->flatMap(function ($exam) use ($assignments) {
+            $items = [];
 
-                if (!$exam->test_na && $exam->test_date) {
-                    $items[] = [
-                        'subject_name' => $exam->subject_name,
-                        'exam_type' => 'Test',
-                        'date' => $exam->test_date->format('Y-m-d'),
-                        'time' => $exam->test_time,
-                    ];
-                }
+            if (!$exam->oski_na && $exam->oski_date) {
+                $a = $assignments->get($exam->id . ':oski');
+                $items[] = [
+                    'subject_name' => $exam->subject_name,
+                    'exam_type' => 'OSKI',
+                    'date' => $exam->oski_date->format('Y-m-d'),
+                    'time' => $exam->oski_time,
+                    'computer_number' => $a?->computer_number,
+                    'planned_start' => $a?->planned_start?->format('Y-m-d H:i'),
+                    'planned_end' => $a?->planned_end?->format('Y-m-d H:i'),
+                    'status' => $a?->status,
+                ];
+            }
 
-                return $items;
-            })
+            if (!$exam->test_na && $exam->test_date) {
+                $a = $assignments->get($exam->id . ':test');
+                $items[] = [
+                    'subject_name' => $exam->subject_name,
+                    'exam_type' => 'Test',
+                    'date' => $exam->test_date->format('Y-m-d'),
+                    'time' => $exam->test_time,
+                    'computer_number' => $a?->computer_number,
+                    'planned_start' => $a?->planned_start?->format('Y-m-d H:i'),
+                    'planned_end' => $a?->planned_end?->format('Y-m-d H:i'),
+                    'status' => $a?->status,
+                ];
+            }
+
+            return $items;
+        })
             ->sortBy('date')
             ->values();
 

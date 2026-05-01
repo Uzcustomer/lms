@@ -196,6 +196,8 @@ class AppLocalizations {
   String get onTime => get('on_time');
   String get clear => get('clear');
   String get allDatesRequired => get('all_dates_required');
+  String get clubs => get('clubs');
+  String get clubsDesc => get('clubs_desc');
 
   static const Map<String, Map<String, String>> _translations = {
     'uz': {
@@ -297,6 +299,8 @@ class AppLocalizations {
       'on_time': 'O\'z vaqtida',
       'clear': 'Tozalash',
       'all_dates_required': 'Barcha nazoratlar uchun sanani tanlang',
+      'clubs': 'To\'garaklar',
+      'clubs_desc': 'To\'garaklarga a\'zo bo\'lish va arizalar',
       'tuition_fee': 'Shartnoma turi',
       'payment_form': 'To\'lov shakli',
       'paid': 'To\'langan',
@@ -474,6 +478,8 @@ class AppLocalizations {
       'on_time': 'Вовремя',
       'clear': 'Очистить',
       'all_dates_required': 'Выберите даты для всех контрольных',
+      'clubs': 'Кружки',
+      'clubs_desc': 'Вступление в кружки и заявки',
       'tuition_fee': 'Тип договора',
       'payment_form': 'Форма оплаты',
       'paid': 'Оплачено',
@@ -651,6 +657,8 @@ class AppLocalizations {
       'on_time': 'On time',
       'clear': 'Clear',
       'all_dates_required': 'Select dates for all assessments',
+      'clubs': 'Clubs',
+      'clubs_desc': 'Join clubs and manage applications',
       'tuition_fee': 'Contract Type',
       'payment_form': 'Payment form',
       'paid': 'Paid',

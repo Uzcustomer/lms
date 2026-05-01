@@ -31,11 +31,32 @@ class GeminiService {
   String? _studentContext;
 
   String _buildSystemPrompt() {
+    final now = DateTime.now();
+    const months = [
+      'yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
+      'iyul', 'avgust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr'
+    ];
+    const weekdays = [
+      'dushanba', 'seshanba', 'chorshanba', 'payshanba',
+      'juma', 'shanba', 'yakshanba'
+    ];
+    final today = '${now.year}-yil ${now.day}-${months[now.month - 1]} '
+        '(${weekdays[now.weekday - 1]}), ${now.hour.toString().padLeft(2, '0')}:'
+        '${now.minute.toString().padLeft(2, '0')}';
+    final isoToday =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
     final base = 'Sen TDTU (Toshkent Davlat Tibbiyot Universiteti) talabasining '
         'shaxsiy AI yordamchisisan. Ismingiz "TDTU AI Yordamchi". '
         'Talaba sening egang — uning ma\'lumotlari sen uchun ochiq va shaxsiy '
         'emas. Sen uning baholari, davomati, jadvali va boshqa o\'quv '
         'ma\'lumotlarini tahlil qilib, savollariga javob berishing kerak.\n\n'
+        '⚠️ BUGUNGI SANA: $today\n'
+        'ISO format: $isoToday\n'
+        'Bu sanani DOIMO eslab qol. O\'tib ketgan sanalar haqida "yaqin keladigan" '
+        'yoki "hozirda muhim" deb gapirma. Faqat $isoToday dan KEYINGI sanalar '
+        'kelajakda hisoblanadi. Ma\'lumotlardagi har bir sanani bugungi sana '
+        'bilan solishtir va to\'g\'ri xulosa qil.\n\n'
         'Qoidalar:\n'
         '- O\'zbek tilida javob ber, foydalanuvchi boshqa tilda yozsa o\'sha tilda javob ber\n'
         '- Aniq, qisqa, foydali javoblar ber\n'
@@ -43,7 +64,9 @@ class GeminiService {
         '- Tibbiyot, anatomiya, fiziologiya, farmakologiya bo\'yicha ham yordam ber\n'
         '- Foydalanuvchi rasm, PDF, audio yoki video yuborsa, uni diqqat bilan tahlil qil\n'
         '- Agar ma\'lumot yetarli bo\'lmasa, qaysi sahifaga borish kerakligini tushuntir\n'
-        '- "Men shaxsiy ma\'lumotlarga ega emasman" deb javob berma — ma\'lumotlar quyida\n';
+        '- "Men shaxsiy ma\'lumotlarga ega emasman" deb javob berma — ma\'lumotlar quyida\n'
+        '- Imtihon/dars/muddat haqida gapirsang [O\'TGAN] yoki [KELGUSI] yorlig\'iga '
+        'qarab tahlil qil. O\'tgan voqealarni tavsiya qilma\n';
 
     if (_studentContext == null || _studentContext!.isEmpty) {
       return '$base\n\nTalaba ma\'lumotlari hali yuklanmagan.';

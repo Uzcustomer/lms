@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
 import 'absence_excuse_list_screen.dart';
+import 'clubs_screen.dart';
 
 class StudentServicesScreen extends StatelessWidget {
   const StudentServicesScreen({super.key});
@@ -27,6 +28,16 @@ class StudentServicesScreen extends StatelessWidget {
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const AbsenceExcuseListScreen()),
+        ),
+      ),
+      _ServiceItem(
+        icon: Icons.groups_outlined,
+        title: l.clubs,
+        subtitle: l.clubsDesc,
+        color: const Color(0xFF4F46E5),
+        onTap: () => Navigator.push(
+          context,
+          SlideFadePageRoute(builder: (_) => const ClubsScreen()),
         ),
       ),
     ];

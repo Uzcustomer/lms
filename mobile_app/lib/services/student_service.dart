@@ -133,6 +133,35 @@ class StudentService {
     );
   }
 
+  // Club methods
+  Future<Map<String, dynamic>> getClubs() async {
+    return await _api.get(ApiConfig.studentClubs);
+  }
+
+  Future<Map<String, dynamic>> getMyClubs() async {
+    return await _api.get(ApiConfig.studentMyClubs);
+  }
+
+  Future<Map<String, dynamic>> joinClub({
+    required String clubName,
+    String? clubPlace,
+    String? clubDay,
+    String? clubTime,
+    String? kafedraName,
+  }) async {
+    return await _api.post(
+      ApiConfig.studentJoinClub,
+      {
+        'club_name': clubName,
+        if (clubPlace != null) 'club_place': clubPlace,
+        if (clubDay != null) 'club_day': clubDay,
+        if (clubTime != null) 'club_time': clubTime,
+        if (kafedraName != null) 'kafedra_name': kafedraName,
+      },
+      auth: true,
+    );
+  }
+
   // Chat methods
   Future<Map<String, dynamic>> getChatContacts() async {
     return await _api.get(ApiConfig.chatContacts);

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
+use App\Http\Controllers\Api\V1\ClubApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -64,6 +65,11 @@ Route::prefix('v1')->group(function () {
             Route::post('/excuses/missed-assessments', [AbsenceExcuseApiController::class, 'missedAssessments']);
             Route::get('/excuses/{id}/download', [AbsenceExcuseApiController::class, 'download']);
             Route::get('/excuses/{id}/download-pdf', [AbsenceExcuseApiController::class, 'downloadPdf']);
+
+            // Clubs
+            Route::get('/clubs', [ClubApiController::class, 'index']);
+            Route::get('/clubs/my', [ClubApiController::class, 'myClubs']);
+            Route::post('/clubs/join', [ClubApiController::class, 'join']);
         });
 
         // ── Chat endpoints ───────────────────────────────

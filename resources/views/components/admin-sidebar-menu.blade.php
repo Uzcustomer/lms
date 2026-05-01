@@ -325,6 +325,18 @@
             </svg>
             JN o'zlashtirish
         </a>
+        @elseif($hasActiveRole('registrator_ofisi'))
+        {{-- Registrator ofisi: YN kunini belgilash (sozlamalardan ruxsat berilgan bo'lsa) --}}
+        @if($canAccessExamDateSetting)
+        <div class="sidebar-section">Qo'shimcha</div>
+        <a href="{{ $r('admin.academic-schedule.index', 'teacher.academic-schedule.index') }}"
+           class="sidebar-link {{ $isActive('admin.academic-schedule.index', 'teacher.academic-schedule.index') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            YN kunini belgilash
+        </a>
+        @endif
         @elseif($hasActiveRole('nazoratchi'))
         {{-- Nazoratchi uchun hisobotlar (faqat o'qish) --}}
         <div class="sidebar-section">Hisobotlar</div>

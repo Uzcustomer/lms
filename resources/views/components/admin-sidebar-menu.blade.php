@@ -85,7 +85,7 @@
     <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section" style="position: relative;">
         {{-- DEBUG: temporary - shu satr ni keyin olib tashlanadi --}}
         <div style="position:absolute;top:0;left:0;right:0;background:#fef3c7;color:#78350f;padding:4px 6px;font-size:10px;font-family:monospace;z-index:99;border-bottom:1px solid #fbbf24;">
-            role={{ $activeRole }} | YN_access={{ $canAccessExamDateSetting ? 'YES' : 'NO' }}
+            role={{ $activeRole }} | YN_access={{ $canAccessExamDateSetting ? 'YES' : 'NO' }} | roles={{ implode(',', $userRoles ?: []) }}
         </div>
         <!-- Mobile close button -->
         <button x-data @click="$store.sidebar.close()"
@@ -341,6 +341,7 @@
             JN o'zlashtirish
         </a>
         @elseif(!$hasActiveRole(['kafedra_mudiri', 'tyutor']))
+        <div style="background:#dcfce7;color:#166534;padding:3px 6px;font-size:10px;font-family:monospace;border-radius:4px;margin:2px 6px;">DEBUG: Qo'shimcha branch entered</div>
         <div class="sidebar-section">Qo'shimcha</div>
 
         <a href="{{ $r('admin.independent.index', 'teacher.independent.index') }}"

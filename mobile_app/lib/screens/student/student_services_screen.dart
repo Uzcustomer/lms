@@ -192,17 +192,15 @@ class _ServiceCard extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                Positioned(
-                  top: -20,
-                  right: -20,
-                  child: Container(
-                    width: 100,
-                    height: 100,
+                Positioned.fill(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
                         colors: [
-                          item.color.withOpacity(isDark ? 0.28 : 0.18),
+                          item.color.withOpacity(isDark ? 0.15 : 0.08),
                           item.color.withOpacity(0),
                         ],
                       ),

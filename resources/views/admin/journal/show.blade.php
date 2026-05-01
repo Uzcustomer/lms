@@ -2158,9 +2158,20 @@
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
                                             $needsGrading = ($hasFile && !$hasGrade) || $hasResubmitted;
+                                            $timeAgoText = '';
                                             if ($needsGrading && $hasFile) {
                                                 $submittedAt = \Carbon\Carbon::parse($submission->submitted_at);
-                                                $daysSince = $submittedAt->diffInDays(now());
+                                                $diffSeconds = (int) abs($submittedAt->diffInSeconds(now()));
+                                                $daysSince = intdiv($diffSeconds, 86400);
+                                                $hoursSince = intdiv($diffSeconds - $daysSince * 86400, 3600);
+                                                if ($daysSince > 0) {
+                                                    $timeAgoText = $daysSince . ' kun' . ($hoursSince > 0 ? ' ' . $hoursSince . ' soat' : '') . ' o\'tdi';
+                                                } elseif ($hoursSince > 0) {
+                                                    $timeAgoText = $hoursSince . ' soat o\'tdi';
+                                                } else {
+                                                    $minutesSince = intdiv($diffSeconds, 60);
+                                                    $timeAgoText = max(1, $minutesSince) . ' daqiqa o\'tdi';
+                                                }
                                                 if ($daysSince >= 3) {
                                                     $urgency = 'danger';
                                                 } elseif ($daysSince >= 1) {
@@ -2194,9 +2205,9 @@
                                                             {{ Str::limit($submission->file_original_name, 20) }}
                                                         </a>
                                                         @if($urgency === 'warning')
-                                                            <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $daysSince }} kun o'tdi</span>
+                                                            <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $timeAgoText }}</span>
                                                         @elseif($urgency === 'danger')
-                                                            <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
+                                                            <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $timeAgoText }}!</span>
                                                         @endif
                                                         @if(auth()->user()?->hasRole('superadmin') && !$isYnSubmittedMt)
                                                             <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"

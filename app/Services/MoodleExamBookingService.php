@@ -56,8 +56,12 @@ class MoodleExamBookingService
         }
 
         $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
+        $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', 30));
         $timeopen = $startsAt->copy()->subMinutes($window)->getTimestamp();
-        $timeclose = $startsAt->copy()->addMinutes($window)->getTimestamp();
+        // After exam_time + window: no NEW attempt starts (handled by quizaccess plugin).
+        $startCutoff = $startsAt->copy()->addMinutes($window)->getTimestamp();
+        // timeclose is wider so in-progress attempts run their full Moodle timelimit.
+        $timeclose = $startsAt->copy()->addMinutes($window + $closeBuffer)->getTimestamp();
         $timelimit = max(0, (int) config('services.moodle.timelimit_seconds', 0));
 
         $courseIdnumber = $this->resolveCourseIdnumber($schedule, $ynType);
@@ -88,6 +92,7 @@ class MoodleExamBookingService
                 'timeopen' => $timeopen,
                 'timeclose' => $timeclose,
                 'timelimit' => $timelimit,
+                'start_cutoff' => $startCutoff,
                 'students' => array_values($usernames),
             ];
 
@@ -108,6 +113,7 @@ class MoodleExamBookingService
             'timeopen' => $timeopen,
             'timeclose' => $timeclose,
             'timelimit' => $timelimit,
+            'start_cutoff' => $startCutoff,
             'calls' => $calls,
         ];
 

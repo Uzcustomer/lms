@@ -8,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
 import 'absence_excuse_list_screen.dart';
+import 'appeals_list_screen.dart';
 import 'clubs_screen.dart';
 
 class StudentServicesScreen extends StatelessWidget {
@@ -39,6 +40,16 @@ class StudentServicesScreen extends StatelessWidget {
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const ClubsScreen()),
+        ),
+      ),
+      _ServiceItem(
+        icon: Icons.gavel_outlined,
+        title: l.appeal,
+        subtitle: l.appealDesc,
+        color: const Color(0xFF7C3AED),
+        onTap: () => Navigator.push(
+          context,
+          SlideFadePageRoute(builder: (_) => const AppealsListScreen()),
         ),
       ),
     ];

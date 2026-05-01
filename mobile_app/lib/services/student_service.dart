@@ -170,6 +170,52 @@ class StudentService {
     );
   }
 
+  // Exam appeal methods
+  Future<Map<String, dynamic>> getAppeals() async {
+    return await _api.get(ApiConfig.studentAppeals);
+  }
+
+  Future<Map<String, dynamic>> getAppealAvailableGrades() async {
+    return await _api.get(ApiConfig.studentAppealAvailableGrades);
+  }
+
+  Future<Map<String, dynamic>> getAppealDetail(int id) async {
+    return await _api.get('${ApiConfig.studentAppeals}/$id');
+  }
+
+  Future<Map<String, dynamic>> submitAppeal({
+    required int studentGradeId,
+    required String reason,
+    Uint8List? fileBytes,
+    String? fileName,
+  }) async {
+    final fields = <String, String>{
+      'student_grade_id': studentGradeId.toString(),
+      'reason': reason,
+    };
+    return await _api.multipartPost(
+      ApiConfig.studentAppeals,
+      fields,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
+  }
+
+  Future<Map<String, dynamic>> addAppealComment({
+    required int appealId,
+    required String comment,
+    Uint8List? fileBytes,
+    String? fileName,
+  }) async {
+    final fields = <String, String>{'comment': comment};
+    return await _api.multipartPost(
+      '${ApiConfig.studentAppeals}/$appealId/comment',
+      fields,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
+  }
+
   // Chat methods
   Future<Map<String, dynamic>> getChatContacts() async {
     return await _api.get(ApiConfig.chatContacts);

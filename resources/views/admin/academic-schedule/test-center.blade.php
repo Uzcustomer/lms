@@ -426,7 +426,7 @@
             input.value = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
         }
 
-        function saveTestTime(btn) {
+        function saveTestTime(btn, force) {
             var container = btn.parentElement;
             var input = container.querySelector('.test-time-input');
             var timeVal = input.value.trim();
@@ -460,7 +460,8 @@
                     semester_code: input.getAttribute('data-semester-code'),
                     yn_type: input.getAttribute('data-yn-type') || 'Test',
                     test_time: timeVal,
-                    yn_submitted: input.getAttribute('data-yn-submitted') === '1'
+                    yn_submitted: input.getAttribute('data-yn-submitted') === '1',
+                    force: force === true
                 })
             })
             .then(function(resp) { return resp.json(); })
@@ -489,7 +490,7 @@
                     }
                 } else if (data.error_code === 'lesson_conflict') {
                     input.value = '';
-                    showLessonConflictModal(data, subjectName, timeVal);
+                    showLessonConflictModal(data, subjectName, timeVal, btn, input);
                 } else {
                     showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
                 }
@@ -497,7 +498,7 @@
             .catch(function(err) {
                 if (err && err.error_code === 'lesson_conflict') {
                     input.value = '';
-                    showLessonConflictModal(err, subjectName, timeVal);
+                    showLessonConflictModal(err, subjectName, timeVal, btn, input);
                 } else {
                     showToast('Xatolik', 'Xatolik yuz berdi', true);
                 }
@@ -509,8 +510,9 @@
         }
 
         // Dars to'qnashuvi modali — shu guruhning shu sanada/vaqtda darslari mavjud
-        function showLessonConflictModal(data, subjectName, timeVal) {
+        function showLessonConflictModal(data, subjectName, timeVal, btn, input) {
             closeLessonConflictModal();
+            window.__lessonConflictPending = { btn: btn, input: input, timeVal: timeVal };
             var lessons = Array.isArray(data.lessons) ? data.lessons : [];
             var rowsHtml = '';
             lessons.forEach(function(l, i) {
@@ -547,8 +549,9 @@
                 + 'Bu vaqt oralig\'ida YN belgilab bo\'lmaydi. Iltimos boshqa vaqt yoki sanani tanlang.'
                 + '</div>'
                 + '</div>'
-                + '<div style="padding:12px 22px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;">'
-                + '<button type="button" onclick="closeLessonConflictModal()" style="padding:8px 22px;background:#0f172a;color:#fff;font-size:13px;font-weight:600;border:none;border-radius:8px;cursor:pointer;">Yopish</button>'
+                + '<div style="padding:12px 22px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">'
+                + '<button type="button" onclick="closeLessonConflictModal()" style="padding:8px 22px;background:#fff;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Yopish</button>'
+                + '<button type="button" onclick="forceSaveTestTime()" style="padding:8px 22px;background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;box-shadow:0 4px 12px rgba(234,88,12,0.35);">Baribir saqlansin</button>'
                 + '</div>'
                 + '</div>'
                 + '</div>';
@@ -557,6 +560,20 @@
         function closeLessonConflictModal() {
             var el = document.getElementById('lesson-conflict-overlay');
             if (el) el.remove();
+            window.__lessonConflictPending = null;
+        }
+
+        // "Baribir saqlash" — dars to'qnashishi e'tiborsiz qoldirilib, force=true bilan qayta jo'natiladi
+        function forceSaveTestTime() {
+            var pending = window.__lessonConflictPending;
+            if (!pending || !pending.btn || !pending.input) {
+                closeLessonConflictModal();
+                return;
+            }
+            // Tozalangan inputga vaqtni qaytaramiz
+            pending.input.value = pending.timeVal;
+            closeLessonConflictModal();
+            saveTestTime(pending.btn, true);
         }
         function esc(s) {
             return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {

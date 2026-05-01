@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
 use App\Http\Controllers\Api\V1\ClubApiController;
+use App\Http\Controllers\Api\V1\ExamAppealApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -71,6 +72,14 @@ Route::prefix('v1')->group(function () {
             Route::get('/clubs/my', [ClubApiController::class, 'myClubs']);
             Route::post('/clubs/join', [ClubApiController::class, 'join']);
             Route::post('/clubs/cancel', [ClubApiController::class, 'cancel']);
+
+            // Exam appeals (apellyatsiya)
+            Route::get('/appeals', [ExamAppealApiController::class, 'index']);
+            Route::get('/appeals/available-grades', [ExamAppealApiController::class, 'availableGrades']);
+            Route::post('/appeals', [ExamAppealApiController::class, 'store']);
+            Route::get('/appeals/{id}', [ExamAppealApiController::class, 'show']);
+            Route::post('/appeals/{id}/comment', [ExamAppealApiController::class, 'addComment']);
+            Route::get('/appeals/{id}/download', [ExamAppealApiController::class, 'download']);
         });
 
         // ── Chat endpoints ───────────────────────────────

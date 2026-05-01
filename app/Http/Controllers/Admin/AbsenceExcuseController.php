@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\AbsenceExcuseStatusExport;
 use App\Exports\AbsenceExcuseTemplate;
 use App\Http\Controllers\Controller;
 use App\Imports\AbsenceExcuseImport;
@@ -85,6 +86,16 @@ class AbsenceExcuseController extends Controller
         $reasons = AbsenceExcuse::reasonLabels();
 
         return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses'));
+    }
+
+    public function exportByStatus(string $status)
+    {
+        if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
+            abort(404);
+        }
+
+        $fileName = 'sababli-arizalar-' . $status . '-' . now()->format('Y-m-d_H-i') . '.xlsx';
+        return Excel::download(new AbsenceExcuseStatusExport($status), $fileName);
     }
 
     public function show($id)

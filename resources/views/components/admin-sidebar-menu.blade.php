@@ -564,7 +564,7 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan', 'oquv_bolimi', 'oquv_bolimi_boshligi']) && !$hasActiveRole('nazoratchi'))
         <div class="sidebar-section">Hisobotlar</div>
 
         @if(!$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi']))

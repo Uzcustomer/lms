@@ -46,7 +46,7 @@ class StudentServicesScreen extends StatelessWidget {
         icon: Icons.gavel_outlined,
         title: l.appeal,
         subtitle: l.appealDesc,
-        color: const Color(0xFF7C3AED),
+        color: const Color(0xFFD97706),
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const AppealsListScreen()),
@@ -191,24 +191,22 @@ class _ServiceCard extends StatelessWidget {
               ],
             ),
             child: Stack(
+              clipBehavior: Clip.hardEdge,
               children: [
                 Positioned(
-                  top: -50,
-                  right: -50,
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                    child: Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            item.color.withOpacity(isDark ? 0.42 : 0.35),
-                            item.color.withOpacity(0),
-                          ],
-                          stops: const [0.0, 0.7],
-                        ),
+                  top: -30,
+                  right: -30,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          item.color.withOpacity(isDark ? 0.32 : 0.22),
+                          item.color.withOpacity(0),
+                        ],
+                        stops: const [0.0, 0.8],
                       ),
                     ),
                   ),

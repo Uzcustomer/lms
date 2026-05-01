@@ -46,6 +46,7 @@ use App\Http\Controllers\Admin\StudentContractController as AdminStudentContract
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\Admin\VedomostTekshirishController;
 use App\Http\Controllers\MoodleImportController;
+use App\Http\Controllers\MoodleExamEventController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Student\StudentContractController as StudentContractCtrl;
 use App\Http\Controllers\LanguageController;
@@ -732,6 +733,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
         });
 
+        // Test markazi kompyuterlari (joylashuv + IP/MAC sozlamalari)
+        Route::prefix('computers')->name('computers.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\ComputerController::class, 'index'])->name('index');
+            Route::patch('/{computer}', [\App\Http\Controllers\Admin\ComputerController::class, 'update'])->name('update');
+        });
+
         // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
@@ -1245,6 +1252,9 @@ Route::post('/moodle/import', [MoodleImportController::class, 'import'])
     ->name('moodle.import');
 Route::get('/moodle/should-sync', [MoodleImportController::class, 'shouldSync'])
     ->name('moodle.should-sync');
+// Quiz attempt event push from local_hemisexport plugin (server-to-server)
+Route::post('/moodle/exam-event', [MoodleExamEventController::class, 'handle'])
+    ->name('moodle.exam-event');
 
 // Telegram bot webhook (CSRF excluded in bootstrap/app.php)
 Route::post('/telegram/webhook/{token}', [\App\Http\Controllers\TelegramWebhookController::class, 'handle'])

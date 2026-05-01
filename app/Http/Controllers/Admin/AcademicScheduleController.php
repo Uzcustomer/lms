@@ -42,6 +42,26 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Test-center sahifasini faqat ko'rish uchun ochadigan rollar.
+     * Bu rollar Saqlash/Yangilash kabi yozish operatsiyalarini bajara olmaydi.
+     */
+    private function isTestCenterReadOnly(): bool
+    {
+        $user = auth()->user() ?? auth('teacher')->user();
+        if (!$user) {
+            return true;
+        }
+        $activeRole = session('active_role', $user->getRoleNames()->first());
+        if (in_array($activeRole, ExamDateRoleService::adminRoles(), true)) {
+            return false;
+        }
+        return in_array($activeRole, [
+            ProjectRole::REGISTRAR_OFFICE->value,
+            ProjectRole::DEAN->value,
+        ], true);
+    }
+
+    /**
      * O'quv bo'limi uchun: YN kunini belgilash sahifasi
      */
     public function index(Request $request)
@@ -349,6 +369,7 @@ class AcademicScheduleController extends Controller
             'user_class' => auth()->user() ? get_class(auth()->user()) : 'null',
         ]);
 
+        $readOnly = $this->isTestCenterReadOnly();
         $today = now()->format('Y-m-d');
 
         $selectedEducationType = $request->get('education_type');
@@ -395,6 +416,7 @@ class AcademicScheduleController extends Controller
                 'isSearched',
                 'currentEducationYear',
                 'routePrefix',
+                'readOnly',
             ))->render();
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView VIEW RENDER xatolik: ' . $e->getMessage(), [
@@ -1915,6 +1937,10 @@ class AcademicScheduleController extends Controller
      */
     public function saveDayOverride(Request $request)
     {
+        if ($this->isTestCenterReadOnly()) {
+            return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
+        }
+
         $request->validate([
             'date' => 'nullable|date_format:Y-m-d',
             'dates' => 'nullable|array',
@@ -2016,6 +2042,10 @@ class AcademicScheduleController extends Controller
 
     public function saveTestTime(Request $request)
     {
+        if ($this->isTestCenterReadOnly()) {
+            return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
+        }
+
         $request->validate([
             'group_hemis_id' => 'required|string',
             'subject_id' => 'required|string',

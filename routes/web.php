@@ -178,6 +178,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'index'])->name('index');
             Route::get('/import/template', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'importTemplate'])->name('import-template');
             Route::post('/import', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'import'])->name('import');
+            Route::get('/export/{status}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'exportByStatus'])->whereIn('status', ['pending', 'approved', 'rejected'])->name('export-status');
             Route::get('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'show'])->name('show');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');

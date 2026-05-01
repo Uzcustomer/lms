@@ -246,48 +246,75 @@
 
             {{-- Status cardlar --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <a href="{{ route('admin.absence-excuses.index', ['status' => 'pending']) }}"
-                   class="block bg-yellow-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'pending' ? 'border-yellow-500 shadow-md ring-2 ring-yellow-200' : 'border-yellow-200 hover:border-yellow-400' }}">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
+                <div class="relative {{ request('status') == 'pending' ? '' : '' }}">
+                    <a href="{{ route('admin.absence-excuses.index', ['status' => 'pending']) }}"
+                       class="block bg-yellow-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'pending' ? 'border-yellow-500 shadow-md ring-2 ring-yellow-200' : 'border-yellow-200 hover:border-yellow-400' }}">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-yellow-600">Kutilmoqda</p>
+                                <p class="text-2xl font-bold text-yellow-800">{{ $stats['pending'] }}</p>
+                            </div>
                         </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-yellow-600">Kutilmoqda</p>
-                            <p class="text-2xl font-bold text-yellow-800">{{ $stats['pending'] }}</p>
+                    </a>
+                    <a href="{{ route('admin.absence-excuses.export-status', 'pending') }}"
+                       title="Excelga yuklab olish"
+                       class="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md bg-white/80 hover:bg-yellow-100 border border-yellow-200 text-yellow-700 hover:text-yellow-900 shadow-sm transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                        </svg>
+                    </a>
+                </div>
+                <div class="relative">
+                    <a href="{{ route('admin.absence-excuses.index', ['status' => 'approved']) }}"
+                       class="block bg-green-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'approved' ? 'border-green-500 shadow-md ring-2 ring-green-200' : 'border-green-200 hover:border-green-400' }}">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-green-600">Tasdiqlangan</p>
+                                <p class="text-2xl font-bold text-green-800">{{ $stats['approved'] }}</p>
+                            </div>
                         </div>
-                    </div>
-                </a>
-                <a href="{{ route('admin.absence-excuses.index', ['status' => 'approved']) }}"
-                   class="block bg-green-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'approved' ? 'border-green-500 shadow-md ring-2 ring-green-200' : 'border-green-200 hover:border-green-400' }}">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
+                    </a>
+                    <a href="{{ route('admin.absence-excuses.export-status', 'approved') }}"
+                       title="Excelga yuklab olish (kim tomonidan tasdiqlangani bilan)"
+                       class="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md bg-white/80 hover:bg-green-100 border border-green-200 text-green-700 hover:text-green-900 shadow-sm transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                        </svg>
+                    </a>
+                </div>
+                <div class="relative">
+                    <a href="{{ route('admin.absence-excuses.index', ['status' => 'rejected']) }}"
+                       class="block bg-red-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'rejected' ? 'border-red-500 shadow-md ring-2 ring-red-200' : 'border-red-200 hover:border-red-400' }}">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-red-600">Rad etilgan</p>
+                                <p class="text-2xl font-bold text-red-800">{{ $stats['rejected'] }}</p>
+                            </div>
                         </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-green-600">Tasdiqlangan</p>
-                            <p class="text-2xl font-bold text-green-800">{{ $stats['approved'] }}</p>
-                        </div>
-                    </div>
-                </a>
-                <a href="{{ route('admin.absence-excuses.index', ['status' => 'rejected']) }}"
-                   class="block bg-red-50 border-2 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:scale-[1.02] {{ request('status') == 'rejected' ? 'border-red-500 shadow-md ring-2 ring-red-200' : 'border-red-200 hover:border-red-400' }}">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-red-600">Rad etilgan</p>
-                            <p class="text-2xl font-bold text-red-800">{{ $stats['rejected'] }}</p>
-                        </div>
-                    </div>
-                </a>
+                    </a>
+                    <a href="{{ route('admin.absence-excuses.export-status', 'rejected') }}"
+                       title="Excelga yuklab olish"
+                       class="absolute top-2 right-2 inline-flex items-center justify-center w-8 h-8 rounded-md bg-white/80 hover:bg-red-100 border border-red-200 text-red-700 hover:text-red-900 shadow-sm transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                        </svg>
+                    </a>
+                </div>
             </div>
 
             {{-- Reviewed by filter ko'rsatkich --}}

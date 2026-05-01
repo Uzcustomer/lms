@@ -488,6 +488,7 @@
                         existingNote.remove();
                     }
                 } else if (data.error_code === 'lesson_conflict') {
+                    input.value = '';
                     showLessonConflictModal(data, subjectName, timeVal);
                 } else {
                     showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
@@ -495,6 +496,7 @@
             })
             .catch(function(err) {
                 if (err && err.error_code === 'lesson_conflict') {
+                    input.value = '';
                     showLessonConflictModal(err, subjectName, timeVal);
                 } else {
                     showToast('Xatolik', 'Xatolik yuz berdi', true);

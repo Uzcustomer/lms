@@ -22,6 +22,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
   bool _loading = true;
   String? _error;
   String? _joiningClub;
+  String? _cancellingClub;
 
   @override
   void initState() {
@@ -89,6 +90,33 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       );
     } finally {
       if (mounted) setState(() => _joiningClub = null);
+    }
+  }
+
+  Future<void> _cancelClub(String clubName) async {
+    setState(() => _cancellingClub = clubName);
+    try {
+      final res = await _service.cancelClub(clubName);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? "Ariza bekor qilindi!"),
+          backgroundColor: const Color(0xFFF59E0B),
+        ),
+      );
+      await _loadData();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFDC2626)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFDC2626)),
+      );
+    } finally {
+      if (mounted) setState(() => _cancellingClub = null);
     }
   }
 
@@ -271,6 +299,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
   ) {
     final applied = club['applied'] == true;
     final isJoining = _joiningClub == club['name'];
+    final isCancelling = _cancellingClub == club['name'];
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
@@ -318,22 +347,34 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
           const Spacer(),
           const SizedBox(height: 10),
           if (applied)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 7),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFF16A34A).withAlpha(20),
-                border: Border.all(color: const Color(0xFF16A34A).withAlpha(70)),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Text(
-                'Ariza yuborilgan',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF16A34A),
+            GestureDetector(
+              onTap: isCancelling ? null : () => _cancelClub(club['name'] as String),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDC2626).withAlpha(15),
+                  border: Border.all(color: const Color(0xFFDC2626).withAlpha(60)),
+                  borderRadius: BorderRadius.circular(9),
                 ),
+                child: isCancelling
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Color(0xFFDC2626)),
+                        ),
+                      )
+                    : const Text(
+                        'Bekor qilish',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFDC2626),
+                        ),
+                      ),
               ),
             )
           else
@@ -511,10 +552,46 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                     ),
                   ),
                 ],
-                const SizedBox(height: 6),
-                Text(
-                  club['created_at'] ?? '',
-                  style: TextStyle(fontSize: 10, color: subColor.withAlpha(120)),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        club['created_at'] ?? '',
+                        style: TextStyle(fontSize: 10, color: subColor.withAlpha(120)),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _cancellingClub == club['club_name']
+                          ? null
+                          : () => _cancelClub(club['club_name'] as String),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626).withAlpha(15),
+                          border: Border.all(color: const Color(0xFFDC2626).withAlpha(60)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: _cancellingClub == club['club_name']
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(Color(0xFFDC2626)),
+                                ),
+                              )
+                            : const Text(
+                                'Bekor qilish',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

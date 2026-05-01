@@ -277,4 +277,31 @@ class ClubApiController extends Controller
             'message' => "To'garakka a'zo bo'lish uchun ariza yuborildi!",
         ]);
     }
+
+    public function cancel(Request $request): JsonResponse
+    {
+        $request->validate([
+            'club_name' => 'required|string|max:255',
+        ]);
+
+        $student = $request->user();
+
+        $membership = ClubMembership::where('student_id', $student->id)
+            ->where('club_name', $request->club_name)
+            ->first();
+
+        if (!$membership) {
+            return response()->json([
+                'success' => false,
+                'message' => "Ariza topilmadi.",
+            ], 404);
+        }
+
+        $membership->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Ariza bekor qilindi.",
+        ]);
+    }
 }

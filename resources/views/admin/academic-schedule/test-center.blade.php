@@ -487,16 +487,78 @@
                     } else if (existingNote) {
                         existingNote.remove();
                     }
+                } else if (data.error_code === 'lesson_conflict') {
+                    showLessonConflictModal(data, subjectName, timeVal);
                 } else {
                     showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
                 }
             })
-            .catch(function() {
-                showToast('Xatolik', 'Xatolik yuz berdi', true);
+            .catch(function(err) {
+                if (err && err.error_code === 'lesson_conflict') {
+                    showLessonConflictModal(err, subjectName, timeVal);
+                } else {
+                    showToast('Xatolik', 'Xatolik yuz berdi', true);
+                }
             })
             .finally(function() {
                 btn.disabled = false;
                 btn.style.opacity = '1';
+            });
+        }
+
+        // Dars to'qnashuvi modali — shu guruhning shu sanada/vaqtda darslari mavjud
+        function showLessonConflictModal(data, subjectName, timeVal) {
+            closeLessonConflictModal();
+            var lessons = Array.isArray(data.lessons) ? data.lessons : [];
+            var rowsHtml = '';
+            lessons.forEach(function(l, i) {
+                rowsHtml += '<tr>'
+                    + '<td style="padding:8px 10px;color:#475569;font-size:12px;">' + (i + 1) + '</td>'
+                    + '<td style="padding:8px 10px;font-weight:600;color:#0f172a;">' + (l.subject_name || '-') + '</td>'
+                    + '<td style="padding:8px 10px;color:#64748b;font-size:12px;">' + (l.training_type || '-') + '</td>'
+                    + '<td style="padding:8px 10px;color:#1e293b;font-weight:600;text-align:center;">' + (l.start || '') + ' – ' + (l.end || '') + '</td>'
+                    + '<td style="padding:8px 10px;color:#475569;font-size:12px;">' + (l.pair_name || '-') + '</td>'
+                    + '</tr>';
+            });
+            var html = ''
+                + '<div id="lesson-conflict-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;">'
+                + '<div style="background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;">'
+                + '<div style="padding:14px 22px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;display:flex;align-items:center;justify-content:space-between;">'
+                + '<h3 style="margin:0;font-size:16px;font-weight:700;">⚠️ Vaqt ustma-ust tushdi — guruh darsda</h3>'
+                + '<button type="button" onclick="closeLessonConflictModal()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;padding:0 6px;">&times;</button>'
+                + '</div>'
+                + '<div style="padding:18px 22px;overflow-y:auto;">'
+                + '<p style="margin:0 0 12px;color:#475569;font-size:13px;">'
+                + '<b>' + esc(subjectName) + '</b> uchun tanlangan <b>' + esc(data.date || '') + '</b> sanasida <b>' + esc(data.time_range || timeVal) + '</b> oralig\'ida bu guruhning quyidagi darslari mavjud:'
+                + '</p>'
+                + '<table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">'
+                + '<thead><tr style="background:#f8fafc;">'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">#</th>'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Fan</th>'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Tur</th>'
+                + '<th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Vaqt</th>'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Juftlik</th>'
+                + '</tr></thead>'
+                + '<tbody>' + (rowsHtml || '<tr><td colspan="5" style="padding:14px;text-align:center;color:#94a3b8;">Ma\'lumot yo\'q</td></tr>') + '</tbody>'
+                + '</table>'
+                + '<div style="margin-top:14px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;font-weight:500;">'
+                + 'Bu vaqt oralig\'ida YN belgilab bo\'lmaydi. Iltimos boshqa vaqt yoki sanani tanlang.'
+                + '</div>'
+                + '</div>'
+                + '<div style="padding:12px 22px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;">'
+                + '<button type="button" onclick="closeLessonConflictModal()" style="padding:8px 22px;background:#0f172a;color:#fff;font-size:13px;font-weight:600;border:none;border-radius:8px;cursor:pointer;">Yopish</button>'
+                + '</div>'
+                + '</div>'
+                + '</div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+        function closeLessonConflictModal() {
+            var el = document.getElementById('lesson-conflict-overlay');
+            if (el) el.remove();
+        }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
             });
         }
     </script>

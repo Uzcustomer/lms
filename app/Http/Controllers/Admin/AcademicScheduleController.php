@@ -2098,6 +2098,36 @@ class AcademicScheduleController extends Controller
                     'computer_count' => $computerCount,
                 ], 422);
             }
+
+            // Shu guruhning shu sanada va shu vaqt oralig'ida darsi bormi tekshirish
+            $slotStartStr = $slotStart->format('H:i:s');
+            $slotEndStr = $slotEnd->format('H:i:s');
+            $conflictingLessons = DB::table('schedules')
+                ->where('group_id', $request->group_hemis_id)
+                ->whereNull('deleted_at')
+                ->whereDate('lesson_date', $relatedDateStr)
+                ->where('lesson_pair_start_time', '<', $slotEndStr)
+                ->where('lesson_pair_end_time', '>', $slotStartStr)
+                ->select('subject_name', 'lesson_pair_name', 'lesson_pair_start_time', 'lesson_pair_end_time', 'training_type_name')
+                ->orderBy('lesson_pair_start_time')
+                ->get();
+
+            if ($conflictingLessons->isNotEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'lesson_conflict',
+                    'message' => "Tanlangan sana va vaqt oralig'ida shu guruhning darslari mavjud — bu vaqtni belgilab bo'lmaydi.",
+                    'date' => \Carbon\Carbon::parse($relatedDateStr)->format('d.m.Y'),
+                    'time_range' => $newTime . ' – ' . $slotEnd->format('H:i'),
+                    'lessons' => $conflictingLessons->map(fn($l) => [
+                        'subject_name'  => $l->subject_name,
+                        'pair_name'     => $l->lesson_pair_name,
+                        'start'         => substr($l->lesson_pair_start_time, 0, 5),
+                        'end'           => substr($l->lesson_pair_end_time, 0, 5),
+                        'training_type' => $l->training_type_name,
+                    ])->values(),
+                ], 422);
+            }
         }
 
         $examSchedule->update([$timeColumn => $request->test_time]);

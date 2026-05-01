@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final screenH = MediaQuery.of(context).size.height;
-    final heroH = screenH * 0.44;
+    final heroH = screenH * 0.36;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
@@ -88,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
               height: heroH,
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
               child: Form(
                 key: _formKey,
                 child: Column(

@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final screenH = MediaQuery.of(context).size.height;
-    final heroH = screenH * 0.44;
+    final heroH = screenH * 0.48;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
@@ -521,7 +521,7 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, height * 0.55),
+                size: Size(MediaQuery.of(context).size.width, height * 0.72),
                 painter: _BuildingPainter(
                   color: Colors.white.withOpacity(0.10),
                 ),

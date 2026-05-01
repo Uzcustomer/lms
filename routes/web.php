@@ -1261,6 +1261,9 @@ Route::get('/moodle/should-sync', [MoodleImportController::class, 'shouldSync'])
 // Quiz attempt event push from local_hemisexport plugin (server-to-server)
 Route::post('/moodle/exam-event', [MoodleExamEventController::class, 'handle'])
     ->name('moodle.exam-event');
+// Proctor dashboard state (read-only) — Moodle proctor plugin polls this
+Route::get('/api/proctor/state', [\App\Http\Controllers\Api\ProctorStateController::class, 'state'])
+    ->name('api.proctor.state');
 
 // Telegram bot webhook (CSRF excluded in bootstrap/app.php)
 Route::post('/telegram/webhook/{token}', [\App\Http\Controllers\TelegramWebhookController::class, 'handle'])

@@ -83,6 +83,10 @@
        style="height: 100vh;">
     <!-- Logo Section -->
     <div class="p-4 flex flex-col items-center flex-shrink-0 sidebar-logo-section" style="position: relative;">
+        {{-- DEBUG: temporary - shu satr ni keyin olib tashlanadi --}}
+        <div style="position:absolute;top:0;left:0;right:0;background:#fef3c7;color:#78350f;padding:4px 6px;font-size:10px;font-family:monospace;z-index:99;border-bottom:1px solid #fbbf24;">
+            role={{ $activeRole }} | YN_access={{ $canAccessExamDateSetting ? 'YES' : 'NO' }}
+        </div>
         <!-- Mobile close button -->
         <button x-data @click="$store.sidebar.close()"
                 class="sidebar-close-btn">

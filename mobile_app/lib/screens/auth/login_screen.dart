@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final screenH = MediaQuery.of(context).size.height;
-    final heroH = screenH * 0.36;
+    final heroH = screenH * 0.44;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
@@ -224,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildIdField() {
     return _FieldShell(
-      label: _isStudent ? 'HEMIS ID' : 'XODIM ID',
+      label: 'LOGIN',
       child: TextFormField(
         controller: _idCtrl,
         keyboardType: TextInputType.text,
@@ -235,11 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
           color: _ink,
         ),
         validator: (v) {
-          if (v == null || v.trim().isEmpty) {
-            return _isStudent
-                ? 'HEMIS ID kiriting'
-                : 'Xodim ID kiriting';
-          }
+          if (v == null || v.trim().isEmpty) return 'Login kiriting';
           return null;
         },
         decoration: InputDecoration(
@@ -250,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
           focusedBorder: InputBorder.none,
           errorBorder: InputBorder.none,
           focusedErrorBorder: InputBorder.none,
-          hintText: _isStudent ? '304220780019' : 'tm-2024-0481',
+          hintText: _isStudent ? 'Talaba login' : 'Xodim login',
           hintStyle: TextStyle(color: _ink.withOpacity(0.3)),
           errorStyle: const TextStyle(
             fontSize: 11,
@@ -264,7 +260,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildPasswordField() {
     return _FieldShell(
-      label: 'PAROL',
+      label: 'PASSWORD',
       trailing: GestureDetector(
         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -525,14 +521,14 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, 110),
+                size: Size(MediaQuery.of(context).size.width, 140),
                 painter: _BuildingPainter(
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withOpacity(0.10),
                 ),
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(28, topPadding + 28, 28, 28),
+              padding: EdgeInsets.fromLTRB(24, topPadding + 20, 24, 28),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -550,24 +546,25 @@ class _Hero extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'TDTU · LMS',
+                    'TASHMEDUNITF - LMS',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 13,
-                      letterSpacing: 3,
+                      letterSpacing: 2.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                    'Toshkent Davlat Tibbiyot Universiteti',
+                    'Toshkent Davlat Tibbiyot Universiteti\nTermiz filiali',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.75),
                       fontSize: 11.5,
-                      letterSpacing: 1.2,
+                      letterSpacing: 1,
                       fontWeight: FontWeight.w500,
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -587,33 +584,41 @@ class _BuildingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-
-    final pillarW = size.width * 0.045;
-    final gap = size.width * 0.025;
-    final totalW = 7 * pillarW + 6 * gap;
+    const pillarCount = 11;
+    final pillarW = size.width * 0.035;
+    final gap = size.width * 0.02;
+    final totalW = pillarCount * pillarW + (pillarCount - 1) * gap;
     final startX = (size.width - totalW) / 2;
 
-    const heights = [0.55, 0.75, 0.90, 1.0, 0.90, 0.75, 0.55];
+    final pillarH = size.height * 0.72;
+    final roofBaseY = size.height - pillarH;
 
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < pillarCount; i++) {
       final x = startX + i * (pillarW + gap);
-      final h = size.height * heights[i];
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, size.height - h, pillarW, h),
-        const Radius.circular(3),
+        Rect.fromLTWH(x, roofBaseY, pillarW, pillarH),
+        const Radius.circular(2),
       );
       canvas.drawRRect(rect, paint);
     }
 
-    final roofPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
     final roofPath = Path()
-      ..moveTo(startX - gap, size.height - size.height * 1.0 + 2)
-      ..lineTo(startX + totalW / 2, size.height - size.height * 1.0 - 14)
-      ..lineTo(startX + totalW + gap, size.height - size.height * 1.0 + 2)
+      ..moveTo(startX - gap * 2, roofBaseY + 2)
+      ..lineTo(startX + totalW / 2, roofBaseY - size.height * 0.22)
+      ..lineTo(startX + totalW + gap * 2, roofBaseY + 2)
       ..close();
-    canvas.drawPath(roofPath, roofPaint);
+    canvas.drawPath(roofPath, paint);
+
+    final beamRect = Rect.fromLTWH(
+      startX - gap * 2,
+      roofBaseY - 2,
+      totalW + gap * 4,
+      6,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(beamRect, const Radius.circular(2)),
+      paint,
+    );
   }
 
   @override

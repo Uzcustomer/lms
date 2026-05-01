@@ -57,6 +57,8 @@ class ComputerController extends Controller
             'ip_address' => 'nullable|string|max:45',
             'mac_address' => 'nullable|string|max:32',
             'label' => 'nullable|string|max:100',
+            'grid_column' => 'nullable|integer|min:1|max:5',
+            'grid_row' => 'nullable|integer|min:1|max:15',
             'active' => 'nullable|boolean',
         ]);
 

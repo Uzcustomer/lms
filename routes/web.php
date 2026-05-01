@@ -1223,6 +1223,12 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         // Route::get('/get-semesters', [LessonController::class, 'getSemesters'])->name('get.semesters');
         // Route::get('/get-subjects', [LessonController::class, 'getSubjects'])->name('get.subjects');
 
+        // Test markazi kompyuterlari (teacher-side mirror)
+        Route::prefix('computers')->name('computers.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\ComputerController::class, 'index'])->name('index');
+            Route::patch('/{computer}', [\App\Http\Controllers\Admin\ComputerController::class, 'update'])->name('update');
+        });
+
         // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');

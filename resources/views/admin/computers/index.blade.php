@@ -83,13 +83,15 @@
                                 @endphp
                                 @if($pc)
                                     <button type="button"
-                                            class="border-2 rounded {{ $bg }} {{ $text }} p-2 text-left text-xs cursor-pointer hover:shadow-md transition"
+                                            class="border-2 rounded {{ $bg }} {{ $text }} p-2 text-left text-xs cursor-pointer hover:shadow-md transition h-[78px]"
                                             onclick="openComputerEditor({{ $pc->id }})"
                                             data-id="{{ $pc->id }}"
                                             data-number="{{ $pc->number }}"
                                             data-ip="{{ $pc->ip_address }}"
                                             data-mac="{{ $pc->mac_address }}"
                                             data-label="{{ $pc->label }}"
+                                            data-col="{{ $pc->grid_column }}"
+                                            data-row="{{ $pc->grid_row }}"
                                             data-active="{{ $pc->active ? 1 : 0 }}">
                                         <div class="font-bold text-sm">№{{ $pc->number }}</div>
                                         <div class="text-[10px] opacity-70 mt-0.5">{{ $pc->ip_address ?? '—' }}</div>
@@ -105,7 +107,9 @@
                                         @endif
                                     </button>
                                 @else
-                                    <div class="border border-dashed border-transparent rounded h-[68px]"></div>
+                                    <div class="border border-dashed border-gray-200 rounded h-[78px] flex items-center justify-center text-[10px] text-gray-300 select-none">
+                                        {{ __('bo\'sh') }}<br>{{ "r{$r}c{$c}" }}
+                                    </div>
                                 @endif
                             @endfor
                         @endfor
@@ -141,6 +145,16 @@
                     <label class="block text-xs text-gray-600 mb-1">{{ __('Belgi (label)') }}</label>
                     <input type="text" id="ce-label" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
                 </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">{{ __('Ustun (1-5)') }}</label>
+                        <input type="number" id="ce-col" min="1" max="5" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">{{ __('Qator (1-15, 1=past)') }}</label>
+                        <input type="number" id="ce-row" min="1" max="15" class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                    </div>
+                </div>
                 <div class="flex items-center gap-2">
                     <input type="checkbox" id="ce-active" class="rounded border-gray-300">
                     <label for="ce-active" class="text-sm">{{ __('Aktiv (ishlaydi)') }}</label>
@@ -162,6 +176,8 @@
             document.getElementById('ce-ip').value = btn.dataset.ip || '';
             document.getElementById('ce-mac').value = btn.dataset.mac || '';
             document.getElementById('ce-label').value = btn.dataset.label || '';
+            document.getElementById('ce-col').value = btn.dataset.col || '';
+            document.getElementById('ce-row').value = btn.dataset.row || '';
             document.getElementById('ce-active').checked = btn.dataset.active === '1';
             document.getElementById('computerEditor').classList.remove('hidden');
             document.getElementById('computerEditor').classList.add('flex');
@@ -177,6 +193,8 @@
                 ip_address: document.getElementById('ce-ip').value || null,
                 mac_address: document.getElementById('ce-mac').value || null,
                 label: document.getElementById('ce-label').value || null,
+                grid_column: document.getElementById('ce-col').value ? parseInt(document.getElementById('ce-col').value, 10) : null,
+                grid_row: document.getElementById('ce-row').value ? parseInt(document.getElementById('ce-row').value, 10) : null,
                 active: document.getElementById('ce-active').checked,
             };
             const resp = await fetch(`{{ url('/admin/computers') }}/${id}`, {

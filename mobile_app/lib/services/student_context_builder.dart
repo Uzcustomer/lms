@@ -1,9 +1,12 @@
-import 'student_service.dart';
+import 'student_data_cache.dart';
 
+/// Builds the long markdown text we feed to Gemini as the AI's view of the
+/// student. Pure projection of the cache — no API calls happen here, so the
+/// AI stays in sync with whatever the cache last fetched.
 class StudentContextBuilder {
-  final StudentService _service;
+  final StudentDataCache _cache;
 
-  StudentContextBuilder(this._service);
+  StudentContextBuilder(this._cache);
 
   static const _monthsUz = [
     'yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
@@ -15,7 +18,7 @@ class StudentContextBuilder {
     'juma', 'shanba', 'yakshanba'
   ];
 
-  Future<String> build() async {
+  String build() {
     final buf = StringBuffer();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -30,31 +33,24 @@ class StudentContextBuilder {
     buf.writeln('- ISO: ${now.toIso8601String().substring(0, 10)}');
     buf.writeln(
         '- ESLATMA: bu sanadan oldingi sanalar [O\'TGAN], keyingilari [KELGUSI]');
+    if (_cache.lastFetchedAt != null) {
+      final fa = _cache.lastFetchedAt!;
+      buf.writeln(
+          '- Cache yangilangan: ${fa.year}-${_pad(fa.month)}-${_pad(fa.day)} '
+          '${_pad(fa.hour)}:${_pad(fa.minute)}');
+    }
     buf.writeln();
 
-    final results = await Future.wait([
-      _safeCall(() => _service.getProfile()),
-      _safeCall(() => _service.getDashboard()),
-      _safeCall(() => _service.getSubjects()),
-      _safeCall(() => _service.getAttendance()),
-      _safeCall(() => _service.getExamSchedule()),
-      _safeCall(() => _service.getRating()),
-      _safeCall(() => _service.getSchedule()),
-      _safeCall(() => _service.getPendingLessons()),
-      _safeCall(() => _service.getContract()),
-      _safeCall(() => _service.getExcuses()),
-    ]);
-
-    final profile = results[0]?['data'] as Map<String, dynamic>?;
-    final dashboard = results[1]?['data'] as Map<String, dynamic>?;
-    final subjects = results[2]?['data'] as List<dynamic>?;
-    final attendance = results[3]?['data'] as Map<String, dynamic>?;
-    final examSchedule = results[4]?['data'];
-    final rating = results[5]?['data'] as Map<String, dynamic>?;
-    final schedule = results[6]?['data'] as Map<String, dynamic>?;
-    final pendingLessons = results[7]?['data'];
-    final contract = results[8]?['data'];
-    final excuses = results[9]?['data'];
+    final profile = _cache.profile?['data'] as Map<String, dynamic>?;
+    final dashboard = _cache.dashboard?['data'] as Map<String, dynamic>?;
+    final subjects = _cache.subjects?['data'] as List<dynamic>?;
+    final attendance = _cache.attendance?['data'] as Map<String, dynamic>?;
+    final examSchedule = _cache.examSchedule?['data'];
+    final rating = _cache.rating?['data'] as Map<String, dynamic>?;
+    final schedule = _cache.schedule?['data'] as Map<String, dynamic>?;
+    final pendingLessons = _cache.pendingLessons?['data'];
+    final contract = _cache.contract?['data'];
+    final excuses = _cache.excuses?['data'];
 
     if (profile != null) {
       buf.writeln('## SHAXSIY MA\'LUMOTLAR');
@@ -78,24 +74,9 @@ class StudentContextBuilder {
       buf.writeln('YN formula: JN×50% + MT×20% + ON×0% + OSKI×15% + TEST×15%');
       buf.writeln();
 
-      final detailFutures = <Future<Map<String, dynamic>?>>[];
       for (final s in subjects) {
-        if (s is Map<String, dynamic>) {
-          final id = s['id'] as int?;
-          if (id != null) {
-            detailFutures.add(
-                _safeCall(() => _service.getSubjectGrades(id)));
-          } else {
-            detailFutures.add(Future.value(null));
-          }
-        }
-      }
-
-      final details = await Future.wait(detailFutures);
-
-      for (int i = 0; i < subjects.length; i++) {
-        final s = subjects[i];
         if (s is! Map<String, dynamic>) continue;
+        final id = s['id'];
         final name = s['subject_name'] ?? s['name'] ?? '?';
         final grades = s['grades'] as Map<String, dynamic>? ?? {};
         final yn = _computeYn(grades);
@@ -113,29 +94,35 @@ class StudentContextBuilder {
 
         if (s['mt_submission'] is Map<String, dynamic>) {
           final mt = s['mt_submission'] as Map<String, dynamic>;
-          _line(buf, 'MT yuklangan', mt['has_submission'] == true ? 'Ha' : 'Yo\'q');
-          _line(buf, 'MT yuklash mumkin', mt['can_submit'] == true ? 'Ha' : 'Yo\'q');
+          _line(buf, 'MT yuklangan',
+              mt['has_submission'] == true ? 'Ha' : 'Yo\'q');
+          _line(buf, 'MT yuklash mumkin',
+              mt['can_submit'] == true ? 'Ha' : 'Yo\'q');
           _line(buf, 'MT yuklangan sana', mt['submitted_at']);
         }
 
-        final detail = details.length > i ? details[i] : null;
-        final detailData = detail?['data'];
-        if (detailData is Map<String, dynamic>) {
-          final gradesList = detailData['grades'] as List<dynamic>?;
-          if (gradesList != null && gradesList.isNotEmpty) {
-            buf.writeln('  JN batafsil kunlik baholar:');
-            for (final g in gradesList) {
-              if (g is! Map<String, dynamic>) continue;
-              final date = g['lesson_date']?.toString() ?? '';
-              final grade = g['grade'] ?? g['ball'];
-              final absent = g['absent'] == true || g['is_absent'] == true;
-              final type = g['training_type_name'] ?? '';
-              final shortDate = date.length >= 10 ? date.substring(0, 10) : date;
-              final marker = _pastFutureMarker(shortDate, today);
-              if (absent) {
-                buf.writeln('    - $shortDate $marker: NB (qatnashmagan) [$type]');
-              } else if (grade != null) {
-                buf.writeln('    - $shortDate $marker: $grade ball [$type]');
+        if (id is int) {
+          final detail = _cache.subjectGrades(id);
+          final detailData = detail?['data'];
+          if (detailData is Map<String, dynamic>) {
+            final gradesList = detailData['grades'] as List<dynamic>?;
+            if (gradesList != null && gradesList.isNotEmpty) {
+              buf.writeln('  JN batafsil kunlik baholar:');
+              for (final g in gradesList) {
+                if (g is! Map<String, dynamic>) continue;
+                final date = g['lesson_date']?.toString() ?? '';
+                final grade = g['grade'] ?? g['ball'];
+                final absent = g['absent'] == true || g['is_absent'] == true;
+                final type = g['training_type_name'] ?? '';
+                final shortDate =
+                    date.length >= 10 ? date.substring(0, 10) : date;
+                final marker = _pastFutureMarker(shortDate, today);
+                if (absent) {
+                  buf.writeln(
+                      '    - $shortDate $marker: NB (qatnashmagan) [$type]');
+                } else if (grade != null) {
+                  buf.writeln('    - $shortDate $marker: $grade ball [$type]');
+                }
               }
             }
           }
@@ -360,14 +347,5 @@ class StudentContextBuilder {
       }
     }
     return hasAny ? sum : null;
-  }
-
-  Future<Map<String, dynamic>?> _safeCall(
-      Future<Map<String, dynamic>> Function() fn) async {
-    try {
-      final res = await fn();
-      if (res['success'] == true) return res;
-    } catch (_) {}
-    return null;
   }
 }

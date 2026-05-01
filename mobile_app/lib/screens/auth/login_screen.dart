@@ -70,97 +70,107 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final safeTop = MediaQuery.of(context).padding.top;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final screenH = MediaQuery.of(context).size.height;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _Hero(accent: _accent, accentSoft: _accentSoft),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Xush kelibsiz',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.6,
-                          color: _ink,
+      body: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: screenH),
+          child: IntrinsicHeight(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Hero(
+                  accent: _accent,
+                  accentSoft: _accentSoft,
+                  topPadding: safeTop,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Xush kelibsiz',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.6,
+                            color: _ink,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _isStudent
-                            ? 'Talaba portaliga kirish'
-                            : 'Xodimlar portaliga kirish',
-                        style: TextStyle(
-                            fontSize: 13, color: _ink.withOpacity(0.6)),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildRoleTabs(),
-                      const SizedBox(height: 16),
-                      _buildIdField(),
-                      const SizedBox(height: 10),
-                      _buildPasswordField(),
-                      const SizedBox(height: 12),
-                      _buildRememberCheckbox(),
-                      Consumer<AuthProvider>(
-                        builder: (context, auth, _) {
-                          if (auth.errorMessage == null) {
-                            return const SizedBox(height: 14);
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 12, bottom: 14),
-                            child: Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDC2626).withOpacity(0.08),
-                                border: Border.all(
-                                    color:
-                                        const Color(0xFFDC2626).withOpacity(0.25)),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                auth.errorMessage!,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFFB91C1C),
+                        const SizedBox(height: 4),
+                        Text(
+                          _isStudent
+                              ? 'Talaba portaliga kirish'
+                              : 'Xodimlar portaliga kirish',
+                          style: TextStyle(
+                              fontSize: 13, color: _ink.withOpacity(0.6)),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildRoleTabs(),
+                        const SizedBox(height: 16),
+                        _buildIdField(),
+                        const SizedBox(height: 10),
+                        _buildPasswordField(),
+                        const SizedBox(height: 12),
+                        _buildRememberCheckbox(),
+                        Consumer<AuthProvider>(
+                          builder: (context, auth, _) {
+                            if (auth.errorMessage == null) {
+                              return const SizedBox(height: 14);
+                            }
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.only(top: 12, bottom: 14),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color:
+                                      const Color(0xFFDC2626).withOpacity(0.08),
+                                  border: Border.all(
+                                      color: const Color(0xFFDC2626)
+                                          .withOpacity(0.25)),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  auth.errorMessage!,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFB91C1C),
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                      _buildSubmitButton(),
-                      const SizedBox(height: 14),
+                            );
+                          },
+                        ),
+                        _buildSubmitButton(),
+                      ],
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+                  child: Column(
+                    children: [
                       _buildOrDivider(),
                       const SizedBox(height: 14),
                       _buildHemisButton(),
-                      const SizedBox(height: 18),
-                      Center(
-                        child: Text(
-                          '© TDTU ${DateTime.now().year}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: _ink.withOpacity(0.4),
-                          ),
-                        ),
-                      ),
+                      SizedBox(height: 16 + safeBottom),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -492,7 +502,12 @@ class _LoginScreenState extends State<LoginScreen> {
 class _Hero extends StatelessWidget {
   final Color accent;
   final Color accentSoft;
-  const _Hero({required this.accent, required this.accentSoft});
+  final double topPadding;
+  const _Hero({
+    required this.accent,
+    required this.accentSoft,
+    required this.topPadding,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -510,39 +525,56 @@ class _Hero extends StatelessWidget {
             colors: [accent, accentSoft],
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(28, 32, 28, 36),
-        child: Column(
+        child: Stack(
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.16),
-                border: Border.all(
-                    color: Colors.white.withOpacity(0.45), width: 1.5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.school_rounded,
-                  color: Colors.white, size: 32),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'TDTU · LMS',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                letterSpacing: 3,
-                fontWeight: FontWeight.w700,
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: CustomPaint(
+                size: Size(MediaQuery.of(context).size.width, 80),
+                painter: _BuildingPainter(
+                  color: Colors.white.withOpacity(0.08),
+                ),
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              'Toshkent Davlat Tibbiyot Universiteti',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 10,
-                letterSpacing: 1.2,
-                fontWeight: FontWeight.w500,
+            Padding(
+              padding: EdgeInsets.fromLTRB(28, topPadding + 36, 28, 48),
+              child: Column(
+                children: [
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.16),
+                      border: Border.all(
+                          color: Colors.white.withOpacity(0.45), width: 1.5),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(Icons.school_rounded,
+                        color: Colors.white, size: 34),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'TDTU · LMS',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      letterSpacing: 3,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toshkent Davlat Tibbiyot Universiteti',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 11,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -550,6 +582,46 @@ class _Hero extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BuildingPainter extends CustomPainter {
+  final Color color;
+  _BuildingPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+
+    final pillarW = size.width * 0.045;
+    final gap = size.width * 0.025;
+    final totalW = 7 * pillarW + 6 * gap;
+    final startX = (size.width - totalW) / 2;
+
+    const heights = [0.55, 0.75, 0.90, 1.0, 0.90, 0.75, 0.55];
+
+    for (int i = 0; i < 7; i++) {
+      final x = startX + i * (pillarW + gap);
+      final h = size.height * heights[i];
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, size.height - h, pillarW, h),
+        const Radius.circular(3),
+      );
+      canvas.drawRRect(rect, paint);
+    }
+
+    final roofPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final roofPath = Path()
+      ..moveTo(startX - gap, size.height - size.height * 1.0 + 2)
+      ..lineTo(startX + totalW / 2, size.height - size.height * 1.0 - 14)
+      ..lineTo(startX + totalW + gap, size.height - size.height * 1.0 + 2)
+      ..close();
+    canvas.drawPath(roofPath, roofPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _FieldShell extends StatelessWidget {

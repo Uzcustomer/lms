@@ -207,7 +207,8 @@ class _ServiceCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Material(
+                Positioned.fill(
+                  child: Material(
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: item.onTap,
@@ -218,6 +219,7 @@ class _ServiceCard extends StatelessWidget {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Container(
                             width: 56,
@@ -272,6 +274,7 @@ class _ServiceCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                ),
                 ),
               ],
             ),

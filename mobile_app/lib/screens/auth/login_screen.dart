@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final screenH = MediaQuery.of(context).size.height;
-    final heroH = screenH * 0.48;
+    final heroH = screenH * 0.44;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
@@ -521,7 +521,7 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, height * 0.72),
+                size: Size(MediaQuery.of(context).size.width, height * 0.82),
                 painter: _BuildingPainter(
                   color: Colors.white.withOpacity(0.10),
                 ),
@@ -589,8 +589,8 @@ class _BuildingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
     const pillarCount = 11;
-    final pillarW = size.width * 0.035;
-    final gapX = size.width * 0.022;
+    final pillarW = size.width * 0.042;
+    final gapX = size.width * 0.027;
     final totalW = pillarCount * pillarW + (pillarCount - 1) * gapX;
     final startX = (size.width - totalW) / 2;
 

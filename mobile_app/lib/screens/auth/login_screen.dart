@@ -73,105 +73,95 @@ class _LoginScreenState extends State<LoginScreen> {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
     final screenH = MediaQuery.of(context).size.height;
+    final heroH = screenH * 0.36;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
       body: SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: screenH),
-          child: IntrinsicHeight(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Hero(
-                  accent: _accent,
-                  accentSoft: _accentSoft,
-                  topPadding: safeTop,
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Xush kelibsiz',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.6,
-                            color: _ink,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _isStudent
-                              ? 'Talaba portaliga kirish'
-                              : 'Xodimlar portaliga kirish',
-                          style: TextStyle(
-                              fontSize: 13, color: _ink.withOpacity(0.6)),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildRoleTabs(),
-                        const SizedBox(height: 16),
-                        _buildIdField(),
-                        const SizedBox(height: 10),
-                        _buildPasswordField(),
-                        const SizedBox(height: 12),
-                        _buildRememberCheckbox(),
-                        Consumer<AuthProvider>(
-                          builder: (context, auth, _) {
-                            if (auth.errorMessage == null) {
-                              return const SizedBox(height: 14);
-                            }
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.only(top: 12, bottom: 14),
-                              child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color(0xFFDC2626).withOpacity(0.08),
-                                  border: Border.all(
-                                      color: const Color(0xFFDC2626)
-                                          .withOpacity(0.25)),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  auth.errorMessage!,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFFB91C1C),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildSubmitButton(),
-                      ],
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
-                  child: Column(
-                    children: [
-                      _buildOrDivider(),
-                      const SizedBox(height: 14),
-                      _buildHemisButton(),
-                      SizedBox(height: 16 + safeBottom),
-                    ],
-                  ),
-                ),
-              ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Hero(
+              accent: _accent,
+              accentSoft: _accentSoft,
+              topPadding: safeTop,
+              height: heroH,
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Xush kelibsiz',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.6,
+                        color: _ink,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isStudent
+                          ? 'Talaba portaliga kirish'
+                          : 'Xodimlar portaliga kirish',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 13, color: _ink.withOpacity(0.6)),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildRoleTabs(),
+                    const SizedBox(height: 16),
+                    _buildIdField(),
+                    const SizedBox(height: 10),
+                    _buildPasswordField(),
+                    const SizedBox(height: 12),
+                    _buildRememberCheckbox(),
+                    Consumer<AuthProvider>(
+                      builder: (context, auth, _) {
+                        if (auth.errorMessage == null) {
+                          return const SizedBox(height: 14);
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 12, bottom: 14),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDC2626).withOpacity(0.08),
+                              border: Border.all(
+                                  color: const Color(0xFFDC2626)
+                                      .withOpacity(0.25)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              auth.errorMessage!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFB91C1C),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildSubmitButton(),
+                    const SizedBox(height: 14),
+                    _buildOrDivider(),
+                    const SizedBox(height: 14),
+                    _buildHemisButton(),
+                    SizedBox(height: 16 + safeBottom),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -503,10 +493,12 @@ class _Hero extends StatelessWidget {
   final Color accent;
   final Color accentSoft;
   final double topPadding;
+  final double height;
   const _Hero({
     required this.accent,
     required this.accentSoft,
     required this.topPadding,
+    required this.height,
   });
 
   @override
@@ -518,6 +510,7 @@ class _Hero extends StatelessWidget {
       ),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
+        height: height,
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -532,19 +525,20 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, 80),
+                size: Size(MediaQuery.of(context).size.width, 110),
                 painter: _BuildingPainter(
                   color: Colors.white.withOpacity(0.08),
                 ),
               ),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(28, topPadding + 36, 28, 48),
+              padding: EdgeInsets.fromLTRB(28, topPadding + 28, 28, 28),
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    width: 68,
-                    height: 68,
+                    width: 72,
+                    height: 72,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.16),
                       border: Border.all(
@@ -552,14 +546,15 @@ class _Hero extends StatelessWidget {
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: const Icon(Icons.school_rounded,
-                        color: Colors.white, size: 34),
+                        color: Colors.white, size: 36),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   const Text(
                     'TDTU · LMS',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 12,
+                      fontSize: 13,
                       letterSpacing: 3,
                       fontWeight: FontWeight.w700,
                     ),
@@ -567,9 +562,10 @@ class _Hero extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Toshkent Davlat Tibbiyot Universiteti',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.75),
+                      fontSize: 11.5,
                       letterSpacing: 1.2,
                       fontWeight: FontWeight.w500,
                     ),

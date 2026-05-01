@@ -227,8 +227,11 @@ class _LoginScreenState extends State<LoginScreen> {
       label: 'LOGIN',
       child: TextFormField(
         controller: _idCtrl,
-        keyboardType: TextInputType.text,
+        keyboardType: TextInputType.visiblePassword,
         autofillHints: const [AutofillHints.username],
+        autocorrect: false,
+        enableSuggestions: false,
+        cursorColor: _accent,
         style: const TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w600,
@@ -238,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (v == null || v.trim().isEmpty) return 'Login kiriting';
           return null;
         },
-        decoration: InputDecoration(
+        decoration: const InputDecoration(
           isDense: true,
           contentPadding: EdgeInsets.zero,
           border: InputBorder.none,
@@ -246,9 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
           focusedBorder: InputBorder.none,
           errorBorder: InputBorder.none,
           focusedErrorBorder: InputBorder.none,
-          hintText: _isStudent ? 'Talaba login' : 'Xodim login',
-          hintStyle: TextStyle(color: _ink.withOpacity(0.3)),
-          errorStyle: const TextStyle(
+          errorStyle: TextStyle(
             fontSize: 11,
             color: Color(0xFFB91C1C),
             height: 1.2,
@@ -284,17 +285,19 @@ class _LoginScreenState extends State<LoginScreen> {
               controller: _pwCtrl,
               obscureText: !_showPw,
               autofillHints: const [AutofillHints.password],
-              style: TextStyle(
+              autocorrect: false,
+              enableSuggestions: false,
+              cursorColor: _accent,
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: _ink,
-                letterSpacing: _showPw ? 0 : 3,
               ),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Parol kiriting';
                 return null;
               },
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
                 border: InputBorder.none,
@@ -302,9 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 focusedBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
-                hintText: 'Parolni kiriting',
-                hintStyle: TextStyle(color: _ink.withOpacity(0.3)),
-                errorStyle: const TextStyle(
+                errorStyle: TextStyle(
                   fontSize: 11,
                   color: Color(0xFFB91C1C),
                   height: 1.2,

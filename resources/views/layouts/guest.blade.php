@@ -24,38 +24,18 @@
             * { font-family: 'Inter', sans-serif; }
 
             .login-bg {
-                background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0d9488 100%);
+                background: #ffffff;
                 min-height: 100vh;
                 position: relative;
                 overflow: hidden;
             }
-            .login-bg::before {
-                content: '';
-                position: absolute;
-                top: -50%;
-                right: -30%;
-                width: 80%;
-                height: 150%;
-                background: radial-gradient(ellipse, rgba(13, 148, 136, 0.15) 0%, transparent 70%);
-                pointer-events: none;
-            }
+            .login-bg::before,
             .login-bg::after {
-                content: '';
-                position: absolute;
-                bottom: -20%;
-                left: -20%;
-                width: 60%;
-                height: 80%;
-                background: radial-gradient(ellipse, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
-                pointer-events: none;
+                content: none;
             }
 
             .geo-shape {
-                position: absolute;
-                border-radius: 50%;
-                opacity: 0.06;
-                background: #fff;
-                pointer-events: none;
+                display: none;
             }
 
             .login-card {
@@ -325,8 +305,8 @@
                     <a href="/" style="display:inline-flex; align-items:center; gap:14px; text-decoration:none;">
                         <img src="{{ asset('logo.png') }}" alt="Logo" style="width:56px; height:56px; object-fit:contain; filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3));" />
                         <div style="text-align:left;">
-                            <div style="color:#fff; font-size:18px; font-weight:700; letter-spacing:-0.3px; line-height:1.2;">TDTU Termiz filiali</div>
-                            <div style="color:rgba(255,255,255,0.6); font-size:12px; font-weight:400; margin-top:2px;">Ta'lim boshqaruv tizimi</div>
+                            <div style="color:#0f172a; font-size:18px; font-weight:700; letter-spacing:-0.3px; line-height:1.2;">TDTU Termiz filiali</div>
+                            <div style="color:#64748b; font-size:12px; font-weight:400; margin-top:2px;">Ta'lim boshqaruv tizimi</div>
                         </div>
                     </a>
                 </div>

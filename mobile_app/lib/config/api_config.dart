@@ -37,6 +37,7 @@ class ApiConfig {
   static const String studentClubs = '/student/clubs';
   static const String studentMyClubs = '/student/clubs/my';
   static const String studentJoinClub = '/student/clubs/join';
+  static const String studentCancelClub = '/student/clubs/cancel';
 
   // Chat endpoints
   static const String chatContacts = '/chat/contacts';

@@ -22,6 +22,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
   bool _loading = true;
   String? _error;
   String? _joiningClub;
+  String? _cancellingClub;
 
   @override
   void initState() {
@@ -89,6 +90,33 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       );
     } finally {
       if (mounted) setState(() => _joiningClub = null);
+    }
+  }
+
+  Future<void> _cancelClub(String clubName) async {
+    setState(() => _cancellingClub = clubName);
+    try {
+      final res = await _service.cancelClub(clubName);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? "Ariza bekor qilindi!"),
+          backgroundColor: const Color(0xFFF59E0B),
+        ),
+      );
+      await _loadData();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFDC2626)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFDC2626)),
+      );
+    } finally {
+      if (mounted) setState(() => _cancellingClub = null);
     }
   }
 
@@ -188,21 +216,57 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
         itemBuilder: (context, sIdx) {
           final section = _sections[sIdx] as Map<String, dynamic>;
           final title = section['title'] as String? ?? '';
-          final clubs = section['clubs'] as List? ?? [];
+          final clubs = (section['clubs'] as List? ?? []).cast<Map<String, dynamic>>();
+
+          final rows = <Widget>[];
+          for (int i = 0; i < clubs.length; i += 2) {
+            final left = clubs[i];
+            final right = (i + 1 < clubs.length) ? clubs[i + 1] : null;
+            rows.add(Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _buildClubCard(left, i + 1, title, cardColor, textColor, subColor, isDark),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: right == null
+                          ? const SizedBox.shrink()
+                          : _buildClubCard(right, i + 2, title, cardColor, textColor, subColor, isDark),
+                    ),
+                  ],
+                ),
+              ),
+            ));
+          }
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.only(bottom: 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E3A5F) : const Color(0xFFC2DEF9),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(14),
-                      topRight: Radius.circular(14),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isDark
+                          ? const [Color(0xFF1E3A5F), Color(0xFF274468)]
+                          : const [Color(0xFFC2DEF9), Color(0xFFD9EAFB)],
                     ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4F46E5).withAlpha(isDark ? 30 : 18),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Text(
                     title,
@@ -215,109 +279,153 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                     textAlign: TextAlign.center,
                   ),
                 ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(14),
-                      bottomRight: Radius.circular(14),
-                    ),
-                    border: Border.all(
-                      color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Column(
-                    children: List.generate(clubs.length, (cIdx) {
-                      final club = clubs[cIdx] as Map<String, dynamic>;
-                      final applied = club['applied'] == true;
-                      final isLast = cIdx == clubs.length - 1;
-
-                      return Container(
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                        decoration: BoxDecoration(
-                          border: isLast
-                              ? null
-                              : Border(
-                                  bottom: BorderSide(
-                                    color: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${cIdx + 1}. ${club['name']}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: textColor,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            _infoRow(Icons.location_on_outlined, club['place'] ?? '', subColor),
-                            const SizedBox(height: 3),
-                            _infoRow(Icons.calendar_today_outlined, club['day'] ?? '', subColor),
-                            const SizedBox(height: 3),
-                            _infoRow(Icons.access_time_outlined, club['time'] ?? '', subColor),
-                            const SizedBox(height: 8),
-                            if (applied)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF16A34A).withAlpha(20),
-                                  border: Border.all(color: const Color(0xFF16A34A).withAlpha(60)),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text(
-                                  'Ariza yuborilgan',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF16A34A),
-                                  ),
-                                ),
-                              )
-                            else
-                              GestureDetector(
-                                onTap: _joiningClub == club['name']
-                                    ? null
-                                    : () => _joinClub(club, title),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF4F46E5),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: _joiningClub == club['name']
-                                      ? const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation(Colors.white),
-                                          ),
-                                        )
-                                      : const Text(
-                                          "A'zo bo'lish",
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ),
-                ),
+                ...rows,
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildClubCard(
+    Map<String, dynamic> club,
+    int number,
+    String kafedraTitle,
+    Color cardColor,
+    Color textColor,
+    Color subColor,
+    bool isDark,
+  ) {
+    final applied = club['applied'] == true;
+    final isJoining = _joiningClub == club['name'];
+    final isCancelling = _cancellingClub == club['name'];
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: applied
+              ? const Color(0xFF16A34A).withAlpha(70)
+              : isDark
+                  ? Colors.white12
+                  : const Color(0xFFE2E8F0),
+          width: applied ? 1.4 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withAlpha(60)
+                : const Color(0xFF0F1B3D).withAlpha(applied ? 18 : 10),
+            blurRadius: applied ? 14 : 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$number. ${club['name']}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _infoRow(Icons.location_on_outlined, club['place'] ?? '', subColor),
+          const SizedBox(height: 4),
+          _infoRow(Icons.calendar_today_outlined, club['day'] ?? '', subColor),
+          const SizedBox(height: 4),
+          _infoRow(Icons.access_time_outlined, club['time'] ?? '', subColor),
+          const Spacer(),
+          const SizedBox(height: 10),
+          if (applied)
+            GestureDetector(
+              onTap: isCancelling ? null : () => _cancelClub(club['name'] as String),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDC2626).withAlpha(15),
+                  border: Border.all(color: const Color(0xFFDC2626).withAlpha(60)),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: isCancelling
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Color(0xFFDC2626)),
+                        ),
+                      )
+                    : const Text(
+                        'Bekor qilish',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFDC2626),
+                        ),
+                      ),
+              ),
+            )
+          else
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(9),
+                onTap: isJoining ? null : () => _joinClub(club, kafedraTitle),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                    ),
+                    borderRadius: BorderRadius.circular(9),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4F46E5).withAlpha(70),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    alignment: Alignment.center,
+                    child: isJoining
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            "A'zo bo'lish",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -444,10 +552,46 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                     ),
                   ),
                 ],
-                const SizedBox(height: 6),
-                Text(
-                  club['created_at'] ?? '',
-                  style: TextStyle(fontSize: 10, color: subColor.withAlpha(120)),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        club['created_at'] ?? '',
+                        style: TextStyle(fontSize: 10, color: subColor.withAlpha(120)),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _cancellingClub == club['club_name']
+                          ? null
+                          : () => _cancelClub(club['club_name'] as String),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626).withAlpha(15),
+                          border: Border.all(color: const Color(0xFFDC2626).withAlpha(60)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: _cancellingClub == club['club_name']
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation(Color(0xFFDC2626)),
+                                ),
+                              )
+                            : const Text(
+                                'Bekor qilish',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

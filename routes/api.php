@@ -70,6 +70,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/clubs', [ClubApiController::class, 'index']);
             Route::get('/clubs/my', [ClubApiController::class, 'myClubs']);
             Route::post('/clubs/join', [ClubApiController::class, 'join']);
+            Route::post('/clubs/cancel', [ClubApiController::class, 'cancel']);
         });
 
         // ── Chat endpoints ───────────────────────────────

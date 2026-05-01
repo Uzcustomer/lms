@@ -162,6 +162,14 @@ class StudentService {
     );
   }
 
+  Future<Map<String, dynamic>> cancelClub(String clubName) async {
+    return await _api.post(
+      ApiConfig.studentCancelClub,
+      {'club_name': clubName},
+      auth: true,
+    );
+  }
+
   // Chat methods
   Future<Map<String, dynamic>> getChatContacts() async {
     return await _api.get(ApiConfig.chatContacts);

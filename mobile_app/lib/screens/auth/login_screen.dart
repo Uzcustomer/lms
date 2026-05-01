@@ -228,7 +228,6 @@ class _LoginScreenState extends State<LoginScreen> {
       child: TextFormField(
         controller: _idCtrl,
         keyboardType: TextInputType.visiblePassword,
-        autofillHints: const [AutofillHints.username],
         autocorrect: false,
         enableSuggestions: false,
         cursorColor: _accent,
@@ -284,7 +283,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: TextFormField(
               controller: _pwCtrl,
               obscureText: !_showPw,
-              autofillHints: const [AutofillHints.password],
               autocorrect: false,
               enableSuggestions: false,
               cursorColor: _accent,

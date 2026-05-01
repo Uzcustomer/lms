@@ -521,53 +521,57 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, 140),
+                size: Size(MediaQuery.of(context).size.width, height * 0.55),
                 painter: _BuildingPainter(
                   color: Colors.white.withOpacity(0.10),
                 ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(24, topPadding + 20, 24, 28),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.16),
-                      border: Border.all(
-                          color: Colors.white.withOpacity(0.45), width: 1.5),
-                      borderRadius: BorderRadius.circular(18),
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, topPadding + 24, 24, 28),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.16),
+                        border: Border.all(
+                            color: Colors.white.withOpacity(0.45), width: 1.5),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const Icon(Icons.school_rounded,
+                          color: Colors.white, size: 36),
                     ),
-                    child: const Icon(Icons.school_rounded,
-                        color: Colors.white, size: 36),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'TASHMEDUNITF - LMS',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      letterSpacing: 2.5,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(height: 18),
+                    const Text(
+                      'TASHMEDUNITF - LMS',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        letterSpacing: 2.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Toshkent Davlat Tibbiyot Universiteti\nTermiz filiali',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.75),
-                      fontSize: 11.5,
-                      letterSpacing: 1,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4,
+                    const SizedBox(height: 6),
+                    Text(
+                      'Toshkent Davlat Tibbiyot Universiteti\nTermiz filiali',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.75),
+                        fontSize: 11.5,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -586,39 +590,45 @@ class _BuildingPainter extends CustomPainter {
     final paint = Paint()..color = color;
     const pillarCount = 11;
     final pillarW = size.width * 0.035;
-    final gap = size.width * 0.02;
-    final totalW = pillarCount * pillarW + (pillarCount - 1) * gap;
+    final gapX = size.width * 0.022;
+    final totalW = pillarCount * pillarW + (pillarCount - 1) * gapX;
     final startX = (size.width - totalW) / 2;
 
-    final pillarH = size.height * 0.72;
-    final roofBaseY = size.height - pillarH;
+    final pillarH = size.height * 0.62;
+    final pillarTopY = size.height - pillarH;
+
+    final beamH = size.height * 0.045;
+    final beamGap = size.height * 0.04;
+    final beamY = pillarTopY - beamGap - beamH;
+
+    final roofPeakY = beamY - size.height * 0.20;
 
     for (int i = 0; i < pillarCount; i++) {
-      final x = startX + i * (pillarW + gap);
+      final x = startX + i * (pillarW + gapX);
       final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, roofBaseY, pillarW, pillarH),
+        Rect.fromLTWH(x, pillarTopY, pillarW, pillarH),
         const Radius.circular(2),
       );
       canvas.drawRRect(rect, paint);
     }
 
-    final roofPath = Path()
-      ..moveTo(startX - gap * 2, roofBaseY + 2)
-      ..lineTo(startX + totalW / 2, roofBaseY - size.height * 0.22)
-      ..lineTo(startX + totalW + gap * 2, roofBaseY + 2)
-      ..close();
-    canvas.drawPath(roofPath, paint);
-
     final beamRect = Rect.fromLTWH(
-      startX - gap * 2,
-      roofBaseY - 2,
-      totalW + gap * 4,
-      6,
+      startX - gapX * 2,
+      beamY,
+      totalW + gapX * 4,
+      beamH,
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(beamRect, const Radius.circular(2)),
       paint,
     );
+
+    final roofPath = Path()
+      ..moveTo(startX - gapX * 2, beamY)
+      ..lineTo(startX + totalW / 2, roofPeakY)
+      ..lineTo(startX + totalW + gapX * 2, beamY)
+      ..close();
+    canvas.drawPath(roofPath, paint);
   }
 
   @override

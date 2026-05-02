@@ -58,6 +58,13 @@ class FaceIdController extends Controller
             return response()->json(['error' => 'Bu talaba uchun Face ID o\'chirilgan. Parol bilan kiring.'], 403);
         }
 
+        // ArcFace yoqilgan bo'lsa — student_photos da tasdiqlangan rasm bo'lishi shart
+        if (FaceIdService::isArcFaceEnabled() && !FaceIdService::hasApprovedPhoto($student)) {
+            return response()->json([
+                'error' => 'Sizning rasmingiz hali tasdiqlanmagan. Face ID orqali kirish uchun avval tutoringizdan rasm yuklattiring. Hozircha login va parol yoki HEMIS orqali kiring.',
+            ], 403);
+        }
+
         // Saqlangan deskriptor bormi?
         $hasDescriptor = FaceIdService::getDescriptor($student) !== null;
 
@@ -179,73 +186,126 @@ class FaceIdController extends Controller
             return response()->json(['success' => false, 'message' => 'Jonlilik tekshiruvi o\'tmadi. Iltimos, ko\'zingizni yumib-oching va boshingizni burting.'], 422);
         }
 
-        $threshold = FaceIdService::getThreshold();
+        // 4. ArcFace (server-side, Python service) orqali taqqoslash
+        // student_photos dagi tasdiqlangan rasm bilan live snapshot solishtiriladi
+        $arcFaceEnabled = FaceIdService::isArcFaceEnabled();
+        $usedArcFace = false;
+        $distance = null;
+        $confidence = null;
 
-        // 4. Server-side descriptor taqqoslash (agar saqlangan bo'lsa)
-        if ($request->descriptor) {
-            $storedDescriptor = FaceIdService::getDescriptor($student);
+        if ($arcFaceEnabled) {
+            $approvedPhoto = FaceIdService::getApprovedStudentPhoto($student);
+            if (!$approvedPhoto) {
+                FaceIdService::logAttempt(array_merge($commonLog, [
+                    'result'         => 'failed',
+                    'failure_reason' => 'student_photos da tasdiqlangan rasm yo\'q',
+                    'snapshot'       => $request->snapshot,
+                ]));
+                return response()->json([
+                    'error' => 'Sizning rasmingiz hali tasdiqlanmagan. Parol orqali kiring.',
+                ], 403);
+            }
 
-            if ($storedDescriptor) {
-                // Server o'zi hisoblaydi — ishonchli
-                $distance   = FaceIdService::euclideanDistance($request->descriptor, $storedDescriptor);
-                $confidence = FaceIdService::distanceToConfidence($distance);
+            if (empty($request->snapshot)) {
+                FaceIdService::logAttempt(array_merge($commonLog, [
+                    'result'         => 'failed',
+                    'failure_reason' => 'Live snapshot yuborilmadi',
+                ]));
+                return response()->json(['error' => 'Yuz ma\'lumotlari topilmadi.'], 422);
+            }
 
-                Log::info('[FaceID] Server-side taqqoslash', [
-                    'student' => $idNumber,
-                    'distance' => round($distance, 4),
-                    'confidence' => round($confidence, 1),
-                    'threshold' => $threshold,
-                ]);
+            // Live snapshot ni vaqtinchalik faylga yozish
+            $liveTmp = FaceIdService::saveTemporarySnapshot($request->snapshot);
+            if (!$liveTmp) {
+                return response()->json(['error' => 'Yuz rasmini saqlashda xato. Qayta urinib ko\'ring.'], 422);
+            }
 
-                if ($distance > $threshold) {
-                    FaceIdService::logAttempt(array_merge($commonLog, [
-                        'result'         => 'failed',
-                        'confidence'     => round($confidence / 100, 4),
-                        'distance'       => round($distance, 4),
-                        'failure_reason' => "Yuz mos kelmadi (distance={$distance}, threshold={$threshold})",
-                        'snapshot'       => $request->snapshot,
-                    ]));
-                    return response()->json([
-                        'success'    => false,
-                        'message'    => 'Yuz mos kelmadi. Iltimos, qayta urinib ko\'ring.',
-                        'distance'   => round($distance, 4),
-                        'confidence' => round($confidence, 1),
-                    ], 422);
-                }
-            } else {
-                // Saqlangan descriptor yo'q — client tomonidan yuborilgan natijaga ishonish (test rejimi)
-                $distance   = $request->distance   ?? 1.0;
-                $confidence = $request->confidence ?? 0.0;
+            try {
+                $referenceUrl = asset($approvedPhoto->photo_path);
+                $compareResult = FaceIdService::compareViaArcFace($liveTmp['url'], $referenceUrl);
+            } finally {
+                FaceIdService::deleteTemporarySnapshot($liveTmp['rel']);
+            }
 
-                if ($distance > $threshold) {
-                    FaceIdService::logAttempt(array_merge($commonLog, [
-                        'result'         => 'failed',
-                        'confidence'     => round(($confidence) / 100, 4),
-                        'distance'       => round($distance, 4),
-                        'failure_reason' => "Yuz mos kelmadi (client-side, no stored descriptor)",
-                        'snapshot'       => $request->snapshot,
-                    ]));
-                    return response()->json([
-                        'success'    => false,
-                        'message'    => 'Yuz mos kelmadi.',
-                        'distance'   => round($distance, 4),
-                        'confidence' => round($confidence, 1),
-                    ], 422);
-                }
+            if (!$compareResult) {
+                FaceIdService::logAttempt(array_merge($commonLog, [
+                    'result'         => 'failed',
+                    'failure_reason' => 'ArcFace service javob bermadi',
+                    'snapshot'       => $request->snapshot,
+                ]));
+                return response()->json(['error' => 'Yuz tekshirish xizmati javob bermadi. Birozdan keyin qayta urinib ko\'ring yoki parol bilan kiring.'], 503);
+            }
+
+            $usedArcFace = true;
+            $similarityPercent = $compareResult['similarity_percent'];
+            $arcThreshold = FaceIdService::getArcFaceThreshold();
+            $distance = $compareResult['distance'];
+            $confidence = $similarityPercent;
+
+            Log::info('[FaceID/ArcFace] Taqqoslash', [
+                'student'    => $idNumber,
+                'similarity' => round($similarityPercent, 2),
+                'threshold'  => $arcThreshold,
+                'distance'   => round($distance, 4),
+                'match'      => $compareResult['match'],
+            ]);
+
+            if ($similarityPercent < $arcThreshold) {
+                FaceIdService::logAttempt(array_merge($commonLog, [
+                    'result'         => 'failed',
+                    'confidence'     => round($similarityPercent / 100, 4),
+                    'distance'       => round($distance, 4),
+                    'failure_reason' => "ArcFace: yuz mos kelmadi ({$similarityPercent}% < {$arcThreshold}%)",
+                    'snapshot'       => $request->snapshot,
+                ]));
+                return response()->json([
+                    'success'    => false,
+                    'message'    => 'Yuz mos kelmadi. Iltimos, kameraga to\'g\'ridan qarab qayta urinib ko\'ring.',
+                    'distance'   => round($distance, 4),
+                    'confidence' => round($similarityPercent, 1),
+                ], 422);
             }
         } else {
-            // Descriptor yuborilmagan
-            FaceIdService::logAttempt(array_merge($commonLog, [
-                'result'         => 'failed',
-                'failure_reason' => 'Descriptor yuborilmadi',
-                'snapshot'       => $request->snapshot,
-            ]));
-            return response()->json(['error' => 'Yuz ma\'lumotlari topilmadi.'], 422);
+            // Eski mexanizm: face-api.js descriptor (fallback)
+            $threshold = FaceIdService::getThreshold();
+            if (!$request->descriptor) {
+                FaceIdService::logAttempt(array_merge($commonLog, [
+                    'result'         => 'failed',
+                    'failure_reason' => 'Descriptor yuborilmadi',
+                    'snapshot'       => $request->snapshot,
+                ]));
+                return response()->json(['error' => 'Yuz ma\'lumotlari topilmadi.'], 422);
+            }
+
+            $storedDescriptor = FaceIdService::getDescriptor($student);
+            if ($storedDescriptor) {
+                $distance   = FaceIdService::euclideanDistance($request->descriptor, $storedDescriptor);
+                $confidence = FaceIdService::distanceToConfidence($distance);
+            } else {
+                $distance   = $request->distance ?? 1.0;
+                $confidence = $request->confidence ?? 0.0;
+            }
+
+            if ($distance > $threshold) {
+                FaceIdService::logAttempt(array_merge($commonLog, [
+                    'result'         => 'failed',
+                    'confidence'     => round($confidence / 100, 4),
+                    'distance'       => round($distance, 4),
+                    'failure_reason' => "Yuz mos kelmadi (distance={$distance}, threshold={$threshold})",
+                    'snapshot'       => $request->snapshot,
+                ]));
+                return response()->json([
+                    'success'    => false,
+                    'message'    => 'Yuz mos kelmadi. Iltimos, qayta urinib ko\'ring.',
+                    'distance'   => round($distance, 4),
+                    'confidence' => round($confidence, 1),
+                ], 422);
+            }
         }
 
         // 5. Muvaffaqiyatli — login
-        $finalDistance   = isset($distance) ? round($distance, 4) : ($request->distance ?? null);
-        $finalConfidence = isset($confidence) ? round($confidence / 100, 4) : (($request->confidence ?? 0) / 100);
+        $finalDistance   = $distance !== null ? round($distance, 4) : null;
+        $finalConfidence = $confidence !== null ? round($confidence / 100, 4) : 0;
 
         FaceIdService::logAttempt(array_merge($commonLog, [
             'result'     => 'success',
@@ -267,6 +327,7 @@ class FaceIdController extends Controller
 
         Log::info('[FaceID] Login muvaffaqiyatli', [
             'student'    => $idNumber,
+            'method'     => $usedArcFace ? 'arcface' : 'face-api',
             'distance'   => $finalDistance,
             'confidence' => round($finalConfidence * 100, 1),
         ]);

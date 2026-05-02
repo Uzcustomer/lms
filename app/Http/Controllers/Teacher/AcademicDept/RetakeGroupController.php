@@ -44,6 +44,7 @@ class RetakeGroupController extends Controller
             'semester_code' => $request->input('semester_code'),
             'group' => $request->input('group'),
         ];
+        $subjectFilter = $request->input('subject');
         $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {
             $perPage = 50;
@@ -85,6 +86,10 @@ class RetakeGroupController extends Controller
             });
         }
 
+        if ($subjectFilter) {
+            $groupsQuery->where('subject_id', $subjectFilter);
+        }
+
         $groups = $groupsQuery->paginate($perPage)->withQueryString();
 
         $educationTypes = \App\Models\Student::query()
@@ -94,6 +99,14 @@ class RetakeGroupController extends Controller
             ->orderBy('education_type_name')
             ->get();
 
+        $subjects = \App\Models\RetakeApplication::query()
+            ->select('subject_id', 'subject_name')
+            ->whereNotNull('subject_id')
+            ->orderBy('subject_name')
+            ->distinct()
+            ->get()
+            ->mapWithKeys(fn ($a) => [$a->subject_id => $a->subject_name]);
+
         return view('teacher.academic-dept.retake-groups.index', [
             'aggregations' => $aggregations,
             'groups' => $groups,
@@ -101,6 +114,7 @@ class RetakeGroupController extends Controller
             'search' => $search,
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
             'educationTypes' => $educationTypes,
+            'subjects' => $subjects,
         ]);
     }
 

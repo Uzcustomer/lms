@@ -48,10 +48,25 @@
             @endif
         </div>
 
-        {{-- Filtrlar --}}
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr) --}}
+        @include('partials._retake_filters', [
+            'formAction' => route('admin.retake-sessions.show', $session->id),
+            'educationTypes' => $educationTypes ?? collect(),
+            'hiddenFilters' => ['group', 'full_name', 'subject'],
+            'extraQueryFields' => array_filter([
+                'status' => $statusFilter !== 'all' ? $statusFilter : null,
+            ]),
+        ])
+
+        {{-- Holat filtri (qo'shimcha) --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4">
-            <form method="GET" action="{{ route('admin.retake-sessions.show', $session->id) }}" class="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
-                <div>
+            <form method="GET" action="{{ route('admin.retake-sessions.show', $session->id) }}" class="flex items-end gap-2 flex-wrap">
+                @foreach(['education_type','department','specialty','level_code','semester_code','per_page'] as $kept)
+                    @if(request($kept))
+                        <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
+                    @endif
+                @endforeach
+                <div class="min-w-[180px]">
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
                     <select name="status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="all" {{ ($statusFilter ?? 'all') === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
@@ -60,28 +75,7 @@
                         <option value="closed" {{ ($statusFilter ?? '') === 'closed' ? 'selected' : '' }}>{{ __("Yopilgan") }}</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Fakultet") }}</label>
-                    <select name="department_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        @foreach($departments as $d)
-                            <option value="{{ $d->department_hemis_id }}" {{ (string)($departmentIdFilter ?? '') === (string)$d->department_hemis_id ? 'selected' : '' }}>{{ $d->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Kurs") }}</label>
-                    <select name="level_code" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        @foreach($levels as $lv)
-                            <option value="{{ $lv['code'] }}" {{ ($levelCodeFilter ?? '') === $lv['code'] ? 'selected' : '' }}>{{ $lv['name'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="flex gap-2">
-                    <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
-                    <a href="{{ route('admin.retake-sessions.show', $session->id) }}" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">{{ __("Tozalash") }}</a>
-                </div>
+                <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Qo'llash") }}</button>
             </form>
         </div>
 

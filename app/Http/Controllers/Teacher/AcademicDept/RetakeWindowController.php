@@ -27,8 +27,14 @@ class RetakeWindowController extends Controller
         $this->authorizeAccess();
 
         $statusFilter = $request->input('status', 'all');
-        $departmentId = $request->input('department_id');
+        $departmentId = $request->input('department');
+        $specialtyId = $request->input('specialty');
         $levelCode = $request->input('level_code');
+        $semesterCode = $request->input('semester_code');
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
 
         $windowsQuery = RetakeApplicationWindow::query()
             ->with('session')
@@ -47,17 +53,24 @@ class RetakeWindowController extends Controller
         }
 
         if ($departmentId) {
-            // department → specialty larni topib filter qilamiz
-            $specialtyIds = Specialty::where('department_hemis_id', $departmentId)
+            $specialtyIdsForDept = Specialty::where('department_hemis_id', $departmentId)
                 ->pluck('specialty_hemis_id');
-            $windowsQuery->whereIn('specialty_id', $specialtyIds);
+            $windowsQuery->whereIn('specialty_id', $specialtyIdsForDept);
+        }
+
+        if ($specialtyId) {
+            $windowsQuery->where('specialty_id', $specialtyId);
         }
 
         if ($levelCode) {
             $windowsQuery->where('level_code', $levelCode);
         }
 
-        $windows = $windowsQuery->paginate(30)->withQueryString();
+        if ($semesterCode) {
+            $windowsQuery->where('semester_code', $semesterCode);
+        }
+
+        $windows = $windowsQuery->paginate($perPage)->withQueryString();
 
         // Yo'nalish bo'yicha fakultet nomini topish uchun map
         $specialtyToFaculty = Specialty::query()
@@ -75,6 +88,13 @@ class RetakeWindowController extends Controller
         // Faqat 12 ta unikal semestr (1-semestr ... 12-semestr)
         $semesters = $this->semesters();
 
+        $educationTypes = \App\Models\Student::query()
+            ->select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->distinct()
+            ->orderBy('education_type_name')
+            ->get();
+
         return view('teacher.academic-dept.retake-windows.index', [
             'windows' => $windows,
             'specialtyToFaculty' => $specialtyToFaculty,
@@ -86,6 +106,7 @@ class RetakeWindowController extends Controller
             'departmentIdFilter' => $departmentId,
             'levelCodeFilter' => $levelCode,
             'canOverride' => $this->canOverride(),
+            'educationTypes' => $educationTypes,
         ]);
     }
 

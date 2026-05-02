@@ -19,6 +19,7 @@ class StudentDisabilityInfo extends Model
     protected $casts = [
         'examined_at' => 'date',
         'reexamination_at' => 'date',
+        'disability_duration' => 'date',
     ];
 
     public const GROUPS = [

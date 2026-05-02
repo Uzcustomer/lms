@@ -51,7 +51,7 @@ class StudentDisabilityController extends Controller
             'examined_at' => 'required|date|before_or_equal:today',
             'disability_group' => 'required|string|max:50',
             'disability_reason' => 'required|string|max:500',
-            'disability_duration' => 'required|string|max:100',
+            'disability_duration' => 'required|date|after_or_equal:examined_at',
             'reexamination_at' => 'nullable|date|after:examined_at',
         ];
         if ($hasCertificateColumn) {
@@ -63,7 +63,9 @@ class StudentDisabilityController extends Controller
             'examined_at.before_or_equal' => "Ko'rik sanasi bugungi kundan keyin bo'lmasligi kerak.",
             'disability_group.required' => "Nogironlik guruhini tanlang.",
             'disability_reason.required' => "Nogironlik sababini kiriting.",
-            'disability_duration.required' => "Nogironlik muddatini kiriting.",
+            'disability_duration.required' => "Nogironlik muddati (tugash sanasini) kiriting.",
+            'disability_duration.date' => "Nogironlik muddati uchun to'g'ri sana kiriting.",
+            'disability_duration.after_or_equal' => "Muddat tugash sanasi ko'rikdan o'tgan sanadan keyin bo'lishi kerak.",
             'reexamination_at.after' => "Qayta ko'rik sanasi ko'rikdan o'tgan sanadan keyin bo'lishi kerak.",
             'certificate.required' => "Nogironlik malumotnomasini PDF shaklida yuklang.",
             'certificate.mimes' => "Malumotnoma faqat PDF formatida bo'lishi kerak.",

@@ -192,7 +192,7 @@
                                         <span class="text-cell" title="{{ $info->disability_reason }}">{{ Str::limit($info->disability_reason, 30) }}</span>
                                     @else — @endif
                                 </td>
-                                <td>{{ $info?->disability_duration ?: '—' }}</td>
+                                <td>{{ $info?->disability_duration?->format('d.m.Y') ?: '—' }}</td>
                                 <td>{{ $info?->reexamination_at?->format('d.m.Y') ?: '—' }}</td>
                                 <td style="text-align:center;">
                                     @if($info)
@@ -316,7 +316,7 @@
                         html += '<div style="color:#64748b;">Ko\'rikdan o\'tgan sana:</div><div style="font-weight:600;">' + escapeHtml(info.examined_at || '—') + '</div>';
                         html += '<div style="color:#64748b;">Nogironlik guruhi:</div><div><span style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:600;">' + escapeHtml(info.disability_group || '—') + '</span></div>';
                         html += '<div style="color:#64748b;">Nogironlik sababi:</div><div>' + escapeHtml(info.disability_reason || '—') + '</div>';
-                        html += '<div style="color:#64748b;">Nogironlik muddati:</div><div style="font-weight:600;">' + escapeHtml(info.disability_duration || '—') + '</div>';
+                        html += '<div style="color:#64748b;">Nogironlik muddati (tugash sanasi):</div><div style="font-weight:600;">' + escapeHtml(info.disability_duration || '—') + '</div>';
                         html += '<div style="color:#64748b;">Qayta ko\'rik sanasi:</div><div style="font-weight:600;">' + escapeHtml(info.reexamination_at || '—') + '</div>';
                         html += '<div style="color:#64748b;">Oxirgi yangilanish:</div><div style="color:#94a3b8;font-size:12px;">' + escapeHtml(info.updated_at || '—') + '</div>';
                         html += '</div>';

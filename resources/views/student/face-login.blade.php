@@ -1,22 +1,9 @@
 <x-guest-layout>
-    <!-- Tab navigatsiya -->
-    <div style="display: flex; margin-bottom: 1.2rem; border-bottom: 2px solid #e5e7eb;">
-        <a href="{{ route('student.login') }}"
-           style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 600; text-decoration: none; border-bottom: 3px solid transparent; color: #1e40af; background-color: #dbeafe; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
-            {{ __('Talaba') }}
-        </a>
-        <a href="{{ route('teacher.login') }}"
-           style="flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 500; text-decoration: none; border-bottom: 3px solid transparent; color: #1e40af; background-color: #dbeafe; border-radius: 8px 8px 0 0; margin-bottom: -2px;">
-            {{ __('Xodim') }}
-        </a>
-    </div>
-
     <div id="faceid-app">
 
         <!-- Bosqich 1: ID kiritish -->
         <div id="step-id-input">
             <div style="text-align: center; margin-bottom: 1.2rem;">
-                <div style="font-size: 2rem; margin-bottom: 0.4rem;">🪪</div>
                 <h2 style="font-size: 1rem; font-weight: 600; color: #1e40af;">{{ __('Face ID bilan kirish') }}</h2>
                 <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">{{ __('Talaba ID raqamingizni kiriting') }}</p>
             </div>

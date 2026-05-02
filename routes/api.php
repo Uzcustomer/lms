@@ -20,6 +20,7 @@ Route::prefix('v1')->group(function () {
 
     // ── Public (no auth) ──────────────────────────────────
     Route::post('/student/login', [AuthController::class, 'studentLogin']);
+    Route::post('/student/face-login', [AuthController::class, 'studentFaceLogin']);
     Route::post('/student/verify-2fa', [AuthController::class, 'studentVerify2fa']);
     Route::post('/student/resend-2fa', [AuthController::class, 'studentResend2fa']);
 

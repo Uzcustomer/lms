@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -115,6 +117,29 @@ class AuthProvider extends ChangeNotifier {
       _state = AuthState.profileIncomplete;
     } else {
       _state = AuthState.authenticated;
+    }
+  }
+
+  Future<bool> studentFaceLogin(String login, File photo) async {
+    _state = AuthState.loading;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _authService.studentFaceLogin(login, photo);
+      _handleLoginResponse(response, 'student');
+      notifyListeners();
+      return true;
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
+      _state = AuthState.error;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _errorMessage = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+      _state = AuthState.error;
+      notifyListeners();
+      return false;
     }
   }
 

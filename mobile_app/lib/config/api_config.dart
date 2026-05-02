@@ -3,6 +3,7 @@ class ApiConfig {
 
   // Auth endpoints
   static const String studentLogin = '/student/login';
+  static const String studentFaceLogin = '/student/face-login';
   static const String studentVerify2fa = '/student/verify-2fa';
   static const String studentResend2fa = '/student/resend-2fa';
   static const String teacherLogin = '/teacher/login';

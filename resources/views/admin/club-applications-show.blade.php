@@ -146,6 +146,18 @@
                         </div>
                     </div>
                 @endif
+
+                @if(in_array(session('active_role'), ['superadmin', 'admin']))
+                    <div class="p-5 border-t border-gray-100">
+                        <form method="POST" action="{{ route('admin.club-applications.destroy', $application) }}" onsubmit="return confirm('Arizani butunlay o\'chirmoqchimisiz?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="w-full py-2 text-sm font-semibold rounded-lg text-red-700 border border-red-300 bg-red-50 hover:bg-red-100 transition">
+                                Arizani o'chirish
+                            </button>
+                        </form>
+                    </div>
+                @endif
             </div>
 
         </div>

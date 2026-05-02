@@ -221,8 +221,17 @@
                                                     </td>
                                                     <td class="px-4 py-3 text-gray-500">{{ $exc->reviewed_at ? $exc->reviewed_at->format('d.m.Y H:i') : '-' }}</td>
                                                     <td class="px-4 py-3 text-center">
-                                                        <a href="{{ route('admin.absence-excuses.show', $exc->id) }}"
-                                                           class="text-indigo-600 hover:text-indigo-800 font-medium">Ko'rish</a>
+                                                        <div class="flex items-center justify-center gap-2">
+                                                            <a href="{{ route('admin.absence-excuses.show', $exc->id) }}"
+                                                               class="text-indigo-600 hover:text-indigo-800 font-medium">Ko'rish</a>
+                                                            @if(\App\Models\Setting::get('feature_absence_excuse_delete', '0') === '1')
+                                                            <form method="POST" action="{{ route('admin.absence-excuses.destroy', $exc->id) }}" onsubmit="return confirm('Haqiqatan o\'chirmoqchimisiz? Talabadan ham o\'chadi.')">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
+                                                            </form>
+                                                            @endif
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             @endforeach
@@ -325,6 +334,15 @@
                         <a href="{{ route('admin.absence-excuses.index') }}" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-md hover:bg-gray-300 transition whitespace-nowrap">
                             Tozalash
                         </a>
+                        @if(in_array(request('status'), ['pending', 'approved', 'rejected'], true))
+                            <a href="{{ route('admin.absence-excuses.export-status', request('status')) }}"
+                               class="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded-md hover:bg-emerald-700 transition whitespace-nowrap inline-flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                                </svg>
+                                Excel yuklash
+                            </a>
+                        @endif
                     </div>
                 </form>
             </div>
@@ -417,8 +435,17 @@
                                             <div class="text-xs text-gray-400">{{ $excuse->created_at?->format('H:i') }}</div>
                                         </td>
                                         <td class="px-3 py-3 whitespace-nowrap text-sm">
-                                            <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
-                                               class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
+                                            <div class="flex items-center gap-2">
+                                                <a href="{{ route('admin.absence-excuses.show', $excuse->id) }}"
+                                                   class="text-indigo-600 hover:text-indigo-900 font-medium">Ko'rish</a>
+                                                @if(\App\Models\Setting::get('feature_absence_excuse_delete', '0') === '1')
+                                                <form method="POST" action="{{ route('admin.absence-excuses.destroy', $excuse->id) }}" onsubmit="return confirm('Haqiqatan o\'chirmoqchimisiz? Talabadan ham o\'chadi.')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
+                                                </form>
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
                                 @endforeach

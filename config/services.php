@@ -64,6 +64,49 @@ return [
         'ssh_port' => env('MOODLE_SSH_PORT', 22),
         'push_script' => env('MOODLE_PUSH_SCRIPT', '/opt/scripts/moodle_to_lmsttatf_push.php'),
         'sync_secret' => env('MOODLE_SYNC_SECRET'),
+
+        // local_hemisexport plugin web service
+        'ws_url' => env('MOODLE_WS_URL'),
+        'ws_token' => env('MOODLE_WS_TOKEN'),
+        'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
+        // Window around exam start during which a student may begin attempt (minutes)
+        'open_window_minutes' => (int) env('MOODLE_OPEN_WINDOW_MINUTES', 10),
+        // After the start cutoff (exam_time + open_window), how many extra minutes
+        // remain before timeclose. Must be >= the Moodle quiz timelimit so that
+        // students who started right before the cutoff still get their full time.
+        'close_buffer_minutes' => (int) env('MOODLE_CLOSE_BUFFER_MINUTES', 30),
+        // 0 = use Moodle quiz default; otherwise seconds to override per-attempt limit
+        'timelimit_seconds' => (int) env('MOODLE_TIMELIMIT_SECONDS', 0),
+        // Total computers in the test centre (used by ComputerAssignmentService)
+        'total_computers' => (int) env('MOODLE_TOTAL_COMPUTERS', 60),
+        // Quiz timelimit used to compute planned_end of each computer assignment.
+        // Should match the actual Moodle quiz timelimit (in minutes).
+        'quiz_duration_minutes' => (int) env('MOODLE_QUIZ_DURATION_MINUTES', 25),
+        // Buffer between two students sharing the same computer (in minutes)
+        'computer_buffer_minutes' => (int) env('MOODLE_COMPUTER_BUFFER_MINUTES', 5),
+        // Quiz idnumber template. Placeholders: {yn} (lowercase: test/oski),
+        // {YN} (uppercase), {lang} (uzb/rus/eng), {attempt} (1).
+        'quiz_idnumber_template' => env(
+            'MOODLE_QUIZ_IDNUMBER_TEMPLATE',
+            'YN {yn} ({lang})_{attempt}-urinish'
+        ),
+        // HEMIS educationLang.code → Moodle quiz_idnumber language token.
+        // HEMIS uses both alpha (uz/ru/en) and numeric codes (11/12/13/14/15).
+        'lang_map' => [
+            'uz' => env('MOODLE_LANG_UZ', 'uzb'),
+            'ru' => env('MOODLE_LANG_RU', 'rus'),
+            'en' => env('MOODLE_LANG_EN', 'eng'),
+            '11' => env('MOODLE_LANG_11', 'uzb'),
+            '12' => env('MOODLE_LANG_12', 'uzb'),
+            '13' => env('MOODLE_LANG_13', 'rus'),
+            '14' => env('MOODLE_LANG_14', 'eng'),
+            '15' => env('MOODLE_LANG_15', 'uzb'),
+        ],
+    ],
+
+    'face_compare' => [
+        'url' => env('FACE_COMPARE_URL', 'http://127.0.0.1:5005'),
+        'timeout' => (int) env('FACE_COMPARE_TIMEOUT', 60),
     ],
 
 ];

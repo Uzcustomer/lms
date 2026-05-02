@@ -59,6 +59,7 @@
                             ->count();
                     } catch (\Exception $e) {}
                 @endphp
+                @if(session('active_role') !== 'tyutor')
                 <div style="position:fixed;top:10px;right:16px;z-index:9999;display:flex;align-items:center;gap:6px;">
                     <!-- Til almashtirgich -->
                     <div x-data="{ langOpen: false }" style="position:relative;">
@@ -153,6 +154,7 @@
                     </div>
                 </div>
                 </div>
+                @endif
 
                 <!-- Page Heading -->
                 @isset($header)

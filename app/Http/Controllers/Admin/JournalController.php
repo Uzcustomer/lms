@@ -67,7 +67,6 @@ class JournalController extends Controller
         $selectedEducationType = $request->get('education_type');
         if (!$request->has('education_type')) {
             if ($isOqituvchi) {
-                // O'qituvchi uchun: ta'lim turi filtrini qo'llamaydi (barcha ta'lim turlari ko'rinadi)
                 $selectedEducationType = null;
             } else {
                 $selectedEducationType = $educationTypes
@@ -115,7 +114,6 @@ class JournalController extends Controller
             ->whereNotNull('cs.department_id')
             ->whereNotNull('cs.department_name');
 
-        // O'qituvchi uchun ta'lim turi filtrini qo'llamaydi
         if (!$isOqituvchi && $selectedEducationType) {
             $kafedraQuery->where('c.education_type_code', $selectedEducationType);
         }
@@ -127,7 +125,6 @@ class JournalController extends Controller
         } elseif ($request->filled('faculty')) {
             $kafedraQuery->where('f.id', $request->faculty);
         }
-        // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan fan+guruh
         if ($isOqituvchi && $teacherHemisId) {
             $kafedraQuery->whereExists(function ($sub) use ($teacherHemisId) {
                 $sub->select(DB::raw(1))
@@ -174,7 +171,6 @@ class JournalController extends Controller
             ->distinct();
 
         // Apply filters
-        // O'qituvchi uchun ta'lim turi filtrini qo'llamaydi
         if (!$isOqituvchi && $selectedEducationType) {
             $query->where('c.education_type_code', $selectedEducationType);
         }
@@ -229,6 +225,16 @@ class JournalController extends Controller
 
         if ($request->filled('group')) {
             $query->where('g.id', $request->group);
+        }
+
+        // Nazoratchi: faqat biriktirilgan guruhlar
+        if (is_active_nazoratchi()) {
+            $nazoratchiGroupIds = get_nazoratchi_group_db_ids();
+            if (empty($nazoratchiGroupIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('g.id', $nazoratchiGroupIds);
+            }
         }
 
         // Joriy semestr filtri (default ON)
@@ -304,6 +310,14 @@ class JournalController extends Controller
         // Migratsiya hali ishlatilmagan instancelarda ham jurnal ochilishi uchun
         // retake_was_sababli ustunining mavjudligini tekshirib olamiz
         $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+
+        // Nazoratchi: faqat biriktirilgan guruhlarga ruxsat
+        if (is_active_nazoratchi()) {
+            $nazoratchiGroupIds = get_nazoratchi_group_db_ids();
+            if (!in_array((int) $group->id, array_map('intval', $nazoratchiGroupIds), true)) {
+                abort(403, "Sizga bu guruh bo'yicha jurnal ko'rish huquqi yo'q.");
+            }
+        }
 
         // O'qituvchi uchun: faqat o'ziga dars jadvalida biriktirilgan guruh+fan kombinatsiyasiga ruxsat
         if (is_active_oqituvchi()) {
@@ -505,7 +519,7 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
-                ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at'],
+                ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at', 'graded_by_user_id', 'retake_graded_at', 'quiz_result_id', 'employee_id'],
                 $hasSababliCol ? ['retake_was_sababli'] : []
             ))
             ->orderBy('lesson_date')
@@ -533,6 +547,10 @@ class JournalController extends Controller
             // status = closed AND reason = teacher_victim AND grade == 0 AND retake_grade === null → null
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
+            }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
+                return ['grade' => $row->retake_grade, 'is_retake' => true];
             }
             // status = recorded → use grade
             if ($row->status === 'recorded') {
@@ -688,6 +706,10 @@ class JournalController extends Controller
                     'retake_grade' => $g->retake_grade,
                     'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'deadline' => $g->deadline,
+                    'graded_by_user_id' => $g->graded_by_user_id,
+                    'retake_graded_at' => $g->retake_graded_at,
+                    'quiz_result_id' => $g->quiz_result_id,
+                    'employee_id' => $g->employee_id,
                 ];
             }
         }
@@ -825,7 +847,6 @@ class JournalController extends Controller
             // student_subjects da ma'lumot bor — faqat fanga biriktirilgan talabalarni ko'rsatish
             $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
-                    // Fanga biriktirilgan faol talabalar
                     ->where(function ($q) use ($subjectId, $semesterCode) {
                         $q->where(function ($q2) {
                             $q2->where('student_status_code', '!=', '60')
@@ -839,7 +860,6 @@ class JournalController extends Controller
                                 ->where('student_subjects.semester_id', $semesterCode);
                         });
                     })
-                    // Chetlashgan talabalar: bahosi bo'lsa ko'rsatiladi (NB ham)
                     ->orWhereExists(function ($sub) use ($subjectId, $semesterCode) {
                         $sub->select(DB::raw(1))
                             ->from('student_grades')
@@ -850,7 +870,7 @@ class JournalController extends Controller
                     });
             });
         } else {
-            // student_subjects da ma'lumot yo'q — eski logika (guruhdagi barcha talabalar)
+            // student_subjects da ma'lumot yo'q — eski logika
             $studentsQuery->where(function ($query) use ($semesterCode, $subjectId) {
                 $query
                     ->where(function ($q) {
@@ -873,6 +893,14 @@ class JournalController extends Controller
             ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
             ->orderBy('full_name')
             ->get();
+
+        if ($students->isEmpty()) {
+            $students = DB::table('students')
+                ->where('group_id', $group->group_hemis_id)
+                ->select('id', 'hemis_id', 'full_name', 'student_id_number', 'student_status_code')
+                ->orderBy('full_name')
+                ->get();
+        }
 
         // Get other averages (ON, OSKI, Test, Quiz) with status-based grade calculation
         // Filter by education_year_code to exclude old education year data
@@ -1361,6 +1389,18 @@ class JournalController extends Controller
             }
         }
 
+        $absFlat = collect($jbAbsences)->flatten(2);
+        $retakeGraderIds = $absFlat->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
+        $retakeGraderNames = [];
+        if (!empty($retakeGraderIds)) {
+            $retakeGraderNames = DB::table('users')->whereIn('id', $retakeGraderIds)->pluck('name', 'id')->toArray();
+        }
+        $retakeEmployeeIds = $absFlat->pluck('employee_id')->filter()->unique()->values()->toArray();
+        $retakeEmployeeNames = [];
+        if (!empty($retakeEmployeeIds)) {
+            $retakeEmployeeNames = DB::table('teachers')->whereIn('hemis_id', $retakeEmployeeIds)->pluck('full_name', 'hemis_id')->toArray();
+        }
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -1387,6 +1427,8 @@ class JournalController extends Controller
             'jbGrades',
             'mtGrades',
             'jbAbsences',
+            'retakeGraderNames',
+            'retakeEmployeeNames',
             'mtAbsences',
             'jbAttendance',
             'mtAttendance',
@@ -1730,6 +1772,19 @@ class JournalController extends Controller
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);
+                            $absenceGradesCreated++;
+                        } elseif ($existingGrade->reason !== 'absent' || $existingGrade->grade !== null) {
+                            // HEMIS'da baho NB ga o'zgartirilgan — mavjud yozuvni yangilash kerak.
+                            // Aks holda eski son baho LMS'da qolib ketadi.
+                            DB::table('student_grades')
+                                ->where('id', $existingGrade->id)
+                                ->update([
+                                    'grade' => null,
+                                    'reason' => 'absent',
+                                    'status' => 'pending',
+                                    'is_final' => !$lessonDate->isToday(),
+                                    'updated_at' => now(),
+                                ]);
                             $absenceGradesCreated++;
                         }
                     }
@@ -2306,6 +2361,11 @@ class JournalController extends Controller
             ->exists();
 
         if ($ynLocked) {
+            // Admin/superadmin uchun toggle ON bo'lsa — YN lock'dan o'tkazish
+            $adminMtToggle = $isAdminRole && Setting::get('feature_admin_mt_grade', '0') === '1';
+            if ($adminMtToggle) {
+                // Ruxsat — davom etadi
+            } else {
             // Sababli ariza orqali MT bahosi: tasdiqlangan sababli + MT makeup turi
             // mavjud bo'lsa va deadline ichida (yoki admin) bo'lsa — ruxsat
             $sababliMtAllowed = false;
@@ -2344,6 +2404,7 @@ class JournalController extends Controller
                     'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
                     'yn_locked' => true,
                 ], 403);
+            }
             }
         }
 
@@ -2826,6 +2887,10 @@ class JournalController extends Controller
     {
         if (!auth()->user()?->hasRole('superadmin')) {
             return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        }
+
+        if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya hozirda o\'chirilgan'], 403);
         }
 
         $request->validate([
@@ -3560,25 +3625,34 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Semestr bo'yicha filtrlash (joriy semestr orqali guruh aniqlanadi)
-        if ($request->filled('semester_code')) {
-            $currentSemesterHemisIds = DB::table('curriculum_weeks')
-                ->select('semester_hemis_id')
-                ->groupBy('semester_hemis_id')
-                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
-                ->pluck('semester_hemis_id');
-            $curriculaIds = Semester::where('code', $request->semester_code)
-                ->whereIn('semester_hemis_id', $currentSemesterHemisIds)
-                ->pluck('curriculum_hemis_id');
-            $query->whereIn('curriculum_hemis_id', $curriculaIds);
-        }
+        // Semester + level filtrlari: schedules jadvalidan haqiqiy dars mavjud guruhlarni olish
+        if ($request->filled('semester_code') || $request->filled('level_code')) {
+            $semesterFilter = Semester::query();
+            if ($request->filled('semester_code')) {
+                $semesterFilter->where('code', $request->semester_code);
+            }
+            if ($request->filled('level_code')) {
+                $semesterFilter->where('level_code', $request->level_code);
+            }
+            if ($request->get('current_semester') == '1') {
+                $semesterFilter->where('current', true);
+            }
+            $curriculaIds = $semesterFilter->pluck('curriculum_hemis_id')->unique()->toArray();
 
-        // Kurs bo'yicha filtrlash (joriy semestr orqali guruh kursini aniqlash)
-        if ($request->filled('level_code')) {
-            $curriculaIds = Semester::where('level_code', $request->level_code)
-                ->where('current', true)
-                ->pluck('curriculum_hemis_id');
-            $query->whereIn('curriculum_hemis_id', $curriculaIds);
+            // Agar semester jadvalidan topilmasa — schedules orqali fallback
+            if (empty($curriculaIds) && $request->filled('semester_code')) {
+                $groupHemisIdsFromSchedule = DB::table('schedules')
+                    ->where('semester_code', $request->semester_code)
+                    ->whereNull('deleted_at')
+                    ->pluck('group_id')
+                    ->unique()
+                    ->toArray();
+                if (!empty($groupHemisIdsFromSchedule)) {
+                    $query->whereIn('group_hemis_id', $groupHemisIdsFromSchedule);
+                }
+            } else {
+                $query->whereIn('curriculum_hemis_id', $curriculaIds);
+            }
         }
 
         // Fan bo'yicha filtrlash
@@ -4913,6 +4987,10 @@ class JournalController extends Controller
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
             }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
+                return $row->retake_grade;
+            }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
             if ($row->retake_grade !== null) return $row->retake_grade;
@@ -5066,9 +5144,7 @@ class JournalController extends Controller
      */
     public function saveExamGrade(Request $request)
     {
-        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
-            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
-        }
+        return response()->json(['success' => false, 'message' => 'OSKI/Test baholarini qo\'yish vaqtinchalik yopilgan.'], 403);
 
         $request->validate([
             'student_hemis_id' => 'required|string',
@@ -5412,6 +5488,10 @@ class JournalController extends Controller
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
+            }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
+                return $row->retake_grade;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
@@ -6261,6 +6341,10 @@ class JournalController extends Controller
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $retakeGrade === null) {
                 return null;
+            }
+            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
+            if ($row->reason === 'low_grade' && $retakeGrade !== null) {
+                return $retakeGrade;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;

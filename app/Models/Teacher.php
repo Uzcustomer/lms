@@ -133,6 +133,15 @@ class Teacher extends Authenticatable
     }
 
     /**
+     * Nazoratchi sifatida biriktirilgan guruhlar (ko'p-ko'p)
+     */
+    public function nazoratchiGroups()
+    {
+        return $this->belongsToMany(Group::class, 'nazoratchi_groups', 'teacher_id', 'group_id')
+            ->withTimestamps();
+    }
+
+    /**
      * Dekan sifatida bog'langan fakultetlar (ko'p-ko'p)
      */
     public function deanFaculties()

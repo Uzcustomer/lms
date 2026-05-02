@@ -24,6 +24,10 @@ class StudentPassport extends Model
         'passport_back_path',
         'foreign_passport_path',
         'is_match',
+        'status',
+        'reviewed_by',
+        'reviewed_at',
+        'rejection_reason',
     ];
 
     public function student()

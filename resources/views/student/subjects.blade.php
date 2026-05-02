@@ -243,6 +243,23 @@
         .modal-tab-btn:hover:not(.active) { color: #475569; }
 
         /* ===== JOURNAL TABLE (exact copy from admin journal) ===== */
+        .retake-cell {
+            position: relative; background: #c9c9c9; padding: 0 !important;
+            min-width: 50px; height: 36px;
+        }
+        .retake-cell .retake-top {
+            position: absolute; top: 1px; left: 3px;
+            font-size: 9px; font-weight: 600; color: #94a3b8;
+        }
+        .retake-cell .retake-bottom {
+            position: absolute; bottom: 1px; right: 3px;
+            font-size: 12px; font-weight: 700; color: #059669;
+        }
+        .retake-cell .retake-line {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom right, transparent calc(50% - 0.5px), #94a3b8 calc(50% - 0.5px), #94a3b8 calc(50% + 0.5px), transparent calc(50% + 0.5px));
+            pointer-events: none;
+        }
         .j-table-wrap { overflow-x: auto; padding: 16px 20px; }
         .journal-table {
             border: 1px solid #cbd5e1;
@@ -605,16 +622,25 @@
                                             <tbody>
                                                 <tr>
                                                     @foreach($jbData as $idx => $day)
-                                                        <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}">
-                                                            @if($day['has_grades'])
-                                                                @php $v = $day['average']; @endphp
-                                                                <span class="font-medium text-gray-900">{{ $v }}</span>
-                                                            @elseif($day['is_absent'])
-                                                                <span class="text-red-600 font-medium">NB</span>
-                                                            @else
+                                                        @if($day['has_retake'] ?? false)
+                                                            <td class="px-1 py-1 text-center retake-cell {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}">
+                                                                <span class="retake-top">@if($day['retake_is_absent'])<span style="color:{{ ($day['is_sababli'] ?? false) ? '#2563eb' : '#dc2626' }}">NB</span>@elseif($day['retake_original'] !== null){{ round($day['retake_original']) }}@endif</span>
+                                                                <span class="retake-line"></span>
+                                                                <span class="retake-bottom">{{ round($day['retake_grade']) }}</span>
+                                                            </td>
+                                                        @elseif($day['has_grades'])
+                                                            <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}">
+                                                                <span class="font-medium text-gray-900">{{ $day['average'] }}</span>
+                                                            </td>
+                                                        @elseif($day['is_absent'])
+                                                            <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}">
+                                                                <span class="font-medium" style="color:{{ ($day['is_sababli'] ?? false) ? '#2563eb' : '#dc2626' }}">NB</span>
+                                                            </td>
+                                                        @else
+                                                            <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === $jbCount - 1 ? 'date-end' : '' }}">
                                                                 <span class="text-gray-300">-</span>
-                                                            @endif
-                                                        </td>
+                                                            </td>
+                                                        @endif
                                                     @endforeach
                                                     <td class="px-1 py-1 text-center">
                                                         @php $v = $subject['jn_average']; @endphp

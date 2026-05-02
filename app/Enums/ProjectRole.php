@@ -15,6 +15,7 @@ enum ProjectRole: string
     case ACCOUNTANT = 'buxgalteriya';
     case SPIRITUAL_AFFAIRS = 'manaviyat';
     case TUTOR = 'tyutor';
+    case SUPERVISOR = 'nazoratchi';
     case DEAN = 'dekan';
     case DEPARTMENT_HEAD = 'kafedra_mudiri';
     case SUBJECT_RESPONSIBLE = 'fan_masuli';
@@ -37,6 +38,7 @@ enum ProjectRole: string
             self::ACCOUNTANT => 'Buxgalteriya',
             self::SPIRITUAL_AFFAIRS => "Ma'naviyat",
             self::TUTOR => 'Tyutor',
+            self::SUPERVISOR => 'Nazoratchi',
             self::DEAN => 'Dekanat',
             self::DEPARTMENT_HEAD => 'Kafedra mudiri',
             self::SUBJECT_RESPONSIBLE => "Fan mas'uli",

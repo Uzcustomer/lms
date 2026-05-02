@@ -22,6 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
+            'nazoratchi.readonly' => \App\Http\Middleware\NazoratchiReadOnly::class,
+        ]);
+
+        // Nazoratchi rolida ishlayotgan har qanday foydalanuvchi uchun yozish
+        // operatsiyalari (POST/PUT/PATCH/DELETE) global ravishda bloklanadi.
+        $middleware->web(append: [
+            \App\Http\Middleware\NazoratchiReadOnly::class,
         ]);
 
         // locale cookie ni encrypt qilmaslik
@@ -37,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'telegram/webhook/*',
             'moodle/import',
             'moodle/should-sync',
+            'moodle/exam-event',
         ]);
 
     })

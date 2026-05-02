@@ -34,6 +34,7 @@ class Student extends Authenticatable
         'curriculum_id', 'hemis_created_at', 'hemis_updated_at', 'hash',
         'token', 'token_expires_at', 'local_password', 'local_password_expires_at', 'must_change_password', 'language_code',
         'language_name',
+        'exam_language_code',
         'year_of_enter',
         'roommate_count',
         'total_acload',
@@ -327,6 +328,11 @@ class Student extends Authenticatable
     public function files()
     {
         return $this->hasMany(\App\Models\StudentFile::class);
+    }
+
+    public function admissionData()
+    {
+        return $this->hasOne(\App\Models\StudentAdmissionData::class);
     }
 
     public function isProfileComplete(): bool

@@ -199,7 +199,7 @@
             <select name="visa_type" required class="w-full rounded-lg text-sm border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="">{{ __('Tanlang') }}</option>
                 @foreach(\App\Models\StudentVisaInfo::VISA_TYPES as $key => $label)
-                    <option value="{{ $key }}" {{ old('visa_type', $visaInfo?->visa_type ?? 'A-1') === $key ? 'selected' : '' }}>{{ $label }}</option>
+                    <option value="{{ $key }}" {{ old('visa_type', $visaInfo?->visa_type ?? '') === $key ? 'selected' : '' }}>{{ $label }}</option>
                 @endforeach
             </select>
             @error('visa_type') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror

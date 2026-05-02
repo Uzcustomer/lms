@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\AbsenceExcuseStatusExport;
 use App\Exports\AbsenceExcuseTemplate;
 use App\Http\Controllers\Controller;
 use App\Imports\AbsenceExcuseImport;
@@ -85,6 +86,16 @@ class AbsenceExcuseController extends Controller
         $reasons = AbsenceExcuse::reasonLabels();
 
         return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses'));
+    }
+
+    public function exportByStatus(string $status)
+    {
+        if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
+            abort(404);
+        }
+
+        $fileName = 'sababli-arizalar-' . $status . '-' . now()->format('Y-m-d_H-i') . '.xlsx';
+        return Excel::download(new AbsenceExcuseStatusExport($status), $fileName);
     }
 
     public function show($id)
@@ -323,10 +334,6 @@ class AbsenceExcuseController extends Controller
     {
         $excuse = AbsenceExcuse::findOrFail($id);
 
-        if (!in_array($excuse->status, ['pending', 'approved'], true)) {
-            return back()->with('error', "Faqat yangi yoki tasdiqlangan arizani o'chirish mumkin.");
-        }
-
         if ($excuse->file_path && Storage::disk('public')->exists($excuse->file_path)) {
             Storage::disk('public')->delete($excuse->file_path);
         }
@@ -335,6 +342,7 @@ class AbsenceExcuseController extends Controller
             Storage::disk('public')->delete($excuse->approved_pdf_path);
         }
 
+        $excuse->makeups()->delete();
         $excuse->delete();
 
         return redirect()->route('admin.absence-excuses.index')

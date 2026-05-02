@@ -482,30 +482,40 @@ class QuizResultController extends Controller
                 }
             }
 
-            // OSKI baholar (training_type_code = 101) — jurnal logikasi: MAX(grade) + semester filtri
+            // OSKI/Test baholar — jurnal logikasi: MAX(grade), faqat JORIY semestr, YN turi bo'yicha alohida
+            // Lookup kaliti: hemis|subject_id|semester|YN_turi (O=OSKI/101, T=Test/102)
             $oskiGrades = [];
-            $allSemCodesForOski = !empty($studentSubjectSemester) ? array_unique(array_values($studentSubjectSemester)) : [];
+            $currentSemCodes = $students->pluck('semester_code')->filter()->unique()->values()->toArray();
 
-            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($allSemCodesForOski)) {
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($currentSemCodes)) {
                 foreach (array_chunk($studentHemisIds, 500) as $chunk) {
                     $oskiRows = DB::table('student_grades')
                         ->whereNull('deleted_at')
                         ->whereIn('student_hemis_id', $chunk)
                         ->whereIn('subject_id', $fanIds)
-                        ->whereIn('semester_code', $allSemCodesForOski)
-                        ->where('training_type_code', 101)
+                        ->whereIn('semester_code', $currentSemCodes)
+                        ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
-                        ->groupBy('student_hemis_id', 'subject_id')
+                        ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code')
                         ->get();
 
                     foreach ($oskiRows as $row) {
-                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $ttype = (int) $row->training_type_code === 101 ? 'O' : 'T';
+                        $k = $row->student_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $ttype;
                         $oskiGrades[$k] = (float) $row->grade;
+                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name) . '|' . $row->semester_code . '|' . $ttype;
+                        if (!isset($oskiGrades[$kName])) {
+                            $oskiGrades[$kName] = (float) $row->grade;
+                        }
                     }
                     unset($oskiRows);
                 }
             }
+
+            // Mavzu (N-mavzu) shakldagi natijalar uchun jurnal holatini oldindan tayyorlash
+            // Har bir (student, fan, mavzu_n) uchun jurnaldagi state: NB / Baho / Retake / Bo'sh
+            $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
             // ====== DATA TAYYORLASH ======
             $data = [];
@@ -534,14 +544,19 @@ class QuizResultController extends Controller
                     $uploadedResultIds, $duplicateMap,
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
-                    $testTypes, $oskiTypes
+                    $testTypes, $oskiTypes,
+                    [], null, $mavzuStates
                 );
 
                 $rowNum++;
+                $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;
                 $data[] = [
                     'id' => $result->id,
                     'row_num' => $rowNum,
                     'student_id' => $result->student_id,
+                    'student_hemis_id' => $student ? $student->hemis_id : null,
+                    'group_local_id' => $studentGroup ? $studentGroup->id : null,
+                    'semester_code' => $student ? $student->semester_code : null,
                     'full_name' => $student ? $student->full_name : $result->student_name,
                     'faculty' => $student ? $student->department_name : '-',
                     'direction' => $student ? $student->specialty_name : '-',
@@ -1077,30 +1092,38 @@ class QuizResultController extends Controller
                 }
             }
 
-            // OSKI baholar (training_type_code = 101) — jurnal logikasi: MAX(grade) + semester filtri
-            $oskiGrades = []; // student_hemis_id|subject_id => max grade (pre-computed)
-            $allSemCodesForOski = !empty($studentSubjectSemester) ? array_unique(array_values($studentSubjectSemester)) : [];
+            // OSKI/Test baholar — jurnal logikasi: MAX(grade), faqat JORIY semestr, YN turi bo'yicha alohida
+            $oskiGrades = []; // hemis|subject_id|semester|YN_turi => max grade
+            $currentSemCodes = $students->pluck('semester_code')->filter()->unique()->values()->toArray();
 
-            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($allSemCodesForOski)) {
+            if (!empty($studentHemisIds) && !empty($fanIds) && !empty($currentSemCodes)) {
                 foreach (array_chunk($studentHemisIds, 500) as $chunk) {
                     $oskiRows = DB::table('student_grades')
                         ->whereNull('deleted_at')
                         ->whereIn('student_hemis_id', $chunk)
                         ->whereIn('subject_id', $fanIds)
-                        ->whereIn('semester_code', $allSemCodesForOski)
-                        ->where('training_type_code', 101)
+                        ->whereIn('semester_code', $currentSemCodes)
+                        ->whereIn('training_type_code', [101, 102])
                         ->whereNotNull('grade')
-                        ->select('student_hemis_id', 'subject_id', DB::raw('MAX(grade) as grade'))
-                        ->groupBy('student_hemis_id', 'subject_id')
+                        ->select('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code', DB::raw('MAX(grade) as grade'))
+                        ->groupBy('student_hemis_id', 'subject_id', 'subject_name', 'semester_code', 'training_type_code')
                         ->get();
 
                     foreach ($oskiRows as $row) {
-                        $k = $row->student_hemis_id . '|' . $row->subject_id;
+                        $ttype = (int) $row->training_type_code === 101 ? 'O' : 'T';
+                        $k = $row->student_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $ttype;
                         $oskiGrades[$k] = (float) $row->grade;
+                        $kName = $row->student_hemis_id . '|' . mb_strtolower($row->subject_name) . '|' . $row->semester_code . '|' . $ttype;
+                        if (!isset($oskiGrades[$kName])) {
+                            $oskiGrades[$kName] = (float) $row->grade;
+                        }
                     }
                     unset($oskiRows);
                 }
             }
+
+            // Mavzu (N-mavzu) shakldagi natijalar uchun jurnal holati
+            $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
             // 4) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
             $markingSystemCodes = $students
@@ -1160,14 +1183,18 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    $studentScoreLookup, $defaultScore
+                    $studentScoreLookup, $defaultScore, $mavzuStates
                 );
 
                 $rowNum++;
+                $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;
                 $data[] = [
                     'id' => $result->id,
                     'row_num' => $rowNum,
                     'student_id' => $result->student_id,
+                    'student_hemis_id' => $student ? $student->hemis_id : null,
+                    'group_local_id' => $studentGroup ? $studentGroup->id : null,
+                    'semester_code' => $student ? $student->semester_code : null,
                     'full_name' => $student ? $student->full_name : $result->student_name,
                     'faculty' => $student ? $student->department_name : '-',
                     'direction' => $student ? $student->specialty_name : '-',
@@ -1216,7 +1243,8 @@ class QuizResultController extends Controller
         $jnGrades, $mtGrades, $oskiGrades,
         $curriculumSubjects, $groups,
         $testTypes, $oskiTypes,
-        $studentScoreLookup = [], $defaultScore = null
+        $studentScoreLookup = [], $defaultScore = null,
+        $mavzuStates = []
     ) {
         $jnAvg = null;
         $mtAvg = null;
@@ -1227,20 +1255,47 @@ class QuizResultController extends Controller
             return ['code' => 'no_student', 'text' => 'Talaba topilmadi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 2) JN mavzu formatini aniqlash (masalan: JN (uzb)_13_Patologik..._D_9-mavzu)
-        // Shaklda N-mavzu + quiz_type 'JN' bilan boshlanishi — mavzu retake formati
+        // Mavzu formatini oldindan aniqlash (uploaded tekshiruvi va existingOskiGrade uchun farq qiladi)
         $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
-        $isJnType = $result->quiz_type && stripos($result->quiz_type, 'JN') === 0;
 
-        if ($isMavzuShakl && $isJnType) {
-            // Baho tekshiruvi
+        // 1.5) Aynan shu Moodle natija (quiz_result_id) jurnalga yuklangan
+        // Mavzu uchun: shu sanadagi student_grade da retake_grade saqlangan
+        // OSKI/Test uchun: reason='quiz_result' bilan yangi yozuv yaratilgan
+        if (isset($uploadedResultIds[$result->id])) {
+            if ($isMavzuShakl) {
+                return ['code' => 'mavzu_uploaded', 'text' => 'Jurnalga yuklangan: ' . $result->shakl, 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+            }
+            return ['code' => 'uploaded', 'text' => 'Jurnalga yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        }
+
+        // 1.6) OSKI/Test uchun: jurnalda shu YN turi (OSKI yoki Test) bahosi bor — informativ
+        // (mavzuga aloqasi yo'q, mavzu JN ustuniga tushadi)
+        // Faqat talabaning JORIY semestri va aynan shu YN turi bo'yicha tekshiriladi
+        if (!$isMavzuShakl) {
+            $existingOskiGrade = null;
+            $currentSem = $student->semester_code;
+            $ttype = $ynTuri === 'OSKI' ? 'O' : ($ynTuri === 'Test' ? 'T' : null);
+            if ($ttype && $currentSem && $result->fan_id) {
+                $gradeCheckKey = $student->hemis_id . '|' . $result->fan_id . '|' . $currentSem . '|' . $ttype;
+                if (isset($oskiGrades[$gradeCheckKey])) {
+                    $existingOskiGrade = $oskiGrades[$gradeCheckKey];
+                }
+            }
+            if ($existingOskiGrade === null && $ttype && $currentSem && $result->fan_name) {
+                $gradeCheckKeyName = $student->hemis_id . '|' . mb_strtolower($result->fan_name) . '|' . $currentSem . '|' . $ttype;
+                if (isset($oskiGrades[$gradeCheckKeyName])) {
+                    $existingOskiGrade = $oskiGrades[$gradeCheckKeyName];
+                }
+            }
+            if ($existingOskiGrade !== null) {
+                return ['code' => 'has_other_grade', 'text' => 'Bahosi bor (' . $existingOskiGrade . ')', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $existingOskiGrade];
+            }
+        }
+
+        // 2) Mavzu formati uchun maxsus xulosa
+        if ($isMavzuShakl) {
             if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
                 return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
-            }
-
-            // Oldin yuklangan (quiz_result_id bo'yicha mavjudligini tekshirish)
-            if (isset($uploadedResultIds[$result->id])) {
-                return ['code' => 'uploaded', 'text' => 'Oldin yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
 
             // Fan o'quv rejada bormi tekshirish
@@ -1254,7 +1309,30 @@ class QuizResultController extends Controller
                 return ['code' => 'no_student', 'text' => 'Talaba guruhi topilmadi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
 
-            // Mavzu retake uchun tayyor — aniq upload paytida yana tekshiriladi
+            // Jurnaldagi mavzu holatini ko'rsatish (NB / Baho / Retake / Bo'sh)
+            preg_match('/^(\d+)-mavzu$/i', $result->shakl, $mavzuMatch);
+            $mavzuN = (int) ($mavzuMatch[1] ?? 0);
+            $mavzuKey = $student->hemis_id . '|' . $result->fan_id . '|' . $mavzuN;
+            $state = $mavzuStates[$mavzuKey] ?? null;
+
+            if ($state) {
+                if ($state['type'] === 'retake') {
+                    $orig = $state['grade'] !== null ? round($state['grade']) : null;
+                    $rt = round($state['retake']);
+                    $txt = $orig !== null
+                        ? 'Retake bor: ' . $result->shakl . ' (' . $orig . '→' . $rt . ')'
+                        : 'Retake bor: ' . $result->shakl . ' (' . $rt . ')';
+                    return ['code' => 'mavzu_grade', 'text' => $txt, 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+                }
+                if ($state['type'] === 'grade') {
+                    return ['code' => 'mavzu_grade', 'text' => 'Baho bor: ' . $result->shakl . ' (' . round($state['grade']) . ')', 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+                }
+                if ($state['type'] === 'nb') {
+                    return ['code' => 'mavzu_nb', 'text' => 'NB bor: ' . $result->shakl, 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+                }
+            }
+
+            // Jurnalda yozuv yo'q — yuklash mumkin
             return ['code' => 'mavzu', 'text' => 'Mavzu retake: ' . $result->shakl, 'jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
         }
 
@@ -1273,12 +1351,7 @@ class QuizResultController extends Controller
             return ['code' => 'not_first', 'text' => '1-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 6) Oldin yuklangan
-        if (isset($uploadedResultIds[$result->id])) {
-            return ['code' => 'uploaded', 'text' => 'Oldin yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
-        }
-
-        // 7) Dublikat tekshiruvi (2O / 2T)
+        // 6) Dublikat tekshiruvi (2O / 2T)
         $typeCode = in_array($result->quiz_type, $testTypes) ? 'T' : 'O';
         $dupKey = $result->student_id . '|' . $result->fan_id . '|' . $typeCode . '|' . $result->shakl;
         if (isset($duplicateMap[$dupKey]) && count($duplicateMap[$dupKey]) > 1) {
@@ -1346,6 +1419,125 @@ class QuizResultController extends Controller
 
         // 10) Hammasi joyida
         return ['code' => 'ok', 'text' => 'Yuklasa bo\'ladi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+    }
+
+    /**
+     * Mavzu shakldagi natijalar uchun jurnal holatini bulk yuklash.
+     * Har bir (student_hemis_id, fan_id, mavzu_n) uchun state qaytaradi:
+     *   ['type' => 'retake'|'grade'|'nb'|'empty', 'grade' => ?, 'retake' => ?]
+     * Mavzu raqami — talabaning JORIY semestridagi xronologik amaliy darslar tartibi.
+     */
+    private function buildMavzuStates($results, array $studentLookup, $students): array
+    {
+        $states = [];
+
+        // 1) Mavzu shakldagi natijalar uchun (student, fan, group, semester) ro'yxat
+        $pairs = []; // hemis|fan_id => ['hemis'=>, 'fan'=>, 'group'=>, 'sem'=>]
+        foreach ($results as $r) {
+            if (!$r->shakl || !preg_match('/^\d+-mavzu$/i', $r->shakl)) continue;
+            $student = $studentLookup[$r->student_id] ?? null;
+            if (!$student || !$r->fan_id || !$student->semester_code || !$student->group_id) continue;
+            $key = $student->hemis_id . '|' . $r->fan_id;
+            if (!isset($pairs[$key])) {
+                $pairs[$key] = [
+                    'hemis' => $student->hemis_id,
+                    'fan'   => $r->fan_id,
+                    'group' => $student->group_id,
+                    'sem'   => $student->semester_code,
+                ];
+            }
+        }
+
+        if (empty($pairs)) return $states;
+
+        $excludedTypes = [11, 17, 99, 100, 101, 102, 103];
+
+        // 2) Schedules — har (group, fan, semester) uchun xronologik dars sanalari
+        $groupIds = array_unique(array_column($pairs, 'group'));
+        $fanIds   = array_unique(array_column($pairs, 'fan'));
+        $semCodes = array_unique(array_column($pairs, 'sem'));
+
+        $scheduleRows = DB::table('schedules')
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', $excludedTypes)
+            ->whereIn('group_id', $groupIds)
+            ->whereIn('subject_id', $fanIds)
+            ->whereIn('semester_code', $semCodes)
+            ->select('group_id', 'subject_id', 'semester_code', DB::raw('DATE(lesson_date) as d'))
+            ->distinct()
+            ->orderBy('d')
+            ->get();
+
+        $datesByTriple = []; // group|fan|sem => [d1, d2, ...]
+        foreach ($scheduleRows as $row) {
+            $k = $row->group_id . '|' . $row->subject_id . '|' . $row->semester_code;
+            $datesByTriple[$k][] = $row->d;
+        }
+
+        // 3) student_grades — hozirgi semestr, mavzu rolidagi yozuvlar
+        $hemisIds = array_unique(array_column($pairs, 'hemis'));
+        $gradeRows = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', $excludedTypes)
+            ->whereIn('student_hemis_id', $hemisIds)
+            ->whereIn('subject_id', $fanIds)
+            ->whereIn('semester_code', $semCodes)
+            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status')
+            ->get();
+
+        $gradesByDate = []; // hemis|fan|sem|date => [rows]
+        foreach ($gradeRows as $g) {
+            $date = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            $k = $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code . '|' . $date;
+            $gradesByDate[$k][] = $g;
+        }
+
+        // 4) Har bir pair uchun mavzu_n ni state ga aylantirish
+        foreach ($results as $r) {
+            if (!$r->shakl || !preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) continue;
+            $student = $studentLookup[$r->student_id] ?? null;
+            if (!$student || !$r->fan_id) continue;
+
+            $mavzuN = (int) $m[1];
+            $tripleKey = $student->group_id . '|' . $r->fan_id . '|' . $student->semester_code;
+            $dates = $datesByTriple[$tripleKey] ?? [];
+
+            if (!isset($dates[$mavzuN - 1])) continue;
+            $targetDate = $dates[$mavzuN - 1];
+
+            $gKey = $student->hemis_id . '|' . $r->fan_id . '|' . $student->semester_code . '|' . $targetDate;
+            $rows = $gradesByDate[$gKey] ?? [];
+
+            if (empty($rows)) continue;
+
+            $maxGrade = null;
+            $maxRetake = null;
+            $hasNb = false;
+
+            foreach ($rows as $gr) {
+                if ($gr->reason === 'absent' && $gr->grade === null && $gr->retake_grade === null) {
+                    $hasNb = true;
+                    continue;
+                }
+                if ($gr->grade !== null) {
+                    $maxGrade = $maxGrade === null ? $gr->grade : max($maxGrade, $gr->grade);
+                }
+                if ($gr->retake_grade !== null) {
+                    $maxRetake = $maxRetake === null ? $gr->retake_grade : max($maxRetake, $gr->retake_grade);
+                }
+            }
+
+            $stateKey = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
+            if ($maxRetake !== null) {
+                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake];
+            } elseif ($maxGrade !== null) {
+                $states[$stateKey] = ['type' => 'grade', 'grade' => $maxGrade, 'retake' => null];
+            } elseif ($hasNb) {
+                $states[$stateKey] = ['type' => 'nb', 'grade' => null, 'retake' => null];
+            }
+        }
+
+        return $states;
     }
 
     /**
@@ -1682,16 +1874,29 @@ class QuizResultController extends Controller
                 'grade' => $result->grade,
             ];
 
-            // JN mavzu formatini aniqlash — OSKI/YN test emas, alohida oqimga yo'naltiramiz
+            // YN turi override (modaldan) — "mavzu_N" bo'lsa, mavzu retake sifatida yuklanadi
+            // (NB shakl yoki noaniq quiz_type uchun foydalanuvchi qo'lda tanlagan bo'ladi)
+            $ynTuriOverridesAll = $request->input('yn_turi_overrides', []);
+            $studentForKey = Student::where('hemis_id', $result->student_id)
+                ->orWhere('student_id_number', $result->student_id)
+                ->first();
+            $ynOverrideKey = $result->fan_id . '_' . ($studentForKey->group_id ?? '');
+            $ynManualOverride = $ynTuriOverridesAll[$ynOverrideKey] ?? null;
+
+            if ($ynManualOverride && preg_match('/^mavzu_(\d+)$/i', $ynManualOverride, $mvm)) {
+                $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides, (int) $mvm[1]);
+                continue;
+            }
+
+            // Mavzu formatini aniqlash — shakl "N-mavzu" bo'lsa, mavzu retake sifatida yuklanadi
             $isMavzuShakl = $result->shakl && preg_match('/^\d+-mavzu$/i', $result->shakl);
-            $isJnType = $result->quiz_type && stripos($result->quiz_type, 'JN') === 0;
-            if ($isMavzuShakl && $isJnType) {
+            if ($isMavzuShakl) {
                 $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides);
                 continue;
             }
 
-            // Faqat 1-urinish yuklanadi (OSKI/YN test)
-            if ($result->shakl !== '1-urinish') {
+            // Faqat 1-urinish yuklanadi (OSKI/YN test) — qayta yuklashda bu filtr o'tkazib yuboriladi
+            if (!$request->input('skip_shakl_filter') && $result->shakl !== '1-urinish') {
                 $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$result->shakl})";
                 $errors[] = $rowInfo;
                 continue;
@@ -1764,10 +1969,15 @@ class QuizResultController extends Controller
             // Quiz type dan training_type_code va name aniqlash
             $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
             $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-            if (in_array($result->quiz_type, $oskiTypes)) {
+            $shaklLower = mb_strtolower($result->shakl ?? '');
+            $ynTuriOverrides = $request->input('yn_turi_overrides', []);
+            $ynOverrideKey = $result->fan_id . '_' . ($student->group_id ?? '');
+            $manualYnTuri = $ynTuriOverrides[$ynOverrideKey] ?? null;
+
+            if ($manualYnTuri === 'oski' || in_array($result->quiz_type, $oskiTypes) || $shaklLower === 'oski' || stripos($result->quiz_type ?? '', 'OSKI') !== false) {
                 $trainingTypeCode = 101;
                 $trainingTypeName = 'Oski';
-            } elseif (in_array($result->quiz_type, $testTypes)) {
+            } elseif ($manualYnTuri === 'test' || in_array($result->quiz_type, $testTypes) || stripos($shaklLower, 'test') !== false || stripos($result->quiz_type ?? '', 'test') !== false) {
                 $trainingTypeCode = 102;
                 $trainingTypeName = 'Yakuniy test';
             } else {
@@ -1776,35 +1986,56 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            StudentGrade::create([
-                'student_id' => $student->id,
-                'student_hemis_id' => $student->hemis_id,
-                'hemis_id' => 999999999,
-                'semester_code' => $semester->code ?? $student->semester_code,
-                'semester_name' => $semester->name ?? $student->semester_name,
-                'subject_schedule_id' => 0,
-                'subject_id' => $subject->subject_id,
-                'subject_name' => $subject->subject_name,
-                'subject_code' => $subject->subject_code ?? '',
-                'training_type_code' => $trainingTypeCode,
-                'training_type_name' => $trainingTypeName,
-                'employee_id' => 0,
-                'employee_name' => auth()->user()->name ?? 'Test markazi',
-                'lesson_pair_name' => '',
-                'lesson_pair_code' => '',
-                'lesson_pair_start_time' => '',
-                'lesson_pair_end_time' => '',
-                'lesson_date' => $result->date_finish ?? now(),
-                'created_at_api' => $result->created_at ?? now(),
-                'reason' => 'quiz_result',
-                'status' => 'recorded',
-                'grade' => round($result->grade),
-                'deadline' => now(),
-                'quiz_result_id' => $result->id,
-                'is_final' => true,
-            ]);
+            try {
+                $created = StudentGrade::create([
+                    'student_id' => $student->id,
+                    'student_hemis_id' => $student->hemis_id,
+                    'hemis_id' => 999999999,
+                    'semester_code' => $semester->code ?? $student->semester_code,
+                    'semester_name' => $semester->name ?? $student->semester_name,
+                    'subject_schedule_id' => 0,
+                    'subject_id' => $subject->subject_id,
+                    'subject_name' => $subject->subject_name,
+                    'subject_code' => $subject->subject_code ?? '',
+                    'training_type_code' => $trainingTypeCode,
+                    'training_type_name' => $trainingTypeName,
+                    'employee_id' => 0,
+                    'employee_name' => auth()->user()->name ?? 'Test markazi',
+                    'lesson_pair_name' => '',
+                    'lesson_pair_code' => '',
+                    'lesson_pair_start_time' => '',
+                    'lesson_pair_end_time' => '',
+                    'lesson_date' => $result->date_finish ?? now(),
+                    'created_at_api' => $result->created_at ?? now(),
+                    'reason' => 'quiz_result',
+                    'status' => 'recorded',
+                    'grade' => round($result->grade),
+                    'deadline' => now(),
+                    'quiz_result_id' => $result->id,
+                    'is_final' => true,
+                ]);
 
-            $successCount++;
+                if (!$created || !$created->exists || !$created->id) {
+                    throw new \RuntimeException('StudentGrade saqlanmadi');
+                }
+
+                $verify = StudentGrade::where('quiz_result_id', $result->id)->exists();
+                if (!$verify) {
+                    throw new \RuntimeException('Yozuv DB da topilmadi');
+                }
+
+                $successCount++;
+            } catch (\Throwable $e) {
+                Log::error('uploadToGrades create failed', [
+                    'quiz_result_id' => $result->id,
+                    'student_id' => $student->id,
+                    'subject_id' => $subject->subject_id,
+                    'error' => $e->getMessage(),
+                ]);
+                $rowInfo['error'] = "Saqlashda xato: " . $e->getMessage();
+                $errors[] = $rowInfo;
+                continue;
+            }
         }
 
         return response()->json([
@@ -1829,15 +2060,19 @@ class QuizResultController extends Controller
      *     Mavjud baho >= Moodle: skip
      *     YN qulflangan: skip
      */
-    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors, array $subjectOverrides = []): void
+    private function uploadMavzuRetake($result, array $rowInfo, int &$successCount, array &$errors, array $subjectOverrides = [], int $mavzuNOverride = 0): void
     {
-        // Mavzu raqamini olish
-        if (!preg_match('/^(\d+)-mavzu$/i', $result->shakl, $m)) {
-            $rowInfo['error'] = "Mavzu raqami topilmadi: '{$result->shakl}'";
-            $errors[] = $rowInfo;
-            return;
+        // Mavzu raqamini aniqlash: foydalanuvchi modaldan tanlagan bo'lsa undan, aks holda shakl'dan
+        if ($mavzuNOverride > 0) {
+            $mavzuN = $mavzuNOverride;
+        } else {
+            if (!preg_match('/^(\d+)-mavzu$/i', $result->shakl, $m)) {
+                $rowInfo['error'] = "Mavzu raqami topilmadi: '{$result->shakl}'";
+                $errors[] = $rowInfo;
+                return;
+            }
+            $mavzuN = (int) $m[1];
         }
-        $mavzuN = (int) $m[1];
 
         if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
             $rowInfo['error'] = "Baho noto'g'ri: {$result->grade}";
@@ -1933,17 +2168,24 @@ class QuizResultController extends Controller
             $updates = null;
 
             if ($isNb) {
-                // NB scenario: sababli/sababsiz aniqlash
-                // Sababli (yashil NB): tasdiqlangan AbsenceExcuse bor → retake × 1.0
-                // Sababsiz (qizil NB): retake × 0.8
-                $isSababli = \App\Models\AbsenceExcuse::where('status', 'approved')
+                // NB scenario: sababli/sababsiz aniqlash (HEMIS davomat orqali, jurnal bilan bir xil)
+                // absent_on > 0 — sababli (yashil/ko'k NB) → retake × 1.0
+                // absent_on = 0 — sababsiz (qizil NB) → retake × 0.8
+                $isSababli = DB::table('attendances')
                     ->where('student_hemis_id', $student->hemis_id)
-                    ->whereDate('start_date', '<=', $targetDate)
-                    ->whereDate('end_date', '>=', $targetDate)
-                    ->whereHas('makeups', function ($q) use ($targetFanId) {
-                        $q->where('subject_id', $targetFanId);
-                    })
+                    ->where('subject_id', $targetFanId)
+                    ->whereDate('lesson_date', $targetDate)
+                    ->where('lesson_pair_code', $sg->lesson_pair_code)
+                    ->where('absent_on', '>', 0)
                     ->exists();
+
+                if (!$isSababli) {
+                    $isSababli = \App\Models\AbsenceExcuse::where('status', 'approved')
+                        ->where('student_hemis_id', $student->hemis_id)
+                        ->whereDate('start_date', '<=', $targetDate)
+                        ->whereDate('end_date', '>=', $targetDate)
+                        ->exists();
+                }
 
                 $multiplier = $isSababli ? 1.0 : 0.8;
                 $retakeValue = round($moodleGrade * $multiplier, 2);
@@ -2007,8 +2249,21 @@ class QuizResultController extends Controller
 
             if (!$updates) continue;
 
-            DB::table('student_grades')->where('id', $sg->id)->update($updates);
-            $updatedAnyPair = true;
+            try {
+                $affected = DB::table('student_grades')->where('id', $sg->id)->update($updates);
+                if ($affected === 0) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: update 0 qator (yozuv yo'qolgan?)";
+                    continue;
+                }
+                $updatedAnyPair = true;
+            } catch (\Throwable $e) {
+                Log::error('uploadMavzuRetake update failed', [
+                    'sg_id' => $sg->id,
+                    'quiz_result_id' => $result->id,
+                    'error' => $e->getMessage(),
+                ]);
+                $skipReasons[] = "juftlik {$sg->lesson_pair_code}: saqlashda xato — " . $e->getMessage();
+            }
         }
 
         if ($updatedAnyPair) {
@@ -2065,6 +2320,10 @@ class QuizResultController extends Controller
         }
 
         // uploadToGrades ni chaqirish (endi eski yozuvlar tozalangan — qayta yuklanadi)
+        $request->merge([
+            'skip_shakl_filter' => true,
+            'yn_turi_overrides' => $request->input('yn_turi_overrides', []),
+        ]);
         return $this->uploadToGrades($request);
     }
 
@@ -2105,6 +2364,8 @@ class QuizResultController extends Controller
                     'grade_count' => 0,
                     'sample_grades' => [],
                     'available_subjects' => [],
+                    'quiz_type' => $r->quiz_type,
+                    'shakl' => $r->shakl,
                 ];
             }
             $groups[$key]['grade_count']++;
@@ -2152,7 +2413,77 @@ class QuizResultController extends Controller
                 'subject_name' => $s->subject_name,
                 'subject_code' => $s->subject_code,
                 'semester_name' => $s->semester_name,
+                'lesson_count' => 0,
             ])->toArray();
+        }
+        unset($g);
+
+        // Har bir (group, available_subject, semester) uchun mavzu (amaliy dars) sonini hisoblash
+        // Bu son YN turi dropdownida 1-mavzu..N-mavzu opsiyalarini ko'rsatish uchun ishlatiladi
+        $excludedSchedTypes = [11, 17, 99, 100, 101, 102, 103];
+        $countTriples = [];
+        foreach ($groups as $g) {
+            foreach ($g['available_subjects'] as $s) {
+                $key = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $g['semester_code'];
+                $countTriples[$key] = [
+                    'group' => $g['group_hemis_id'],
+                    'subject' => $s['subject_id'],
+                    'sem' => $g['semester_code'],
+                ];
+            }
+        }
+        $lessonCounts = [];
+        if (!empty($countTriples)) {
+            $cGroups = array_unique(array_column($countTriples, 'group'));
+            $cSubjects = array_unique(array_column($countTriples, 'subject'));
+            $cSems = array_unique(array_filter(array_column($countTriples, 'sem')));
+
+            if (!empty($cGroups) && !empty($cSubjects) && !empty($cSems)) {
+                $countRows = DB::table('schedules')
+                    ->whereNull('deleted_at')
+                    ->whereNotIn('training_type_code', $excludedSchedTypes)
+                    ->whereIn('group_id', $cGroups)
+                    ->whereIn('subject_id', $cSubjects)
+                    ->whereIn('semester_code', $cSems)
+                    ->select('group_id', 'subject_id', 'semester_code', DB::raw('COUNT(DISTINCT DATE(lesson_date)) as cnt'))
+                    ->groupBy('group_id', 'subject_id', 'semester_code')
+                    ->get();
+
+                foreach ($countRows as $r) {
+                    $k = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    $lessonCounts[$k] = (int) $r->cnt;
+                }
+            }
+        }
+
+        foreach ($groups as &$g) {
+            foreach ($g['available_subjects'] as &$s) {
+                $k = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $g['semester_code'];
+                $s['lesson_count'] = $lessonCounts[$k] ?? 0;
+            }
+            unset($s);
+        }
+        unset($g);
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        foreach ($groups as &$g) {
+            $qt = $g['quiz_type'] ?? '';
+            $sh = $g['shakl'] ?? '';
+            $shLower = mb_strtolower($sh);
+            // NB shakli: talaba qatnashmagan — foydalanuvchi fan va YN turini o'zi tanlasin
+            if ($shLower === 'nb') {
+                $g['yn_turi'] = null;
+            } elseif (preg_match('/^\d+-mavzu$/i', $sh)) {
+                $g['yn_turi'] = 'jn_mavzu';
+                $g['mavzu_shakl'] = $sh;
+            } elseif (in_array($qt, $oskiTypes) || $shLower === 'oski' || stripos($qt, 'OSKI') !== false) {
+                $g['yn_turi'] = 'oski';
+            } elseif (in_array($qt, $testTypes) || stripos($shLower, 'test') !== false || stripos($qt, 'test') !== false) {
+                $g['yn_turi'] = 'test';
+            } else {
+                $g['yn_turi'] = null;
+            }
         }
         unset($g);
 

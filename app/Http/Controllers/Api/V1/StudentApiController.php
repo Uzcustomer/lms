@@ -1136,6 +1136,30 @@ class StudentApiController extends Controller
     }
 
     /**
+     * Talaba imtihon tilini tanlaydi (group default ustidan).
+     * Allowed values: keys/values of services.moodle.lang_map (uz/ru/en yoki uzb/rus/eng).
+     */
+    public function saveExamLanguage(Request $request): JsonResponse
+    {
+        $map = (array) config('services.moodle.lang_map', []);
+        $allowed = array_values(array_unique(array_merge(array_keys($map), array_values($map))));
+
+        $request->validate([
+            'language_code' => ['nullable', 'string', 'in:' . implode(',', $allowed ?: ['uzb', 'rus', 'eng'])],
+        ]);
+
+        $student = $request->user();
+        $student->exam_language_code = $request->input('language_code') ?: null;
+        $student->save();
+
+        return response()->json([
+            'ok' => true,
+            'exam_language_code' => $student->exam_language_code,
+            'group_default_language_code' => optional(\App\Models\Group::where('group_hemis_id', $student->group_id)->first())->education_lang_code,
+        ]);
+    }
+
+    /**
      * Contract — shartnoma ma'lumotlari (lokal DB dan)
      */
     public function contract(Request $request): JsonResponse
@@ -1222,36 +1246,54 @@ class StudentApiController extends Controller
     {
         $student = $request->user();
 
-        $exams = ExamSchedule::where('group_hemis_id', $student->group_id)
+        $schedules = ExamSchedule::where('group_hemis_id', $student->group_id)
             ->where('semester_code', $student->semester_code)
             ->where(function ($query) use ($student) {
                 $query->where('education_year', $student->education_year_code)
                     ->orWhereNull('education_year');
             })
+            ->get();
+
+        // Personal computer assignments for this student across the schedules above
+        $assignments = \App\Models\ComputerAssignment::query()
+            ->whereIn('exam_schedule_id', $schedules->pluck('id'))
+            ->where('student_id_number', $student->student_id_number)
             ->get()
-            ->flatMap(function ($exam) {
-                $items = [];
+            ->keyBy(fn($a) => $a->exam_schedule_id . ':' . $a->yn_type);
 
-                if (!$exam->oski_na && $exam->oski_date) {
-                    $items[] = [
-                        'subject_name' => $exam->subject_name,
-                        'exam_type' => 'OSKI',
-                        'date' => $exam->oski_date->format('Y-m-d'),
-                        'time' => $exam->oski_time,
-                    ];
-                }
+        $exams = $schedules->flatMap(function ($exam) use ($assignments) {
+            $items = [];
 
-                if (!$exam->test_na && $exam->test_date) {
-                    $items[] = [
-                        'subject_name' => $exam->subject_name,
-                        'exam_type' => 'Test',
-                        'date' => $exam->test_date->format('Y-m-d'),
-                        'time' => $exam->test_time,
-                    ];
-                }
+            if (!$exam->oski_na && $exam->oski_date) {
+                $a = $assignments->get($exam->id . ':oski');
+                $items[] = [
+                    'subject_name' => $exam->subject_name,
+                    'exam_type' => 'OSKI',
+                    'date' => $exam->oski_date->format('Y-m-d'),
+                    'time' => $exam->oski_time,
+                    'computer_number' => $a?->computer_number,
+                    'planned_start' => $a?->planned_start?->format('Y-m-d H:i'),
+                    'planned_end' => $a?->planned_end?->format('Y-m-d H:i'),
+                    'status' => $a?->status,
+                ];
+            }
 
-                return $items;
-            })
+            if (!$exam->test_na && $exam->test_date) {
+                $a = $assignments->get($exam->id . ':test');
+                $items[] = [
+                    'subject_name' => $exam->subject_name,
+                    'exam_type' => 'Test',
+                    'date' => $exam->test_date->format('Y-m-d'),
+                    'time' => $exam->test_time,
+                    'computer_number' => $a?->computer_number,
+                    'planned_start' => $a?->planned_start?->format('Y-m-d H:i'),
+                    'planned_end' => $a?->planned_end?->format('Y-m-d H:i'),
+                    'status' => $a?->status,
+                ];
+            }
+
+            return $items;
+        })
             ->sortBy('date')
             ->values();
 

@@ -208,6 +208,82 @@ if (!function_exists('get_teacher_hemis_id')) {
     }
 }
 
+if (!function_exists('is_active_nazoratchi')) {
+    /**
+     * Joriy foydalanuvchining faol roli nazoratchi ekanligini tekshirish.
+     */
+    function is_active_nazoratchi(): bool
+    {
+        $webUser = auth()->guard('web')->user();
+        if ($webUser) {
+            $roles = $webUser->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? '');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+            return $activeRole === 'nazoratchi';
+        }
+
+        if (auth()->guard('teacher')->check()) {
+            $teacher = auth()->guard('teacher')->user();
+            $roles = $teacher->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? '');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+            return $activeRole === 'nazoratchi';
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('get_nazoratchi_teacher')) {
+    /**
+     * Joriy foydalanuvchini Teacher modeli sifatida olish (web yoki teacher guard).
+     */
+    function get_nazoratchi_teacher(): ?\App\Models\Teacher
+    {
+        $teacher = auth()->guard('teacher')->user();
+        if ($teacher instanceof \App\Models\Teacher) {
+            return $teacher;
+        }
+        $webUser = auth()->guard('web')->user();
+        if ($webUser) {
+            return \App\Models\Teacher::where('login', $webUser->email)->first();
+        }
+        return null;
+    }
+}
+
+if (!function_exists('get_nazoratchi_group_hemis_ids')) {
+    /**
+     * Nazoratchi sifatida biriktirilgan guruhlarning HEMIS ID lari.
+     *
+     * @return array<string>
+     */
+    function get_nazoratchi_group_hemis_ids(): array
+    {
+        $teacher = get_nazoratchi_teacher();
+        if (!$teacher) return [];
+        return $teacher->nazoratchiGroups()->where('active', true)->pluck('group_hemis_id')->toArray();
+    }
+}
+
+if (!function_exists('get_nazoratchi_group_db_ids')) {
+    /**
+     * Nazoratchi guruhlarining lokal DB ID (groups.id) lari.
+     *
+     * @return array<int>
+     */
+    function get_nazoratchi_group_db_ids(): array
+    {
+        $teacher = get_nazoratchi_teacher();
+        if (!$teacher) return [];
+        return $teacher->nazoratchiGroups()->where('active', true)->pluck('groups.id')->toArray();
+    }
+}
+
 if (!function_exists('format_date')) {
     /**
      * Sanani dd.mm.yyyy formatda chiqarish

@@ -92,7 +92,24 @@ class TeacherController extends Controller
                 return $group;
             });
 
-        return view('admin.teachers.show', compact('teacher', 'departments', 'roles', 'tutorGroups'));
+        // Nazoratchi guruhlari va talabalar
+        $nazoratchiGroups = $teacher->nazoratchiGroups()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($group) {
+                $group->students = \App\Models\Student::where('group_id', $group->group_hemis_id)
+                    ->orderBy('full_name')
+                    ->get();
+                return $group;
+            });
+
+        // Tanlash uchun barcha aktiv guruhlar
+        $allGroups = \App\Models\Group::where('active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'department_name']);
+
+        return view('admin.teachers.show', compact('teacher', 'departments', 'roles', 'tutorGroups', 'nazoratchiGroups', 'allGroups'));
     }
 
     public function edit(Teacher $teacher)
@@ -191,6 +208,7 @@ class TeacherController extends Controller
         $isDean = in_array(ProjectRole::DEAN->value, $roles);
         $isSubjectResponsible = in_array(ProjectRole::SUBJECT_RESPONSIBLE->value, $roles);
         $isFirmResponsible = in_array(ProjectRole::FIRM_RESPONSIBLE->value, $roles);
+        $isSupervisor = in_array(ProjectRole::SUPERVISOR->value, $roles);
 
         $request->validate([
             'roles' => 'nullable|array',
@@ -200,9 +218,12 @@ class TeacherController extends Controller
             'dean_faculties.*' => 'exists:departments,department_hemis_id',
             'responsible_subjects' => [$isSubjectResponsible ? 'required' : 'nullable', 'array'],
             'responsible_subjects.*' => 'exists:curriculum_subjects,id',
+            'nazoratchi_groups' => [$isSupervisor ? 'required' : 'nullable', 'array'],
+            'nazoratchi_groups.*' => 'exists:groups,id',
         ], [
             'dean_faculties.required' => 'Dekan roli uchun kamida bitta fakultetni tanlash majburiy.',
             'responsible_subjects.required' => "Fan mas'uli roli uchun kamida bitta fanni tanlash majburiy.",
+            'nazoratchi_groups.required' => 'Nazoratchi roli uchun kamida bitta guruhni tanlash majburiy.',
         ]);
 
         $teacher->lavozim = $request->input('lavozim') ?: null;
@@ -242,6 +263,21 @@ class TeacherController extends Controller
                 $teacher->deanFaculties()->detach();
             } catch (\Throwable $e) {
                 Log::error('updateRoles - deanFaculties detach xatolik: ' . $e->getMessage());
+            }
+        }
+
+        if ($isSupervisor) {
+            try {
+                $teacher->nazoratchiGroups()->sync($request->input('nazoratchi_groups', []));
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - nazoratchiGroups xatolik: ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', 'Nazoratchi guruhlarini saqlashda xatolik: ' . $e->getMessage());
+            }
+        } else {
+            try {
+                $teacher->nazoratchiGroups()->detach();
+            } catch (\Throwable $e) {
+                Log::error('updateRoles - nazoratchiGroups detach xatolik: ' . $e->getMessage());
             }
         }
 

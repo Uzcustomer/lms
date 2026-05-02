@@ -26,6 +26,12 @@ class ExamSchedule extends Model
         'education_year',
         'created_by',
         'updated_by',
+        'oski_moodle_synced_at',
+        'oski_moodle_response',
+        'oski_moodle_error',
+        'test_moodle_synced_at',
+        'test_moodle_response',
+        'test_moodle_error',
     ];
 
     protected $casts = [
@@ -33,6 +39,10 @@ class ExamSchedule extends Model
         'oski_na' => 'boolean',
         'test_date' => 'date',
         'test_na' => 'boolean',
+        'oski_moodle_synced_at' => 'datetime',
+        'test_moodle_synced_at' => 'datetime',
+        'oski_moodle_response' => 'array',
+        'test_moodle_response' => 'array',
     ];
 
     public function department()

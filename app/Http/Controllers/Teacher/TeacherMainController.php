@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Teacher;
 
 use App\Exports\StudentGradeBox;
 use App\Exports\StudentGradesExportAdmin;
+use App\Console\Commands\CalculateTeacherDashboardStats;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
@@ -17,7 +18,6 @@ use App\Models\StaffRegistrationDivision;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
-use App\Models\TeacherDashboardSnapshot;
 use App\Models\TutorHistory;
 use App\Services\StudentGradeService;
 use Illuminate\Support\Facades\Schema;
@@ -27,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class TeacherMainController extends Controller
@@ -39,57 +40,44 @@ class TeacherMainController extends Controller
     }
     public function index()
     {
-        $teacher = auth()->guard('teacher')->user();
-        $userRoles = $teacher->getRoleNames()->toArray();
+        $teacher = auth()->user();
+
+        // Aktiv rol (loyihaning standart konventsiyasi — students() bilan bir xil)
+        $userRoles = $teacher ? $teacher->getRoleNames()->toArray() : [];
         $activeRole = session('active_role', $userRoles[0] ?? '');
         if (!in_array($activeRole, $userRoles) && count($userRoles) > 0) {
             $activeRole = $userRoles[0];
         }
 
-        // Dashboard ma'lumoti kunlik snapshotdan o'qiladi (teachers:build-dashboard-snapshots).
-        // Snapshot har kuni 05:00 da hisoblanadi, dashboardda kechagi kun holati ko'rsatiladi.
-        [$tutorStats, $gradingTimeStats, $workloadStats, $subjectStudents, $snapshotGeneratedAt] = $this->loadDashboardSnapshot($teacher);
+        // Statistika va Top 10 — faqat "oqituvchi" rolida ko'rinadi
+        $isTeacherRole = $activeRole === 'oqituvchi';
 
-        return view('teacher.dashboard', compact(
-            'tutorStats', 'gradingTimeStats', 'workloadStats', 'subjectStudents', 'snapshotGeneratedAt'
-        ));
-    }
+        $stats = null;
+        $topPayload = null;
 
-    private function loadDashboardSnapshot($teacher): array
-    {
-        if (!$teacher || !$teacher->hemis_id) {
-            return [null, null, null, null, null];
+        if ($isTeacherRole && $teacher && !empty($teacher->hemis_id)) {
+            $stats = Cache::get(
+                CalculateTeacherDashboardStats::employeeCacheKey($teacher->hemis_id)
+            );
+            $topPayload = Cache::get(
+                CalculateTeacherDashboardStats::topLeaderboardCacheKey()
+            );
         }
 
-        $teacherSnapshot = TeacherDashboardSnapshot::forTeacher((string) $teacher->hemis_id);
-        $globalSnapshot = TeacherDashboardSnapshot::global();
+        $topItems = $topPayload['items'] ?? [];
+        $topUpdatedAt = $topPayload['last_updated'] ?? null;
+        $topTotalRanked = $topPayload['total_ranked'] ?? null;
+        $topSize = $topPayload['size'] ?? CalculateTeacherDashboardStats::TOP_LEADERBOARD_SIZE;
 
-        $payload = $teacherSnapshot ? ($teacherSnapshot->payload ?? []) : [];
-        $tutorStats = $payload['tutor'] ?? null;
-        $gradingPerTeacher = $payload['grading'] ?? null;
-        $workloadStats = $payload['workload'] ?? null;
-        $subjectStudents = $payload['subjects'] ?? null;
-
-        $gradingTimeStats = null;
-        if ($gradingPerTeacher && $globalSnapshot) {
-            $topList = $globalSnapshot->payload['top_list'] ?? [];
-            $myHemisId = (string) $teacher->hemis_id;
-            foreach ($topList as &$row) {
-                $row['is_me'] = (string) ($row['hemis_id'] ?? '') === $myHemisId;
-            }
-            unset($row);
-
-            $gradingTimeStats = array_merge($gradingPerTeacher, [
-                'total_teachers' => $globalSnapshot->payload['total_teachers'] ?? 0,
-                'top_list' => $topList,
-            ]);
-        }
-
-        $generatedAt = $teacherSnapshot?->generated_at
-            ?? $globalSnapshot?->generated_at
-            ?? null;
-
-        return [$tutorStats, $gradingTimeStats, $workloadStats, $subjectStudents, $generatedAt];
+        return view('teacher.dashboard', [
+            'stats'           => $stats,
+            'topItems'        => $topItems,
+            'topUpdatedAt'    => $topUpdatedAt,
+            'topTotalRanked'  => $topTotalRanked,
+            'topSize'         => $topSize,
+            'teacher'         => $teacher,
+            'isTeacherRole'   => $isTeacherRole,
+        ]);
     }
 
     public function info()
@@ -112,8 +100,28 @@ class TeacherMainController extends Controller
             return $this->studentsAdmin($request);
         }
 
-        // Tyutor guruhlari mavjud bo'lsa, guruh bo'yicha talabalarni ko'rsat
-        $tutorGroups = $teacher->groups()->where('active', true)->orderBy('name')->get();
+        // Tyutor va nazoratchi guruhlari mavjud bo'lsa, guruh bo'yicha talabalarni ko'rsat
+        $tutorGroups = $teacher->groups()->where('active', true)->get();
+        $supervisorGroups = $teacher->nazoratchiGroups()->where('active', true)->get();
+        $tutorGroups = $tutorGroups->concat($supervisorGroups)->unique('id')->sortBy('name')->values();
+
+        // Schedule orqali biriktirilgan guruhlarni ham qo'shish
+        if ($tutorGroups->isEmpty() && $teacher->hemis_id) {
+            $scheduleGroupIds = DB::table('schedules')
+                ->where('employee_id', $teacher->hemis_id)
+                ->where('education_year_current', true)
+                ->whereNotNull('lesson_date')
+                ->pluck('group_id')
+                ->unique()
+                ->toArray();
+            if (!empty($scheduleGroupIds)) {
+                $tutorGroups = \App\Models\Group::whereIn('group_hemis_id', $scheduleGroupIds)
+                    ->where('active', true)
+                    ->orderBy('name')
+                    ->get();
+            }
+        }
+
         if ($tutorGroups->count() > 0) {
             return $this->studentsTutor($request, $teacher, $tutorGroups);
         }
@@ -167,10 +175,28 @@ class TeacherMainController extends Controller
             $query->where('province_name', $request->province);
         }
 
+        $allStudentIds = Student::whereIn('group_id', $groupHemisIds)->pluck('student_id_number')->toArray();
+        $photoStats = [
+            'has_photo' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'pending')->distinct('student_id_number')->count('student_id_number'),
+            'approved' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'approved')->distinct('student_id_number')->count('student_id_number'),
+            'rejected' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'rejected')->distinct('student_id_number')->count('student_id_number'),
+        ];
+
+        $photoFilter = $request->get('photo_filter');
+        if ($photoFilter === 'has_photo') {
+            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'pending')->pluck('student_id_number')->unique()->toArray();
+            $query->whereIn('student_id_number', $ids);
+        } elseif ($photoFilter === 'approved') {
+            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'approved')->pluck('student_id_number')->unique()->toArray();
+            $query->whereIn('student_id_number', $ids);
+        } elseif ($photoFilter === 'rejected') {
+            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'rejected')->pluck('student_id_number')->unique()->toArray();
+            $query->whereIn('student_id_number', $ids);
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->orderBy('group_name')->orderBy('full_name')->paginate($perPage)->appends($request->query());
 
-        // Viloyatlar ro'yxati (filtr uchun)
         $provinces = Student::whereIn('group_id', $groupHemisIds)
             ->whereNotNull('province_name')
             ->distinct()
@@ -178,16 +204,18 @@ class TeacherMainController extends Controller
             ->sort()
             ->values();
 
-        return view('teacher.students-tutor', compact('students', 'tutorGroups', 'provinces'));
+        return view('teacher.students-tutor', compact('students', 'tutorGroups', 'provinces', 'photoStats'));
     }
 
     public function showStudent(Student $student)
     {
         $teacher = auth()->guard('teacher')->user();
 
-        // Tyutor faqat o'z guruhidagi talabalarni ko'rishi mumkin
+        // Tyutor / nazoratchi faqat o'z guruhidagi talabalarni ko'rishi mumkin
         $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
-        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+        $supervisorGroupHemisIds = $teacher->nazoratchiGroups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        $allowedGroupHemisIds = array_unique(array_merge($tutorGroupHemisIds, $supervisorGroupHemisIds));
+        if (!in_array($student->group_id, $allowedGroupHemisIds)) {
             abort(403, 'Bu talaba sizga biriktirilgan guruhda emas.');
         }
 
@@ -217,7 +245,82 @@ class TeacherMainController extends Controller
                 ->get();
         }
 
-        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory'));
+        $photo = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)
+            ->latest()
+            ->first();
+
+        return view('teacher.student-show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'photo'));
+    }
+
+    public function uploadStudentPhoto(Request $request, Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403);
+        }
+
+        try {
+            if (!$request->hasFile('photo')) {
+                return back()->with('error', 'Rasm tanlanmadi');
+            }
+
+            // Avvalgi rasmlarni o'chirish (DB + fayl)
+            $oldPhotos = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->get();
+            foreach ($oldPhotos as $old) {
+                $oldFile = public_path($old->photo_path);
+                if (file_exists($oldFile)) {
+                    @unlink($oldFile);
+                }
+                $old->delete();
+            }
+
+            $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
+            $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
+            $fname = $student->student_id_number . '_' . $safeName . '_' . time() . '.jpg';
+            $dir = public_path('uploads/student-photos/' . date('Y-m'));
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
+
+            $request->file('photo')->move($dir, $fname);
+
+            \App\Models\StudentPhoto::create([
+                'student_id_number' => $student->student_id_number,
+                'full_name' => $student->full_name,
+                'group_name' => $student->group_name,
+                'semester_name' => $student->semester_name,
+                'uploaded_by' => $teacher->full_name ?? $teacher->short_name ?? 'Tyutor',
+                'uploaded_by_teacher_id' => $teacher->id,
+                'photo_path' => $path,
+            ]);
+
+            return back()->with('success', 'Rasm yuklandi');
+        } catch (\Throwable $e) {
+            \Log::error('Student photo upload error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return back()->with('error', 'Xatolik: ' . $e->getMessage());
+        }
+    }
+
+    public function deleteStudentPhoto(Request $request, Student $student)
+    {
+        $teacher = auth()->guard('teacher')->user();
+        $tutorGroupHemisIds = $teacher->groups()->where('active', true)->pluck('group_hemis_id')->toArray();
+        if (!in_array($student->group_id, $tutorGroupHemisIds)) {
+            abort(403);
+        }
+
+        $photos = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->get();
+        foreach ($photos as $photo) {
+            $filePath = public_path($photo->photo_path);
+            if (file_exists($filePath)) {
+                @unlink($filePath);
+            }
+            $photo->delete();
+        }
+
+        return back()->with('success', 'Rasm o\'chirildi');
     }
 
     private function studentsAdmin(Request $request)

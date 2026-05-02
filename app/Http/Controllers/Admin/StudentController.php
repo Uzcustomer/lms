@@ -98,6 +98,22 @@ class StudentController extends Controller
             $query->where('country_name', $request->country);
         }
 
+        if ($request->filled('has_files')) {
+            if ($request->has_files === 'yes') {
+                $query->whereHas('files');
+            } elseif ($request->has_files === 'no') {
+                $query->whereDoesntHave('files');
+            }
+        }
+
+        if ($request->filled('has_admission_data')) {
+            if ($request->has_admission_data === 'yes') {
+                $query->whereHas('admissionData');
+            } elseif ($request->has_admission_data === 'no') {
+                $query->whereDoesntHave('admissionData');
+            }
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->paginate($perPage)->appends($request->query());
 
@@ -1234,6 +1250,7 @@ class StudentController extends Controller
         $filters = $request->only([
             'student_id_number', 'full_name', 'level_code', 'semester_code',
             'department', 'specialty', 'group', 'education_type',
+            'country', 'has_files', 'has_admission_data',
         ]);
         $filename = 'talabalar_' . now()->format('Y-m-d_H-i') . '.xlsx';
         return Excel::download(new StudentsExport($filters), $filename);

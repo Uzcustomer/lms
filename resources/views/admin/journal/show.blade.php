@@ -1,4 +1,24 @@
 <x-app-layout>
+    @php $highlightStudentHemisId = request('highlight_student'); @endphp
+    @if($highlightStudentHemisId)
+        <style>
+            td.student-name-cell[data-student-hemis-id="{{ $highlightStudentHemisId }}"] {
+                background: #fef08a !important;
+                color: #713f12 !important;
+                font-weight: 800 !important;
+                box-shadow: inset 4px 0 0 #ca8a04;
+            }
+            tr:has(> td.student-name-cell[data-student-hemis-id="{{ $highlightStudentHemisId }}"]) {
+                background: #fefce8 !important;
+            }
+        </style>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                var first = document.querySelector('td.student-name-cell[data-student-hemis-id="{{ $highlightStudentHemisId }}"]');
+                if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        </script>
+    @endif
     <style>
         /* Sababli NB katakchalar uchun stil */
         .excuse-nb-cell {
@@ -832,10 +852,18 @@
     </style>
 
     @php
-        $isDekan = is_active_dekan();
+        $isDekan = is_active_dekan() || (session('active_role') === 'tyutor');
         $isRegistrator = is_active_registrator();
-        $isSuperAdmin = auth()->user()?->hasRole('superadmin') ?? false;
-        $canAdminEditExam = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+        $isOqituvchi = is_active_oqituvchi();
+        $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
+        $teacherCanEdit = ($levelDeadline ?? null) && $levelDeadline->retake_by_oqituvchi;
+        $teacherEditDays = ($levelDeadline ?? null) ? $levelDeadline->deadline_days : 0;
+        $todayStr = \Carbon\Carbon::now('Asia/Tashkent')->format('Y-m-d');
+        $pastLessonDates = array_values(array_filter($jbLessonDates, fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d') <= $todayStr));
+        $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
+        $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
+        $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
+        $canAdminEditExam = false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
@@ -917,7 +945,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @forelse($lectureLessonDates as $idx => $date)
                                                 @php
                                                     $scheduledPairs = $lecturePairsByDate[$date] ?? [];
@@ -972,7 +1000,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @forelse($lectureColumns as $idx => $col)
                                                 @php
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
@@ -1153,7 +1181,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
@@ -1352,7 +1380,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($jbColumns as $colIndex => $col)
                                                 @php
@@ -1482,7 +1510,28 @@
                                                                 $nbColorClass = $isSababli ? 'text-green-600' : 'text-red-600';
                                                                 $retakeSababli = !empty($gradeData['retake_was_sababli']);
                                                             @endphp
-                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ round($grade, 0) }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
+                                                            @php
+                                                                $retakeTooltip = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . round($grade, 0);
+                                                                if ($retakeSababli) {
+                                                                    $retakeTooltip .= ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)';
+                                                                }
+                                                                if (isset($absenceData)) {
+                                                                    if (!empty($absenceData['retake_graded_at'])) {
+                                                                        $retakeTooltip .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                    }
+                                                                    $graderName = null;
+                                                                    if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                        $graderName = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                    } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                        $graderName = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                    }
+                                                                    if ($graderName) {
+                                                                        $retakeTooltip .= "\nBaho qo'ydi: " . $graderName;
+                                                                    }
+                                                                    $retakeTooltip .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
+                                                                }
+                                                            @endphp
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ round($grade, 0) }}</span>
@@ -1557,8 +1606,25 @@
                                                             @php
                                                                 $retakeVal = round($absenceData['retake_grade'], 0);
                                                                 $retakeSababli = !empty($absenceData['retake_was_sababli']);
+                                                                $retakeTooltip2 = 'NB (' . ($isSababli ? 'sababli' : 'sababsiz') . '), Otrabotka: ' . $retakeVal;
+                                                                if ($retakeSababli) {
+                                                                    $retakeTooltip2 .= ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)';
+                                                                }
+                                                                if (!empty($absenceData['retake_graded_at'])) {
+                                                                    $retakeTooltip2 .= "\nSana: " . \Carbon\Carbon::parse($absenceData['retake_graded_at'])->format('d.m.Y H:i');
+                                                                }
+                                                                $graderName2 = null;
+                                                                if (!empty($absenceData['graded_by_user_id']) && isset($retakeGraderNames[$absenceData['graded_by_user_id']])) {
+                                                                    $graderName2 = $retakeGraderNames[$absenceData['graded_by_user_id']];
+                                                                } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
+                                                                    $graderName2 = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                }
+                                                                if ($graderName2) {
+                                                                    $retakeTooltip2 .= "\nBaho qo'ydi: " . $graderName2;
+                                                                }
+                                                                $retakeTooltip2 .= "\nManba: " . (!empty($absenceData['quiz_result_id']) ? 'Diagnostika' : 'Jurnal');
                                                             @endphp
-                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="NB ({{ $isSababli ? 'sababli' : 'sababsiz' }}), Otrabotka: {{ $retakeVal }}{{ $retakeSababli ? ' (sababli ariza — 12-qo\'shimcha shaklga tushadi)' : '' }}">
+                                                            <div class="split-cell {{ $retakeSababli ? 'sababli-retake-cell' : '' }}" title="{{ $retakeTooltip2 }}">
                                                                 <svg class="split-line" viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="100" x2="100" y2="0" /></svg>
                                                                 <span class="split-top {{ $nbColorClass }}" style="font-size:10px;">NB</span>
                                                                 <span class="split-bottom">{{ $retakeVal }}</span>
@@ -2052,7 +2118,7 @@
                                                 }
                                             }
                                             $canRegrade = $hasGrade && $manualGrade < ($minimumLimit ?? 60) && $currentAttempt <= $mtMaxResubmissions && $hasResubmitted;
-                                            $isAdminMt = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
+                                            $isAdminMt = (auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false) && \App\Models\Setting::get('feature_admin_mt_grade', '0') === '1';
                                             $isYnSubmittedMt = isset($ynSubmission) && $ynSubmission;
 
                                             // Sababli ariza orqali MT bahosi: talaba uchun tasdiqlangan
@@ -2080,21 +2146,32 @@
                                                 && (!$mtSababliDeadlinePassed || $isAdminMt);
 
                                             $inputDisabled = $isYnSubmittedMt
-                                                ? !$mtSababliCanGrade
+                                                ? ($isAdminMt ? false : !$mtSababliCanGrade)
                                                 : ($isAdminMt
                                                     ? ($isDekan || $isRegistrator)
                                                     : ($isDekan || $isRegistrator || $hasGrade || !$hasFile));
                                             // YN yuborilgan bo'lsa hamma action bloklash, sababli holdan tashqari
-                                            if ($isYnSubmittedMt && !$mtSababliCanGrade) {
+                                            if ($isYnSubmittedMt && !$mtSababliCanGrade && !$isAdminMt) {
                                                 $canRegrade = false;
                                             }
 
                                             // Urgency: file uploaded but not graded, OR resubmitted after low grade
                                             $urgency = 'none'; // none, fresh, warning, danger
                                             $needsGrading = ($hasFile && !$hasGrade) || $hasResubmitted;
+                                            $timeAgoText = '';
                                             if ($needsGrading && $hasFile) {
                                                 $submittedAt = \Carbon\Carbon::parse($submission->submitted_at);
-                                                $daysSince = $submittedAt->diffInDays(now());
+                                                $diffSeconds = (int) abs($submittedAt->diffInSeconds(now()));
+                                                $daysSince = intdiv($diffSeconds, 86400);
+                                                $hoursSince = intdiv($diffSeconds - $daysSince * 86400, 3600);
+                                                if ($daysSince > 0) {
+                                                    $timeAgoText = $daysSince . ' kun' . ($hoursSince > 0 ? ' ' . $hoursSince . ' soat' : '') . ' o\'tdi';
+                                                } elseif ($hoursSince > 0) {
+                                                    $timeAgoText = $hoursSince . ' soat o\'tdi';
+                                                } else {
+                                                    $minutesSince = intdiv($diffSeconds, 60);
+                                                    $timeAgoText = max(1, $minutesSince) . ' daqiqa o\'tdi';
+                                                }
                                                 if ($daysSince >= 3) {
                                                     $urgency = 'danger';
                                                 } elseif ($daysSince >= 1) {
@@ -2118,7 +2195,7 @@
                                         @endphp
                                         <tr id="mt-row-{{ $student->hemis_id }}" {!! $rowBg ? 'style="background:' . $rowBg . '"' : '' !!}>
                                             <td class="px-2 py-1 text-center" style="color: #111827;">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
                                                     <div class="mt-file-cell" style="display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative;">
@@ -2128,9 +2205,9 @@
                                                             {{ Str::limit($submission->file_original_name, 20) }}
                                                         </a>
                                                         @if($urgency === 'warning')
-                                                            <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $daysSince }} kun o'tdi</span>
+                                                            <span style="font-size: 11px; color: #ca8a04; font-weight: 500;">{{ $timeAgoText }}</span>
                                                         @elseif($urgency === 'danger')
-                                                            <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $daysSince }} kun o'tdi!</span>
+                                                            <span style="font-size: 11px; color: #dc2626; font-weight: 700; animation: badge-pulse 1.5s ease-in-out infinite;">{{ $timeAgoText }}!</span>
                                                         @endif
                                                         @if(auth()->user()?->hasRole('superadmin') && !$isYnSubmittedMt)
                                                             <button type="button" onclick="deleteMtFile({{ $submission->id }}, '{{ $student->hemis_id }}')"
@@ -2294,7 +2371,7 @@
                                             @endphp
                                             <tr>
                                                 <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
@@ -2382,7 +2459,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($mtColumns as $colIndex => $col)
                                                 @php
@@ -3081,8 +3158,9 @@
             }
         }
 
-        // Admin/Superadmin: OSKI/Test baho kiritish (YN qulfidan qat'iy nazar)
+        // OSKI/Test baho kiritish vaqtinchalik yopilgan
         function editExamGrade(cell, studentHemisId, typeCode, currentValue) {
+            return;
             if (cell.querySelector('input')) return;
             var typeNames = {101: 'OSKI', 102: 'Test'};
             var original = cell.innerHTML;
@@ -4822,4 +4900,5 @@
             </div>
         </div>
     </div>
+
 </x-app-layout>

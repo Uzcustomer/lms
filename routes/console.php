@@ -32,8 +32,8 @@ Schedule::command('command:independent-auto-create')->dailyAt('06:00');
 // quiz natijalari LMSga keladi.
 Schedule::command('moodle:trigger-sync')->dailyAt('04:30');
 
-// Akademik ma'lumotnoma: HEMIS dan academic records import (har kuni 02:00 da)
-Schedule::command('import:academic-records')->dailyAt('02:00')->withoutOverlapping(120);
+// Akademik ma'lumotnoma: HEMIS dan academic records import (oyda bir marta — 1-sana, 02:00 da)
+Schedule::command('import:academic-records')->monthlyOn(1, '02:00')->withoutOverlapping(120);
 
 // Attendance backfill: oxirgi 30 kunlik davomatni HEMIS dan qayta sinxronlash.
 // Faqat o'zgargan yozuvlarni yangilaydi, qolganini skip qiladi.
@@ -86,12 +86,29 @@ Schedule::command('visa:check-expiry')->dailyAt('09:00');
 // HEMIS exam grades sync — baholarni HEMIS dan tortib hemis_exam_grades jadvaliga saqlash (har kuni 03:00 da)
 Schedule::command('hemis:sync-exam-grades')->dailyAt('03:00')->withoutOverlapping(120);
 
+// O'qituvchi dashbordi statistikasi — joriy semestr bo'yicha har kuni 03:00 da
+// hisoblanadi va keshga yoziladi. Sahifaning o'zi faqat keshdan o'qiydi.
+Schedule::command('dashboard:teacher-stats')->dailyAt('03:00')->withoutOverlapping(60);
+
 // 5 ga da'vogarlar hisoboti: SendAttendanceGroupSummary ichida (1.7-qadam)
 // baholar import qilingandan keyin avtomatik chaqiriladi (18:00, 22:00 da)
 
 // Chat xabarlarni 2 haftadan keyin avtomatik tozalash (har kuni 04:00 da)
 Schedule::command('chat:purge --days=14')->dailyAt('04:00');
 
-// Teacher dashboard snapshot — har kuni 05:00 da (nightly import va final retry 04:00 dan keyin).
-// Dashboardga kirganda og'ir hisob-kitob qilinmasligi uchun kechagi kun holati saqlab qo'yiladi.
-Schedule::command('teachers:build-dashboard-snapshots')->dailyAt('05:00')->withoutOverlapping(120);
+// Kunlik baho o'zgarishlari digesti — har kuni ertalab 08:00 da admin chatiga
+// (otrabotka baholari + o'zgartirilgan baholar jadvali; oxirgi 24 soat)
+Schedule::command('grades:send-daily-changes-digest')->dailyAt('08:00');
+
+// ─── Qayta o'qish arizalari (retake) ─────────────────────────────────
+// Guruh holat o'tishlari: scheduled→in_progress, in_progress→completed.
+// Har kuni 00:05 da ishga tushadi.
+Schedule::command('retake:transition-group-statuses')->dailyAt('00:05')->withoutOverlapping(30);
+
+// HEMIS academic-records sync 02:00 da, ungandan keyin auto-cancel:
+// baho paydo bo'lgan yoki retraining_status o'zgargan arizalar bekor qilinadi.
+Schedule::command('retake:auto-cancel-hemis')->dailyAt('02:30')->withoutOverlapping(60);
+
+// Stale guruhlar monitoringi (cron buzilganini erta aniqlash).
+// Har kuni 12:00 da. Agar muammo bo'lsa admin chatiga Telegram xabar.
+Schedule::command('retake:monitor-stale-groups')->dailyAt('12:00');

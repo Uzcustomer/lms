@@ -49,11 +49,11 @@ class RebuildFaceEmbeddings extends Command
                 }
                 $processed++;
 
-                // Local fayl yo'lini ishlatish — HTTP yuklash o'rniga (tezroq, ishonchliroq)
-                $localPath = public_path($photo->photo_path);
-                $source = file_exists($localPath) ? $localPath : asset($photo->photo_path);
+                // URL beriladi — Python service o'zi HTTPS orqali yuklab oladi
+                // (Container va host fayl yo'llari turlicha bo'lgani uchun local path ishlamaydi)
+                $url = asset($photo->photo_path);
 
-                $embedding = FaceIdService::extractEmbedding($source);
+                $embedding = FaceIdService::extractEmbedding($url);
                 if (!$embedding) {
                     $failed++;
                     $bar->advance();

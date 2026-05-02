@@ -25,12 +25,11 @@ class RebuildFaceEmbeddings extends Command
         if ($onlyMissing) {
             $query->whereNull('face_embedding');
         }
-        if ($limit > 0) {
-            $query->limit($limit);
-        }
 
-        $total = (clone $query)->count();
-        $this->info("Qayta ishlanadi: {$total} ta rasm");
+        $availableTotal = (clone $query)->count();
+        $total = ($limit > 0 && $limit < $availableTotal) ? $limit : $availableTotal;
+
+        $this->info("Qayta ishlanadi: {$total} ta rasm" . ($limit > 0 ? " (chegara: {$limit}, jami mos: {$availableTotal})" : ''));
         if ($total === 0) {
             return self::SUCCESS;
         }
@@ -41,9 +40,15 @@ class RebuildFaceEmbeddings extends Command
         $ok = 0;
         $failed = 0;
         $skipped = 0;
+        $processed = 0;
 
-        $query->chunkById(50, function ($photos) use (&$ok, &$failed, &$skipped, $bar) {
+        $query->orderBy('id')->chunkById(50, function ($photos) use (&$ok, &$failed, &$skipped, &$processed, $bar, $limit) {
             foreach ($photos as $photo) {
+                if ($limit > 0 && $processed >= $limit) {
+                    return false; // chunkById iteratsiyani to'xtatadi
+                }
+                $processed++;
+
                 $url = asset($photo->photo_path);
 
                 $embedding = FaceIdService::extractEmbedding($url);

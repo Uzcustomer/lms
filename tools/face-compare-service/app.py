@@ -7,7 +7,12 @@ Face Comparison + Photo Quality Service
 - POST /embed          extract a 512-dim ArcFace embedding for one image
 - POST /identify       1:N identification — find best match in cached embeddings
 - POST /refresh-cache  replace the in-memory student embedding cache
+- POST /reload-from-db reload cache from MySQL (student_photos.face_embedding)
 - GET  /cache-info     report cache size and sample IDs
+
+On startup, the service reads embeddings directly from the MySQL DB
+(student_photos.face_embedding for status='approved' rows). This means
+the cache survives service restarts without external action.
 
 Used by the LMS admin student-photo review page and student Face ID login.
 Runs bound to 127.0.0.1:5005 and the Docker bridge IP; do not expose
@@ -17,6 +22,7 @@ publicly.
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from deepface import DeepFace
+import json
 import logging
 import os
 import io
@@ -26,6 +32,20 @@ from urllib.parse import urlsplit, urlunsplit, quote
 import numpy as np
 import cv2
 from PIL import Image
+
+# DB ulanishlari (PyMySQL — sof Python, oddiy)
+import pymysql
+
+# .env faylni o'qish uchun (agar mavjud bo'lsa)
+try:
+    from dotenv import load_dotenv
+    # Laravel .env odatda /var/www/lmsttatf/.env yo'lida; service uni
+    # EnvironmentFile yoki LARAVEL_ENV_PATH orqali topadi
+    _env_path = os.environ.get("LARAVEL_ENV_PATH")
+    if _env_path and os.path.isfile(_env_path):
+        load_dotenv(_env_path)
+except Exception:
+    pass
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
@@ -72,6 +92,91 @@ class RefreshCacheRequest(BaseModel):
     replace: bool = True   # True bo'lsa eski cache butunlay yangilanadi
 
 
+# ───────────────────────── DB cache loader ────────────────────────────
+
+def _db_connect():
+    """
+    MySQL ulanish — DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD
+    environment variable'lari (Laravel .env'dan keladi).
+    """
+    host = os.environ.get("DB_HOST", "127.0.0.1")
+    port = int(os.environ.get("DB_PORT", "3306"))
+    database = os.environ.get("DB_DATABASE")
+    user = os.environ.get("DB_USERNAME")
+    password = os.environ.get("DB_PASSWORD", "")
+    if not (database and user):
+        raise RuntimeError("DB_DATABASE va DB_USERNAME atrof-muhit o'zgaruvchilari kerak")
+    return pymysql.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=10,
+    )
+
+
+def _load_cache_from_db() -> dict:
+    """
+    student_photos jadvalidan tasdiqlangan va embedding mavjud yozuvlarni o'qib
+    cache'ni qayta tuzadi. Yangi cache lug'ati va meta lug'atini qaytaradi
+    (eski cache'ni almashtirish uchun atomic swap).
+    """
+    new_cache: dict[str, np.ndarray] = {}
+    new_meta: dict[str, dict] = {}
+    failed = 0
+
+    conn = _db_connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT student_id_number, full_name, face_embedding
+                FROM student_photos
+                WHERE status = 'approved'
+                  AND face_embedding IS NOT NULL
+            """)
+            for row in cur:
+                sid = (row.get("student_id_number") or "").strip()
+                if not sid:
+                    continue
+                emb_raw = row.get("face_embedding")
+                if isinstance(emb_raw, (bytes, bytearray)):
+                    emb_raw = emb_raw.decode("utf-8", errors="ignore")
+                try:
+                    if isinstance(emb_raw, str):
+                        arr_list = json.loads(emb_raw)
+                    elif isinstance(emb_raw, list):
+                        arr_list = emb_raw
+                    else:
+                        failed += 1
+                        continue
+                    arr = np.asarray(arr_list, dtype=np.float32)
+                    norm = np.linalg.norm(arr)
+                    if norm < 1e-6:
+                        failed += 1
+                        continue
+                    new_cache[sid] = arr / norm
+                    new_meta[sid] = {"full_name": row.get("full_name") or ""}
+                except Exception:
+                    failed += 1
+    finally:
+        conn.close()
+
+    logger.info(f"DB cache yuklandi: {len(new_cache)} ta, xato {failed}")
+    return {"cache": new_cache, "meta": new_meta, "failed": failed}
+
+
+def _swap_cache(new_cache: dict, new_meta: dict) -> int:
+    with _cache_lock:
+        _identify_cache.clear()
+        _identify_meta.clear()
+        _identify_cache.update(new_cache)
+        _identify_meta.update(new_meta)
+        return len(_identify_cache)
+
+
 @app.on_event("startup")
 def warmup():
     try:
@@ -79,6 +184,14 @@ def warmup():
         logger.info(f"{MODEL_NAME} model warmed up")
     except Exception as e:
         logger.error(f"warmup failed: {e}")
+
+    # Cache'ni DB'dan yuklash (xato bo'lsa service ishlayveradi, faqat cache bo'sh qoladi)
+    try:
+        loaded = _load_cache_from_db()
+        size = _swap_cache(loaded["cache"], loaded["meta"])
+        logger.info(f"identify cache restored from DB: cache_size={size}")
+    except Exception as e:
+        logger.error(f"DB cache load failed: {e}")
 
 
 @app.get("/health")
@@ -219,6 +332,26 @@ def cache_info():
         size = len(_identify_cache)
         sample = list(_identify_cache.keys())[:10]
     return {"cache_size": size, "sample_ids": sample, "model": MODEL_NAME}
+
+
+@app.post("/reload-from-db")
+def reload_from_db():
+    """
+    Cache'ni MySQL student_photos jadvalidan qayta yuklash.
+    Manual chaqirilganda ishlatiladi (masalan Laravel approve hookida).
+    """
+    try:
+        loaded = _load_cache_from_db()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB load xato: {e}")
+
+    size = _swap_cache(loaded["cache"], loaded["meta"])
+    return {
+        "ok": True,
+        "cache_size": size,
+        "failed": loaded["failed"],
+        "model": MODEL_NAME,
+    }
 
 
 # ─────────────────────────── /identify ────────────────────────────────

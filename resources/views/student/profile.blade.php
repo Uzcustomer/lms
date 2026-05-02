@@ -122,6 +122,44 @@
                                     <li><span class="font-medium">{{ __('Tuman:') }}</span> {{ $profileData['district']['name'] }}</li>
                                 </ul>
                             </div>
+
+                            @if(method_exists($student, 'isDisabled') && $student->isDisabled() && \Illuminate\Support\Facades\Schema::hasTable('student_disability_infos'))
+                                @php $disabilityInfo = \App\Models\StudentDisabilityInfo::where('student_id', $student->id)->first(); @endphp
+                                <div class="mt-6 bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                                    <div class="flex items-start justify-between gap-3 mb-3">
+                                        <h4 class="font-semibold text-lg text-amber-900 flex items-center gap-2">
+                                            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 13a3 3 0 100-6 3 3 0 000 6zm6.5 4.5L20 21M9 13c-3 0-5 2-5 5v3h10m1-6a4 4 0 014 4"/></svg>
+                                            {{ __("Nogironlik ma'lumotlari") }}
+                                        </h4>
+                                        <a href="{{ route('student.disability-info.index') }}" class="text-xs font-semibold text-amber-700 hover:text-amber-900 underline whitespace-nowrap">
+                                            {{ $disabilityInfo ? __('Tahrirlash') : __("To'ldirish") }}
+                                        </a>
+                                    </div>
+
+                                    @if($disabilityInfo)
+                                        <ul class="space-y-2 text-sm">
+                                            <li><span class="font-medium text-gray-700">{{ __("Ijtimoiy toifa:") }}</span> {{ $student->social_category_name ?: '—' }}</li>
+                                            <li><span class="font-medium text-gray-700">{{ __("Ko'rikdan o'tgan sana:") }}</span> {{ optional($disabilityInfo->examined_at)->format('d.m.Y') ?: '—' }}</li>
+                                            <li><span class="font-medium text-gray-700">{{ __("Nogironlik guruhi:") }}</span> {{ \App\Models\StudentDisabilityInfo::GROUPS[$disabilityInfo->disability_group] ?? $disabilityInfo->disability_group ?? '—' }}</li>
+                                            <li><span class="font-medium text-gray-700">{{ __("Nogironlik sababi:") }}</span> {{ $disabilityInfo->disability_reason ?: '—' }}</li>
+                                            <li><span class="font-medium text-gray-700">{{ __("Nogironlik muddati:") }}</span> {{ optional($disabilityInfo->disability_duration)->format('d.m.Y') ?: '—' }}</li>
+                                            <li><span class="font-medium text-gray-700">{{ __("Ko'rikdan qayta o'tish muddati:") }}</span> {{ optional($disabilityInfo->reexamination_at)->format('d.m.Y') ?: '—' }}</li>
+                                            @if(\Illuminate\Support\Facades\Schema::hasColumn('student_disability_infos', 'certificate_path') && $disabilityInfo->certificate_path)
+                                                <li class="pt-2">
+                                                    <a href="{{ route('student.disability-info.file') }}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-md transition">
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                                        {{ __("Malumotnomani ko'rish (PDF)") }}
+                                                    </a>
+                                                </li>
+                                            @endif
+                                        </ul>
+                                    @else
+                                        <p class="text-sm text-amber-800">
+                                            {{ __("Hali nogironlik to'g'risidagi ma'lumotlar to'ldirilmagan. Iltimos, to'ldiring.") }}
+                                        </p>
+                                    @endif
+                                </div>
+                            @endif
                         </div>
                     </div>
 

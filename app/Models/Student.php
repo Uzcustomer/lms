@@ -50,7 +50,6 @@ class Student extends Authenticatable
         'login_code',
         'login_code_expires_at',
         'face_id_enabled',
-        'disability_duration',
     ];
 
     protected $casts = [
@@ -319,6 +318,17 @@ class Student extends Authenticatable
     public function visaInfo()
     {
         return $this->hasOne(\App\Models\StudentVisaInfo::class);
+    }
+
+    public function disabilityInfo()
+    {
+        return $this->hasOne(\App\Models\StudentDisabilityInfo::class);
+    }
+
+    public function isDisabled(): bool
+    {
+        return !empty($this->social_category_name)
+            && stripos($this->social_category_name, 'nogiron') !== false;
     }
 
     public function faceDescriptor()

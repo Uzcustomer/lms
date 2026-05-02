@@ -51,6 +51,7 @@ class RetakeApprovalController extends Controller
             'semester_code' => $request->input('semester_code'),
             'group' => $request->input('group'),
         ];
+        $subjectFilter = $request->input('subject');
         $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {
             $perPage = 50;
@@ -134,6 +135,11 @@ class RetakeApprovalController extends Controller
             });
         }
 
+        // Fan bo'yicha filtr — guruhda hech bo'lmaganda bitta arizа shu fanga tegishli
+        if ($subjectFilter) {
+            $query->whereHas('applications', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+
         $groups = $query->paginate($perPage)->withQueryString();
 
         // Statistika (faqat rolga tegishli arizalar bo'yicha)
@@ -156,6 +162,15 @@ class RetakeApprovalController extends Controller
             ->orderBy('education_type_name')
             ->get();
 
+        // Fanlar ro'yxati — barcha qayta o'qish arizalaridan unikal subject_id => subject_name
+        $subjects = \App\Models\RetakeApplication::query()
+            ->select('subject_id', 'subject_name')
+            ->whereNotNull('subject_id')
+            ->orderBy('subject_name')
+            ->distinct()
+            ->get()
+            ->mapWithKeys(fn ($a) => [$a->subject_id => $a->subject_name]);
+
         return view('teacher.retake.index', [
             'groups' => $groups,
             'role' => $role,
@@ -167,6 +182,7 @@ class RetakeApprovalController extends Controller
             'paymentToVerifyCount' => $paymentToVerifyCount,
             'minReasonLength' => \App\Models\RetakeSetting::rejectReasonMinLength(),
             'educationTypes' => $educationTypes,
+            'subjects' => $subjects,
         ]);
     }
 

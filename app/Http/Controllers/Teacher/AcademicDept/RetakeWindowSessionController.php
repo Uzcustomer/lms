@@ -92,8 +92,14 @@ class RetakeWindowSessionController extends Controller
         $session = RetakeWindowSession::findOrFail($sessionId);
 
         $statusFilter = $request->input('status', 'all');
-        $departmentId = $request->input('department_id');
+        $departmentId = $request->input('department');
+        $specialtyId = $request->input('specialty');
         $levelCode = $request->input('level_code');
+        $semesterCode = $request->input('semester_code');
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
 
         $windowsQuery = RetakeApplicationWindow::query()
             ->where('session_id', $session->id)
@@ -112,16 +118,31 @@ class RetakeWindowSessionController extends Controller
         }
 
         if ($departmentId) {
-            $specialtyIds = Specialty::where('department_hemis_id', $departmentId)
+            $specialtyIdsForDept = Specialty::where('department_hemis_id', $departmentId)
                 ->pluck('specialty_hemis_id');
-            $windowsQuery->whereIn('specialty_id', $specialtyIds);
+            $windowsQuery->whereIn('specialty_id', $specialtyIdsForDept);
+        }
+
+        if ($specialtyId) {
+            $windowsQuery->where('specialty_id', $specialtyId);
         }
 
         if ($levelCode) {
             $windowsQuery->where('level_code', $levelCode);
         }
 
-        $windows = $windowsQuery->paginate(30)->withQueryString();
+        if ($semesterCode) {
+            $windowsQuery->where('semester_code', $semesterCode);
+        }
+
+        $windows = $windowsQuery->paginate($perPage)->withQueryString();
+
+        $educationTypes = \App\Models\Student::query()
+            ->select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->distinct()
+            ->orderBy('education_type_name')
+            ->get();
 
         $specialtyToFaculty = Specialty::query()
             ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
@@ -146,6 +167,7 @@ class RetakeWindowSessionController extends Controller
             'departmentIdFilter' => $departmentId,
             'levelCodeFilter' => $levelCode,
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+            'educationTypes' => $educationTypes,
         ]);
     }
 

@@ -13,7 +13,7 @@
         {{-- Statistika kartlari --}}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500">
-                <p class="text-xs text-gray-500 uppercase">{{ __('Mening tasdiqimni kutyapti') }}</p>
+                <p class="text-xs text-gray-500 uppercase">{{ __('Kutilmoqda') }}</p>
                 <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['pending'] }}</p>
             </div>
             <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
@@ -26,30 +26,29 @@
             </div>
         </div>
 
-        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh) --}}
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
         @include('partials._retake_filters', [
             'formAction' => route('admin.retake.index'),
             'educationTypes' => $educationTypes ?? collect(),
+            'subjects' => $subjects ?? collect(),
             'extraQueryFields' => array_filter([
                 'filter' => $filter ?? null,
-                'date_from' => $dateFrom ?? null,
-                'date_to' => $dateTo ?? null,
             ]),
         ])
 
-        {{-- Holat va sana filtri (qo'shimcha) --}}
+        {{-- Holat filtri (qo'shimcha) --}}
         <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <form method="GET" action="{{ route('admin.retake.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <form method="GET" action="{{ route('admin.retake.index') }}" class="flex items-end gap-3 flex-wrap">
                 {{-- Cascading filterdan keladigan qiymatlarni saqlab qolamiz --}}
-                @foreach(['education_type','department','specialty','level_code','semester_code','group','search','per_page'] as $kept)
+                @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','search','per_page'] as $kept)
                     @if(request($kept))
                         <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
                     @endif
                 @endforeach
-                <div>
+                <div class="min-w-[200px]">
                     <label class="block text-xs text-gray-600 mb-1">{{ __('Holat') }}</label>
                     <select name="filter" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                        <option value="pending_mine" {{ $filter === 'pending_mine' ? 'selected' : '' }}>{{ __('Tasdiqimni kutyapti') }}</option>
+                        <option value="pending_mine" {{ $filter === 'pending_mine' ? 'selected' : '' }}>{{ __('Kutilmoqda') }}</option>
                         @if($role === 'registrar')
                             <option value="payment_to_verify" {{ $filter === 'payment_to_verify' ? 'selected' : '' }}>
                                 {{ __("To'lov cheki tekshirilishi kutilmoqda") }}
@@ -60,16 +59,6 @@
                         <option value="rejected" {{ $filter === 'rejected' ? 'selected' : '' }}>{{ __('Rad etilgan') }}</option>
                         <option value="all" {{ $filter === 'all' ? 'selected' : '' }}>{{ __('Barchasi') }}</option>
                     </select>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __('Sanadan') }}</label>
-                    <input type="date" name="date_from" value="{{ $dateFrom ?? '' }}"
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __('Sanagacha') }}</label>
-                    <input type="date" name="date_to" value="{{ $dateTo ?? '' }}"
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                 </div>
                 <div class="flex gap-2">
                     <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">

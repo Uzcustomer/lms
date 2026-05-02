@@ -95,6 +95,18 @@
                 </div>
             @endif
 
+            @if(!$hidden('subject') && !empty($subjects ?? []))
+                <div class="rf-item" style="flex: 1; min-width: 200px;">
+                    <label class="rf-label"><span class="rf-dot" style="background:#000000;"></span> Fan</label>
+                    <select id="rf_subject" name="subject" class="rf-select2" style="width: 100%;">
+                        <option value="">Barchasi</option>
+                        @foreach($subjects as $subjId => $subjName)
+                            <option value="{{ $subjId }}" {{ (string)request('subject') === (string)$subjId ? 'selected' : '' }}>{{ $subjName }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+
             @if(!$hidden('full_name'))
                 <div class="rf-item" style="flex: 1; min-width: 200px;">
                     <label class="rf-label"><span class="rf-dot" style="background:#f59e0b;"></span> F.I.Sh / HEMIS ID</label>

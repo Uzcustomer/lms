@@ -1,8 +1,19 @@
 <x-teacher-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __("Qayta o'qish — Qabul oynalari") }}
-        </h2>
+        <div class="flex items-center gap-2 flex-wrap">
+            <a href="{{ route('admin.retake-sessions.index') }}" class="text-sm text-blue-600 hover:underline">
+                ← {{ __("Sessiyalar") }}
+            </a>
+            <span class="text-gray-300">/</span>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{ $session->name }}
+            </h2>
+            @if($session->is_closed)
+                <span class="px-2 py-0.5 text-[11px] font-medium bg-gray-200 text-gray-700 rounded-full">{{ __("Yopilgan") }}</span>
+            @else
+                <span class="px-2 py-0.5 text-[11px] font-medium bg-green-100 text-green-800 rounded-full">{{ __("Ochiq") }}</span>
+            @endif
+        </div>
     </x-slot>
 
     @include('partials._retake_tom_select')
@@ -26,17 +37,20 @@
 
         <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
             <p class="text-sm text-gray-500">
-                {{ __("Barcha sessiyalardagi oynalar — yangi oyna ochish uchun sessiyaga kiring") }}
+                {{ __("Sessiya ichida har yo'nalish + kurs + semestr uchun alohida oyna ochiladi") }}
             </p>
-            <a href="{{ route('admin.retake-sessions.index') }}"
-               class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                {{ __("Sessiyalarga o'tish") }}
-            </a>
+            @if(!$session->is_closed)
+                <button type="button"
+                        @click="showCreate = true"
+                        class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    + {{ __("Yangi oyna ochish") }}
+                </button>
+            @endif
         </div>
 
         {{-- Filtrlar --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4">
-            <form method="GET" action="{{ route('admin.retake-windows.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
+            <form method="GET" action="{{ route('admin.retake-sessions.show', $session->id) }}" class="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
                 <div>
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
                     <select name="status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
@@ -66,7 +80,7 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
-                    <a href="{{ route('admin.retake-windows.index') }}" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">{{ __("Tozalash") }}</a>
+                    <a href="{{ route('admin.retake-sessions.show', $session->id) }}" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">{{ __("Tozalash") }}</a>
                 </div>
             </form>
         </div>
@@ -75,7 +89,7 @@
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             @if($windows->count() === 0)
                 <div class="p-10 text-center text-gray-500 text-sm">
-                    {{ __("Hali oyna yaratilmagan") }}
+                    {{ __("Bu sessiyada hali oyna yo'q. Yuqoridagi tugma orqali oching.") }}
                 </div>
             @else
                 <div class="overflow-x-auto">
@@ -148,11 +162,13 @@
         </div>
 
         {{-- Yangi oyna yaratish modal --}}
+        @if(!$session->is_closed)
         <div x-show="showCreate" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showCreate = false">
             <div class="flex items-center justify-center min-h-screen p-4">
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
                 <div class="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 z-10">
-                    <h3 class="text-base font-bold text-gray-900 mb-4">{{ __("Yangi qabul oynasi") }}</h3>
+                    <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Yangi qabul oynasi") }}</h3>
+                    <p class="text-xs text-gray-500 mb-4">{{ __("Sessiya") }}: {{ $session->name }}</p>
                     <form method="POST"
                           action="{{ route('admin.retake-windows.store') }}"
                           x-data="windowForm({
@@ -160,12 +176,11 @@
                           })"
                           class="space-y-3">
                         @csrf
+                        <input type="hidden" name="session_id" value="{{ $session->id }}">
 
-                        {{-- Fakultet --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Fakultet") }} <span class="text-red-500">*</span></label>
-                            <select x-model="departmentId"
-                                    required
+                            <select x-model="departmentId" required
                                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                 <option value="">— {{ __("Tanlang") }} —</option>
                                 @foreach($departments as $d)
@@ -174,13 +189,9 @@
                             </select>
                         </div>
 
-                        {{-- Yo'nalish (fakultet bo'yicha filtrlanadi) --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
-                            <select name="specialty_id"
-                                    x-model="specialtyId"
-                                    @change="onSpecialtyChange($event)"
-                                    required
+                            <select name="specialty_id" x-model="specialtyId" @change="onSpecialtyChange($event)" required
                                     :disabled="!departmentId"
                                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
                                 <option value="">— {{ __("Avval fakultetni tanlang") }} —</option>
@@ -191,14 +202,11 @@
                             <input type="hidden" name="specialty_name" :value="specialtyName">
                         </div>
 
-                        {{-- Kurs --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
-                            <select name="level_code"
-                                    x-model="levelCode"
+                            <select name="level_code" x-model="levelCode"
                                     @change="levelName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
-                                    required
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                    required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                 <option value="">— {{ __("Tanlang") }} —</option>
                                 @foreach($levels as $lv)
                                     <option value="{{ $lv['code'] }}" data-name="{{ $lv['name'] }}">{{ $lv['name'] }}</option>
@@ -207,14 +215,11 @@
                             <input type="hidden" name="level_name" :value="levelName">
                         </div>
 
-                        {{-- Semestr (12 ta unikal) --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Semestr") }} <span class="text-red-500">*</span></label>
-                            <select name="semester_code"
-                                    x-model="semesterCode"
+                            <select name="semester_code" x-model="semesterCode"
                                     @change="semesterName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
-                                    required
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                    required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                 <option value="">— {{ __("Tanlang") }} —</option>
                                 @foreach($semesters as $s)
                                     <option value="{{ $s['code'] }}" data-name="{{ $s['name'] }}">{{ $s['name'] }}</option>
@@ -223,7 +228,6 @@
                             <input type="hidden" name="semester_name" :value="semesterName">
                         </div>
 
-                        {{-- Sanalar --}}
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Boshlanish") }} <span class="text-red-500">*</span></label>
@@ -253,6 +257,7 @@
                 </div>
             </div>
         </div>
+        @endif
 
         {{-- Override modal --}}
         @if($canOverride)

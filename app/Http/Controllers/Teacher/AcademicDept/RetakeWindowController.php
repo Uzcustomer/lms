@@ -31,6 +31,7 @@ class RetakeWindowController extends Controller
         $levelCode = $request->input('level_code');
 
         $windowsQuery = RetakeApplicationWindow::query()
+            ->with('session')
             ->withCount('applicationGroups as applications_count')
             ->orderByDesc('start_date');
 
@@ -93,6 +94,7 @@ class RetakeWindowController extends Controller
         $this->authorizeAccess();
 
         $data = $request->validate([
+            'session_id' => 'required|integer|exists:retake_window_sessions,id',
             'specialty_id' => 'required|integer',
             'specialty_name' => 'required|string|max:255',
             'level_code' => 'required|string|max:10',
@@ -103,6 +105,14 @@ class RetakeWindowController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
+        // Yopilgan sessiyaga oyna qo'shish mumkin emas
+        $session = \App\Models\RetakeWindowSession::findOrFail($data['session_id']);
+        if ($session->is_closed) {
+            return redirect()->back()->withErrors([
+                'session_id' => 'Yopilgan sessiyaga oyna qo\'shib bo\'lmaydi',
+            ])->withInput();
+        }
+
         try {
             /** @var Teacher $user */
             $user = RetakeAccess::currentStaff();
@@ -111,7 +121,7 @@ class RetakeWindowController extends Controller
             return redirect()->back()->withErrors($e->errors())->withInput();
         }
 
-        return redirect()->route('admin.retake-windows.index')
+        return redirect()->route('admin.retake-sessions.show', $data['session_id'])
             ->with('success', __('Qabul oynasi muvaffaqiyatli yaratildi'));
     }
 

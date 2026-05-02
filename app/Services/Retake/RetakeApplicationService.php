@@ -46,37 +46,48 @@ class RetakeApplicationService
     ) {}
 
     /**
-     * Talabaning aktiv (pending + approved) arizalari soni.
-     * Faqat slot hisoblash uchun ishlatiladi.
+     * Talabaning aktiv (pending + approved) arizalari soni — JORIY OYNA ICHIDA.
+     * Slot har oyna uchun alohida hisoblanadi: yangi oyna ochilsa, slot reset bo'ladi.
      */
-    public function activeSubjectCount(int $studentHemisId): int
+    public function activeSubjectCount(int $studentHemisId, ?int $windowId = null): int
     {
-        return RetakeApplication::query()
+        $query = RetakeApplication::query()
             ->forStudent($studentHemisId)
-            ->active()
-            ->count();
+            ->active();
+
+        if ($windowId !== null) {
+            $query->whereHas('group', fn ($q) => $q->where('window_id', $windowId));
+        }
+
+        return $query->count();
     }
 
     /**
-     * Qancha slot bo'sh — talaba yana nechta fan tanlay oladi.
+     * Qancha slot bo'sh — talaba yana nechta fan tanlay oladi (joriy oynada).
      */
-    public function remainingSlots(int $studentHemisId): int
+    public function remainingSlots(int $studentHemisId, ?int $windowId = null): int
     {
-        return max(0, self::MAX_ACTIVE_SUBJECTS - $this->activeSubjectCount($studentHemisId));
+        return max(0, self::MAX_ACTIVE_SUBJECTS - $this->activeSubjectCount($studentHemisId, $windowId));
     }
 
     /**
      * Berilgan fan uchun talaba aktiv arizasi bor (pending yoki approved)?
-     * Bitta fanga bir vaqtda faqat bitta aktiv ariza bo'la oladi.
+     * Joriy oyna ichida bitta fanga faqat bitta aktiv ariza bo'la oladi.
+     * Boshqa (eski) oynadagi tasdiqlangan ariza yangi oynada blocklamaydi.
      */
-    public function hasActiveApplicationFor(int $studentHemisId, string $subjectId, string $semesterId): bool
+    public function hasActiveApplicationFor(int $studentHemisId, string $subjectId, string $semesterId, ?int $windowId = null): bool
     {
-        return RetakeApplication::query()
+        $query = RetakeApplication::query()
             ->forStudent($studentHemisId)
             ->where('subject_id', $subjectId)
             ->where('semester_id', $semesterId)
-            ->active()
-            ->exists();
+            ->active();
+
+        if ($windowId !== null) {
+            $query->whereHas('group', fn ($q) => $q->where('window_id', $windowId));
+        }
+
+        return $query->exists();
     }
 
     /**
@@ -106,11 +117,11 @@ class RetakeApplicationService
             ]);
         }
 
-        // 3. Slot tekshirish (aktiv + yangi <= 3)
-        $remaining = $this->remainingSlots((int) $student->hemis_id);
+        // 3. Slot tekshirish (joriy oyna ichida aktiv + yangi <= 3)
+        $remaining = $this->remainingSlots((int) $student->hemis_id, $window->id);
         if ($count > $remaining) {
             throw ValidationException::withMessages([
-                'subjects' => "Bo'sh slot yetarli emas. Aktiv arizalaringiz bilan birga jami 3 tadan oshmasligi kerak (qolgan: {$remaining})",
+                'subjects' => "Bo'sh slot yetarli emas. Joriy oynada aktiv arizalaringiz bilan birga jami 3 tadan oshmasligi kerak (qolgan: {$remaining})",
             ]);
         }
 
@@ -150,10 +161,10 @@ class RetakeApplicationService
                 ]);
             }
 
-            // Bu fan uchun aktiv ariza yo'qligini tekshirish
-            if ($this->hasActiveApplicationFor((int) $student->hemis_id, $debt->subject_id, $debt->semester_id)) {
+            // Bu fan uchun JORIY OYNADA aktiv ariza yo'qligini tekshirish
+            if ($this->hasActiveApplicationFor((int) $student->hemis_id, $debt->subject_id, $debt->semester_id, $window->id)) {
                 throw ValidationException::withMessages([
-                    'subjects' => "{$debt->subject_name} fani bo'yicha sizda aktiv ariza allaqachon mavjud",
+                    'subjects' => "{$debt->subject_name} fani bo'yicha siz joriy oynada ariza topshirgansiz",
                 ]);
             }
             $resolved[] = $debt;

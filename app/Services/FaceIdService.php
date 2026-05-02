@@ -336,6 +336,32 @@ class FaceIdService
     }
 
     /**
+     * Python /reload-from-db orqali cache'ni MySQL'dan qayta yuklash.
+     * Bu Python service'ning startup'da ham qiladigan ishi — DB'dagi barcha
+     * tasdiqlangan embedding'larni yuklaydi. Manual qayta sinxron uchun ishlatiladi.
+     */
+    public static function reloadArcFaceCacheFromDb(): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)->acceptJson()->post($serviceUrl . '/reload-from-db');
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /reload-from-db HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+            return $response->json();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /reload-from-db exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
      * Python /refresh-cache orqali identifikatsiya cache'ini yangilash.
      * Items: [['student_id_number' => ..., 'embedding' => [...], 'full_name' => ...], ...]
      */

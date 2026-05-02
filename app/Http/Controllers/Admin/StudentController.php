@@ -178,6 +178,17 @@ class StudentController extends Controller
             }
         }
 
+        if ($request->filled('student_status')) {
+            if ($request->student_status === 'expelled') {
+                $query->whereRaw('LOWER(student_status_name) LIKE ?', ['%chetlash%']);
+            } elseif ($request->student_status === 'active') {
+                $query->where(function ($q) {
+                    $q->whereNull('student_status_name')
+                      ->orWhereRaw('LOWER(student_status_name) NOT LIKE ?', ['%chetlash%']);
+                });
+            }
+        }
+
         $perPage = (int) $request->get('per_page', 50);
         $students = $query->orderBy('full_name')->paginate($perPage)->appends($request->query());
 
@@ -186,6 +197,9 @@ class StudentController extends Controller
             ? Student::where($disabledFilter)->whereHas('disabilityInfo')->count()
             : 0;
         $totalEmpty = $totalAll - $totalFilled;
+        $totalExpelled = Student::where($disabledFilter)
+            ->whereRaw('LOWER(student_status_name) LIKE ?', ['%chetlash%'])
+            ->count();
 
         $disabilityTypes = Student::select('social_category_code', 'social_category_name')
             ->where($disabledFilter)
@@ -217,7 +231,7 @@ class StudentController extends Controller
 
         return view('admin.students.disabled', compact(
             'students', 'disabilityTypes', 'departments', 'groups', 'levels',
-            'totalAll', 'totalFilled', 'totalEmpty', 'hasInfoTable'
+            'totalAll', 'totalFilled', 'totalEmpty', 'totalExpelled', 'hasInfoTable'
         ));
     }
 

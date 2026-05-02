@@ -17,6 +17,7 @@ class RetakeApplication extends Model
     public const REJECTED_BY_REGISTRAR = 'registrar';
     public const REJECTED_BY_ACADEMIC_DEPT = 'academic_dept';
     public const REJECTED_BY_SYSTEM_HEMIS = 'system_hemis';
+    public const REJECTED_BY_WINDOW_CLOSED = 'window_closed';
 
     protected $fillable = [
         'group_id',
@@ -99,6 +100,7 @@ class RetakeApplication extends Model
                 self::REJECTED_BY_REGISTRAR => 'Registrator',
                 self::REJECTED_BY_ACADEMIC_DEPT => 'O\'quv bo\'limi',
                 self::REJECTED_BY_SYSTEM_HEMIS => 'Tizim (HEMIS)',
+                self::REJECTED_BY_WINDOW_CLOSED => "Oyna yopildi (muddat o'tdi)",
                 default => 'Tizim',
             };
             return "Rad etilgan: {$whoLabel}";

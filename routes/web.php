@@ -768,7 +768,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/applications/{applicationId}/decide', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'decide'])->name('decide');
         });
 
-        // O'quv bo'limi: Qayta o'qish qabul oynalari
+        // O'quv bo'limi: Qayta o'qish sessiyalari (yangi konteyner)
+        Route::prefix('retake-sessions')->name('retake-sessions.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'store'])->name('store');
+            Route::get('/{sessionId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'show'])->name('show');
+            Route::post('/{sessionId}/close', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'close'])->name('close');
+        });
+
+        // O'quv bo'limi: Qayta o'qish qabul oynalari (sessiya ichida boshqariladi)
         Route::prefix('retake-windows')->name('retake-windows.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'store'])->name('store');

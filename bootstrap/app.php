@@ -72,6 +72,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
+
+        // Qayta o'qish: muddati o'tgan oynalardagi pending arizalarni har kuni
+        // ertalab 02:00 da avtomatik rad etish.
+        $schedule->command('retake:close-expired-windows')->dailyAt('02:00')->withoutOverlapping(30);
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {

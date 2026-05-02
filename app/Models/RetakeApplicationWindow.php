@@ -8,6 +8,7 @@ use Illuminate\Support\Carbon;
 class RetakeApplicationWindow extends Model
 {
     protected $fillable = [
+        'session_id',
         'specialty_id',
         'specialty_name',
         'level_code',
@@ -24,6 +25,11 @@ class RetakeApplicationWindow extends Model
         'start_date' => 'date',
         'end_date' => 'date',
     ];
+
+    public function session()
+    {
+        return $this->belongsTo(RetakeWindowSession::class, 'session_id');
+    }
 
     public function createdBy()
     {

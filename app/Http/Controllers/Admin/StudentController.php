@@ -134,12 +134,14 @@ class StudentController extends Controller
 
     public function disabledIndex(Request $request)
     {
-        $query = Student::query()
-            ->whereNotNull('disability_type_code')
-            ->where('disability_type_code', '!=', '');
+        $disabledFilter = function ($q) {
+            $q->whereRaw('LOWER(social_category_name) LIKE ?', ['%nogiron%']);
+        };
+
+        $query = Student::query()->where($disabledFilter);
 
         if ($request->filled('disability_type')) {
-            $query->where('disability_type_code', $request->disability_type);
+            $query->where('social_category_code', $request->disability_type);
         }
 
         if ($request->filled('full_name')) {
@@ -165,32 +167,29 @@ class StudentController extends Controller
         $perPage = (int) $request->get('per_page', 50);
         $students = $query->orderBy('full_name')->paginate($perPage)->appends($request->query());
 
-        $disabilityTypes = Student::select('disability_type_code', 'disability_type_name')
-            ->whereNotNull('disability_type_code')
-            ->where('disability_type_code', '!=', '')
+        $disabilityTypes = Student::select('social_category_code', 'social_category_name')
+            ->where($disabledFilter)
+            ->whereNotNull('social_category_code')
             ->distinct()
-            ->orderBy('disability_type_name')
+            ->orderBy('social_category_name')
             ->get();
 
         $departments = Student::select('department_id', 'department_name')
-            ->whereNotNull('disability_type_code')
-            ->where('disability_type_code', '!=', '')
+            ->where($disabledFilter)
             ->whereNotNull('department_id')
             ->distinct()
             ->orderBy('department_name')
             ->get();
 
         $groups = Student::select('group_id', 'group_name')
-            ->whereNotNull('disability_type_code')
-            ->where('disability_type_code', '!=', '')
+            ->where($disabledFilter)
             ->whereNotNull('group_id')
             ->distinct()
             ->orderBy('group_name')
             ->get();
 
         $levels = Student::select('level_code', 'level_name')
-            ->whereNotNull('disability_type_code')
-            ->where('disability_type_code', '!=', '')
+            ->where($disabledFilter)
             ->whereNotNull('level_code')
             ->distinct()
             ->orderBy('level_code')

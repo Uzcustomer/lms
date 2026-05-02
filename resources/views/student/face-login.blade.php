@@ -47,9 +47,9 @@
         <!-- Tugmalar -->
         <div style="display:flex;gap:10px;margin-top:14px;">
             <button id="btn-retry" type="button"
-                    style="display:none;flex:1;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">{{ __('Qayta urinish') }}</button>
+                    style="display:none;flex:1;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;text-align:center;line-height:1.2;cursor:pointer;font-family:inherit;">{{ __('Qayta urinish') }}</button>
             <a href="javascript:history.length > 1 ? history.back() : (window.location.href='{{ url('/') }}');"
-               style="flex:1;text-align:center;padding:10px;background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:8px;color:#fff;text-decoration:none;font-size:13px;font-weight:700;box-shadow:0 4px 10px rgba(34,197,94,0.3);">
+               style="display:flex;align-items:center;justify-content:center;flex:1;padding:10px;background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:8px;color:#fff;text-decoration:none;font-size:14px;font-weight:700;line-height:1.2;text-align:center;box-shadow:0 4px 10px rgba(34,197,94,0.3);font-family:inherit;">
                 {{ __('Parol bilan kirish') }}
             </a>
         </div>

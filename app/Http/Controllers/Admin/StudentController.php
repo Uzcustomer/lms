@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -138,7 +139,12 @@ class StudentController extends Controller
             $q->whereRaw('LOWER(social_category_name) LIKE ?', ['%nogiron%']);
         };
 
-        $query = Student::query()->with('disabilityInfo')->where($disabledFilter);
+        $hasInfoTable = Schema::hasTable('student_disability_infos');
+
+        $query = Student::query()->where($disabledFilter);
+        if ($hasInfoTable) {
+            $query->with('disabilityInfo');
+        }
 
         if ($request->filled('disability_type')) {
             $query->where('social_category_code', $request->disability_type);
@@ -164,7 +170,7 @@ class StudentController extends Controller
             $query->where('level_code', $request->level_code);
         }
 
-        if ($request->filled('info_status')) {
+        if ($hasInfoTable && $request->filled('info_status')) {
             if ($request->info_status === 'filled') {
                 $query->whereHas('disabilityInfo');
             } elseif ($request->info_status === 'empty') {
@@ -176,7 +182,9 @@ class StudentController extends Controller
         $students = $query->orderBy('full_name')->paginate($perPage)->appends($request->query());
 
         $totalAll = Student::where($disabledFilter)->count();
-        $totalFilled = Student::where($disabledFilter)->whereHas('disabilityInfo')->count();
+        $totalFilled = $hasInfoTable
+            ? Student::where($disabledFilter)->whereHas('disabilityInfo')->count()
+            : 0;
         $totalEmpty = $totalAll - $totalFilled;
 
         $disabilityTypes = Student::select('social_category_code', 'social_category_name')
@@ -209,7 +217,7 @@ class StudentController extends Controller
 
         return view('admin.students.disabled', compact(
             'students', 'disabilityTypes', 'departments', 'groups', 'levels',
-            'totalAll', 'totalFilled', 'totalEmpty'
+            'totalAll', 'totalFilled', 'totalEmpty', 'hasInfoTable'
         ));
     }
 

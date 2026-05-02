@@ -116,11 +116,18 @@
                     </div>
                 </form>
 
+                @if(!($hasInfoTable ?? true))
+                    <div style="padding:12px 20px;background:#fef3c7;border-bottom:1px solid #fde68a;color:#92400e;font-size:13px;">
+                        <strong>Diqqat:</strong> <code>student_disability_infos</code> jadvali hali yaratilmagan. Server konsolida <code>php artisan migrate</code> ishga tushiring.
+                    </div>
+                @endif
                 <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <span class="badge" style="background:linear-gradient(135deg,#b91c1c,#ef4444);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ $totalAll }} ta nogiron talaba</span>
-                        <span class="badge" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirgan: {{ $totalFilled }}</span>
-                        <span class="badge" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirmagan: {{ $totalEmpty }}</span>
+                        @if($hasInfoTable ?? true)
+                            <span class="badge" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirgan: {{ $totalFilled }}</span>
+                            <span class="badge" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirmagan: {{ $totalEmpty }}</span>
+                        @endif
                     </div>
                     <span style="font-size:12px;color:#64748b;">Sahifada: {{ $students->total() }} ta natija</span>
                 </div>
@@ -144,7 +151,7 @@
                         </thead>
                         <tbody>
                         @forelse($students as $i => $student)
-                            @php $info = $student->disabilityInfo; @endphp
+                            @php $info = ($hasInfoTable ?? true) ? $student->disabilityInfo : null; @endphp
                             <tr>
                                 <td style="text-align:center;color:#64748b;">{{ $students->firstItem() + $i }}</td>
                                 <td>

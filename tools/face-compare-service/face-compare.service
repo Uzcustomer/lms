@@ -19,7 +19,7 @@ Environment="LARAVEL_ENV_PATH=/var/www/lmsttatf/.env"
 # Environment="DB_DATABASE=lmsttatf"
 # Environment="DB_USERNAME=falcon"
 # Environment="DB_PASSWORD=Password@123"
-ExecStart=/var/www/face-compare-service/venv/bin/uvicorn app:app --host 127.0.0.1 --port 5005
+ExecStart=/var/www/face-compare-service/venv/bin/uvicorn app:app --host 0.0.0.0 --port 5005
 Restart=always
 RestartSec=5
 

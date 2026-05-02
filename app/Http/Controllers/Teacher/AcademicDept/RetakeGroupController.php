@@ -36,6 +36,19 @@ class RetakeGroupController extends Controller
         $statusFilter = $request->input('status', 'all');
         $search = trim((string) $request->input('search', ''));
 
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
+
         $groupsQuery = RetakeGroup::query()
             ->with('teacher')
             ->withCount(['applications as students_count'])
@@ -55,7 +68,31 @@ class RetakeGroupController extends Controller
             });
         }
 
-        $groups = $groupsQuery->paginate(20)->withQueryString();
+        // Talaba ma'lumotlari bo'yicha filtrlar — guruh ichidagi arizalardan
+        // hech bo'lmaganda bittasi tanlangan talaba shartiga mos kelishi kerak.
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+        if ($hasStudentFilter) {
+            $groupsQuery->whereHas('applications', function ($q) use ($studentFilters) {
+                $q->whereIn('student_hemis_id', function ($sub) use ($studentFilters) {
+                    $sub->select('hemis_id')->from('students');
+                    if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+                    if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+                    if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+                    if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+                    if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+                    if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+                });
+            });
+        }
+
+        $groups = $groupsQuery->paginate($perPage)->withQueryString();
+
+        $educationTypes = \App\Models\Student::query()
+            ->select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->distinct()
+            ->orderBy('education_type_name')
+            ->get();
 
         return view('teacher.academic-dept.retake-groups.index', [
             'aggregations' => $aggregations,
@@ -63,6 +100,7 @@ class RetakeGroupController extends Controller
             'statusFilter' => $statusFilter,
             'search' => $search,
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+            'educationTypes' => $educationTypes,
         ]);
     }
 

@@ -26,17 +26,26 @@
             </div>
         </div>
 
-        {{-- Filtrlar --}}
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh) --}}
+        @include('partials._retake_filters', [
+            'formAction' => route('admin.retake.index'),
+            'educationTypes' => $educationTypes ?? collect(),
+            'extraQueryFields' => array_filter([
+                'filter' => $filter ?? null,
+                'date_from' => $dateFrom ?? null,
+                'date_to' => $dateTo ?? null,
+            ]),
+        ])
+
+        {{-- Holat va sana filtri (qo'shimcha) --}}
         <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <form method="GET" action="{{ route('admin.retake.index') }}" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-                <div class="md:col-span-2">
-                    <label class="block text-xs text-gray-600 mb-1">{{ __('Qidirish') }}</label>
-                    <input type="text"
-                           name="search"
-                           value="{{ $search }}"
-                           placeholder="{{ __('Talaba F.I.Sh. yoki HEMIS ID') }}"
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                </div>
+            <form method="GET" action="{{ route('admin.retake.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                {{-- Cascading filterdan keladigan qiymatlarni saqlab qolamiz --}}
+                @foreach(['education_type','department','specialty','level_code','semester_code','group','search','per_page'] as $kept)
+                    @if(request($kept))
+                        <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
+                    @endif
+                @endforeach
                 <div>
                     <label class="block text-xs text-gray-600 mb-1">{{ __('Holat') }}</label>
                     <select name="filter" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
@@ -62,9 +71,9 @@
                     <input type="date" name="date_to" value="{{ $dateTo ?? '' }}"
                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                 </div>
-                <div class="md:col-span-5 flex gap-2">
+                <div class="flex gap-2">
                     <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        {{ __('Filtrlash') }}
+                        {{ __('Qo\'llash') }}
                     </button>
                     <a href="{{ route('admin.retake.index') }}" class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
                         {{ __('Tozalash') }}

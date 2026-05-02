@@ -99,6 +99,14 @@
                                     <option value="empty" {{ request('info_status') === 'empty' ? 'selected' : '' }}>To'ldirilmagan</option>
                                 </select>
                             </div>
+                            <div class="filter-item" style="min-width: 200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Talaba holati</label>
+                                <select name="student_status" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    <option value="active" {{ request('student_status') === 'active' ? 'selected' : '' }}>Chetlashmagan</option>
+                                    <option value="expelled" {{ request('student_status') === 'expelled' ? 'selected' : '' }}>Chetlashgan</option>
+                                </select>
+                            </div>
                             <div class="filter-item" style="min-width: 120px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <button type="submit" class="btn-calc">
@@ -128,6 +136,9 @@
                             <span class="badge" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirgan: {{ $totalFilled }}</span>
                             <span class="badge" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirmagan: {{ $totalEmpty }}</span>
                         @endif
+                        @if(($totalExpelled ?? 0) > 0)
+                            <span class="badge" style="background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Chetlashgan: {{ $totalExpelled }}</span>
+                        @endif
                     </div>
                     <span style="font-size:12px;color:#64748b;">Sahifada: {{ $students->total() }} ta natija</span>
                 </div>
@@ -141,6 +152,7 @@
                             <th>Talaba ID</th>
                             <th>Guruh</th>
                             <th>Nogironlik turi</th>
+                            <th>Talaba holati</th>
                             <th>Ko'rikdan o'tgan</th>
                             <th>Guruhi</th>
                             <th>Sababi</th>
@@ -161,6 +173,14 @@
                                 <td style="color:#64748b;">{{ $student->student_id_number }}</td>
                                 <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
                                 <td><span class="badge badge-red" title="{{ $student->social_category_name }}">{{ Str::limit($student->social_category_name, 28) ?: '-' }}</span></td>
+                                <td>
+                                    @php $isExpelled = $student->student_status_name && stripos($student->student_status_name, 'chetlash') !== false; @endphp
+                                    @if($isExpelled)
+                                        <span class="badge badge-expelled" title="{{ $student->student_status_name }}">Chetlashgan</span>
+                                    @else
+                                        <span class="badge badge-active" title="{{ $student->student_status_name }}">{{ Str::limit($student->student_status_name, 18) ?: '—' }}</span>
+                                    @endif
+                                </td>
                                 <td>{{ $info?->examined_at?->format('d.m.Y') ?: '—' }}</td>
                                 <td>
                                     @if($info?->disability_group)
@@ -184,7 +204,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="11" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:13px;">
+                                <td colspan="12" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:13px;">
                                     Nogiron talabalar topilmadi.
                                 </td>
                             </tr>
@@ -375,5 +395,7 @@
         .badge-red { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; white-space: nowrap; }
         .badge-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; white-space: nowrap; }
         .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; white-space: nowrap; }
+        .badge-expelled { background: linear-gradient(135deg,#7f1d1d,#dc2626); color: #fff; border: none; white-space: nowrap; }
+        .badge-active { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; white-space: nowrap; }
     </style>
 </x-app-layout>

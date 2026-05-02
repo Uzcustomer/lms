@@ -49,9 +49,11 @@ class RebuildFaceEmbeddings extends Command
                 }
                 $processed++;
 
-                $url = asset($photo->photo_path);
+                // Local fayl yo'lini berish HTTP yuklashdan tezroq
+                $localPath = public_path($photo->photo_path);
+                $source = file_exists($localPath) ? $localPath : asset($photo->photo_path);
 
-                $embedding = FaceIdService::extractEmbedding($url);
+                $embedding = FaceIdService::extractEmbedding($source);
                 if (!$embedding) {
                     $failed++;
                     $bar->advance();

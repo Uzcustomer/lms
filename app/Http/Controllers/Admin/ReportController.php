@@ -6877,6 +6877,8 @@ class ReportController extends Controller
         }
 
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test", "Klinik mashg'ulot", "Klinik mashgulot"];
+        // Ma'ruza = training_type_code 11 — DB'dagi apostrof varianti farq qilsa ham ushlaymiz
+        $gradeExcludedCodes = [11, 17, 99, 100, 101, 102, 103];
 
         // 1-QADAM: Asosiy jadval so'rovi (filtrlar bilan)
         $scheduleQuery = DB::table('schedules as sch')
@@ -6886,6 +6888,7 @@ class ReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
+            ->whereNotIn('sch.training_type_code', $gradeExcludedCodes)
             ->where('sch.education_year_current', true)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')

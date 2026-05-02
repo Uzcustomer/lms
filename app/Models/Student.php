@@ -50,8 +50,6 @@ class Student extends Authenticatable
         'login_code',
         'login_code_expires_at',
         'face_id_enabled',
-        'disability_type_code',
-        'disability_type_name',
         'disability_duration',
     ];
 

@@ -32,8 +32,8 @@
                                 <select name="disability_type" class="select2" style="width: 100%;">
                                     <option value="">Barchasi</option>
                                     @foreach($disabilityTypes as $type)
-                                        <option value="{{ $type->disability_type_code }}" {{ request('disability_type') == $type->disability_type_code ? 'selected' : '' }}>
-                                            {{ $type->disability_type_name }}
+                                        <option value="{{ $type->social_category_code }}" {{ request('disability_type') == $type->social_category_code ? 'selected' : '' }}>
+                                            {{ $type->social_category_name }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -141,7 +141,7 @@
                                 <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 30) }}</span></td>
                                 <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
                                 <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
-                                <td><span class="badge badge-red">{{ $student->disability_type_name ?: '-' }}</span></td>
+                                <td><span class="badge badge-red">{{ $student->social_category_name ?: '-' }}</span></td>
                                 <td><span class="text-cell">{{ $student->disability_duration ?: '-' }}</span></td>
                             </tr>
                         @empty

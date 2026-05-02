@@ -121,28 +121,23 @@ class RetakeDocumentService
 
         $deanDisplay = $deanName !== '' ? $deanName : '_______________________';
 
-        // ─── Yuqori o'ng — manzil bloki (border'siz 2-ustunli jadval) ───
-        // Chap ustun bo'sh, o'ng ustunda manzil ikki paragrafda justified ravishda
-        // joylashadi (har bir paragraf o'z ichida tabiiy oqib ketadi).
-        $phpWord->addTableStyle('arizaAddressTable', [
-            'borderSize' => 0,
-            'cellMargin' => 0,
-        ]);
+        // ─── Yuqori o'ng — manzil bloki ───
+        // Jadval emas, oddiy paragraflarga chap indent qo'yamiz — natijada matn
+        // sahifaning faqat o'ng yarmida joylashadi va tabiiy ravishda oqib ketadi.
+        $addrParaStyle = [
+            'alignment' => Jc::BOTH,
+            'spaceAfter' => 120,
+            'lineHeight' => 1.15,
+            'indentation' => ['left' => 4500], // ~8 sm chapdan
+        ];
 
-        $addressTable = $section->addTable('arizaAddressTable');
-        $addressTable->addRow();
-        $addressTable->addCell(4500); // chap bo'sh
-        $rightCell = $addressTable->addCell(5500);
-
-        $addrParaStyle = ['alignment' => Jc::BOTH, 'spaceAfter' => 120, 'lineHeight' => 1.15];
-
-        // 1-paragraf: institut + fakultet + dekan + F.I.Sh. + "ga"
-        $p1 = $rightCell->addTextRun($addrParaStyle);
+        // 1-paragraf: institut + fakultet + dekan F.I.Sh. + "ga"
+        $p1 = $section->addTextRun($addrParaStyle);
         $p1->addText("Toshkent davlat tibbiyot universiteti Termiz filiali {$facultyBase} fakulteti dekani ");
         $p1->addText($deanDisplay . 'ga', ['bold' => true]);
 
         // 2-paragraf: fakultet + guruh + talaba F.I.Sh. + "tomonidan"
-        $p2 = $rightCell->addTextRun($addrParaStyle);
+        $p2 = $section->addTextRun($addrParaStyle);
         $p2->addText("{$facultyBase} fakulteti {$groupName} guruh talabasi ");
         $p2->addText($studentFullName, ['bold' => true]);
         $p2->addText(' (F.I.Sh.) tomonidan');

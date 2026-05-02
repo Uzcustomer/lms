@@ -8,10 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasColumn('students', 'disability_duration')) {
-            Schema::table('students', function (Blueprint $table) {
-                $table->dropColumn('disability_duration');
-            });
+        foreach (['disability_duration', 'disability_type_code', 'disability_type_name'] as $col) {
+            if (Schema::hasColumn('students', $col)) {
+                Schema::table('students', function (Blueprint $table) use ($col) {
+                    $table->dropColumn($col);
+                });
+            }
         }
 
         if (!Schema::hasTable('student_disability_infos')) {

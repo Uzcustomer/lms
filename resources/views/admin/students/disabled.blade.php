@@ -152,12 +152,10 @@
                         <tbody>
                         @forelse($students as $i => $student)
                             @php $info = ($hasInfoTable ?? true) ? $student->disabilityInfo : null; @endphp
-                            <tr>
+                            <tr class="row-clickable" data-student-id="{{ $student->id }}" style="cursor:pointer;">
                                 <td style="text-align:center;color:#64748b;">{{ $students->firstItem() + $i }}</td>
                                 <td>
-                                    <a href="{{ route('admin.students.show', $student->id) }}" class="student-name-link">
-                                        {{ $student->full_name }}
-                                    </a>
+                                    <span class="student-name-link">{{ $student->full_name }}</span>
                                     <div style="font-size:11px;color:#94a3b8;">{{ $student->department_name }}</div>
                                 </td>
                                 <td style="color:#64748b;">{{ $student->student_id_number }}</td>
@@ -220,6 +218,26 @@
         </div>
     </div>
 
+    {{-- Talaba ma'lumotlari modali --}}
+    <div id="infoModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:20px;overflow-y:auto;">
+        <div style="background:#fff;border-radius:14px;max-width:640px;width:100%;margin:auto;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="padding:18px 22px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#fef2f2,#fef3c7);">
+                <div>
+                    <h3 id="infoModalTitle" style="font-size:16px;font-weight:700;color:#1e293b;margin:0;">Nogiron talaba ma'lumotlari</h3>
+                    <p id="infoModalSubtitle" style="font-size:12px;color:#64748b;margin:2px 0 0;"></p>
+                </div>
+                <button type="button" onclick="closeInfoModal()" style="background:none;border:none;font-size:24px;color:#64748b;cursor:pointer;line-height:1;padding:0 6px;">&times;</button>
+            </div>
+            <div id="infoModalBody" style="padding:20px 22px;font-size:13px;color:#334155;">
+                <div style="text-align:center;padding:40px 0;color:#94a3b8;">Yuklanmoqda...</div>
+            </div>
+            <div style="padding:14px 22px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:flex-end;gap:8px;">
+                <button type="button" onclick="closeInfoModal()" style="padding:7px 16px;font-size:12px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;color:#475569;cursor:pointer;">Yopish</button>
+                <a id="infoModalProfile" href="#" style="padding:7px 16px;font-size:12px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);color:#fff;border:none;border-radius:8px;text-decoration:none;font-weight:600;">Talaba profili</a>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -234,7 +252,78 @@
                     placeholder: $(this).find('option:first').text()
                 });
             });
+
+            $(document).on('click', '.row-clickable', function(e) {
+                if ($(e.target).is('a, button, input, select')) return;
+                openInfoModal($(this).data('student-id'));
+            });
+
+            $('#infoModal').on('click', function(e) {
+                if (e.target === this) closeInfoModal();
+            });
         });
+
+        function escapeHtml(s) {
+            if (s === null || s === undefined) return '';
+            return String(s).replace(/[&<>"']/g, function(c) {
+                return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+            });
+        }
+
+        function openInfoModal(studentId) {
+            var modal = document.getElementById('infoModal');
+            modal.style.display = 'flex';
+            document.getElementById('infoModalBody').innerHTML = '<div style="text-align:center;padding:40px 0;color:#94a3b8;">Yuklanmoqda...</div>';
+
+            $.getJSON('{{ url('admin/students/disabled') }}/' + studentId + '/info')
+                .done(function(d) {
+                    var s = d.student || {};
+                    var info = d.info;
+                    document.getElementById('infoModalTitle').textContent = s.full_name || '—';
+                    document.getElementById('infoModalSubtitle').textContent = (s.student_id_number || '') + ' • ' + (s.group_name || '') + ' • ' + (s.department_name || '');
+                    document.getElementById('infoModalProfile').href = '{{ url('admin/students') }}/' + s.id;
+
+                    var html = '';
+                    html += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #e2e8f0;">';
+                    html += '<div style="color:#64748b;">Yo\'nalish:</div><div>' + escapeHtml(s.specialty_name || '—') + '</div>';
+                    html += '<div style="color:#64748b;">Kurs:</div><div>' + escapeHtml(s.level_name || '—') + '</div>';
+                    html += '<div style="color:#64748b;">Ijtimoiy toifa:</div><div><span style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:600;">' + escapeHtml(s.social_category_name || '—') + '</span></div>';
+                    html += '</div>';
+
+                    if (info) {
+                        html += '<h4 style="font-size:12px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 10px;">Nogironlik ma\'lumotlari</h4>';
+                        html += '<div style="display:grid;grid-template-columns:200px 1fr;gap:8px 14px;">';
+                        html += '<div style="color:#64748b;">Ko\'rikdan o\'tgan sana:</div><div style="font-weight:600;">' + escapeHtml(info.examined_at || '—') + '</div>';
+                        html += '<div style="color:#64748b;">Nogironlik guruhi:</div><div><span style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe;padding:2px 8px;border-radius:6px;font-size:11.5px;font-weight:600;">' + escapeHtml(info.disability_group || '—') + '</span></div>';
+                        html += '<div style="color:#64748b;">Nogironlik sababi:</div><div>' + escapeHtml(info.disability_reason || '—') + '</div>';
+                        html += '<div style="color:#64748b;">Nogironlik muddati:</div><div style="font-weight:600;">' + escapeHtml(info.disability_duration || '—') + '</div>';
+                        html += '<div style="color:#64748b;">Qayta ko\'rik sanasi:</div><div style="font-weight:600;">' + escapeHtml(info.reexamination_at || '—') + '</div>';
+                        html += '<div style="color:#64748b;">Oxirgi yangilanish:</div><div style="color:#94a3b8;font-size:12px;">' + escapeHtml(info.updated_at || '—') + '</div>';
+                        html += '</div>';
+
+                        if (d.certificate_url) {
+                            html += '<div style="margin-top:16px;padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;">';
+                            html += '<div style="display:flex;align-items:center;gap:8px;"><svg style="width:18px;height:18px;color:#16a34a;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
+                            html += '<span style="font-size:13px;font-weight:600;color:#166534;">Nogironlik malumotnomasi</span></div>';
+                            html += '<a href="' + d.certificate_url + '" target="_blank" style="padding:5px 12px;font-size:11.5px;background:#16a34a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">PDF ochish</a>';
+                            html += '</div>';
+                        } else {
+                            html += '<div style="margin-top:16px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12.5px;color:#92400e;">Malumotnoma PDF yuklanmagan.</div>';
+                        }
+                    } else {
+                        html += '<div style="padding:24px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;text-align:center;font-size:13px;color:#92400e;">Talaba hali nogironlik ma\'lumotlarini to\'ldirmagan.</div>';
+                    }
+
+                    document.getElementById('infoModalBody').innerHTML = html;
+                })
+                .fail(function(xhr) {
+                    document.getElementById('infoModalBody').innerHTML = '<div style="padding:24px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;text-align:center;font-size:13px;color:#991b1b;">Ma\'lumotni yuklashda xatolik (' + xhr.status + ').</div>';
+                });
+        }
+
+        function closeInfoModal() {
+            document.getElementById('infoModal').style.display = 'none';
+        }
     </script>
 
     <style>
@@ -270,6 +359,7 @@
         .student-table tbody tr:nth-child(even) { background: #f8fafc; }
         .student-table tbody tr:nth-child(odd) { background: #fff; }
         .student-table tbody tr:hover { background: #fef2f2 !important; box-shadow: inset 4px 0 0 #ef4444; }
+        .row-clickable:hover .student-name-link { text-decoration: underline; }
         .student-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; }
 
         .student-name-link { color: #1e40af; font-weight: 700; text-decoration: none; transition: all 0.15s; }

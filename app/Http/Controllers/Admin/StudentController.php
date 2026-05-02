@@ -221,6 +221,47 @@ class StudentController extends Controller
         ));
     }
 
+    public function disabledInfo(Student $student)
+    {
+        if (!Schema::hasTable('student_disability_infos')) {
+            return response()->json(['error' => 'Migratsiya bajarilmagan.'], 503);
+        }
+
+        $info = \App\Models\StudentDisabilityInfo::where('student_id', $student->id)->first();
+        $hasCertificate = $info && Schema::hasColumn('student_disability_infos', 'certificate_path') && $info->certificate_path;
+
+        return response()->json([
+            'student' => [
+                'id' => $student->id,
+                'full_name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'department_name' => $student->department_name,
+                'specialty_name' => $student->specialty_name,
+                'group_name' => $student->group_name,
+                'level_name' => $student->level_name,
+                'social_category_name' => $student->social_category_name,
+            ],
+            'info' => $info ? [
+                'examined_at' => optional($info->examined_at)->format('d.m.Y'),
+                'disability_group' => \App\Models\StudentDisabilityInfo::GROUPS[$info->disability_group] ?? $info->disability_group,
+                'disability_reason' => $info->disability_reason,
+                'disability_duration' => $info->disability_duration,
+                'reexamination_at' => optional($info->reexamination_at)->format('d.m.Y'),
+                'updated_at' => optional($info->updated_at)->format('d.m.Y H:i'),
+            ] : null,
+            'certificate_url' => $hasCertificate ? route('admin.students.disabled.certificate', $student->id) : null,
+        ]);
+    }
+
+    public function disabledCertificate(Student $student)
+    {
+        $info = \App\Models\StudentDisabilityInfo::where('student_id', $student->id)->firstOrFail();
+        if (!$info->certificate_path) {
+            abort(404);
+        }
+        return \Storage::disk('public')->response($info->certificate_path);
+    }
+
     public function getFilterDepartments(Request $request)
     {
         $query = Student::query();

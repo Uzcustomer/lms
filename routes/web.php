@@ -129,6 +129,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
         Route::get('/students/disabled', [AdminStudentController::class, 'disabledIndex'])->name('students.disabled');
+        Route::get('/students/disabled/{student}/info', [AdminStudentController::class, 'disabledInfo'])->name('students.disabled.info');
+        Route::get('/students/disabled/{student}/certificate', [AdminStudentController::class, 'disabledCertificate'])->name('students.disabled.certificate');
         Route::get('/students/export', [AdminStudentController::class, 'exportStudents'])->name('students.export');
         Route::get('/students/filter/departments', [AdminStudentController::class, 'getFilterDepartments'])->name('students.filter.departments');
         Route::get('/students/filter/specialties', [AdminStudentController::class, 'getFilterSpecialties'])->name('students.filter.specialties');
@@ -1002,6 +1004,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::prefix('disability-info')->name('disability-info.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'store'])->name('store');
+            Route::get('/certificate', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'showFile'])->name('file');
         });
 
         // Pasport ma'lumotlari

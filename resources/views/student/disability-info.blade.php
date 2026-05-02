@@ -49,7 +49,7 @@
                 {{ __("Ijtimoiy toifa") }}: <span class="font-semibold text-gray-800">{{ $student->social_category_name ?: '-' }}</span>
             </p>
 
-            <form method="POST" action="{{ route('student.disability-info.store') }}" class="space-y-4">
+            <form method="POST" action="{{ route('student.disability-info.store') }}" class="space-y-4" enctype="multipart/form-data">
                 @csrf
 
                 <div>
@@ -104,6 +104,29 @@
                            value="{{ old('reexamination_at', optional($disabilityInfo?->reexamination_at)->format('Y-m-d')) }}"
                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <p class="text-xs text-gray-500 mt-1">{{ __("Agar muddatsiz bo'lsa, bo'sh qoldiring.") }}</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 mb-1">
+                        {{ __("Nogironlik malumotnomasi (PDF)") }}
+                        @if(!$disabilityInfo?->certificate_path)<span class="text-red-500">*</span>@endif
+                    </label>
+                    @if($disabilityInfo?->certificate_path)
+                        <div class="mb-2 flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            <a href="{{ route('student.disability-info.file') }}" target="_blank" class="text-xs text-green-700 font-semibold hover:underline">{{ __("Yuklangan malumotnomani ko'rish") }}</a>
+                        </div>
+                    @endif
+                    <input type="file" name="certificate" accept="application/pdf"
+                           {{ $disabilityInfo?->certificate_path ? '' : 'required' }}
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="text-xs text-gray-500 mt-1">
+                        @if($disabilityInfo?->certificate_path)
+                            {{ __("Yangi PDF tanlasangiz, eskisi almashtiriladi.") }}
+                        @else
+                            {{ __("Faqat PDF, 5MB gacha.") }}
+                        @endif
+                    </p>
                 </div>
 
                 <div class="flex gap-3 pt-2">

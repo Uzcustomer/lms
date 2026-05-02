@@ -13,6 +13,7 @@ class StudentDisabilityInfo extends Model
         'disability_reason',
         'disability_duration',
         'reexamination_at',
+        'certificate_path',
     ];
 
     protected $casts = [

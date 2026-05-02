@@ -48,8 +48,8 @@
         <div style="display:flex;gap:10px;margin-top:14px;">
             <button id="btn-retry" type="button"
                     style="display:none;flex:1;padding:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;">{{ __('Qayta urinish') }}</button>
-            <a href="{{ route('student.login') }}"
-               style="flex:1;text-align:center;padding:10px;border:1px solid #d1d5db;border-radius:8px;color:#374151;text-decoration:none;font-size:13px;">
+            <a href="javascript:history.length > 1 ? history.back() : (window.location.href='{{ url('/') }}');"
+               style="flex:1;text-align:center;padding:10px;background:linear-gradient(135deg,#16a34a,#22c55e);border:none;border-radius:8px;color:#fff;text-decoration:none;font-size:13px;font-weight:700;box-shadow:0 4px 10px rgba(34,197,94,0.3);">
                 {{ __('Parol bilan kirish') }}
             </a>
         </div>

@@ -6889,6 +6889,10 @@ class ReportController extends Controller
             })
             ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotIn('sch.training_type_code', $gradeExcludedCodes)
+            // Apostrof variantlari (ASCII ', U+2018 ', U+2019 ', U+02BB ʻ, U+02BC ʼ va backtick `)
+            // farq qilsa ham Ma'ruza/Maruza qatorlarini ushlaymiz: barcha apostrofni olib tashlab,
+            // lowercase qilib "maruza" substringni izlaymiz.
+            ->whereRaw("LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(IFNULL(sch.training_type_name, ''), 0x27, ''), 0xE28098, ''), 0xE28099, ''), 0xCABB, ''), 0xCABC, ''), '`', '')) NOT LIKE '%maruza%'")
             ->where('sch.education_year_current', true)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')

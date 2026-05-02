@@ -37,7 +37,6 @@
         </div>
     </div>
 
-    @push('scripts')
     <!-- face-api.js — yuz aniqlash uchun (kamera oldida yuz turishini tekshirish) -->
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <script>
@@ -222,5 +221,4 @@
         window.addEventListener('beforeunload', stopCamera);
     })();
     </script>
-    @endpush
 </x-guest-layout>

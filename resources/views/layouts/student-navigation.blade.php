@@ -50,6 +50,11 @@
                         {{ __('Viza ma\'lumotlarim') }}
                     </x-nav-link>
                     @endif
+                    @if($navStudent && method_exists($navStudent, 'isDisabled') && $navStudent->isDisabled())
+                    <x-nav-link :href="route('student.disability-info.index')" :active="request()->routeIs('student.disability-info.*')">
+                        {{ __("Nogironlik ma'lumotlarim") }}
+                    </x-nav-link>
+                    @endif
                 </div>
             </div>
 

@@ -270,6 +270,113 @@
         @endif
     @endauth
 
+    {{-- Nogiron talaba ma'lumot to'ldirish modali --}}
+    @auth('student')
+        @php
+            $ds = auth()->guard('student')->user();
+            $isDisabled = $ds && method_exists($ds, 'isDisabled') && $ds->isDisabled();
+            $onDisabilityPage = request()->routeIs('student.disability-info.*');
+            $disabilityInfo = null;
+            $showDisabilityModal = false;
+            if ($isDisabled && \Illuminate\Support\Facades\Schema::hasTable('student_disability_infos')) {
+                $disabilityInfo = \App\Models\StudentDisabilityInfo::where('student_id', $ds->id)->first();
+                $showDisabilityModal = !$disabilityInfo && !$onDisabilityPage;
+            }
+        @endphp
+
+        @if($isDisabled && !$disabilityInfo && !$onDisabilityPage)
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+                <div class="flex items-center justify-between px-4 py-3 rounded-lg border bg-amber-50 border-amber-200">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                        <span class="text-sm font-semibold text-amber-800">{{ __("Nogironlik to'g'risidagi ma'lumotlaringizni to'ldiring!") }}</span>
+                    </div>
+                    <a href="{{ route('student.disability-info.index') }}" class="px-3 py-1 bg-amber-600 text-white text-xs font-bold rounded hover:bg-amber-700 transition flex-shrink-0">{{ __("To'ldirish") }}</a>
+                </div>
+            </div>
+        @endif
+
+        @if($showDisabilityModal)
+            <div x-data="{ show: true }" x-show="show" x-cloak style="position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);overflow-y:auto;padding:20px 0;">
+                <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full mx-4 p-6" style="max-height:90vh;overflow-y:auto;">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div style="width:42px;height:42px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 13a3 3 0 100-6 3 3 0 000 6zm6.5 4.5L20 21M9 13c-3 0-5 2-5 5v3h10m1-6a4 4 0 014 4"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-bold text-gray-800">{{ __("Nogironlik ma'lumotlari") }}</h3>
+                                <p class="text-xs text-gray-500 mt-0.5">{{ __("Iltimos, quyidagi ma'lumotlarni to'ldiring") }}</p>
+                            </div>
+                        </div>
+                        <button type="button" @click="show = false" class="text-gray-400 hover:text-gray-600 ml-2" title="{{ __('Keyinroq') }}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+
+                    @if($errors->any())
+                        <div class="mb-3 p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                            <ul class="list-disc list-inside">
+                                @foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    <p class="text-xs text-gray-600 mb-3">
+                        {{ __("Ijtimoiy toifa") }}: <span class="font-semibold text-gray-800">{{ $ds->social_category_name }}</span>
+                    </p>
+
+                    <form method="POST" action="{{ route('student.disability-info.store') }}" class="space-y-3">
+                        @csrf
+                        <input type="hidden" name="_redirect_back" value="1">
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">{{ __("Ko'rikdan o'tgan sana") }} <span class="text-red-500">*</span></label>
+                            <input type="date" name="examined_at" required value="{{ old('examined_at') }}" max="{{ now()->format('Y-m-d') }}"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">{{ __("Nogironlik guruhi") }} <span class="text-red-500">*</span></label>
+                            <select name="disability_group" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="">{{ __("Tanlang...") }}</option>
+                                @foreach(\App\Models\StudentDisabilityInfo::GROUPS as $key => $label)
+                                    <option value="{{ $key }}" {{ old('disability_group') === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">{{ __("Nogironlik sababi") }} <span class="text-red-500">*</span></label>
+                            <textarea name="disability_reason" required rows="2" maxlength="500"
+                                      placeholder="{{ __('Sababini batafsil yozing...') }}"
+                                      class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">{{ old('disability_reason') }}</textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">{{ __("Nogironlik muddati") }} <span class="text-red-500">*</span></label>
+                            <input type="text" name="disability_duration" required maxlength="100" value="{{ old('disability_duration') }}"
+                                   placeholder="{{ __('Masalan: 1 yil, 5 yil, muddatsiz') }}"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">{{ __("Ko'rikdan qayta o'tish muddati") }}</label>
+                            <input type="date" name="reexamination_at" value="{{ old('reexamination_at') }}"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            <p class="text-xs text-gray-500 mt-1">{{ __("Agar muddatsiz bo'lsa, bo'sh qoldiring.") }}</p>
+                        </div>
+
+                        <div class="flex gap-2 pt-2">
+                            <button type="button" @click="show = false" class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">{{ __('Keyinroq') }}</button>
+                            <button type="submit" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition">{{ __('Saqlash') }}</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        @endif
+    @endauth
+
     {{-- Impersonatsiya banneri --}}
     @if(session('impersonating'))
         <div class="bg-red-600 text-white">

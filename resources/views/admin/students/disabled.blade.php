@@ -91,6 +91,14 @@
                                 <input type="text" name="student_id_number" value="{{ request('student_id_number') }}"
                                        placeholder="1234" class="filter-input">
                             </div>
+                            <div class="filter-item" style="min-width: 200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#22c55e;"></span> Ma'lumot holati</label>
+                                <select name="info_status" class="select2" style="width: 100%;">
+                                    <option value="">Barchasi</option>
+                                    <option value="filled" {{ request('info_status') === 'filled' ? 'selected' : '' }}>To'ldirilgan</option>
+                                    <option value="empty" {{ request('info_status') === 'empty' ? 'selected' : '' }}>To'ldirilmagan</option>
+                                </select>
+                            </div>
                             <div class="filter-item" style="min-width: 120px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <button type="submit" class="btn-calc">
@@ -108,8 +116,13 @@
                     </div>
                 </form>
 
-                <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                    <span class="badge" style="background:linear-gradient(135deg,#b91c1c,#ef4444);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ $students->total() }} ta nogiron talaba</span>
+                <div style="padding:10px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <span class="badge" style="background:linear-gradient(135deg,#b91c1c,#ef4444);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">Jami: {{ $totalAll }} ta nogiron talaba</span>
+                        <span class="badge" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirgan: {{ $totalFilled }}</span>
+                        <span class="badge" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirmagan: {{ $totalEmpty }}</span>
+                    </div>
+                    <span style="font-size:12px;color:#64748b;">Sahifada: {{ $students->total() }} ta natija</span>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -119,34 +132,54 @@
                             <th style="width:50px;text-align:center;">#</th>
                             <th>F.I.Sh</th>
                             <th>Talaba ID</th>
-                            <th>Fakultet</th>
-                            <th>Yo'nalish</th>
-                            <th>Kurs</th>
                             <th>Guruh</th>
                             <th>Nogironlik turi</th>
+                            <th>Ko'rikdan o'tgan</th>
+                            <th>Guruhi</th>
+                            <th>Sababi</th>
                             <th>Muddati</th>
+                            <th>Qayta ko'rik</th>
+                            <th style="text-align:center;">Holat</th>
                         </tr>
                         </thead>
                         <tbody>
                         @forelse($students as $i => $student)
+                            @php $info = $student->disabilityInfo; @endphp
                             <tr>
                                 <td style="text-align:center;color:#64748b;">{{ $students->firstItem() + $i }}</td>
                                 <td>
                                     <a href="{{ route('admin.students.show', $student->id) }}" class="student-name-link">
                                         {{ $student->full_name }}
                                     </a>
+                                    <div style="font-size:11px;color:#94a3b8;">{{ $student->department_name }}</div>
                                 </td>
                                 <td style="color:#64748b;">{{ $student->student_id_number }}</td>
-                                <td><span class="text-cell text-emerald">{{ $student->department_name }}</span></td>
-                                <td><span class="text-cell text-cyan" title="{{ $student->specialty_name }}">{{ Str::limit($student->specialty_name, 30) }}</span></td>
-                                <td><span class="badge badge-violet">{{ $student->level_name }}</span></td>
                                 <td><span class="badge badge-indigo">{{ $student->group_name }}</span></td>
-                                <td><span class="badge badge-red">{{ $student->social_category_name ?: '-' }}</span></td>
-                                <td><span class="text-cell">{{ $student->disability_duration ?: '-' }}</span></td>
+                                <td><span class="badge badge-red" title="{{ $student->social_category_name }}">{{ Str::limit($student->social_category_name, 28) ?: '-' }}</span></td>
+                                <td>{{ $info?->examined_at?->format('d.m.Y') ?: '—' }}</td>
+                                <td>
+                                    @if($info?->disability_group)
+                                        <span class="badge badge-violet">{{ \App\Models\StudentDisabilityInfo::GROUPS[$info->disability_group] ?? $info->disability_group }}</span>
+                                    @else — @endif
+                                </td>
+                                <td>
+                                    @if($info?->disability_reason)
+                                        <span class="text-cell" title="{{ $info->disability_reason }}">{{ Str::limit($info->disability_reason, 30) }}</span>
+                                    @else — @endif
+                                </td>
+                                <td>{{ $info?->disability_duration ?: '—' }}</td>
+                                <td>{{ $info?->reexamination_at?->format('d.m.Y') ?: '—' }}</td>
+                                <td style="text-align:center;">
+                                    @if($info)
+                                        <span class="badge badge-green">To'ldirilgan</span>
+                                    @else
+                                        <span class="badge badge-amber">Kiritilmagan</span>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:13px;">
+                                <td colspan="11" style="text-align:center;padding:40px 20px;color:#94a3b8;font-size:13px;">
                                     Nogiron talabalar topilmadi.
                                 </td>
                             </tr>
@@ -243,5 +276,7 @@
         .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
         .badge-red { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; white-space: nowrap; }
+        .badge-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; white-space: nowrap; }
+        .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; white-space: nowrap; }
     </style>
 </x-app-layout>

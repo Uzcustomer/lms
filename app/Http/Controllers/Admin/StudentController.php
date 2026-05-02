@@ -138,7 +138,7 @@ class StudentController extends Controller
             $q->whereRaw('LOWER(social_category_name) LIKE ?', ['%nogiron%']);
         };
 
-        $query = Student::query()->where($disabledFilter);
+        $query = Student::query()->with('disabilityInfo')->where($disabledFilter);
 
         if ($request->filled('disability_type')) {
             $query->where('social_category_code', $request->disability_type);
@@ -164,8 +164,20 @@ class StudentController extends Controller
             $query->where('level_code', $request->level_code);
         }
 
+        if ($request->filled('info_status')) {
+            if ($request->info_status === 'filled') {
+                $query->whereHas('disabilityInfo');
+            } elseif ($request->info_status === 'empty') {
+                $query->whereDoesntHave('disabilityInfo');
+            }
+        }
+
         $perPage = (int) $request->get('per_page', 50);
         $students = $query->orderBy('full_name')->paginate($perPage)->appends($request->query());
+
+        $totalAll = Student::where($disabledFilter)->count();
+        $totalFilled = Student::where($disabledFilter)->whereHas('disabilityInfo')->count();
+        $totalEmpty = $totalAll - $totalFilled;
 
         $disabilityTypes = Student::select('social_category_code', 'social_category_name')
             ->where($disabledFilter)
@@ -195,7 +207,10 @@ class StudentController extends Controller
             ->orderBy('level_code')
             ->get();
 
-        return view('admin.students.disabled', compact('students', 'disabilityTypes', 'departments', 'groups', 'levels'));
+        return view('admin.students.disabled', compact(
+            'students', 'disabilityTypes', 'departments', 'groups', 'levels',
+            'totalAll', 'totalFilled', 'totalEmpty'
+        ));
     }
 
     public function getFilterDepartments(Request $request)

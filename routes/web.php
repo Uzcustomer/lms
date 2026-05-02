@@ -990,6 +990,12 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/file/{field}', [\App\Http\Controllers\Student\StudentVisaController::class, 'showFile'])->name('file');
         });
 
+        // Nogironlik ma'lumotlari (nogiron talabalar)
+        Route::prefix('disability-info')->name('disability-info.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'store'])->name('store');
+        });
+
         // Pasport ma'lumotlari
         Route::get('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'index'])->name('passport.index');
         Route::post('/passport', [\App\Http\Controllers\Student\StudentPassportController::class, 'store'])->name('passport.store');

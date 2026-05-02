@@ -30,7 +30,6 @@ dependencies:
   webview_flutter: ^4.10.0
   google_generative_ai: ^0.4.7
   local_auth: ^2.3.0
-  local_auth_android: ^1.0.0
 
 dev_dependencies:
   flutter_test:

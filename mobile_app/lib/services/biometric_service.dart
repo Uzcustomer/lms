@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:local_auth_android/local_auth_android.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BiometricService {
@@ -26,26 +25,20 @@ class BiometricService {
     if (kIsWeb) return false;
     try {
       final list = await _auth.getAvailableBiometrics();
-      return list.contains(BiometricType.face) || list.contains(BiometricType.strong);
+      return list.contains(BiometricType.face) ||
+          list.contains(BiometricType.strong);
     } on PlatformException {
       return false;
     }
   }
 
-  Future<bool> authenticate({String reason = 'Tizimga kirish uchun yuzingizni tasdiqlang'}) async {
+  Future<bool> authenticate({
+    String reason = 'Tizimga kirish uchun yuzingizni tasdiqlang',
+  }) async {
     if (kIsWeb) return false;
     try {
       return await _auth.authenticate(
         localizedReason: reason,
-        authMessages: const [
-          AndroidAuthMessages(
-            signInTitle: 'Yuz orqali kirish',
-            cancelButton: 'Bekor qilish',
-            biometricHint: '',
-            biometricNotRecognized: 'Tanilmadi, qayta urining',
-            biometricSuccess: 'Tasdiqlandi',
-          ),
-        ],
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,

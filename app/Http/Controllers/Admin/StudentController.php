@@ -259,7 +259,7 @@ class StudentController extends Controller
                 'examined_at' => optional($info->examined_at)->format('d.m.Y'),
                 'disability_group' => \App\Models\StudentDisabilityInfo::GROUPS[$info->disability_group] ?? $info->disability_group,
                 'disability_reason' => $info->disability_reason,
-                'disability_duration' => $info->disability_duration,
+                'disability_duration' => optional($info->disability_duration)->format('d.m.Y'),
                 'reexamination_at' => optional($info->reexamination_at)->format('d.m.Y'),
                 'updated_at' => optional($info->updated_at)->format('d.m.Y H:i'),
             ] : null,

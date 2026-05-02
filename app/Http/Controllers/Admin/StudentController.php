@@ -178,22 +178,6 @@ class StudentController extends Controller
             }
         }
 
-        $hasCertColumn = $hasInfoTable && Schema::hasColumn('student_disability_infos', 'certificate_path');
-        if ($hasCertColumn && $request->filled('cert_status')) {
-            if ($request->cert_status === 'uploaded') {
-                $query->whereHas('disabilityInfo', function ($q) {
-                    $q->whereNotNull('certificate_path')->where('certificate_path', '!=', '');
-                });
-            } elseif ($request->cert_status === 'missing') {
-                $query->where(function ($outer) {
-                    $outer->whereDoesntHave('disabilityInfo')
-                        ->orWhereHas('disabilityInfo', function ($q) {
-                            $q->whereNull('certificate_path')->orWhere('certificate_path', '');
-                        });
-                });
-            }
-        }
-
         $perPage = (int) $request->get('per_page', 50);
         $students = $query->orderBy('full_name')->paginate($perPage)->appends($request->query());
 
@@ -202,11 +186,6 @@ class StudentController extends Controller
             ? Student::where($disabledFilter)->whereHas('disabilityInfo')->count()
             : 0;
         $totalEmpty = $totalAll - $totalFilled;
-        $totalCertUploaded = $hasCertColumn
-            ? Student::where($disabledFilter)->whereHas('disabilityInfo', function ($q) {
-                $q->whereNotNull('certificate_path')->where('certificate_path', '!=', '');
-            })->count()
-            : 0;
 
         $disabilityTypes = Student::select('social_category_code', 'social_category_name')
             ->where($disabledFilter)
@@ -238,8 +217,7 @@ class StudentController extends Controller
 
         return view('admin.students.disabled', compact(
             'students', 'disabilityTypes', 'departments', 'groups', 'levels',
-            'totalAll', 'totalFilled', 'totalEmpty', 'totalCertUploaded',
-            'hasInfoTable', 'hasCertColumn'
+            'totalAll', 'totalFilled', 'totalEmpty', 'hasInfoTable'
         ));
     }
 

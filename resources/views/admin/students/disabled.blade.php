@@ -99,14 +99,6 @@
                                     <option value="empty" {{ request('info_status') === 'empty' ? 'selected' : '' }}>To'ldirilmagan</option>
                                 </select>
                             </div>
-                            <div class="filter-item" style="min-width: 200px;">
-                                <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Malumotnoma (PDF)</label>
-                                <select name="cert_status" class="select2" style="width: 100%;">
-                                    <option value="">Barchasi</option>
-                                    <option value="uploaded" {{ request('cert_status') === 'uploaded' ? 'selected' : '' }}>Yuklagan (cherlashgan)</option>
-                                    <option value="missing" {{ request('cert_status') === 'missing' ? 'selected' : '' }}>Yuklamagan</option>
-                                </select>
-                            </div>
                             <div class="filter-item" style="min-width: 120px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <button type="submit" class="btn-calc">
@@ -135,9 +127,6 @@
                         @if($hasInfoTable ?? true)
                             <span class="badge" style="background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirgan: {{ $totalFilled }}</span>
                             <span class="badge" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">To'ldirmagan: {{ $totalEmpty }}</span>
-                        @endif
-                        @if($hasCertColumn ?? false)
-                            <span class="badge" style="background:linear-gradient(135deg,#0369a1,#0ea5e9);color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">PDF yuklagan: {{ $totalCertUploaded }}</span>
                         @endif
                     </div>
                     <span style="font-size:12px;color:#64748b;">Sahifada: {{ $students->total() }} ta natija</span>

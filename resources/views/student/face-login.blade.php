@@ -1,4 +1,22 @@
 <x-guest-layout>
+    {{-- Face ID sahifasida tepadagi logo va sarlavhani yashirish --}}
+    <style>
+        body > .login-bg > div:first-child > div:first-of-type:has(a[href="/"]) { display: none !important; }
+        .login-bg > div > div:first-child > a[href="/"] { display: none !important; }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Layoutdagi logo+title blokini topib yashirish
+            var logoLinks = document.querySelectorAll('a[href="/"]');
+            logoLinks.forEach(function(a) {
+                if (a.querySelector('img[alt="Logo"]')) {
+                    var wrap = a.closest('div[style*="text-align:center"]') || a.parentElement;
+                    if (wrap) wrap.style.display = 'none';
+                }
+            });
+        });
+    </script>
+
     <div id="faceid-app" style="max-width:420px;margin:0 auto;">
 
         <!-- Sarlavha -->

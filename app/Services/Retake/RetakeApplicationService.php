@@ -207,6 +207,11 @@ class RetakeApplicationService
                 $loaded->docx_path = $this->documentService->generateDocx($loaded);
                 $loaded->save();
             } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('[Retake] DOCX generation failed', [
+                    'group_id' => $loaded->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
                 report($e);
             }
 

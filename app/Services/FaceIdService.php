@@ -266,6 +266,108 @@ class FaceIdService
     }
 
     /**
+     * Python ArcFace service /embed endpoint orqali rasm uchun embedding olish.
+     * @return array<int, float>|null  L2-normalized 512-float vector
+     */
+    public static function extractEmbedding(string $imageUrlOrPath): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/embed', ['image' => $imageUrlOrPath]);
+
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /embed HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            $json = $response->json();
+            return $json['embedding'] ?? null;
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /embed exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Python /identify orqali 1:N tanish — eng yaqin talabani topadi.
+     * @return array{matches: array, cache_size: int}|null
+     */
+    public static function identifyViaArcFace(string $imageUrlOrPath, int $topK = 1): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/identify', [
+                    'image' => $imageUrlOrPath,
+                    'top_k' => $topK,
+                ]);
+
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /identify HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            $json = $response->json();
+            if (!is_array($json) || !isset($json['matches'])) {
+                return null;
+            }
+
+            return [
+                'matches'    => $json['matches'],
+                'cache_size' => (int) ($json['cache_size'] ?? 0),
+            ];
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /identify exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Python /refresh-cache orqali identifikatsiya cache'ini yangilash.
+     * Items: [['student_id_number' => ..., 'embedding' => [...], 'full_name' => ...], ...]
+     */
+    public static function refreshArcFaceCache(array $items, bool $replace = true): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 120);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/refresh-cache', [
+                    'items'   => $items,
+                    'replace' => $replace,
+                ]);
+
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /refresh-cache HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            return $response->json();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /refresh-cache exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
      * Python ArcFace service /compare endpoint'iga ikki rasm yo'lini yuborish.
      * @return array{similarity_percent: float, distance: float, threshold: float, match: bool}|null
      */

@@ -876,6 +876,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/check-student', [FaceIdController::class, 'checkStudent'])->name('check-student');
         Route::get('/photo/{id}', [FaceIdController::class, 'getPhoto'])->name('photo');
         Route::post('/verify', [FaceIdController::class, 'verifyAndLogin'])->name('verify');
+        Route::post('/identify', [FaceIdController::class, 'identifyAndLogin'])->name('identify');
         Route::post('/save-descriptor', [FaceIdController::class, 'saveDescriptor'])->name('save-descriptor');
     });
 

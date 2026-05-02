@@ -30,6 +30,8 @@ class StudentPhoto extends Model
         'quality_issues',
         'quality_ok',
         'quality_checked_at',
+        'face_embedding',
+        'embedding_extracted_at',
     ];
 
     protected $casts = [
@@ -41,6 +43,8 @@ class StudentPhoto extends Model
         'quality_issues' => 'array',
         'quality_ok' => 'array',
         'quality_checked_at' => 'datetime',
+        'face_embedding' => 'array',
+        'embedding_extracted_at' => 'datetime',
     ];
 
     public function getPhotoUrlAttribute(): string

@@ -4,9 +4,14 @@ Face Comparison + Photo Quality Service
 - POST /compare        compare two face images, return similarity %
 - POST /quality-check  inspect a photo against student-photo standards
                        (centering, framing, white coat, lighting, size)
+- POST /embed          extract a 512-dim ArcFace embedding for one image
+- POST /identify       1:N identification — find best match in cached embeddings
+- POST /refresh-cache  replace the in-memory student embedding cache
+- GET  /cache-info     report cache size and sample IDs
 
-Used by the LMS admin student-photo review page. Runs bound to
-127.0.0.1:5005 and the Docker bridge IP; do not expose publicly.
+Used by the LMS admin student-photo review page and student Face ID login.
+Runs bound to 127.0.0.1:5005 and the Docker bridge IP; do not expose
+publicly.
 """
 
 from fastapi import FastAPI, HTTPException
@@ -15,6 +20,7 @@ from deepface import DeepFace
 import logging
 import os
 import io
+import threading
 import requests
 from urllib.parse import urlsplit, urlunsplit, quote
 import numpy as np
@@ -29,6 +35,12 @@ logger = logging.getLogger("uvicorn.error")
 MODEL_NAME = "ArcFace"
 DETECTOR_BACKEND = "opencv"
 
+# ─────────────────────── In-memory identification cache ───────────────────────
+# {student_id_number: np.ndarray (512,)}
+_identify_cache: dict[str, np.ndarray] = {}
+_identify_meta: dict[str, dict] = {}
+_cache_lock = threading.Lock()
+
 
 class CompareRequest(BaseModel):
     image1: str  # URL or absolute local path
@@ -37,6 +49,27 @@ class CompareRequest(BaseModel):
 
 class QualityRequest(BaseModel):
     image: str  # URL or absolute local path
+
+
+class EmbedRequest(BaseModel):
+    image: str  # URL or absolute local path
+
+
+class IdentifyRequest(BaseModel):
+    image: str  # URL or absolute local path
+    top_k: int = 1
+
+
+class CacheItem(BaseModel):
+    student_id_number: str
+    embedding: list[float] | None = None
+    image: str | None = None  # URL/path — server o'zi embedding hisoblaydi
+    full_name: str | None = None
+
+
+class RefreshCacheRequest(BaseModel):
+    items: list[CacheItem]
+    replace: bool = True   # True bo'lsa eski cache butunlay yangilanadi
 
 
 @app.on_event("startup")
@@ -50,7 +83,7 @@ def warmup():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": MODEL_NAME}
+    return {"status": "ok", "model": MODEL_NAME, "cache_size": len(_identify_cache)}
 
 
 # ───────────────────────────── /compare ──────────────────────────────
@@ -87,6 +120,145 @@ def compare(req: CompareRequest):
         "match": verified,
         "model": MODEL_NAME,
     }
+
+
+# ─────────────────────────── /embed ───────────────────────────────────
+
+def _extract_embedding(src: str) -> np.ndarray | None:
+    """ArcFace 512-dim embedding chiqarish. None — yuz topilmadi yoki xato."""
+    try:
+        reps = DeepFace.represent(
+            img_path=src,
+            model_name=MODEL_NAME,
+            detector_backend=DETECTOR_BACKEND,
+            enforce_detection=False,
+            align=True,
+        )
+    except Exception as e:
+        logger.warning(f"represent failed: {e}")
+        return None
+
+    if not reps:
+        return None
+    emb = reps[0].get("embedding") if isinstance(reps, list) else None
+    if not emb:
+        return None
+    arr = np.asarray(emb, dtype=np.float32)
+    norm = np.linalg.norm(arr)
+    if norm < 1e-6:
+        return None
+    return arr / norm  # L2-normalized → cosine similarity = dot product
+
+
+@app.post("/embed")
+def embed(req: EmbedRequest):
+    arr = _extract_embedding(req.image)
+    if arr is None:
+        raise HTTPException(status_code=422, detail="Yuz aniqlanmadi yoki embedding hisoblab bo'lmadi")
+    return {
+        "embedding": arr.tolist(),
+        "dim": int(arr.shape[0]),
+        "model": MODEL_NAME,
+    }
+
+
+# ──────────────────────── /refresh-cache ──────────────────────────────
+
+@app.post("/refresh-cache")
+def refresh_cache(req: RefreshCacheRequest):
+    """
+    Cache'ga embedding'larni yuklash. Har item uchun:
+      - embedding berilgan bo'lsa: shu darhol saqlanadi
+      - image berilgan bo'lsa: bu yerda hisoblanadi va saqlanadi
+    `replace=True` — eski cache butunlay almashtiriladi (item dagilarsiz oldingilar yo'q bo'ladi).
+    """
+    new_entries: dict[str, np.ndarray] = {}
+    new_meta: dict[str, dict] = {}
+    failed: list[dict] = []
+
+    for it in req.items:
+        sid = (it.student_id_number or '').strip()
+        if not sid:
+            continue
+        if it.embedding:
+            arr = np.asarray(it.embedding, dtype=np.float32)
+            norm = np.linalg.norm(arr)
+            if norm > 1e-6:
+                arr = arr / norm
+        elif it.image:
+            arr = _extract_embedding(it.image)
+            if arr is None:
+                failed.append({"student_id_number": sid, "reason": "embedding_not_extracted"})
+                continue
+        else:
+            failed.append({"student_id_number": sid, "reason": "neither_embedding_nor_image"})
+            continue
+
+        new_entries[sid] = arr
+        new_meta[sid] = {"full_name": it.full_name or ""}
+
+    with _cache_lock:
+        if req.replace:
+            _identify_cache.clear()
+            _identify_meta.clear()
+        _identify_cache.update(new_entries)
+        _identify_meta.update(new_meta)
+        size = len(_identify_cache)
+
+    return {
+        "ok": True,
+        "added_or_updated": len(new_entries),
+        "cache_size": size,
+        "failed": failed,
+    }
+
+
+@app.get("/cache-info")
+def cache_info():
+    with _cache_lock:
+        size = len(_identify_cache)
+        sample = list(_identify_cache.keys())[:10]
+    return {"cache_size": size, "sample_ids": sample, "model": MODEL_NAME}
+
+
+# ─────────────────────────── /identify ────────────────────────────────
+
+@app.post("/identify")
+def identify(req: IdentifyRequest):
+    """
+    1:N identifikatsiya — kelayotgan rasm uchun cache'dan eng yaqin
+    talabani topadi. Cosine similarity (embedding'lar L2-normalized,
+    shuning uchun matmul yetarli).
+    """
+    with _cache_lock:
+        if not _identify_cache:
+            raise HTTPException(status_code=503, detail="Cache bo'sh — avval /refresh-cache chaqiring")
+        ids = list(_identify_cache.keys())
+        matrix = np.stack([_identify_cache[i] for i in ids], axis=0)  # (N, D)
+        meta_snapshot = {i: _identify_meta.get(i, {}) for i in ids}
+
+    query = _extract_embedding(req.image)
+    if query is None:
+        raise HTTPException(status_code=422, detail="Yuz aniqlanmadi")
+
+    sims = matrix @ query                    # cosine similarity (-1..1)
+    sims_norm = (sims + 1.0) / 2.0           # 0..1 range
+    percents = sims_norm * 100.0             # 0..100
+
+    top_k = max(1, min(int(req.top_k or 1), 5))
+    top_idx = np.argsort(-percents)[:top_k]
+
+    matches = []
+    for i in top_idx:
+        sid = ids[int(i)]
+        matches.append({
+            "student_id_number": sid,
+            "similarity_percent": round(float(percents[int(i)]), 2),
+            "cosine": round(float(sims[int(i)]), 4),
+            "full_name": meta_snapshot.get(sid, {}).get("full_name", ""),
+        })
+
+    return {"matches": matches, "cache_size": len(ids), "model": MODEL_NAME}
 
 
 # ──────────────────────────── /quality-check ─────────────────────────

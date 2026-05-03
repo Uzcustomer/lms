@@ -1315,6 +1315,28 @@ class JournalController extends Controller
             ->where('attempt', 3)
             ->first() : null;
 
+        // OSKI/Test uchun sababli ariza ochilgan talabalar (assessment_type bo'yicha)
+        $sababliOskiStudents = [];
+        $sababliTestStudents = [];
+        try {
+            $hasAssessmentTypeCol = \Illuminate\Support\Facades\Schema::hasColumn('excuse_grade_openings', 'assessment_type');
+            if ($hasAssessmentTypeCol) {
+                $studentHemisIdsList = $students->pluck('hemis_id')->toArray();
+                $openings = ExcuseGradeOpening::where('subject_id', $subjectId)
+                    ->whereIn('assessment_type', ['oski', 'test'])
+                    ->where('status', 'active')
+                    ->where('deadline', '>', now())
+                    ->whereIn('student_hemis_id', $studentHemisIdsList)
+                    ->get(['student_hemis_id', 'assessment_type']);
+                foreach ($openings as $op) {
+                    if ($op->assessment_type === 'oski') $sababliOskiStudents[] = $op->student_hemis_id;
+                    if ($op->assessment_type === 'test') $sababliTestStudents[] = $op->student_hemis_id;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Sababli OSKI/Test openings query failed: ' . $e->getMessage());
+        }
+
         // exam_schedules dan OSKI/Test sanalarini olish
         $examSchedule = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
@@ -1404,9 +1426,8 @@ class JournalController extends Controller
             }
         }
 
-        // Har talaba uchun joriy bosqichni hisoblash (badge ko'rsatish uchun).
-        // exportYnQaydnoma ichidagi V hisoblash mantig'ini soddalashtirilgan
-        // ko'rinishda — joriy holatdagi (sababli retake bilan) baholar bilan.
+        // Har talaba uchun joriy bosqichni hisoblash (badge ko'rsatish uchun) —
+        // 12a/12b OSKI/Test (attempt=2/3) yozuvlari ham inobatga olinadi.
         $studentStages = [];
         try {
             $hasOskiForWeights = !($examSchedule && $examSchedule->oski_na);
@@ -1422,13 +1443,52 @@ class JournalController extends Controller
             }
 
             $stageLevelCode = (string) ($semester?->level_code ?? '');
+            $hasAttemptColForStage = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+            // 12a (attempt=2) va 12b (attempt=3) OSKI/Test baholari (sababsiz va sababli alohida)
+            $fetchAttemptOskiTest = function (int $attempt, bool $excludeSababli) use ($studentHemisIds, $subjectId, $semesterCode, $hasAttemptColForStage) {
+                if (!$hasAttemptColForStage) return [101 => [], 102 => []];
+                $rows = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('attempt', $attempt)
+                    ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason')
+                    ->get();
+                $byType = [101 => [], 102 => []];
+                foreach ($rows as $r) {
+                    $val = null;
+                    if ($r->status === 'pending' && $r->reason === 'low_grade' && $r->grade !== null) $val = $r->grade;
+                    elseif ($r->status === 'pending') $val = null;
+                    elseif ($r->reason === 'absent' && $r->grade === null) {
+                        $val = (!$excludeSababli || empty($r->retake_was_sababli)) ? $r->retake_grade : null;
+                    }
+                    elseif ($r->status === 'recorded' || $r->status === 'closed') $val = $r->grade;
+                    elseif ($r->retake_grade !== null && (!$excludeSababli || empty($r->retake_was_sababli))) $val = $r->retake_grade;
+                    if ($val === null) continue;
+                    $byType[$r->training_type_code][$r->student_hemis_id][] = (float) $val;
+                }
+                $avg = [101 => [], 102 => []];
+                foreach ([101, 102] as $tc) {
+                    foreach ($byType[$tc] as $sid => $vals) {
+                        if (count($vals) > 0) $avg[$tc][$sid] = array_sum($vals) / count($vals);
+                    }
+                }
+                return $avg;
+            };
+
+            $av1 = $fetchAttemptOskiTest(2, true);  // 12a sababsiz
+            $av2 = $fetchAttemptOskiTest(2, false); // 12a sababli bilan
+            $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
+            $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
 
             foreach ($students as $stu) {
                 $h = $stu->hemis_id;
 
-                // JN o'rtacha
-                $jnSum = 0;
-                $jnDays = 0;
+                // JN/MT o'rtacha (joriy holat — sababli retake bilan)
+                $jnSum = 0; $jnDays = 0;
                 foreach ($jbLessonDates as $date) {
                     $dayGrades = $jbGrades[$h][$date] ?? [];
                     if (empty($dayGrades)) continue;
@@ -1439,9 +1499,7 @@ class JournalController extends Controller
                 }
                 $jn = $jnDays > 0 ? (int) round($jnSum / $jnDays, 0, PHP_ROUND_HALF_UP) : 0;
 
-                // MT o'rtacha
-                $mtSum = 0;
-                $mtDays = 0;
+                $mtSum = 0; $mtDays = 0;
                 foreach ($mtLessonDates as $date) {
                     $dayGrades = $mtGrades[$h][$date] ?? [];
                     if (empty($dayGrades)) continue;
@@ -1452,7 +1510,6 @@ class JournalController extends Controller
                 }
                 $mt = $mtDays > 0 ? (int) round($mtSum / $mtDays, 0, PHP_ROUND_HALF_UP) : 0;
 
-                // Manual MT override
                 if (isset($manualMtGrades[$h])) {
                     $mt = (int) round((float) $manualMtGrades[$h]->grade, 0, PHP_ROUND_HALF_UP);
                 }
@@ -1462,52 +1519,54 @@ class JournalController extends Controller
                 $auditH = (float) ($auditoriumHours ?? 0);
                 $davomatPct = $auditH > 0 ? round(($davomat / $auditH) * 100, 2) : 0.0;
 
-                $vCurrent = \App\Services\YnAttemptStatusService::computeV(
-                    $jn, $mt,
-                    $other['on'] ?? null, $other['oski'] ?? null, $other['test'] ?? null,
-                    $davomatPct,
-                    $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'],
-                    $defaultWeights['oski'], $defaultWeights['test'],
-                    $stageLevelCode
-                );
+                // Asosiy stsenariy (sababli retake bilan = qoshimcha holati, ya'ni current jb/mt jami)
+                $svc = \App\Services\YnAttemptStatusService::class;
+                $main = $svc::buildScenario($jn, $mt, $other['on'] ?? null, $other['oski'] ?? null, $other['test'] ?? null, $davomatPct,
+                    $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
 
-                // Sababli retake bormi? (jb/mt/other dagi flag)
-                $hasSababliRetake = false;
-                foreach (($jbGrades[$h] ?? []) as $dg) {
-                    foreach ($dg as $g) {
-                        if (!empty($g['retake_was_sababli'])) { $hasSababliRetake = true; break 2; }
-                    }
+                $hasSababli = false;
+                foreach (($jbGrades[$h] ?? []) as $dg) foreach ($dg as $g) if (!empty($g['retake_was_sababli'])) { $hasSababli = true; break 2; }
+                if (!$hasSababli) foreach (($mtGrades[$h] ?? []) as $dg) foreach ($dg as $g) if (!empty($g['retake_was_sababli'])) { $hasSababli = true; break 2; }
+                if (!$hasSababli && (!empty($other['on_sababli']) || !empty($other['oski_sababli']) || !empty($other['test_sababli']))) $hasSababli = true;
+
+                // Asosiy va qo'shimcha — agar sababli bo'lmasa qo'shimcha = main, aks holda asosiy ham main (chunki bizda V1 alohida ajratilmagan).
+                // Asosiy logika: stage detection mainni qo'shimcha holatida ko'radi. Sababli flag bo'lsa
+                // determineStage qo'shimcha_passed deb qaytaradi.
+                $qoshimcha = $hasSababli ? $main : null;
+
+                // 12a stsenariy — JN/MT bir xil, OSKI/Test attempt=2 dan
+                $a = null;
+                if (!empty($av1[101]) && isset($av1[101][$h]) || !empty($av1[102]) && isset($av1[102][$h])) {
+                    $a = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $av1[101][$h] ?? null, $av1[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
-                if (!$hasSababliRetake) {
-                    foreach (($mtGrades[$h] ?? []) as $dg) {
-                        foreach ($dg as $g) {
-                            if (!empty($g['retake_was_sababli'])) { $hasSababliRetake = true; break 2; }
-                        }
-                    }
-                }
-                if (!$hasSababliRetake) {
-                    if (!empty($other['on_sababli']) || !empty($other['oski_sababli']) || !empty($other['test_sababli'])) {
-                        $hasSababliRetake = true;
-                    }
+                $aQoshimcha = null;
+                if (isset($av2[101][$h]) || isset($av2[102][$h])) {
+                    $aQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $av2[101][$h] ?? null, $av2[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
 
-                // Bosqich aniqlash (soddalashtirilgan)
-                $passing = is_numeric($vCurrent) && (float) $vCurrent >= 60;
-                $jnMtOk = $jn >= 60 && $mt >= 60;
-
-                if ($passing) {
-                    $stageKey = $hasSababliRetake
-                        ? \App\Services\YnAttemptStatusService::STAGE_QOSHIMCHA_PASSED
-                        : \App\Services\YnAttemptStatusService::STAGE_ASOSIY_PASSED;
-                } else {
-                    $stageKey = $jnMtOk
-                        ? \App\Services\YnAttemptStatusService::STAGE_IN_12A
-                        : \App\Services\YnAttemptStatusService::STAGE_IN_12A_PULLIK;
+                $b = null;
+                if (isset($bv1[101][$h]) || isset($bv1[102][$h])) {
+                    $b = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $bv1[101][$h] ?? null, $bv1[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
+                $bQoshimcha = null;
+                if (isset($bv2[101][$h]) || isset($bv2[102][$h])) {
+                    $bQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $bv2[101][$h] ?? null, $bv2[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
+                }
+
+                $stageInfo = $svc::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha);
+                $stageKey = $stageInfo['stage'];
 
                 $studentStages[$h] = array_merge(
-                    \App\Services\YnAttemptStatusService::stageLabel($stageKey),
-                    ['stage' => $stageKey, 'v' => $vCurrent]
+                    $svc::stageLabel($stageKey),
+                    ['stage' => $stageKey, 'v' => $main['v']]
                 );
             }
         } catch (\Throwable $e) {
@@ -1595,7 +1654,9 @@ class JournalController extends Controller
             'excuseOpenedDatesPerStudent',
             'studentStages',
             'ynSubmission12a',
-            'ynSubmission12b'
+            'ynSubmission12b',
+            'sababliOskiStudents',
+            'sababliTestStudents'
         ));
     }
 
@@ -5620,6 +5681,7 @@ class JournalController extends Controller
             'training_type_code' => 'required|in:101,102',
             'grade' => 'required|numeric|min:0|max:100',
             'attempt' => 'nullable|integer|min:1|max:3',
+            'is_sababli' => 'nullable|boolean',
         ]);
 
         $studentHemisId = $request->student_hemis_id;
@@ -5628,14 +5690,24 @@ class JournalController extends Controller
         $typeCode = (int) $request->training_type_code;
         $grade = round($request->grade, 2);
         $attempt = (int) ($request->attempt ?? 1);
+        $isSababli = filter_var($request->input('is_sababli', false), FILTER_VALIDATE_BOOLEAN);
 
-        // Asosiy urinish (attempt=1) OSKI/Test entry — hozircha yopiq
-        // (test markazi yuklash orqali keladi)
+        // Asosiy urinish (attempt=1) faqat sababli ariza orqali kelishi mumkin
         if ($attempt === 1) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Asosiy urinish OSKI/Test baholari hozircha yopiq.',
-            ], 403);
+            if (!$isSababli) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Asosiy urinish OSKI/Test baholari faqat sababli ariza orqali kiritiladi.',
+                ], 403);
+            }
+            // Tegishli sababli ochilish mavjud bo'lishi shart
+            $assessmentType = $typeCode === 101 ? 'oski' : 'test';
+            if (!\App\Models\ExcuseGradeOpening::isAssessmentTypeOpenForStudent($studentHemisId, $subjectId, $assessmentType)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bu talaba uchun ' . ($typeCode === 101 ? 'OSKI' : 'Test') . ' sababli ariza ochilmagan yoki muddati tugagan.',
+                ], 403);
+            }
         }
 
         $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
@@ -5676,11 +5748,16 @@ class JournalController extends Controller
             }
             $existing = $existingQuery->first();
 
+            $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+
             if ($existing) {
                 $updateData = [
                     'grade' => $grade,
                     'updated_at' => now(),
                 ];
+                if ($attempt === 1 && $isSababli && $hasSababliCol) {
+                    $updateData['retake_was_sababli'] = true;
+                }
                 DB::table('student_grades')->where('id', $existing->id)->update($updateData);
             } else {
                 $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
@@ -5744,6 +5821,9 @@ class JournalController extends Controller
                 ];
                 if ($hasAttemptCol) {
                     $insertData['attempt'] = $attempt;
+                }
+                if ($attempt === 1 && $isSababli && $hasSababliCol) {
+                    $insertData['retake_was_sababli'] = true;
                 }
                 DB::table('student_grades')->insert($insertData);
             }
@@ -7649,6 +7729,74 @@ class JournalController extends Controller
                 $sheetTitleFor($form),
                 $shaklLabelFor($form)
             );
+        }
+
+        // 7-sheet: O'zgarishlar tarixi (yn_form_corrections audit log)
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('yn_form_corrections')) {
+                $corrections = DB::table('yn_form_corrections as c')
+                    ->leftJoin('students as s', 's.hemis_id', '=', 'c.student_hemis_id')
+                    ->leftJoin('absence_excuses as ae', 'ae.id', '=', 'c.absence_excuse_id')
+                    ->where('c.subject_id', $subjectId)
+                    ->where('c.semester_code', $semesterCode)
+                    ->where('c.group_hemis_id', $groupHemisId)
+                    ->orderBy('c.performed_at')
+                    ->select([
+                        'c.performed_at', 'c.correction_type', 'c.attempt',
+                        'c.student_hemis_id', 's.full_name as student_name',
+                        'c.from_form', 'c.to_form', 'c.reason',
+                        'c.performed_by_name', 'ae.doc_number as excuse_doc',
+                    ])
+                    ->get();
+
+                if ($corrections->isNotEmpty()) {
+                    $historySheet = $spreadsheet->createSheet();
+                    $historySheet->setTitle(mb_substr('Tarix ' . $cleanGroupName, 0, 31));
+                    $historySheet->setCellValue('A1', 'O\'zgarishlar tarixi — ' . ($subject->subject_name ?? '') . ' / ' . ($group->name ?? ''));
+                    $historySheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+                    $historySheet->mergeCells('A1:I1');
+
+                    $headers = ['#', 'Sana', 'Tur', 'Urinish', 'Talaba', 'Qayerdan', 'Qayerga', 'Sabab / Ariza', 'Kim'];
+                    foreach ($headers as $i => $h) {
+                        $col = chr(ord('A') + $i);
+                        $historySheet->setCellValue($col . '3', $h);
+                        $historySheet->getStyle($col . '3')->getFont()->setBold(true);
+                        $historySheet->getStyle($col . '3')->getFill()
+                            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                            ->getStartColor()->setARGB('FFE5E7EB');
+                    }
+                    $typeLabels = [
+                        'late_sababli' => 'Kechikkan sababli',
+                        'finalized' => 'Yakuniylash',
+                        'moved_to_qoshimcha' => 'Qo\'shimchaga',
+                        'removed_from_12a' => '12a dan chiqdi',
+                        'removed_from_12b' => '12b dan chiqdi',
+                    ];
+                    $row = 4;
+                    foreach ($corrections as $i => $c) {
+                        $attemptLabel = match ((int)($c->attempt ?? 1)) { 2 => '12a', 3 => '12b', default => 'Asosiy' };
+                        $reasonText = $c->reason ?: '';
+                        if ($c->excuse_doc) $reasonText .= ' (Ariza: ' . $c->excuse_doc . ')';
+                        $historySheet->setCellValue('A' . $row, $i + 1);
+                        $historySheet->setCellValue('B' . $row, $c->performed_at ? \Carbon\Carbon::parse($c->performed_at)->format('d.m.Y H:i') : '-');
+                        $historySheet->setCellValue('C' . $row, $typeLabels[$c->correction_type] ?? $c->correction_type);
+                        $historySheet->setCellValue('D' . $row, $attemptLabel);
+                        $historySheet->setCellValue('E' . $row, $c->student_name ?: ($c->student_hemis_id ?: '—'));
+                        $historySheet->setCellValue('F' . $row, $c->from_form ?: '—');
+                        $historySheet->setCellValue('G' . $row, $c->to_form ?: '—');
+                        $historySheet->setCellValue('H' . $row, $reasonText);
+                        $historySheet->setCellValue('I' . $row, $c->performed_by_name ?: '—');
+                        $row++;
+                    }
+                    foreach (range('A', 'I') as $col) {
+                        $historySheet->getColumnDimension($col)->setAutoSize(true);
+                    }
+                    $historySheet->getStyle('A3:I' . ($row - 1))->getBorders()->getAllBorders()
+                        ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Tarix sheet generatsiyada xatolik: ' . $e->getMessage());
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

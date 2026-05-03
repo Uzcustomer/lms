@@ -101,11 +101,30 @@ class AcademicScheduleController extends Controller
         $selectedStatus = $request->get('status');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
+        $currentSemesterToggle = $request->get('current_semester', '1');
+        // Agar foydalanuvchi faqat "gacha" sanani bersa va "Joriy semestr" toggle yoqilgan bo'lsa,
+        // "dan" sanani joriy semestr boshlanish sanasidan boshlaymiz —
+        // shunda eski semestrlardagi tugagan darslar ro'yxatga tushib qolmaydi.
+        // Joriy semestr boshlanish sanasi curriculum_weeks dan olinadi (HEMIS API manbai).
+        if (empty($dateFrom) && !empty($dateTo) && $currentSemesterToggle === '1') {
+            try {
+                $currentSemHemisIds = Semester::where('current', true)->pluck('semester_hemis_id')->toArray();
+                if (!empty($currentSemHemisIds)) {
+                    $earliestStartDate = DB::table('curriculum_weeks')
+                        ->whereIn('semester_hemis_id', $currentSemHemisIds)
+                        ->min('start_date');
+                    if ($earliestStartDate) {
+                        $dateFrom = substr($earliestStartDate, 0, 10);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // semestr boshlanish sanasini topa olmasak filtrsiz qoldiramiz
+            }
+        }
         $oskiDateFrom = $request->get('oski_date_from');
         $oskiDateTo = $request->get('oski_date_to');
         $testDateFrom = $request->get('test_date_from');
         $testDateTo = $request->get('test_date_to');
-        $currentSemesterToggle = $request->get('current_semester', '1');
         $showStudents = $request->get('show_students') === '1';
         $urinishFilter = $request->get('urinish'); // '1', '2', '3' yoki null (barchasi)
         $isSearched = $request->has('searched');

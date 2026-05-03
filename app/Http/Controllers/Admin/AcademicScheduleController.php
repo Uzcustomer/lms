@@ -101,16 +101,31 @@ class AcademicScheduleController extends Controller
         $selectedStatus = $request->get('status');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
-        // Agar foydalanuvchi faqat "gacha" sanani bersa, "dan" ni bugundan boshlaymiz —
+        $currentSemesterToggle = $request->get('current_semester', '1');
+        // Agar foydalanuvchi faqat "gacha" sanani bersa va "Joriy semestr" toggle yoqilgan bo'lsa,
+        // "dan" sanani joriy semestr boshlanish sanasidan boshlaymiz —
         // shunda eski semestrlardagi tugagan darslar ro'yxatga tushib qolmaydi.
-        if (empty($dateFrom) && !empty($dateTo)) {
-            $dateFrom = \Carbon\Carbon::today()->format('Y-m-d');
+        if (empty($dateFrom) && !empty($dateTo) && $currentSemesterToggle === '1') {
+            try {
+                $currentSemCodes = Semester::where('current', true)->pluck('code')->toArray();
+                if (!empty($currentSemCodes)) {
+                    $earliestLessonDate = DB::table('schedules')
+                        ->whereIn('semester_code', $currentSemCodes)
+                        ->whereNotNull('lesson_date')
+                        ->whereNull('deleted_at')
+                        ->min('lesson_date');
+                    if ($earliestLessonDate) {
+                        $dateFrom = substr($earliestLessonDate, 0, 10);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // semestr boshlanish sanasini topa olmasak filtrsiz qoldiramiz
+            }
         }
         $oskiDateFrom = $request->get('oski_date_from');
         $oskiDateTo = $request->get('oski_date_to');
         $testDateFrom = $request->get('test_date_from');
         $testDateTo = $request->get('test_date_to');
-        $currentSemesterToggle = $request->get('current_semester', '1');
         $showStudents = $request->get('show_students') === '1';
         $urinishFilter = $request->get('urinish'); // '1', '2', '3' yoki null (barchasi)
         $isSearched = $request->has('searched');

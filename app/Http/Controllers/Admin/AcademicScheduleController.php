@@ -346,16 +346,18 @@ class AcademicScheduleController extends Controller
         // 1) JN/MT olish — yn_student_grades dan (snapshot)
         $jnMtMap = []; // hemis_id|subj|sem => [jn, mt]
         try {
-            $ynRows = DB::table('yn_student_grades as ysg')
+            $hasYnSubAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
+            $ynQuery = DB::table('yn_student_grades as ysg')
                 ->join('yn_submissions as yns', 'yns.id', '=', 'ysg.yn_submission_id')
                 ->whereIn('yns.subject_id', $allSubjectIds)
                 ->whereIn('yns.semester_code', $allSemCodes)
-                ->whereIn('yns.group_hemis_id', $allGroupHids)
-                ->where(function ($q) {
-                    if (\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
-                        $q->where('yns.attempt', 1)->orWhereNull('yns.attempt');
-                    }
-                })
+                ->whereIn('yns.group_hemis_id', $allGroupHids);
+            if ($hasYnSubAttemptCol) {
+                $ynQuery->where(function ($q) {
+                    $q->where('yns.attempt', 1)->orWhereNull('yns.attempt');
+                });
+            }
+            $ynRows = $ynQuery
                 ->orderBy('ysg.created_at', 'desc')
                 ->select('ysg.student_hemis_id', 'yns.subject_id', 'yns.semester_code', 'ysg.jn', 'ysg.mt')
                 ->get();

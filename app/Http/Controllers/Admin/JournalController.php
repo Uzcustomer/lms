@@ -5473,7 +5473,7 @@ class JournalController extends Controller
      */
     public function finalizationWarningData(Request $request)
     {
-        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin', 'registrator_ofisi'])) {
             return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
         }
         $request->validate([
@@ -5505,7 +5505,7 @@ class JournalController extends Controller
      */
     public function finalizeAttempt(Request $request)
     {
-        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin', 'registrator_ofisi'])) {
             return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
         }
 

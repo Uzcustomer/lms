@@ -171,7 +171,7 @@ class AcademicScheduleController extends Controller
         // Har bir item ni urinish bo'yicha kengaytirib, alohida virtual qatorlarga aylantirish.
         // Bu YN kunini belgilash sahifasida 1-urinish / 2-urinish / 3-urinish ro'yxatda alohida qatorlarda paydo bo'ladi.
         if ($isSearched) {
-            $scheduleData = $this->expandByUrinish($scheduleData, $urinishFilter);
+            $scheduleData = $this->expandByUrinish($scheduleData, $urinishFilter, $showStudents);
         }
 
         return view('admin.academic-schedule.index', compact(
@@ -2636,7 +2636,7 @@ class AcademicScheduleController extends Controller
      *  - 2-urinish — agar mavjud yozuv bo'lsa YOKI talabalar V<60 bo'lib qolgan bo'lsa
      *  - 3-urinish — xuddi shu mantiq, attempt=2 dan o'tmaganlar uchun
      */
-    private function expandByUrinish($scheduleData, ?string $urinishFilter)
+    private function expandByUrinish($scheduleData, ?string $urinishFilter, bool $forceShowExtra = false)
     {
         if ($scheduleData->isEmpty()) return $scheduleData;
 
@@ -2685,9 +2685,10 @@ class AcademicScheduleController extends Controller
             \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
         }
 
-        // Filter "2" yoki "3" tanlangan bo'lsa, tegishli urinish qatorlarini barcha guruhlar uchun majburiy ko'rsatamiz
-        $force2 = ($urinishFilter === '2');
-        $force3 = ($urinishFilter === '3');
+        // Filter "2" yoki "3" tanlangan bo'lsa, tegishli urinish qatorlarini barcha guruhlar uchun majburiy ko'rsatamiz.
+        // "Talabani ko'rsatish" toggle yoqilganda ham 2-urinish qatori paydo bo'lishi shart (per-student sana belgilash uchun).
+        $force2 = ($urinishFilter === '2') || $forceShowExtra;
+        $force3 = ($urinishFilter === '3') || $forceShowExtra;
 
         return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $force2, $force3) {
             $expanded = collect();

@@ -191,12 +191,12 @@
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
                                         @php
-                                            // Virtual urinish-aware item
+                                            // Virtual urinish-aware item (oski_date_for_urinish har doim set qilingan, fallback yo'q)
                                             $itemUrinish = $item['urinish'] ?? 1;
-                                            $itemOski = $item['oski_date_for_urinish'] ?? $item['oski_date'] ?? null;
-                                            $itemTest = $item['test_date_for_urinish'] ?? ($item['test_date'] ?? null);
-                                            $itemOskiNa = $item['oski_na_for_urinish'] ?? ($item['oski_na'] ?? false);
-                                            $itemTestNa = $item['test_na_for_urinish'] ?? ($item['test_na'] ?? false);
+                                            $itemOski = $item['oski_date_for_urinish'] ?? null;
+                                            $itemTest = $item['test_date_for_urinish'] ?? null;
+                                            $itemOskiNa = $item['oski_na_for_urinish'] ?? false;
+                                            $itemTestNa = $item['test_na_for_urinish'] ?? false;
                                             $oskiSaved = !empty($itemOski) || $itemOskiNa;
                                             $testSaved = !empty($itemTest) || $itemTestNa;
                                         @endphp
@@ -204,7 +204,14 @@
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
-                                            <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
+                                            <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">
+                                                <a href="{{ route('admin.journal.show', [$item['group']->id, $item['subject']->subject_id, $item['subject']->semester_code]) }}"
+                                                   target="_blank"
+                                                   class="hover:text-blue-600 hover:underline"
+                                                   title="Jurnalni yangi oynada ochish">
+                                                    {{ $item['subject']->subject_name }}
+                                                </a>
+                                            </td>
                                             <td data-sort-value="{{ $item['subject']->credit }}" style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
                                             <td data-sort-value="{{ $item['lesson_start_date'] ? \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['lesson_start_date'])

@@ -160,7 +160,17 @@
                             <span style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;font-weight:700;">
                                 Imtihon sanalari
                                 @if($currentEducationYear)
-                                    ({{ $currentEducationYear }})
+                                    @php
+                                        $eduYearLabel = (string) $currentEducationYear;
+                                        // Agar HEMIS API faqat boshlanish yili saqlasa (masalan "2025"),
+                                        // ko'rinishni "2025-2026 o'quv yili" formatiga keltiramiz.
+                                        if (preg_match('/^\d{4}$/', $eduYearLabel)) {
+                                            $eduYearLabel = $eduYearLabel . '-' . ((int) $eduYearLabel + 1) . ' o\'quv yili';
+                                        } elseif (!str_contains($eduYearLabel, 'o\'quv')) {
+                                            $eduYearLabel = $eduYearLabel . ' o\'quv yili';
+                                        }
+                                    @endphp
+                                    ({{ $eduYearLabel }})
                                 @endif
                             </span>
                         </div>
@@ -363,9 +373,19 @@
                                         </tr>
 
                                         {{-- Per-student qatorlar — har urinish (1/2/3) ostida.
-                                             1-urinish da ham talabaga individual sana belgilash mumkin. --}}
-                                        @if(($showStudents ?? false) && !empty($item['students']))
-                                            @foreach($item['students'] as $stuRow)
+                                             1-urinish: barcha talabalar (har biriga individual sana mumkin)
+                                             2-urinish: faqat 1-urinishdan o'tmaganlar (V<60). Pullik bo'lsa sana yopiq.
+                                             3-urinish: faqat 12a dan o'tmaganlar. Pullik bo'lsa sana yopiq. --}}
+                                        @php
+                                            $studentsForRow = $item['students'] ?? [];
+                                            if ($itemUrinish === 2) {
+                                                $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt1'])));
+                                            } elseif ($itemUrinish === 3) {
+                                                $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt2'])));
+                                            }
+                                        @endphp
+                                        @if(($showStudents ?? false) && !empty($studentsForRow))
+                                            @foreach($studentsForRow as $stuRow)
                                                 @php
                                                     $rowIndex++;
                                                     if ($itemUrinish === 1) {
@@ -378,12 +398,17 @@
                                                         $stuValueOski = $stuRow['oski_resit2_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_resit2_date'] ?? '';
                                                     }
+                                                    // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
+                                                    $pullikBlocked = ($itemUrinish > 1) && !empty($stuRow['is_pullik']);
                                                 @endphp
-                                                <tr class="student-sub-row" style="background:#fafafa;border-top:1px dashed #e2e8f0;">
+                                                <tr class="student-sub-row" style="background:{{ $pullikBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
                                                     <td></td>
-                                                    <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:#475569;">
-                                                        <span style="display:inline-block;padding:0 4px;border-left:3px solid #93c5fd;margin-right:6px;">↳</span>
+                                                    <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $pullikBlocked ? '#991b1b' : '#475569' }};">
+                                                        <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $pullikBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
                                                         {{ $stuRow['full_name'] }}
+                                                        @if($pullikBlocked)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi (pullik)">Pullik</span>
+                                                        @endif
                                                     </td>
                                                     <td style="text-align:center;font-size:9px;color:#64748b;">
                                                         @php
@@ -396,14 +421,16 @@
                                                     <td style="text-align:center;padding:4px 8px;">
                                                         <input type="date" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                value="{{ $stuValueOski }}"
-                                                               title="{{ $itemUrinish }}-urinish OSKI sanasi"
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                               title="{{ $pullikBlocked ? 'Pullik talaba — sana belgilab bo\'lmaydi' : ($itemUrinish . '-urinish OSKI sanasi') }}"
+                                                               @if($pullikBlocked) disabled @endif
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $pullikBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $pullikBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
                                                         <input type="date" name="schedules[{{ $rowIndex }}][test_date]"
                                                                value="{{ $stuValueTest }}"
-                                                               title="{{ $itemUrinish }}-urinish Test sanasi"
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                               title="{{ $pullikBlocked ? 'Pullik talaba — sana belgilab bo\'lmaydi' : ($itemUrinish . '-urinish Test sanasi') }}"
+                                                               @if($pullikBlocked) disabled @endif
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $pullikBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $pullikBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">

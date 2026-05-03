@@ -270,17 +270,24 @@ class AcademicScheduleController extends Controller
             $perStudentMap[$key] = $row;
         }
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap) {
+        // Per-student urinish-status: jn/mt/oski/test/davomat asosida — 2/3-urinish ro'yxatda
+        // kim "yiqilgan" va kim "pullik" ekanligini bilish uchun.
+        $studentStatus = $this->computeStudentAttemptStatuses($scheduleData);
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
+                $statusKey = $gHid . '|' . $subjectId . '|' . $semCode;
+                $statusByStudent = $studentStatus[$statusKey] ?? [];
                 $studentList = $studentsByGroup->get($gHid, collect());
 
                 $rows = [];
                 foreach ($studentList as $stu) {
                     $key = $gHid . '|' . $subjectId . '|' . $semCode . '|' . $stu->hemis_id;
                     $perRow = $perStudentMap[$key] ?? null;
+                    $stat = $statusByStudent[$stu->hemis_id] ?? ['failed1' => false, 'failed2' => false, 'pullik' => false];
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'full_name' => $stu->full_name,
@@ -288,12 +295,203 @@ class AcademicScheduleController extends Controller
                         'oski_resit2_date' => $perRow?->oski_resit2_date?->format('Y-m-d'),
                         'test_resit_date' => $perRow?->test_resit_date?->format('Y-m-d'),
                         'test_resit2_date' => $perRow?->test_resit2_date?->format('Y-m-d'),
+                        'failed_attempt1' => $stat['failed1'],
+                        'failed_attempt2' => $stat['failed2'],
+                        'is_pullik' => $stat['pullik'],
                     ];
                 }
                 $item['students'] = $rows;
                 return $item;
             });
         });
+    }
+
+    /**
+     * Har bir guruh+fan+talaba uchun urinish statusini hisoblash.
+     * Qaytaradi: [groupHid|subjId|semCode => [studentHid => ['failed1'=>bool, 'failed2'=>bool, 'pullik'=>bool]]]
+     */
+    private function computeStudentAttemptStatuses($scheduleData): array
+    {
+        $result = [];
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $minLimit = 60;
+
+        // Har item uchun (group, subject, semester) uchligini yig'amiz
+        $triples = [];
+        $scheduleData->each(function ($items) use (&$triples) {
+            foreach ($items as $it) {
+                $g = $it['group']->group_hemis_id ?? null;
+                $s = $it['subject']->subject_id ?? null;
+                $sem = $it['subject']->semester_code ?? null;
+                if ($g && $s && $sem) {
+                    $triples[$g . '|' . $s . '|' . $sem] = [$g, $s, $sem];
+                }
+            }
+        });
+
+        if (empty($triples)) return $result;
+
+        $allGroupHids = array_unique(array_column($triples, 0));
+        $allSubjectIds = array_unique(array_column($triples, 1));
+        $allSemCodes = array_unique(array_column($triples, 2));
+
+        // Talabalarning hemis_id va group_id xaritasi
+        $studentGroup = DB::table('students')
+            ->whereIn('group_id', $allGroupHids)
+            ->pluck('group_id', 'hemis_id')
+            ->toArray();
+        $allStudentHids = array_keys($studentGroup);
+        if (empty($allStudentHids)) return $result;
+
+        // 1) JN/MT olish — yn_student_grades dan (snapshot)
+        $jnMtMap = []; // hemis_id|subj|sem => [jn, mt]
+        try {
+            $ynRows = DB::table('yn_student_grades as ysg')
+                ->join('yn_submissions as yns', 'yns.id', '=', 'ysg.yn_submission_id')
+                ->whereIn('yns.subject_id', $allSubjectIds)
+                ->whereIn('yns.semester_code', $allSemCodes)
+                ->whereIn('yns.group_hemis_id', $allGroupHids)
+                ->where(function ($q) {
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
+                        $q->where('yns.attempt', 1)->orWhereNull('yns.attempt');
+                    }
+                })
+                ->orderBy('ysg.created_at', 'desc')
+                ->select('ysg.student_hemis_id', 'yns.subject_id', 'yns.semester_code', 'ysg.jn', 'ysg.mt')
+                ->get();
+            foreach ($ynRows as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                if (!isset($jnMtMap[$k])) {
+                    $jnMtMap[$k] = ['jn' => (int) $r->jn, 'mt' => (int) $r->mt];
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        // 2) OSKI / Test attempt=1 baholari
+        $examMap = []; // hemis_id|subj|sem|type => grade
+        try {
+            $rows = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $allStudentHids)
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->whereIn('training_type_code', [101, 102])
+                ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade')
+                ->get();
+            foreach ($rows as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $r->training_type_code;
+                $examMap[$k] = $r->retake_grade ?? $r->grade; // null bo'lsa ham nullni saqlaymiz
+            }
+        } catch (\Throwable $e) {}
+
+        // 2b) OSKI / Test attempt=2 baholari (12a) — failed_attempt2 ni aniqlash uchun
+        $examMap2 = [];
+        try {
+            if ($hasAttemptCol) {
+                $rows = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $allStudentHids)
+                    ->whereIn('subject_id', $allSubjectIds)
+                    ->whereIn('semester_code', $allSemCodes)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('attempt', 2)
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade')
+                    ->get();
+                foreach ($rows as $r) {
+                    $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $r->training_type_code;
+                    $examMap2[$k] = $r->retake_grade ?? $r->grade;
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        // 3) Davomat — har talaba/fan/semestr uchun absent_off summasi
+        $davomatMap = []; // hemis_id|subj|sem => total_absent_off
+        try {
+            $rows = DB::table('attendances')
+                ->whereIn('student_hemis_id', $allStudentHids)
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->whereNotIn('training_type_code', [99, 100, 101, 102])
+                ->selectRaw('student_hemis_id, subject_id, semester_code, SUM(absent_off) as total_off')
+                ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
+                ->get();
+            foreach ($rows as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                $davomatMap[$k] = (float) $r->total_off;
+            }
+        } catch (\Throwable $e) {}
+
+        // 4) Auditoriya soatlari — fan bo'yicha
+        $audHoursMap = []; // subj|sem => hours
+        try {
+            $subjectRows = DB::table('curriculum_subjects')
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->select('subject_id', 'semester_code', 'subject_details', 'total_acload')
+                ->get();
+            $nonAud = ['17'];
+            foreach ($subjectRows as $sr) {
+                $details = is_string($sr->subject_details) ? json_decode($sr->subject_details, true) : $sr->subject_details;
+                $aud = 0;
+                if (is_array($details)) {
+                    foreach ($details as $d) {
+                        $tc = (string) ($d['trainingType']['code'] ?? '');
+                        if ($tc !== '' && !in_array($tc, $nonAud, true)) {
+                            $aud += (float) ($d['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($aud <= 0) $aud = (float) ($sr->total_acload ?? 0);
+                $audHoursMap[$sr->subject_id . '|' . $sr->semester_code] = $aud;
+            }
+        } catch (\Throwable $e) {}
+
+        // Endi har talaba uchun statusni hisoblaymiz
+        foreach ($studentGroup as $hid => $gHid) {
+            foreach ($triples as $triple) {
+                [$g, $s, $sem] = $triple;
+                if ($g !== $gHid) continue;
+
+                $jnMtKey = $hid . '|' . $s . '|' . $sem;
+                $jn = $jnMtMap[$jnMtKey]['jn'] ?? 0;
+                $mt = $jnMtMap[$jnMtKey]['mt'] ?? 0;
+
+                $oski = $examMap[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
+                $test = $examMap[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
+                $oski2 = $examMap2[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
+                $test2 = $examMap2[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
+
+                $absentOff = $davomatMap[$hid . '|' . $s . '|' . $sem] ?? 0;
+                $audHours = $audHoursMap[$s . '|' . $sem] ?? 0;
+                $davomatPct = $audHours > 0 ? round(($absentOff / $audHours) * 100, 2) : 0;
+
+                $isPullik = ($jn < $minLimit) || ($mt < $minLimit) || ($davomatPct >= 25);
+
+                // Yiqilgan attempt=1: V<60 yoki OSKI/Test < 60 yoki kelmagan (null)
+                $oskiNum = $oski !== null ? (float) $oski : null;
+                $testNum = $test !== null ? (float) $test : null;
+                $failed1 = $isPullik
+                    || ($oskiNum === null) || ($oskiNum < $minLimit)
+                    || ($testNum === null) || ($testNum < $minLimit);
+
+                $oski2Num = $oski2 !== null ? (float) $oski2 : null;
+                $test2Num = $test2 !== null ? (float) $test2 : null;
+                $failed2 = $isPullik
+                    || ($oski2Num === null) || ($oski2Num < $minLimit)
+                    || ($test2Num === null) || ($test2Num < $minLimit);
+
+                $key = $g . '|' . $s . '|' . $sem;
+                if (!isset($result[$key])) $result[$key] = [];
+                $result[$key][$hid] = [
+                    'failed1' => $failed1,
+                    'failed2' => $failed2,
+                    'pullik' => $isPullik,
+                ];
+            }
+        }
+
+        return $result;
     }
 
     /**

@@ -1112,7 +1112,19 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">OSKI</th>
+                                        @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">Test</th>
+                                        @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;">Dav %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">YN</th>
                                     </tr>
@@ -1252,47 +1264,78 @@
                                             @php
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA2 = isset($oskiAttempt2Map[$student->hemis_id]) ? round($oskiAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA3 = isset($oskiAttempt3Map[$student->hemis_id]) ? round($oskiAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA2 = isset($testAttempt2Map[$student->hemis_id]) ? round($testAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA3 = isset($testAttempt3Map[$student->hemis_id]) ? round($testAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
 
-                                                // Talaba 12a/12b da bo'lsa — attempt=2/3 entry; aks holda asosiy
+                                                // Sababli ariza orqali asosiy OSKI/Test (attempt=1) tahrir
+                                                $isOskiSababli = in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
+                                                $isTestSababli = in_array($student->hemis_id, $sababliTestStudents ?? [], true);
+
+                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati
                                                 $stageHere = ($studentStages[$student->hemis_id]['stage'] ?? null);
-                                                $isInActive12a = !empty($ynSubmission12a) && in_array($stageHere, [
+                                                $eligible12a = !empty($ynSubmission12a) && in_array($stageHere, [
                                                     \App\Services\YnAttemptStatusService::STAGE_IN_12A,
                                                     \App\Services\YnAttemptStatusService::STAGE_12A_PASSED,
                                                 ], true);
-                                                $isInActive12b = !empty($ynSubmission12b) && in_array($stageHere, [
+                                                $eligible12b = !empty($ynSubmission12b) && in_array($stageHere, [
                                                     \App\Services\YnAttemptStatusService::STAGE_IN_12B,
                                                     \App\Services\YnAttemptStatusService::STAGE_12B_PASSED,
                                                 ], true);
-                                                $cellAttempt = $isInActive12b ? 3 : ($isInActive12a ? 2 : 1);
-                                                $cellAttemptLabel = $cellAttempt === 3 ? '12b' : ($cellAttempt === 2 ? '12a' : '');
-                                                $oskiResitDate = !empty($examSchedule) ? ($cellAttempt === 3 ? ($examSchedule->oski_resit2_date ?? null) : ($cellAttempt === 2 ? ($examSchedule->oski_resit_date ?? null) : null)) : null;
-                                                $testResitDate = !empty($examSchedule) ? ($cellAttempt === 3 ? ($examSchedule->test_resit2_date ?? null) : ($cellAttempt === 2 ? ($examSchedule->test_resit_date ?? null) : null)) : null;
 
-                                                // Asosiy attempt OSKI/Test sababli ochilishi (assessment_type='oski'/'test')
-                                                $isOskiSababli = $cellAttempt === 1 && in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
-                                                $isTestSababli = $cellAttempt === 1 && in_array($student->hemis_id, $sababliTestStudents ?? [], true);
+                                                $oskiResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit_date ?? null) : null;
+                                                $oski2ResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit2_date ?? null) : null;
+                                                $testResitDate = !empty($examSchedule) ? ($examSchedule->test_resit_date ?? null) : null;
+                                                $test2ResitDate = !empty($examSchedule) ? ($examSchedule->test_resit2_date ?? null) : null;
 
-                                                $canEditOski = $canAdminEditExam || $cellAttempt > 1 || $isOskiSababli;
-                                                $canEditTest = $canAdminEditExam || $cellAttempt > 1 || $isTestSababli;
+                                                $showOski2Col = !empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []);
+                                                $showOski3Col = !empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []);
+                                                $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
+                                                $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canEditOski ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canEditOski) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }}, {{ $cellAttempt }}, {{ $isOskiSababli ? 'true' : 'false' }})" title="{{ $isOskiSababli ? 'Sababli OSKI — bahoni kiriting (12-qo\'shimcha shaklga tushadi)' : ($cellAttempt > 1 ? $cellAttemptLabel . ' OSKI bahosini kiriting' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Bosib OSKI bahosini kiriting') }}" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canEditOski && $oskiRounded !== null)
-                                                    <span class="font-bold {{ $cellAttempt > 1 ? 'text-amber-700' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
-                                                    @if($cellAttempt > 1)<span class="text-[9px] text-amber-600 ml-0.5">{{ $cellAttemptLabel }}</span>@endif
-                                                @else
-                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
+                                            {{-- Asosiy OSKI — sababli orqali tahrirlash mumkin --}}
+                                            <td class="px-1 py-1 text-center {{ $isOskiSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($isOskiSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }}, 1, true)" title="Sababli OSKI — bahoni kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                                @if($oskiRounded !== null)
+                                                    <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canEditTest ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canEditTest) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }}, {{ $cellAttempt }}, {{ $isTestSababli ? 'true' : 'false' }})" title="{{ $isTestSababli ? 'Sababli Test — bahoni kiriting (12-qo\'shimcha shaklga tushadi)' : ($cellAttempt > 1 ? $cellAttemptLabel . ' Test bahosini kiriting' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Bosib Test bahosini kiriting') }}" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canEditTest && $testRounded !== null)
-                                                    <span class="font-bold {{ $cellAttempt > 1 ? 'text-amber-700' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
-                                                    @if($cellAttempt > 1)<span class="text-[9px] text-amber-600 ml-0.5">{{ $cellAttemptLabel }}</span>@endif
-                                                @else
-                                                    {{ $testRounded !== null ? $testRounded : '' }}
+                                            {{-- 2-urinish OSKI ustuni --}}
+                                            @if($showOski2Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA2 !== null ? $oskiA2 : 'null' }}, 2, false)" title="2-urinish OSKI{{ $oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish OSKI ustuni --}}
+                                            @if($showOski3Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA3 !== null ? $oskiA3 : 'null' }}, 3, false)" title="3-urinish OSKI{{ $oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- Asosiy Test — sababli orqali tahrirlash mumkin --}}
+                                            <td class="px-1 py-1 text-center {{ $isTestSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($isTestSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }}, 1, true)" title="Sababli Test — bahoni kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                                @if($testRounded !== null)
+                                                    <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
                                                 @endif
                                             </td>
+                                            {{-- 2-urinish Test ustuni --}}
+                                            @if($showTest2Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA2 !== null ? $testA2 : 'null' }}, 2, false)" title="2-urinish Test{{ $testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish Test ustuni --}}
+                                            @if($showTest3Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA3 !== null ? $testA3 : 'null' }}, 3, false)" title="3-urinish Test{{ $test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1337,7 +1380,19 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">OSKI</th>
+                                        @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">Test</th>
+                                        @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;">Dav %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">YN</th>
                                     </tr>
@@ -1708,47 +1763,78 @@
                                             @php
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA2 = isset($oskiAttempt2Map[$student->hemis_id]) ? round($oskiAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA3 = isset($oskiAttempt3Map[$student->hemis_id]) ? round($oskiAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA2 = isset($testAttempt2Map[$student->hemis_id]) ? round($testAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA3 = isset($testAttempt3Map[$student->hemis_id]) ? round($testAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
 
-                                                // Talaba 12a/12b da bo'lsa — attempt=2/3 entry; aks holda asosiy
+                                                // Sababli ariza orqali asosiy OSKI/Test (attempt=1) tahrir
+                                                $isOskiSababli = in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
+                                                $isTestSababli = in_array($student->hemis_id, $sababliTestStudents ?? [], true);
+
+                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati
                                                 $stageHere = ($studentStages[$student->hemis_id]['stage'] ?? null);
-                                                $isInActive12a = !empty($ynSubmission12a) && in_array($stageHere, [
+                                                $eligible12a = !empty($ynSubmission12a) && in_array($stageHere, [
                                                     \App\Services\YnAttemptStatusService::STAGE_IN_12A,
                                                     \App\Services\YnAttemptStatusService::STAGE_12A_PASSED,
                                                 ], true);
-                                                $isInActive12b = !empty($ynSubmission12b) && in_array($stageHere, [
+                                                $eligible12b = !empty($ynSubmission12b) && in_array($stageHere, [
                                                     \App\Services\YnAttemptStatusService::STAGE_IN_12B,
                                                     \App\Services\YnAttemptStatusService::STAGE_12B_PASSED,
                                                 ], true);
-                                                $cellAttempt = $isInActive12b ? 3 : ($isInActive12a ? 2 : 1);
-                                                $cellAttemptLabel = $cellAttempt === 3 ? '12b' : ($cellAttempt === 2 ? '12a' : '');
-                                                $oskiResitDate = !empty($examSchedule) ? ($cellAttempt === 3 ? ($examSchedule->oski_resit2_date ?? null) : ($cellAttempt === 2 ? ($examSchedule->oski_resit_date ?? null) : null)) : null;
-                                                $testResitDate = !empty($examSchedule) ? ($cellAttempt === 3 ? ($examSchedule->test_resit2_date ?? null) : ($cellAttempt === 2 ? ($examSchedule->test_resit_date ?? null) : null)) : null;
 
-                                                // Asosiy attempt OSKI/Test sababli ochilishi (assessment_type='oski'/'test')
-                                                $isOskiSababli = $cellAttempt === 1 && in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
-                                                $isTestSababli = $cellAttempt === 1 && in_array($student->hemis_id, $sababliTestStudents ?? [], true);
+                                                $oskiResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit_date ?? null) : null;
+                                                $oski2ResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit2_date ?? null) : null;
+                                                $testResitDate = !empty($examSchedule) ? ($examSchedule->test_resit_date ?? null) : null;
+                                                $test2ResitDate = !empty($examSchedule) ? ($examSchedule->test_resit2_date ?? null) : null;
 
-                                                $canEditOski = $canAdminEditExam || $cellAttempt > 1 || $isOskiSababli;
-                                                $canEditTest = $canAdminEditExam || $cellAttempt > 1 || $isTestSababli;
+                                                $showOski2Col = !empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []);
+                                                $showOski3Col = !empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []);
+                                                $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
+                                                $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canEditOski ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canEditOski) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }}, {{ $cellAttempt }}, {{ $isOskiSababli ? 'true' : 'false' }})" title="{{ $isOskiSababli ? 'Sababli OSKI — bahoni kiriting (12-qo\'shimcha shaklga tushadi)' : ($cellAttempt > 1 ? $cellAttemptLabel . ' OSKI bahosini kiriting' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Bosib OSKI bahosini kiriting') }}" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canEditOski && $oskiRounded !== null)
-                                                    <span class="font-bold {{ $cellAttempt > 1 ? 'text-amber-700' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
-                                                    @if($cellAttempt > 1)<span class="text-[9px] text-amber-600 ml-0.5">{{ $cellAttemptLabel }}</span>@endif
-                                                @else
-                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
+                                            {{-- Asosiy OSKI — sababli orqali tahrirlash mumkin --}}
+                                            <td class="px-1 py-1 text-center {{ $isOskiSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($isOskiSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }}, 1, true)" title="Sababli OSKI — bahoni kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                                @if($oskiRounded !== null)
+                                                    <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canEditTest ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canEditTest) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }}, {{ $cellAttempt }}, {{ $isTestSababli ? 'true' : 'false' }})" title="{{ $isTestSababli ? 'Sababli Test — bahoni kiriting (12-qo\'shimcha shaklga tushadi)' : ($cellAttempt > 1 ? $cellAttemptLabel . ' Test bahosini kiriting' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Bosib Test bahosini kiriting') }}" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canEditTest && $testRounded !== null)
-                                                    <span class="font-bold {{ $cellAttempt > 1 ? 'text-amber-700' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
-                                                    @if($cellAttempt > 1)<span class="text-[9px] text-amber-600 ml-0.5">{{ $cellAttemptLabel }}</span>@endif
-                                                @else
-                                                    {{ $testRounded !== null ? $testRounded : '' }}
+                                            {{-- 2-urinish OSKI ustuni --}}
+                                            @if($showOski2Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA2 !== null ? $oskiA2 : 'null' }}, 2, false)" title="2-urinish OSKI{{ $oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish OSKI ustuni --}}
+                                            @if($showOski3Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA3 !== null ? $oskiA3 : 'null' }}, 3, false)" title="3-urinish OSKI{{ $oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- Asosiy Test — sababli orqali tahrirlash mumkin --}}
+                                            <td class="px-1 py-1 text-center {{ $isTestSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($isTestSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }}, 1, true)" title="Sababli Test — bahoni kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                                @if($testRounded !== null)
+                                                    <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
                                                 @endif
                                             </td>
+                                            {{-- 2-urinish Test ustuni --}}
+                                            @if($showTest2Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA2 !== null ? $testA2 : 'null' }}, 2, false)" title="2-urinish Test{{ $testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish Test ustuni --}}
+                                            @if($showTest3Col)
+                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
+                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA3 !== null ? $testA3 : 'null' }}, 3, false)" title="3-urinish Test{{ $test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
+                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);

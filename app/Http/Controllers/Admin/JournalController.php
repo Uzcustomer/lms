@@ -1429,6 +1429,11 @@ class JournalController extends Controller
         // Har talaba uchun joriy bosqichni hisoblash (badge ko'rsatish uchun) —
         // 12a/12b OSKI/Test (attempt=2/3) yozuvlari ham inobatga olinadi.
         $studentStages = [];
+        // Per-attempt OSKI/Test xaritalari — jurnal jadvalida 2/3-urinish ustunlari uchun
+        $oskiAttempt2Map = [];
+        $testAttempt2Map = [];
+        $oskiAttempt3Map = [];
+        $testAttempt3Map = [];
         try {
             $hasOskiForWeights = !($examSchedule && $examSchedule->oski_na);
             $hasTestForWeights = !($examSchedule && $examSchedule->test_na);
@@ -1483,6 +1488,12 @@ class JournalController extends Controller
             $av2 = $fetchAttemptOskiTest(2, false); // 12a sababli bilan
             $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
             $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
+
+            // Bladega ham uzatamiz: 2-urinish va 3-urinish OSKI/Test ustunlari uchun
+            $oskiAttempt2Map = $av2[101] ?? [];
+            $testAttempt2Map = $av2[102] ?? [];
+            $oskiAttempt3Map = $bv2[101] ?? [];
+            $testAttempt3Map = $bv2[102] ?? [];
 
             foreach ($students as $stu) {
                 $h = $stu->hemis_id;
@@ -1656,7 +1667,11 @@ class JournalController extends Controller
             'ynSubmission12a',
             'ynSubmission12b',
             'sababliOskiStudents',
-            'sababliTestStudents'
+            'sababliTestStudents',
+            'oskiAttempt2Map',
+            'testAttempt2Map',
+            'oskiAttempt3Map',
+            'testAttempt3Map'
         ));
     }
 

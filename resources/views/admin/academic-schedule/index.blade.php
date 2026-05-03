@@ -253,6 +253,28 @@
                                                             <span class="na-label">N/A</span>
                                                         </label>
                                                     @endif
+
+                                                    {{-- Qayta topshirish sanalari (1-urinish / 2-urinish) — asosiy saqlangandan keyin ko'rinadi --}}
+                                                    @if($oskiSaved && !$item['oski_na'])
+                                                        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 3px; padding-top: 4px; border-top: 1px dashed #cbd5e1;">
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">1-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][oski_resit_date]"
+                                                                       value="{{ $item['oski_resit_date'] ?? '' }}"
+                                                                       title="12a OSKI sanasi"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                            @if(!empty($item['oski_resit_date']))
+                                                                <div style="display:flex; align-items:center; gap:4px;">
+                                                                    <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">2-urinish:</span>
+                                                                    <input type="date" name="schedules[{{ $rowIndex }}][oski_resit2_date]"
+                                                                           value="{{ $item['oski_resit2_date'] ?? '' }}"
+                                                                           title="12b OSKI sanasi"
+                                                                           style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                    @endif
                                                 </div>
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
@@ -310,6 +332,28 @@
                                                                    onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                    @endif
+
+                                                    {{-- Qayta topshirish sanalari (1-urinish / 2-urinish) — asosiy saqlangandan keyin ko'rinadi --}}
+                                                    @if($testSaved && !$item['test_na'])
+                                                        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 3px; padding-top: 4px; border-top: 1px dashed #cbd5e1;">
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">1-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][test_resit_date]"
+                                                                       value="{{ $item['test_resit_date'] ?? '' }}"
+                                                                       title="12a Test sanasi"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                            @if(!empty($item['test_resit_date']))
+                                                                <div style="display:flex; align-items:center; gap:4px;">
+                                                                    <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">2-urinish:</span>
+                                                                    <input type="date" name="schedules[{{ $rowIndex }}][test_resit2_date]"
+                                                                           value="{{ $item['test_resit2_date'] ?? '' }}"
+                                                                           title="12b Test sanasi"
+                                                                           style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
+                                                                </div>
+                                                            @endif
+                                                        </div>
                                                     @endif
                                                 </div>
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">

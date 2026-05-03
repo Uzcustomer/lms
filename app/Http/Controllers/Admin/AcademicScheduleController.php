@@ -651,9 +651,13 @@ class AcademicScheduleController extends Controller
                     'oski_date' => $existing?->oski_date?->format('Y-m-d'),
                     'oski_na' => (bool) $existing?->oski_na,
                     'oski_time' => $existing?->oski_time,
+                    'oski_resit_date' => $existing?->oski_resit_date?->format('Y-m-d'),
+                    'oski_resit2_date' => $existing?->oski_resit2_date?->format('Y-m-d'),
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
                     'test_na' => (bool) $existing?->test_na,
                     'test_time' => $existing?->test_time,
+                    'test_resit_date' => $existing?->test_resit_date?->format('Y-m-d'),
+                    'test_resit2_date' => $existing?->test_resit2_date?->format('Y-m-d'),
                     'schedule_id' => $existing?->id,
                 ];
 

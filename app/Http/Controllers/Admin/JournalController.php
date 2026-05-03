@@ -5412,14 +5412,18 @@ class JournalController extends Controller
      */
     public function saveExamGrade(Request $request)
     {
-        return response()->json(['success' => false, 'message' => 'OSKI/Test baholarini qo\'yish vaqtinchalik yopilgan.'], 403);
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
 
         $request->validate([
             'student_hemis_id' => 'required|string',
             'subject_id' => 'required',
             'semester_code' => 'required',
+            'group_hemis_id' => 'nullable|string',
             'training_type_code' => 'required|in:101,102',
             'grade' => 'required|numeric|min:0|max:100',
+            'attempt' => 'nullable|integer|min:1|max:3',
         ]);
 
         $studentHemisId = $request->student_hemis_id;
@@ -5427,40 +5431,96 @@ class JournalController extends Controller
         $semesterCode = $request->semester_code;
         $typeCode = (int) $request->training_type_code;
         $grade = round($request->grade, 2);
+        $attempt = (int) ($request->attempt ?? 1);
+
+        // Asosiy urinish (attempt=1) OSKI/Test entry — hozircha yopiq
+        // (test markazi yuklash orqali keladi)
+        if ($attempt === 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Asosiy urinish OSKI/Test baholari hozircha yopiq.',
+            ], 403);
+        }
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
 
         $typeNames = [101 => 'OSKI', 102 => 'Test'];
+        $formName = $attempt === 2 ? '12a-shakl' : '12b-shakl';
 
         try {
-            $existing = DB::table('student_grades')
+            // 12a/12b uchun yn_submission mavjud bo'lishi shart
+            if ($attempt >= 2 && \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
+                $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+                $groupHemisId = $request->group_hemis_id ?? ($student->group_id ?? null);
+                if (!$groupHemisId) {
+                    return response()->json(['success' => false, 'message' => 'Guruh aniqlanmadi.'], 422);
+                }
+                $sub = YnSubmission::where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->where('group_hemis_id', $groupHemisId)
+                    ->where('attempt', $attempt)
+                    ->first();
+                if (!$sub) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $formName . ' yaratilmagan. Avval "12a/12b ga o\'tkazish" tugmasini bosing.',
+                    ], 422);
+                }
+            }
+
+            // Mavjud yozuvni topish: shu attempt uchun
+            $existingQuery = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->where('training_type_code', $typeCode)
-                ->first();
+                ->where('training_type_code', $typeCode);
+            if ($hasAttemptCol) {
+                $existingQuery->where('attempt', $attempt);
+            }
+            $existing = $existingQuery->first();
 
             if ($existing) {
-                DB::table('student_grades')->where('id', $existing->id)->update([
+                $updateData = [
                     'grade' => $grade,
                     'updated_at' => now(),
-                ]);
+                ];
+                DB::table('student_grades')->where('id', $existing->id)->update($updateData);
             } else {
                 $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
                 if (!$student) {
                     return response()->json(['success' => false, 'message' => 'Talaba topilmadi'], 404);
                 }
 
-                // Fan ma'lumotlarini olish
                 $subject = DB::table('curriculum_subjects')
                     ->where('subject_id', $subjectId)
                     ->where('semester_code', $semesterCode)
                     ->first();
 
-                // Joriy o'quv yili
                 $semester = DB::table('semesters')->where('code', $semesterCode)->first();
 
-                DB::table('student_grades')->insert([
-                    'hemis_id' => 0, // Manual kiritilgan baholar uchun marker
+                // 12a/12b uchun lesson_date ni exam_schedules dan olish
+                $lessonDate = now()->toDateString();
+                if ($attempt >= 2) {
+                    $es = DB::table('exam_schedules')
+                        ->where('group_hemis_id', $student->group_id)
+                        ->where('subject_id', $subjectId)
+                        ->where('semester_code', $semesterCode)
+                        ->first();
+                    if ($es) {
+                        if ($attempt === 2) {
+                            $resitDate = $typeCode === 101 ? ($es->oski_resit_date ?? null) : ($es->test_resit_date ?? null);
+                        } else {
+                            $resitDate = $typeCode === 101 ? ($es->oski_resit2_date ?? null) : ($es->test_resit2_date ?? null);
+                        }
+                        if ($resitDate) {
+                            $lessonDate = $resitDate;
+                        }
+                    }
+                }
+
+                $insertData = [
+                    'hemis_id' => 0,
                     'student_id' => $student->id,
                     'student_hemis_id' => $studentHemisId,
                     'semester_code' => $semesterCode,
@@ -5474,24 +5534,29 @@ class JournalController extends Controller
                     'training_type_code' => $typeCode,
                     'training_type_name' => $typeNames[$typeCode] ?? 'Manual',
                     'employee_id' => 0,
-                    'employee_name' => 'Manual Entry',
+                    'employee_name' => 'Manual Entry (' . $formName . ')',
                     'lesson_pair_code' => '1',
                     'lesson_pair_name' => 'Manual',
                     'lesson_pair_start_time' => '00:00',
                     'lesson_pair_end_time' => '00:00',
                     'grade' => $grade,
-                    'lesson_date' => now()->toDateString(),
+                    'lesson_date' => $lessonDate,
                     'created_at_api' => now(),
                     'status' => 'recorded',
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]);
+                ];
+                if ($hasAttemptCol) {
+                    $insertData['attempt'] = $attempt;
+                }
+                DB::table('student_grades')->insert($insertData);
             }
 
             return response()->json([
                 'success' => true,
-                'message' => ($typeNames[$typeCode] ?? 'Baho') . ' saqlandi: ' . $grade,
+                'message' => $formName . ' ' . ($typeNames[$typeCode] ?? 'baho') . ' saqlandi: ' . $grade,
                 'grade' => $grade,
+                'attempt' => $attempt,
             ]);
         } catch (\Exception $e) {
             \Log::error('saveExamGrade xatolik: ' . $e->getMessage(), [
@@ -5501,6 +5566,7 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
         }
     }
+
 
     /**
      * Sababli talabaning bahosini saqlash (retake_grade sifatida)

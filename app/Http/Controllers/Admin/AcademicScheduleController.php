@@ -105,17 +105,16 @@ class AcademicScheduleController extends Controller
         // Agar foydalanuvchi faqat "gacha" sanani bersa va "Joriy semestr" toggle yoqilgan bo'lsa,
         // "dan" sanani joriy semestr boshlanish sanasidan boshlaymiz —
         // shunda eski semestrlardagi tugagan darslar ro'yxatga tushib qolmaydi.
+        // Joriy semestr boshlanish sanasi curriculum_weeks dan olinadi (HEMIS API manbai).
         if (empty($dateFrom) && !empty($dateTo) && $currentSemesterToggle === '1') {
             try {
-                $currentSemCodes = Semester::where('current', true)->pluck('code')->toArray();
-                if (!empty($currentSemCodes)) {
-                    $earliestLessonDate = DB::table('schedules')
-                        ->whereIn('semester_code', $currentSemCodes)
-                        ->whereNotNull('lesson_date')
-                        ->whereNull('deleted_at')
-                        ->min('lesson_date');
-                    if ($earliestLessonDate) {
-                        $dateFrom = substr($earliestLessonDate, 0, 10);
+                $currentSemHemisIds = Semester::where('current', true)->pluck('semester_hemis_id')->toArray();
+                if (!empty($currentSemHemisIds)) {
+                    $earliestStartDate = DB::table('curriculum_weeks')
+                        ->whereIn('semester_hemis_id', $currentSemHemisIds)
+                        ->min('start_date');
+                    if ($earliestStartDate) {
+                        $dateFrom = substr($earliestStartDate, 0, 10);
                     }
                 }
             } catch (\Throwable $e) {

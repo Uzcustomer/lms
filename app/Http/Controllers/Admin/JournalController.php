@@ -7459,7 +7459,14 @@ class JournalController extends Controller
         foreach ($orderedForms as $form) {
             if (!empty($activeForms[$form])) {
                 $tplExtra = SpreadsheetIOFactory::load($templatePath);
-                $sheetMap[$form] = $spreadsheet->addExternalSheet($tplExtra->getActiveSheet());
+                $extSheet = $tplExtra->getActiveSheet();
+                // Asosiy spreadsheet'da bir xil nomli sheet bo'lmasligi uchun
+                // qo'shishdan oldin vaqtinchalik unikal nom beramiz
+                // (keyinroq fillSheet to'g'ri title bilan o'zgartiradi)
+                try {
+                    $extSheet->setTitle(mb_substr('tmp_' . str_replace('-', '', $form) . '_' . uniqid(), 0, 31));
+                } catch (\Throwable $e) {}
+                $sheetMap[$form] = $spreadsheet->addExternalSheet($extSheet);
             }
         }
 

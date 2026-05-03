@@ -73,6 +73,8 @@ class YnAttemptStatusService
         $jnMtOk = fn(?array $row) => $row !== null
             && (int)($row['jn'] ?? 0) >= 60
             && (int)($row['mt'] ?? 0) >= 60;
+        // Davomat ≥ 25% bo'lsa computeV -3 qaytaradi (pullik deb hisoblash uchun)
+        $davomatFailed = fn(?array $row) => $row !== null && ($row['v'] ?? null) === -3;
 
         // 1. Asosiy urinishda o'tgan?
         if ($passes($main)) {
@@ -84,18 +86,18 @@ class YnAttemptStatusService
             return ['stage' => self::STAGE_QOSHIMCHA_PASSED, 'reason' => '12-qo\'shimcha da V≥60'];
         }
 
-        // JN/MT past bo'lsa va sababli orqali tuzatilmagan bo'lsa — pullik kategoriya.
-        // Bunday talaba 12a/12b ga aktiv kira olmaydi, lekin ro'yxatda turadi.
+        // JN/MT past yoki davomat ≥25% bo'lsa va sababli orqali tuzatilmagan bo'lsa — pullik
+        // kategoriya. Bunday talaba 12a/12b ga aktiv kira olmaydi, lekin ro'yxatda turadi.
         $latestJnMtSource = $qoshimcha ?? $main;
-        $jnMtFailed = !$jnMtOk($latestJnMtSource);
+        $isPullikCondition = !$jnMtOk($latestJnMtSource) || $davomatFailed($latestJnMtSource);
+        $pullikReason = $davomatFailed($latestJnMtSource) ? 'Davomat ≥25% — pullik' : 'JN/MT past — pullik';
 
         // 3. 12a urinishida o'tgan?
         if ($passes($a)) {
-            if ($jnMtFailed) {
-                // JN/MT past lekin 12a OSKI/Test bilan V≥60 — bu xodisa bo'lmaydi
-                // chunki JN/MT past bo'lsa 12a OSKI/Test ham aslida o'zgarmasligi kerak.
-                // Lekin himoya uchun.
-                return ['stage' => self::STAGE_IN_12A_PULLIK, 'reason' => 'JN/MT past — pullik'];
+            if ($isPullikCondition) {
+                // JN/MT past yoki davomat past lekin 12a OSKI/Test bilan V≥60 — odatda
+                // bo'lmaydi, lekin himoya uchun.
+                return ['stage' => self::STAGE_IN_12A_PULLIK, 'reason' => $pullikReason];
             }
             return ['stage' => self::STAGE_12A_PASSED, 'reason' => '12a da V≥60'];
         }
@@ -107,8 +109,8 @@ class YnAttemptStatusService
 
         // 5. 12b da o'tgan?
         if ($passes($b)) {
-            if ($jnMtFailed) {
-                return ['stage' => self::STAGE_IN_12B_PULLIK, 'reason' => 'JN/MT past — pullik'];
+            if ($isPullikCondition) {
+                return ['stage' => self::STAGE_IN_12B_PULLIK, 'reason' => $pullikReason];
             }
             return ['stage' => self::STAGE_12B_PASSED, 'reason' => '12b da V≥60'];
         }
@@ -121,21 +123,21 @@ class YnAttemptStatusService
         // O'tmagan: qaysi bosqichda turibdi?
         if ($b !== null || $bQoshimcha !== null) {
             return [
-                'stage' => $jnMtFailed ? self::STAGE_IN_12B_PULLIK : self::STAGE_IN_12B,
-                'reason' => $jnMtFailed ? 'JN/MT past — pullik' : '12b ga tushgan',
+                'stage' => $isPullikCondition ? self::STAGE_IN_12B_PULLIK : self::STAGE_IN_12B,
+                'reason' => $isPullikCondition ? $pullikReason : '12b ga tushgan',
             ];
         }
         if ($a !== null || $aQoshimcha !== null) {
             return [
-                'stage' => $jnMtFailed ? self::STAGE_IN_12A_PULLIK : self::STAGE_IN_12A,
-                'reason' => $jnMtFailed ? 'JN/MT past — pullik' : '12a ga tushgan',
+                'stage' => $isPullikCondition ? self::STAGE_IN_12A_PULLIK : self::STAGE_IN_12A,
+                'reason' => $isPullikCondition ? $pullikReason : '12a ga tushgan',
             ];
         }
 
         // Hali hech qaysi keyingi urinishga o'tmagan — asosiy yiqilgan
         return [
-            'stage' => $jnMtFailed ? self::STAGE_IN_12A_PULLIK : self::STAGE_IN_12A,
-            'reason' => 'Asosiy urinishda V<60',
+            'stage' => $isPullikCondition ? self::STAGE_IN_12A_PULLIK : self::STAGE_IN_12A,
+            'reason' => $isPullikCondition ? $pullikReason : 'Asosiy urinishda V<60',
         ];
     }
 

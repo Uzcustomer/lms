@@ -2640,45 +2640,44 @@ class AcademicScheduleController extends Controller
     {
         if ($scheduleData->isEmpty()) return $scheduleData;
 
-        // Talabalar qaysi urinishda V<60 bo'lib qolganligini aniqlash
-        // (oddiy SQL tekshiruvi: OSKI/Test grade < 60 mavjudmi shu attempt da)
+        // Talabalar qaysi urinishda V<60 bo'lib qolganligini aniqlash.
+        // Strict mantiq: faqat haqiqiy bahosi mavjud bo'lib, lekin <60 bo'lgan yozuvlar.
+        // Null/null yozuvlar (NB placeholderlar) inobatga olinmaydi.
+        // Guruh bo'yicha alohida filterlanadi (chunki har item alohida guruh).
         $needsByKey = [];
         try {
             $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-            $allKeys = [];
-            $scheduleData->each(function ($items) use (&$allKeys) {
-                foreach ($items as $it) {
-                    $allKeys[] = ($it['group']->group_hemis_id) . '|' . ($it['subject']->subject_id ?? '') . '|' . ($it['subject']->semester_code ?? '');
-                }
-            });
 
-            if (!empty($allKeys)) {
-                // attempt=1 ichida V<60 bo'lgan talabalar mavjudmi (2-urinish kerakmi)
-                // attempt=2 ichida V<60 bo'lgan talabalar mavjudmi (3-urinish kerakmi)
-                foreach ([2, 3] as $att) {
-                    $check = $att === 2 ? 1 : 2; // attempt=N kerakmi → attempt=(N-1) dagi V<60
-                    $rows = DB::table('student_grades')
-                        ->whereNull('deleted_at')
-                        ->whereIn('training_type_code', [101, 102])
-                        ->whereRaw('COALESCE(retake_grade, grade, 0) < 60')
-                        ->when($hasAttemptCol, function ($q) use ($check) {
-                            $q->where(function ($qq) use ($check) {
-                                if ($check === 1) {
-                                    $qq->where('attempt', 1)->orWhereNull('attempt');
-                                } else {
-                                    $qq->where('attempt', $check);
-                                }
-                            });
-                        })
-                        ->select('subject_id', 'semester_code', DB::raw('COUNT(*) as c'))
-                        ->groupBy('subject_id', 'semester_code')
-                        ->get();
-                    foreach ($rows as $r) {
-                        // Har bir item key uchun mosini belgilaymiz — bu o'qigan talabalar
-                        // qaysi guruhda ekanligini aniqlash uchun har item da group bor
-                        // shuning uchun ehtiyotkorlik bilan: V<60 bor — kerak deb qaramiz
-                        $needsByKey['__any__|' . $r->subject_id . '|' . $r->semester_code . '|' . $att] = true;
-                    }
+            foreach ([2, 3] as $att) {
+                $check = $att === 2 ? 1 : 2; // attempt=N kerakmi → attempt=(N-1) dagi V<60
+                $rows = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->whereNull('sg.deleted_at')
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->where(function ($q) {
+                        // Haqiqiy baho mavjud bo'lib, <60 bo'lsa
+                        $q->where(function ($qq) {
+                            $qq->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '<', 60);
+                        })->orWhere(function ($qq) {
+                            $qq->whereNull('sg.retake_grade')
+                               ->whereNotNull('sg.grade')
+                               ->where('sg.grade', '<', 60);
+                        });
+                    })
+                    ->when($hasAttemptCol, function ($q) use ($check) {
+                        $q->where(function ($qq) use ($check) {
+                            if ($check === 1) {
+                                $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                            } else {
+                                $qq->where('sg.attempt', $check);
+                            }
+                        });
+                    })
+                    ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
+                    ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                    ->get();
+                foreach ($rows as $r) {
+                    $needsByKey[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att] = (int) $r->c;
                 }
             }
         } catch (\Throwable $e) {
@@ -2693,8 +2692,10 @@ class AcademicScheduleController extends Controller
         return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $force2, $force3) {
             $expanded = collect();
             foreach ($items as $item) {
+                $groupHid = $item['group']->group_hemis_id ?? '';
                 $subjectId = $item['subject']->subject_id ?? '';
                 $semCode = $item['subject']->semester_code ?? '';
+                $needsKeyBase = $groupHid . '|' . $subjectId . '|' . $semCode;
 
                 // 1-urinish — har doim
                 $row1 = $item;
@@ -2706,7 +2707,7 @@ class AcademicScheduleController extends Controller
 
                 // 2-urinish — mavjud yoki kerakli (yoki filter majburiy)
                 $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
-                $needs2 = isset($needsByKey['__any__|' . $subjectId . '|' . $semCode . '|2']);
+                $needs2 = isset($needsByKey[$needsKeyBase . '|2']);
                 $show2 = $has2Data || $needs2 || $force2;
 
                 $row2 = null;
@@ -2721,7 +2722,7 @@ class AcademicScheduleController extends Controller
 
                 // 3-urinish — mavjud yoki kerakli (yoki filter majburiy)
                 $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
-                $needs3 = isset($needsByKey['__any__|' . $subjectId . '|' . $semCode . '|3']);
+                $needs3 = isset($needsByKey[$needsKeyBase . '|3']);
                 $show3 = $has3Data || $needs3 || $force3;
 
                 $row3 = null;

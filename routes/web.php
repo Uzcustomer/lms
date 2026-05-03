@@ -191,6 +191,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
         });
 
+        // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)
+        Route::prefix('yn-form-corrections')->name('yn-form-corrections.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'index'])->name('index');
+            Route::get('/{id}/pdf', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'pdf'])->name('pdf');
+        });
+
         // Imtihon apellyatsiyalari (Admin panel)
         Route::prefix('exam-appeals')->name('exam-appeals.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\ExamAppealController::class, 'index'])->name('index');
@@ -307,6 +313,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
             Route::post('/transfer-to-next-attempt', [JournalController::class, 'transferToNextAttempt'])->name('transfer-to-next-attempt');
+            Route::post('/finalize-attempt', [JournalController::class, 'finalizeAttempt'])->name('finalize-attempt');
+            Route::post('/unfinalize-attempt', [JournalController::class, 'unfinalizeAttempt'])->name('unfinalize-attempt');
+            Route::get('/finalization-warning-data', [JournalController::class, 'finalizationWarningData'])->name('finalization-warning-data');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
             Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade');
             Route::post('/submit-excuse-to-yn', [JournalController::class, 'submitExcuseToYn'])->name('submit-excuse-to-yn');

@@ -1866,9 +1866,10 @@
                                     }
                                 }
 
-                                $isAdminRoleForTransfer = (auth()->guard('web')->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
+                                $authUserForRoles = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+                                $isAdminRoleForTransfer = ($authUserForRoles?->hasAnyRole(['admin', 'superadmin']) ?? false);
                                 // Yakuniy qilish — registrator ofisiga ham ruxsat (lekin o'qituvchiga emas)
-                                $canFinalizeForm = (auth()->guard('web')->user()?->hasAnyRole(['admin', 'superadmin', 'registrator_ofisi']) ?? false);
+                                $canFinalizeForm = ($authUserForRoles?->hasAnyRole(['admin', 'superadmin', 'registrator_ofisi']) ?? false);
                             @endphp
 
                             @if($isAdminRoleForTransfer && isset($ynSubmission) && $ynSubmission && empty($ynSubmission12a ?? null) && $failed12aCount > 0)

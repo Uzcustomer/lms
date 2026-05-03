@@ -20,9 +20,17 @@ class ExamSchedule extends Model
         'oski_date',
         'oski_na',
         'oski_time',
+        'oski_resit_date',
+        'oski_resit_time',
+        'oski_resit2_date',
+        'oski_resit2_time',
         'test_date',
         'test_na',
         'test_time',
+        'test_resit_date',
+        'test_resit_time',
+        'test_resit2_date',
+        'test_resit2_time',
         'education_year',
         'created_by',
         'updated_by',
@@ -33,6 +41,10 @@ class ExamSchedule extends Model
         'oski_na' => 'boolean',
         'test_date' => 'date',
         'test_na' => 'boolean',
+        'oski_resit_date' => 'date',
+        'oski_resit2_date' => 'date',
+        'test_resit_date' => 'date',
+        'test_resit2_date' => 'date',
     ];
 
     public function department()

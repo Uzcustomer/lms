@@ -1684,7 +1684,71 @@
                                     }
                                     if ($__hasSababli) $sababliStudentsCount++;
                                 }
+
+                                // 12a/12b uchun yiqilgan talabalar soni — stage bo'yicha
+                                $failed12aCount = 0; // 12a ga tushadiganlar (V<60, JN/MT to'g'ri yoki pullik — hammasi 12a-shaklga)
+                                $failed12bCount = 0;
+                                foreach (($students ?? []) as $__stu) {
+                                    $__stage = ($studentStages[$__stu->hemis_id]['stage'] ?? null);
+                                    if (in_array($__stage, [
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12A,
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12A_PULLIK,
+                                    ], true)) {
+                                        $failed12aCount++;
+                                    }
+                                    if (in_array($__stage, [
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12B,
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12B_PULLIK,
+                                    ], true)) {
+                                        $failed12bCount++;
+                                    }
+                                }
+
+                                $isAdminRoleForTransfer = (auth()->guard('web')->user()?->hasAnyRole(['admin', 'superadmin']) ?? false);
                             @endphp
+
+                            @if($isAdminRoleForTransfer && isset($ynSubmission) && $ynSubmission && empty($ynSubmission12a ?? null) && $failed12aCount > 0)
+                                <button type="button"
+                                    class="px-4 py-2 mr-2 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm text-sm"
+                                    onclick="openTransferModal(2)"
+                                    title="V<60 olgan {{ $failed12aCount }} ta talabani 12a-shaklga (1-urinish) o'tkazish">
+                                    12a ga o'tkazish
+                                    <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-white text-amber-700">{{ $failed12aCount }}</span>
+                                </button>
+                            @endif
+
+                            @if($isAdminRoleForTransfer && !empty($ynSubmission12a ?? null) && empty($ynSubmission12b ?? null) && $failed12bCount > 0)
+                                <button type="button"
+                                    class="px-4 py-2 mr-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition shadow-sm text-sm"
+                                    onclick="openTransferModal(3)"
+                                    title="12a dan ham yiqilgan {{ $failed12bCount }} ta talabani 12b-shaklga (2-urinish) o'tkazish">
+                                    12b ga o'tkazish
+                                    <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-white text-orange-700">{{ $failed12bCount }}</span>
+                                </button>
+                            @endif
+
+                            @if(!empty($ynSubmission12b ?? null))
+                                <div class="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
+                                    12b shakl faol
+                                    @if(!empty($examSchedule) && ($examSchedule->oski_resit2_date || $examSchedule->test_resit2_date))
+                                        <div class="text-xs text-orange-700 mt-1">
+                                            @if($examSchedule->oski_resit2_date) OSKI: {{ \Carbon\Carbon::parse($examSchedule->oski_resit2_date)->format('d.m.Y') }} @endif
+                                            @if($examSchedule->test_resit2_date) | Test: {{ \Carbon\Carbon::parse($examSchedule->test_resit2_date)->format('d.m.Y') }} @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            @elseif(!empty($ynSubmission12a ?? null))
+                                <div class="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
+                                    12a shakl faol
+                                    @if(!empty($examSchedule) && ($examSchedule->oski_resit_date || $examSchedule->test_resit_date))
+                                        <div class="text-xs text-amber-700 mt-1">
+                                            @if($examSchedule->oski_resit_date) OSKI: {{ \Carbon\Carbon::parse($examSchedule->oski_resit_date)->format('d.m.Y') }} @endif
+                                            @if($examSchedule->test_resit_date) | Test: {{ \Carbon\Carbon::parse($examSchedule->test_resit_date)->format('d.m.Y') }} @endif
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+
                             @if(isset($ynSubmission) && $ynSubmission)
                                 <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
                                     YN ga yuborilgan ({{ $ynSubmission->submitted_at->format('d.m.Y H:i') }})
@@ -1924,6 +1988,55 @@
                                 <button type="button" id="btn-yn-weights-submit" onclick="submitYnQaydnoma()"
                                     class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm">
                                     Yaratish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- 12a / 12b ga o'tkazish modali --}}
+                <div id="transfer-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeTransferModal()"></div>
+                    <div class="fixed inset-0 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg relative">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h3 class="text-lg font-bold text-gray-800" id="transfer-modal-title">Talabalarni 12a ga o'tkazish</h3>
+                                <p class="text-sm text-gray-500 mt-1" id="transfer-modal-desc"></p>
+                            </div>
+                            <div class="px-6 py-4 space-y-4">
+                                <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                                    <strong id="transfer-modal-count">0</strong> ta talaba <strong id="transfer-modal-form">12a-shaklga</strong> o'tkaziladi.
+                                    Ular OSKI/Test ni qayta topshirishadi. JN/MT baholari o'zgarmaydi.
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">OSKI sanasi</label>
+                                    <div class="flex gap-2">
+                                        <input type="date" id="transfer-oski-date" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                                        <input type="time" id="transfer-oski-time" class="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="HH:MM">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">Test sanasi</label>
+                                    <div class="flex gap-2">
+                                        <input type="date" id="transfer-test-date" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                                        <input type="time" id="transfer-test-time" class="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="HH:MM">
+                                    </div>
+                                </div>
+
+                                <p class="text-xs text-gray-500">
+                                    Kamida bittasi (OSKI yoki Test) belgilanishi kerak. Bu sanalar "exam_schedules" ga saqlanadi va talabalarga ko'rinadi.
+                                </p>
+                            </div>
+                            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                                <button type="button" onclick="closeTransferModal()"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                                    Bekor qilish
+                                </button>
+                                <button type="button" id="transfer-submit-btn" onclick="submitTransfer()"
+                                    class="px-5 py-2.5 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm text-sm">
+                                    Tasdiqlash va o'tkazish
                                 </button>
                             </div>
                         </div>
@@ -4592,6 +4705,81 @@
 
         function closeYnWeightsModal() {
             document.getElementById('yn-weights-modal').classList.add('hidden');
+        }
+
+        // 12a / 12b ga o'tkazish modali
+        var _transferAttempt = 2;
+        function openTransferModal(attempt) {
+            _transferAttempt = attempt;
+            var formLabel = attempt === 2 ? '12a-shaklga' : '12b-shaklga';
+            var titleLabel = attempt === 2 ? 'Talabalarni 12a ga o\'tkazish' : 'Talabalarni 12b ga o\'tkazish';
+            var descLabel = attempt === 2
+                ? 'Yiqilgan talabalar uchun 1-urinish OSKI/Test sanalarini belgilang.'
+                : '12a dan ham yiqilgan talabalar uchun 2-urinish OSKI/Test sanalarini belgilang.';
+            var count = attempt === 2 ? {{ $failed12aCount ?? 0 }} : {{ $failed12bCount ?? 0 }};
+
+            document.getElementById('transfer-modal-title').textContent = titleLabel;
+            document.getElementById('transfer-modal-desc').textContent = descLabel;
+            document.getElementById('transfer-modal-form').textContent = formLabel;
+            document.getElementById('transfer-modal-count').textContent = count;
+            document.getElementById('transfer-oski-date').value = '';
+            document.getElementById('transfer-oski-time').value = '';
+            document.getElementById('transfer-test-date').value = '';
+            document.getElementById('transfer-test-time').value = '';
+            document.getElementById('transfer-modal').classList.remove('hidden');
+        }
+        function closeTransferModal() {
+            document.getElementById('transfer-modal').classList.add('hidden');
+        }
+        function submitTransfer() {
+            var oskiDate = document.getElementById('transfer-oski-date').value;
+            var oskiTime = document.getElementById('transfer-oski-time').value;
+            var testDate = document.getElementById('transfer-test-date').value;
+            var testTime = document.getElementById('transfer-test-time').value;
+
+            if (!oskiDate && !testDate) {
+                alert('Kamida OSKI yoki Test sanasini belgilang.');
+                return;
+            }
+
+            var btn = document.getElementById('transfer-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+
+            fetch('{{ route("admin.journal.transfer-to-next-attempt") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                    attempt: _transferAttempt,
+                    oski_date: oskiDate || null,
+                    oski_time: oskiTime || null,
+                    test_date: testDate || null,
+                    test_time: testTime || null
+                })
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    alert(data.message || 'Muvaffaqiyatli o\'tkazildi.');
+                    location.reload();
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Noma\'lum xato'));
+                    btn.disabled = false;
+                    btn.textContent = 'Tasdiqlash va o\'tkazish';
+                }
+            })
+            .catch(err => {
+                alert('Tarmoq xatosi: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Tasdiqlash va o\'tkazish';
+            });
         }
 
         function updateYnWeightsTotal() {

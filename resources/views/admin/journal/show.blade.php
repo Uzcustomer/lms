@@ -1908,7 +1908,10 @@
                                         <div class="text-[10px] text-orange-600 mt-1">{{ \Carbon\Carbon::parse($ynSubmission12b->finalized_at)->format('d.m.Y H:i') }}</div>
                                     @endif
                                     @if($isAdminRoleForTransfer && !$isFinal12b)
-                                        <button type="button" onclick="openFinalizeModal(3)" class="ml-2 text-[11px] underline hover:text-orange-900">Yakuniy qilish</button>
+                                        <button type="button" onclick="openFinalizeModal(3)"
+                                            class="mt-1 inline-flex items-center px-2 py-0.5 bg-orange-600 text-white text-[11px] font-semibold rounded hover:bg-orange-700">
+                                            🔒 Yakuniy qilish
+                                        </button>
                                     @endif
                                 </div>
                             @elseif(!empty($ynSubmission12a ?? null))
@@ -1924,7 +1927,10 @@
                                         <div class="text-[10px] text-amber-600 mt-1">{{ \Carbon\Carbon::parse($ynSubmission12a->finalized_at)->format('d.m.Y H:i') }}</div>
                                     @endif
                                     @if($isAdminRoleForTransfer && !$isFinal12a)
-                                        <button type="button" onclick="openFinalizeModal(2)" class="ml-2 text-[11px] underline hover:text-amber-900">Yakuniy qilish</button>
+                                        <button type="button" onclick="openFinalizeModal(2)"
+                                            class="mt-1 inline-flex items-center px-2 py-0.5 bg-amber-600 text-white text-[11px] font-semibold rounded hover:bg-amber-700">
+                                            🔒 Yakuniy qilish
+                                        </button>
                                     @endif
                                 </div>
                             @endif
@@ -1939,7 +1945,10 @@
                                         <div class="text-[10px] text-blue-600 mt-1">Yakuniylashtirildi: {{ \Carbon\Carbon::parse($ynSubmission->finalized_at)->format('d.m.Y H:i') }}</div>
                                     @endif
                                     @if($isAdminRoleForTransfer && !$isFinal12)
-                                        <button type="button" onclick="openFinalizeModal(1)" class="ml-2 text-[11px] underline hover:text-blue-900">Yakuniy qilish</button>
+                                        <button type="button" onclick="openFinalizeModal(1)"
+                                            class="mt-1 inline-flex items-center px-2 py-0.5 bg-blue-600 text-white text-[11px] font-semibold rounded hover:bg-blue-700">
+                                            🔒 Yakuniy qilish
+                                        </button>
                                     @endif
                                 </div>
                             @elseif($canSubmitYn ?? false)

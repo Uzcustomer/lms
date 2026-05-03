@@ -59,3 +59,5 @@ tmtags
 
 /mysql_data
 docker-compose.override.yml
+*.backup
+/public/uploads/

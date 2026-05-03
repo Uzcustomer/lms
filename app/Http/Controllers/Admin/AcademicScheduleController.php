@@ -101,6 +101,11 @@ class AcademicScheduleController extends Controller
         $selectedStatus = $request->get('status');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
+        // Agar foydalanuvchi faqat "gacha" sanani bersa, "dan" ni bugundan boshlaymiz —
+        // shunda eski semestrlardagi tugagan darslar ro'yxatga tushib qolmaydi.
+        if (empty($dateFrom) && !empty($dateTo)) {
+            $dateFrom = \Carbon\Carbon::today()->format('Y-m-d');
+        }
         $oskiDateFrom = $request->get('oski_date_from');
         $oskiDateTo = $request->get('oski_date_to');
         $testDateFrom = $request->get('test_date_from');

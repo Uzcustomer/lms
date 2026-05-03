@@ -8,6 +8,7 @@ use App\Models\CurriculumSubject;
 use App\Models\Department;
 use App\Models\ExamCapacityOverride;
 use App\Models\ExamSchedule;
+use App\Models\YnSubmission;
 use App\Models\Attendance;
 use App\Models\Group;
 use App\Models\MarkingSystemScore;
@@ -982,7 +983,25 @@ class AcademicScheduleController extends Controller
                 $oskiDateChanged = $record->isDirty('oski_date') || $record->isDirty('oski_na');
                 $testDateChanged = $record->isDirty('test_date') || $record->isDirty('test_na');
 
+                // 1-urinish (12a) va 2-urinish (12b) qayta topshirish sanalarini ham qabul qilamiz
+                $resitFields = ['oski_resit_date', 'oski_resit_time', 'test_resit_date', 'test_resit_time',
+                                'oski_resit2_date', 'oski_resit2_time', 'test_resit2_date', 'test_resit2_time'];
+                foreach ($resitFields as $rf) {
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', $rf) && array_key_exists($rf, $schedule)) {
+                        $record->{$rf} = !empty($schedule[$rf]) ? $schedule[$rf] : null;
+                    }
+                }
+
+                $resitOpened12a = ($record->isDirty('oski_resit_date') && !empty($record->oski_resit_date))
+                    || ($record->isDirty('test_resit_date') && !empty($record->test_resit_date));
+                $resitOpened12b = ($record->isDirty('oski_resit2_date') && !empty($record->oski_resit2_date))
+                    || ($record->isDirty('test_resit2_date') && !empty($record->test_resit2_date));
+
                 $record->save();
+
+                // Sana belgilangan bo'lsa — yn_submission(attempt=2/3) ni avtomatik yaratish
+                $this->autoOpenAttemptIfNeeded($record, 2, $resitOpened12a, $userId);
+                $this->autoOpenAttemptIfNeeded($record, 3, $resitOpened12b, $userId);
 
                 // Queue Moodle booking when date is set, time already exists, and not N/A.
                 // Time is set by saveTestTime(); store() only triggers when both are present.
@@ -2474,5 +2493,61 @@ class AcademicScheduleController extends Controller
             'slots' => $slots,
             'totalComputers' => $totalComputers,
         ]);
+    }
+
+    /**
+     * Imtihon sanasi belgilangach, mos urinish (12a yoki 12b) uchun
+     * yn_submission yozuvini avtomatik yaratish — agar hali bo'lmasa.
+     * Bu jurnaldan "12a/12b ga o'tkazish" tugmasini bosish o'rniga
+     * sanani bir marta belgilash bilan barchasini boshlaydi.
+     */
+    private function autoOpenAttemptIfNeeded($examScheduleRecord, int $attempt, bool $shouldOpen, $userId): void
+    {
+        if (!$shouldOpen) return;
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) return;
+
+        try {
+            // Asosiy YN yuborilgan bo'lishi shart
+            $mainSubmission = YnSubmission::where('subject_id', $examScheduleRecord->subject_id)
+                ->where('semester_code', $examScheduleRecord->semester_code)
+                ->where('group_hemis_id', $examScheduleRecord->group_hemis_id)
+                ->where(fn($q) => $q->where('attempt', 1)->orWhereNull('attempt'))
+                ->first();
+            if (!$mainSubmission) return; // asosiy yo'q — hech narsa qilmaymiz
+
+            // 12b uchun avval 12a yaratilgan bo'lishi kerak
+            if ($attempt === 3) {
+                $aSubmission = YnSubmission::where('subject_id', $examScheduleRecord->subject_id)
+                    ->where('semester_code', $examScheduleRecord->semester_code)
+                    ->where('group_hemis_id', $examScheduleRecord->group_hemis_id)
+                    ->where('attempt', 2)
+                    ->first();
+                if (!$aSubmission) return;
+            }
+
+            // Bu attempt uchun yaratilgan bo'lsa — qaytadan yaratmaymiz
+            $existing = YnSubmission::where('subject_id', $examScheduleRecord->subject_id)
+                ->where('semester_code', $examScheduleRecord->semester_code)
+                ->where('group_hemis_id', $examScheduleRecord->group_hemis_id)
+                ->where('attempt', $attempt)
+                ->first();
+            if ($existing) return;
+
+            $userGuard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
+            $userIdToUse = $userId ?: (auth()->guard('web')->id() ?? auth()->guard('teacher')->id());
+
+            YnSubmission::create([
+                'subject_id' => $examScheduleRecord->subject_id,
+                'semester_code' => $examScheduleRecord->semester_code,
+                'group_hemis_id' => $examScheduleRecord->group_hemis_id,
+                'attempt' => $attempt,
+                'status' => 'draft',
+                'submitted_by' => $userIdToUse,
+                'submitted_by_guard' => $userGuard,
+                'submitted_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('autoOpenAttemptIfNeeded xatolik (attempt=' . $attempt . '): ' . $e->getMessage());
+        }
     }
 }

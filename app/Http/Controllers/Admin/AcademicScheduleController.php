@@ -337,6 +337,68 @@ class AcademicScheduleController extends Controller
         $allSubjectIds = array_unique(array_column($triples, 1));
         $allSemCodes = array_unique(array_column($triples, 2));
 
+        // Ko'rinadigan triples (status qaytarish uchun) va kengaytirilgan triples
+        // (4+ qarz qoidasi uchun, butun o'quv yili bo'yicha sanash kerak).
+        $visibleTriples = $triples;
+
+        // semester_code → education_year xaritasi
+        $semYearMap = [];
+        try {
+            $rows = DB::table('semesters')
+                ->whereIn('semester_code', $allSemCodes)
+                ->select('semester_code', 'education_year')
+                ->get();
+            foreach ($rows as $r) $semYearMap[$r->semester_code] = $r->education_year;
+        } catch (\Throwable $e) {}
+        $relevantYears = array_values(array_unique(array_filter($semYearMap)));
+
+        // O'quv yiliga kiruvchi BARCHA semesterlarni olish (boshqa semestrlardagi
+        // qarzlarni hisoblash uchun)
+        $yearSemCodes = $allSemCodes;
+        if (!empty($relevantYears)) {
+            try {
+                $extraSems = DB::table('semesters')
+                    ->whereIn('education_year', $relevantYears)
+                    ->pluck('semester_code')
+                    ->toArray();
+                foreach ($extraSems as $code) {
+                    if (!isset($semYearMap[$code])) {
+                        // map qaytadan to'ldirish
+                        $semYearMap[$code] = $relevantYears[0] ?? null;
+                    }
+                }
+                $yearSemCodes = array_values(array_unique(array_merge($yearSemCodes, $extraSems)));
+                // Aniq xaritalash uchun yana bir marta o'qiymiz
+                $rows = DB::table('semesters')
+                    ->whereIn('semester_code', $yearSemCodes)
+                    ->select('semester_code', 'education_year')
+                    ->get();
+                foreach ($rows as $r) $semYearMap[$r->semester_code] = $r->education_year;
+            } catch (\Throwable $e) {}
+        }
+
+        // Schedules dan o'quv yiliga tegishli barcha (group, subject, semester)
+        // uchligini qo'shamiz — qarzlarni yashirin semestrlardan ham hisoblash uchun
+        if (!empty($yearSemCodes) && count($yearSemCodes) > count($allSemCodes)) {
+            try {
+                $extra = DB::table('schedules')
+                    ->whereNull('deleted_at')
+                    ->whereIn('group_id', $allGroupHids)
+                    ->whereIn('semester_code', $yearSemCodes)
+                    ->select('group_id', 'subject_id', 'semester_code')
+                    ->distinct()
+                    ->get();
+                foreach ($extra as $r) {
+                    $k = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    if (!isset($triples[$k])) {
+                        $triples[$k] = [$r->group_id, $r->subject_id, $r->semester_code];
+                    }
+                }
+                $allSubjectIds = array_unique(array_column($triples, 1));
+                $allSemCodes = array_unique(array_column($triples, 2));
+            } catch (\Throwable $e) {}
+        }
+
         // Talabalarning hemis_id va group_id xaritasi (faqat faol talabalar)
         $studentGroup = DB::table('students')
             ->whereIn('group_id', $allGroupHids)
@@ -642,30 +704,41 @@ class AcademicScheduleController extends Controller
         }
 
         // 4+ ta fandan qarz bo'lsa — qayta o'qishga (2-urinishga) ruxsat berilmaydi.
-        // Talaba bo'yicha guruh + semestr bo'yicha failed1 fanlar sonini sanab,
-        // chegaradan oshganlarni held_back deb belgilaymiz.
+        // Talaba guruh almashtirishi mumkin va qoida o'quv yili bo'yicha amal qiladi,
+        // shuning uchun bucket = hemis_id | education_year. Sanash butun yil bo'yicha
+        // (ko'rinmaydigan semestrlar ham) — failed1 fanlar sonini sanab, chegaradan
+        // oshganlarni held_back deb belgilaymiz. Lekin natija ko'rinadigan triples
+        // uchungina qaytariladi.
         $debtThreshold = 4;
-        $debtCount = []; // hemis_id|gHid|sem => count
+        $debtCount = []; // hemis_id|education_year => count
         foreach ($result as $key => $studs) {
             [$g, $s, $sem] = explode('|', $key);
+            $year = $semYearMap[$sem] ?? null;
+            if (!$year) continue;
             foreach ($studs as $hid => $stat) {
                 if (!empty($stat['failed1'])) {
-                    $bucket = $hid . '|' . $g . '|' . $sem;
+                    $bucket = $hid . '|' . $year;
                     $debtCount[$bucket] = ($debtCount[$bucket] ?? 0) + 1;
                 }
             }
         }
-        foreach ($result as $key => $studs) {
-            [$g, $s, $sem] = explode('|', $key);
+
+        // Faqat ko'rinadigan triples uchun result qaytaramiz, lekin held_back
+        // bayrog'ini butun yil bo'yicha hisoblangan debtCount asosida belgilaymiz
+        $visibleResult = [];
+        foreach ($visibleTriples as $key => $triple) {
+            if (!isset($result[$key])) continue;
+            $sem = $triple[2];
+            $year = $semYearMap[$sem] ?? null;
+            $studs = $result[$key];
             foreach ($studs as $hid => $stat) {
-                $bucket = $hid . '|' . $g . '|' . $sem;
-                if (($debtCount[$bucket] ?? 0) >= $debtThreshold) {
-                    $result[$key][$hid]['held_back'] = true;
-                }
+                $bucket = $hid . '|' . ($year ?? '');
+                $stat['held_back'] = $year && (($debtCount[$bucket] ?? 0) >= $debtThreshold);
+                $visibleResult[$key][$hid] = $stat;
             }
         }
 
-        return $result;
+        return $visibleResult;
     }
 
     /**

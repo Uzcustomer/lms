@@ -454,8 +454,9 @@ class AcademicScheduleController extends Controller
                 if ($g !== $gHid) continue;
 
                 $jnMtKey = $hid . '|' . $s . '|' . $sem;
-                $jn = $jnMtMap[$jnMtKey]['jn'] ?? 0;
-                $mt = $jnMtMap[$jnMtKey]['mt'] ?? 0;
+                // Snapshot bo'lmasa null — "yiqilgan" deb hisoblamaymiz, fallback yo'q
+                $jn = $jnMtMap[$jnMtKey]['jn'] ?? null;
+                $mt = $jnMtMap[$jnMtKey]['mt'] ?? null;
 
                 $oski = $examMap[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
                 $test = $examMap[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
@@ -466,9 +467,12 @@ class AcademicScheduleController extends Controller
                 $audHours = $audHoursMap[$s . '|' . $sem] ?? 0;
                 $davomatPct = $audHours > 0 ? round(($absentOff / $audHours) * 100, 2) : 0;
 
-                $isPullik = ($jn < $minLimit) || ($mt < $minLimit) || ($davomatPct >= 25);
+                // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz
+                $jnLow = ($jn !== null) && ($jn < $minLimit);
+                $mtLow = ($mt !== null) && ($mt < $minLimit);
+                $isPullik = $jnLow || $mtLow || ($davomatPct >= 25);
 
-                // Yiqilgan attempt=1: V<60 yoki OSKI/Test < 60 yoki kelmagan (null)
+                // Yiqilgan attempt=1: pullik yoki OSKI/Test < 60 yoki kelmagan
                 $oskiNum = $oski !== null ? (float) $oski : null;
                 $testNum = $test !== null ? (float) $test : null;
                 $failed1 = $isPullik

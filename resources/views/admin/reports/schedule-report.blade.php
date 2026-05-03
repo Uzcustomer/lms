@@ -486,7 +486,11 @@
 
             (res.lessons || []).forEach(function(wk) {
                 var darsLabel = wk.lesson + '-dars' + (wk.date ? ' <span class="dars-date">(' + wk.date + ')</span>' : '');
-                html += '<tr><td class="wk-col">' + darsLabel + '</td>';
+                if (wk.ktr_only) {
+                    darsLabel = '<span class="ktr-only-mark" title="HEMIS jadvalida bu hafta uchun dars yo\'q, faqat KTR rejasida soat kiritilgan">KTR rejada</span> <span class="dars-date">(' + (wk.date || '') + ')</span>';
+                }
+                var rowCls = wk.ktr_only ? ' class="ktr-only-row"' : '';
+                html += '<tr' + rowCls + '><td class="wk-col">' + darsLabel + '</td>';
                 typeCodes.forEach(function(code, idx) {
                     var c = idx % 6;
                     var cell = (wk.cells && wk.cells[code]) ? wk.cells[code] : {hemis:0, ktr:0, marked:0, diff:0};
@@ -508,13 +512,18 @@
             });
 
             html += '</tbody><tfoot><tr><td class="wk-col">Jami</td>';
+            var serverTotals = res.totals || {};
             typeCodes.forEach(function(code, idx) {
                 var c = idx % 6;
-                var d = totalKtr[code] - totalHemis[code];
+                var t = serverTotals[code] || { hemis: totalHemis[code] || 0, ktr: totalKtr[code] || 0, marked: totalMarked[code] || 0, diff: 0 };
+                var h = t.hemis || 0;
+                var kt = t.ktr === null || t.ktr === undefined ? 0 : t.ktr;
+                var mk = t.marked || 0;
+                var d = t.diff === null || t.diff === undefined ? 0 : t.diff;
                 var diffCls = Math.abs(d) < 0.01 ? 'diff-zero' : (d > 0 ? 'diff-pos' : 'diff-neg');
-                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalHemis[code]) + '</td>';
-                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalKtr[code]) + '</td>';
-                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(totalMarked[code]) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(h) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(kt) + '</td>';
+                html += '<td class="num-cell tt-foot-' + c + '">' + fmt(mk) + '</td>';
                 html += '<td class="num-cell tt-foot-' + c + ' ' + diffCls + '">' + (d > 0 ? '+' + fmt(d) : fmt(d)) + '</td>';
             });
             html += '</tr></tfoot></table></div>';
@@ -523,6 +532,7 @@
                 '<span><span class="legend-dot" style="background:#d97706;"></span> Farq &gt; 0 (KTR ko\'p)</span>' +
                 '<span><span class="legend-dot" style="background:#dc2626;"></span> Farq &lt; 0 (HEMIS ko\'p)</span>' +
                 '<span><span class="legend-dot" style="background:#bbf7d0;border:1px solid #16a34a;"></span> Belgi: o\'qituvchi belgilagan dars</span>' +
+                '<span><span class="legend-dot" style="background:#fef3c7;border:1px solid #92400e;"></span> KTR rejada: faqat KTR rejasida soat kiritilgan, HEMIS jadvalida dars yo\'q</span>' +
                 '</div>';
 
             $('#ktr-compare-modal-body').html(html);
@@ -929,6 +939,9 @@
         .ktr-cmp-table th.wk-col { background: linear-gradient(135deg, #1e3a5f, #2b5ea7); color: #fff; border-bottom: 1px solid #2b5ea7; }
         .ktr-cmp-table td.wk-col { background: #f8fafc; font-weight: 700; color: #1e3a5f; padding: 8px 10px; border-right: 1px solid #e2e8f0; text-align: center; white-space: nowrap; }
         .dars-date { font-weight: 500; color: #64748b; font-size: 11px; }
+        .ktr-only-mark { display: inline-block; padding: 2px 8px; background: #fef3c7; color: #92400e; border-radius: 999px; font-size: 11px; font-weight: 700; }
+        .ktr-cmp-table tbody tr.ktr-only-row td.wk-col { background: #fffbeb; color: #92400e; }
+        .ktr-cmp-table tbody tr.ktr-only-row td.num-cell { background: #fffdf5; }
         .ktr-cmp-table td.num-cell { padding: 7px 8px; text-align: center; font-weight: 600; color: #334155; border-bottom: 1px solid #f1f5f9; }
         .ktr-cmp-table tbody tr:hover td.num-cell { filter: brightness(0.96); }
         .ktr-cmp-table tbody tr:hover td.wk-col { background: #dbeafe; }

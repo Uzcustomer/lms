@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../l10n/app_localizations.dart';
-import '../../providers/settings_provider.dart';
+import '../../services/api_service.dart';
+import '../../services/biometric_service.dart';
+import '../../utils/page_transitions.dart';
 import 'verify_2fa_screen.dart';
+
+enum _Role { student, staff }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,258 +15,762 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _LoginScreenState extends State<LoginScreen> {
+  _Role _role = _Role.student;
   final _formKey = GlobalKey<FormState>();
-  final _loginController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
+  final _idCtrl = TextEditingController();
+  final _pwCtrl = TextEditingController();
+  final _biometricService = BiometricService();
+  final _apiService = ApiService();
+  bool _showPw = false;
+  bool _remember = true;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
+
+  static const _ink = Color(0xFF0F1B3D);
+
+  Color get _accent =>
+      _role == _Role.student ? const Color(0xFF1E3A8A) : const Color(0xFF0F766E);
+  Color get _accentSoft =>
+      _role == _Role.student ? const Color(0xFF2950C8) : const Color(0xFF14B8A6);
+  bool get _isStudent => _role == _Role.student;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _checkBiometric();
+  }
+
+  Future<void> _checkBiometric() async {
+    final available = await _biometricService.isAvailable();
+    final enabled = await _biometricService.isEnabled();
+    final hasToken = await _apiService.isLoggedIn();
+    if (!mounted) return;
+    setState(() {
+      _biometricAvailable = available;
+      _biometricEnabled = enabled && hasToken;
+    });
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
-    _loginController.dispose();
-    _passwordController.dispose();
+    _idCtrl.dispose();
+    _pwCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _submit() async {
+    final auth = context.read<AuthProvider>();
+    auth.clearError();
     if (!_formKey.currentState!.validate()) return;
 
-    final authProvider = context.read<AuthProvider>();
-    authProvider.clearError();
-
-    if (_tabController.index == 0) {
-      await authProvider.studentLogin(
-        _loginController.text.trim(),
-        _passwordController.text,
-      );
+    if (_isStudent) {
+      await auth.studentLogin(_idCtrl.text.trim(), _pwCtrl.text);
     } else {
-      await authProvider.teacherLogin(
-        _loginController.text.trim(),
-        _passwordController.text,
-      );
+      await auth.teacherLogin(_idCtrl.text.trim(), _pwCtrl.text);
     }
 
     if (!mounted) return;
 
-    if (authProvider.state == AuthState.requires2fa) {
+    if (auth.state == AuthState.requires2fa) {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => Verify2faScreen(login: _loginController.text.trim()),
+        SlideFadePageRoute(
+          builder: (_) => Verify2faScreen(login: _idCtrl.text.trim()),
         ),
       );
+      return;
     }
+
+    if (auth.state == AuthState.authenticated || auth.state == AuthState.profileIncomplete) {
+      await _maybePromptEnableBiometric();
+    }
+  }
+
+  Future<void> _maybePromptEnableBiometric() async {
+    if (!_biometricAvailable) return;
+    final already = await _biometricService.isEnabled();
+    if (already) return;
+    if (!mounted) return;
+
+    final accept = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Face ID yoqilsinmi?', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: const Text(
+          "Keyingi safar tezroq kirish uchun yuz tanish (Face ID / Face Unlock) yoqishni xohlaysizmi?",
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Yo`q'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _accent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yoqish', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (accept == true) {
+      final ok = await _biometricService.authenticate(
+        reason: 'Face ID ni yoqish uchun yuzingizni tasdiqlang',
+      );
+      if (ok) {
+        await _biometricService.setEnabled(true);
+      }
+    }
+  }
+
+  Future<void> _faceIdLogin() async {
+    if (!_biometricAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bu qurilmada Face ID mavjud emas')),
+      );
+      return;
+    }
+
+    final hasToken = await _apiService.isLoggedIn();
+    if (!hasToken) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avval bir marta login va parol bilan kiring')),
+      );
+      return;
+    }
+
+    final ok = await _biometricService.authenticate();
+    if (!ok) return;
+    if (!mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    await auth.checkAuth();
+  }
+
+  void _onRoleChanged(_Role r) {
+    if (_role == r) return;
+    setState(() {
+      _role = r;
+      _idCtrl.clear();
+      _pwCtrl.clear();
+    });
+    context.read<AuthProvider>().clearError();
   }
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.primaryDark;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
+    final safeTop = MediaQuery.of(context).padding.top;
+    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final screenH = MediaQuery.of(context).size.height;
+    final heroH = screenH * 0.36;
 
     return Scaffold(
-      backgroundColor: bgColor,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
+      backgroundColor: const Color(0xFFF7F8FB),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Hero(
+              accent: _accent,
+              accentSoft: _accentSoft,
+              topPadding: safeTop,
+              height: heroH,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Xush kelibsiz',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.6,
+                        color: _ink,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isStudent
+                          ? 'Talaba portaliga kirish'
+                          : 'Xodimlar portaliga kirish',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 13, color: _ink.withOpacity(0.6)),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildRoleTabs(),
+                    const SizedBox(height: 16),
+                    _buildIdField(),
+                    const SizedBox(height: 10),
+                    _buildPasswordField(),
+                    const SizedBox(height: 12),
+                    _buildRememberCheckbox(),
+                    Consumer<AuthProvider>(
+                      builder: (context, auth, _) {
+                        if (auth.errorMessage == null) {
+                          return const SizedBox(height: 14);
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 12, bottom: 14),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDC2626).withOpacity(0.08),
+                              border: Border.all(
+                                  color: const Color(0xFFDC2626)
+                                      .withOpacity(0.25)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              auth.errorMessage!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFB91C1C),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildSubmitButton(),
+                    const SizedBox(height: 14),
+                    _buildOrDivider(),
+                    const SizedBox(height: 14),
+                    _buildFaceIdButton(),
+                    SizedBox(height: 16 + safeBottom),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleTabs() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAEEF6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _ink.withOpacity(0.06)),
+      ),
+      child: Row(
+        children: [
+          _tabButton('Talaba', _Role.student),
+          const SizedBox(width: 4),
+          _tabButton('Xodim', _Role.staff),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabButton(String label, _Role r) {
+    final on = _role == r;
+    final color =
+        r == _Role.student ? const Color(0xFF1E3A8A) : const Color(0xFF0F766E);
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _onRoleChanged(r),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: on ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: on
+                ? [
+                    BoxShadow(
+                      color: _ink.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: on ? color : _ink.withOpacity(0.55),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIdField() {
+    return _FieldShell(
+      label: 'LOGIN',
+      child: TextFormField(
+        controller: _idCtrl,
+        keyboardType: TextInputType.visiblePassword,
+        autocorrect: false,
+        enableSuggestions: false,
+        cursorColor: _accent,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: _ink,
+        ),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) return 'Login kiriting';
+          return null;
+        },
+        decoration: const InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: EdgeInsets.zero,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          focusedErrorBorder: InputBorder.none,
+          errorStyle: TextStyle(
+            fontSize: 11,
+            color: Color(0xFFB91C1C),
+            height: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return _FieldShell(
+      label: 'PASSWORD',
+      trailing: GestureDetector(
+        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                "Parolni tiklash uchun universitet IT-bo'limiga murojaat qiling."),
+          ),
+        ),
+        child: Text(
+          'Unutdingizmi?',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: _accent,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextFormField(
+              controller: _pwCtrl,
+              obscureText: !_showPw,
+              autocorrect: false,
+              enableSuggestions: false,
+              cursorColor: _accent,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: _ink,
+              ),
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Parol kiriting';
+                return null;
+              },
+              decoration: const InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                errorStyle: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFFB91C1C),
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => setState(() => _showPw = !_showPw),
+            child: Icon(
+              _showPw
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              size: 18,
+              color: _ink.withOpacity(0.55),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRememberCheckbox() {
+    return GestureDetector(
+      onTap: () => setState(() => _remember = !_remember),
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: _remember ? _accent : Colors.white,
+              borderRadius: BorderRadius.circular(5),
+              border: _remember
+                  ? null
+                  : Border.all(color: _ink.withOpacity(0.25), width: 1.5),
+            ),
+            child: _remember
+                ? const Icon(Icons.check, size: 12, color: Colors.white)
+                : null,
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'Meni eslab qol',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _ink,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final loading = auth.state == AuthState.loading;
+        return InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: loading ? null : _submit,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: _accent.withOpacity(loading ? 0.7 : 1),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: _accent.withOpacity(0.33),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo & Title
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.school_rounded,
-                    size: 48,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'TDTU LMS',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l.lmsSubtitle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: subTextColor,
-                      ),
-                ),
-                const SizedBox(height: 32),
-
-                // Tab selector
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: divColor),
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    indicator: BoxDecoration(
-                      color: AppTheme.primaryColor,
-                      borderRadius: BorderRadius.circular(11),
+                if (loading) ...[
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
                     ),
-                    labelColor: Colors.white,
-                    unselectedLabelColor: subTextColor,
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    dividerColor: Colors.transparent,
-                    tabs: [
-                      Tab(text: l.student),
-                      Tab(text: l.teacher),
-                    ],
-                    onTap: (_) {
-                      _loginController.clear();
-                      _passwordController.clear();
-                      context.read<AuthProvider>().clearError();
-                    },
                   ),
-                ),
-                const SizedBox(height: 24),
-
-                // Login form
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        controller: _loginController,
-                        keyboardType: TextInputType.text,
-                        decoration: InputDecoration(
-                          labelText: l.loginLabel,
-                          hintText: l.loginHint,
-                          prefixIcon: const Icon(Icons.person_outline),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return l.loginRequired;
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          labelText: l.password,
-                          hintText: l.passwordHint,
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return l.passwordRequired;
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Error message
-                      Consumer<AuthProvider>(
-                        builder: (context, auth, _) {
-                          if (auth.errorMessage != null) {
-                            return Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              margin: const EdgeInsets.only(bottom: 12),
-                              decoration: BoxDecoration(
-                                color: AppTheme.errorColor.withAlpha(25),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AppTheme.errorColor.withAlpha(76)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.error_outline,
-                                      color: AppTheme.errorColor, size: 20),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      auth.errorMessage!,
-                                      style: const TextStyle(
-                                        color: AppTheme.errorColor,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
-
-                      // Login button
-                      Consumer<AuthProvider>(
-                        builder: (context, auth, _) {
-                          return SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: auth.state == AuthState.loading
-                                  ? null
-                                  : _handleLogin,
-                              child: auth.state == AuthState.loading
-                                  ? const SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Text(l.signIn),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
                   ),
                 ),
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOrDivider() {
+    return Row(
+      children: [
+        Expanded(child: Container(height: 1, color: _ink.withOpacity(0.10))),
+        const SizedBox(width: 10),
+        Text(
+          'YOKI',
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1,
+            color: _ink.withOpacity(0.45),
+          ),
         ),
+        const SizedBox(width: 10),
+        Expanded(child: Container(height: 1, color: _ink.withOpacity(0.10))),
+      ],
+    );
+  }
+
+  Widget _buildFaceIdButton() {
+    final disabled = !_biometricAvailable || !_biometricEnabled;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: disabled
+          ? () => ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(!_biometricAvailable
+                      ? 'Bu qurilmada Face ID mavjud emas'
+                      : 'Avval bir marta login va parol bilan kiring'),
+                ),
+              )
+          : _faceIdLogin,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(
+            color: disabled ? _ink.withOpacity(0.15) : _accent,
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: disabled ? _ink.withOpacity(0.15) : _accent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.face_outlined,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Face ID orqali kirish',
+              style: TextStyle(
+                color: disabled ? _ink.withOpacity(0.4) : _accent,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Hero extends StatelessWidget {
+  final Color accent;
+  final Color accentSoft;
+  final double topPadding;
+  final double height;
+  const _Hero({
+    required this.accent,
+    required this.accentSoft,
+    required this.topPadding,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.only(
+        bottomLeft: Radius.circular(36),
+        bottomRight: Radius.circular(36),
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        height: height,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [accent, accentSoft],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: CustomPaint(
+                size: Size(MediaQuery.of(context).size.width, height * 0.82),
+                painter: _BuildingPainter(
+                  color: Colors.white.withOpacity(0.10),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24, topPadding + 24, 24, 28),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.16),
+                        border: Border.all(
+                            color: Colors.white.withOpacity(0.45), width: 1.5),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: const Icon(Icons.school_rounded,
+                          color: Colors.white, size: 36),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'TASHMEDUNITF - LMS',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        letterSpacing: 2.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Toshkent Davlat Tibbiyot Universiteti\nTermiz filiali',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.75),
+                        fontSize: 11.5,
+                        letterSpacing: 1,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BuildingPainter extends CustomPainter {
+  final Color color;
+  _BuildingPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    const pillarCount = 11;
+    final pillarW = size.width * 0.042;
+    final gapX = size.width * 0.027;
+    final totalW = pillarCount * pillarW + (pillarCount - 1) * gapX;
+    final startX = (size.width - totalW) / 2;
+
+    final pillarH = size.height * 0.62;
+    final pillarTopY = size.height - pillarH;
+
+    final beamH = size.height * 0.045;
+    final beamGap = size.height * 0.04;
+    final beamY = pillarTopY - beamGap - beamH;
+
+    final roofPeakY = beamY - size.height * 0.20;
+
+    for (int i = 0; i < pillarCount; i++) {
+      final x = startX + i * (pillarW + gapX);
+      final rect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x, pillarTopY, pillarW, pillarH),
+        const Radius.circular(2),
+      );
+      canvas.drawRRect(rect, paint);
+    }
+
+    final beamRect = Rect.fromLTWH(
+      startX - gapX * 2,
+      beamY,
+      totalW + gapX * 4,
+      beamH,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(beamRect, const Radius.circular(2)),
+      paint,
+    );
+
+    final roofPath = Path()
+      ..moveTo(startX - gapX * 2, beamY)
+      ..lineTo(startX + totalW / 2, roofPeakY)
+      ..lineTo(startX + totalW + gapX * 2, beamY)
+      ..close();
+    canvas.drawPath(roofPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _FieldShell extends StatelessWidget {
+  final String label;
+  final Widget child;
+  final Widget? trailing;
+  const _FieldShell({required this.label, required this.child, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    const ink = Color(0xFF0F1B3D);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: ink.withOpacity(0.10)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: ink.withOpacity(0.5),
+                  letterSpacing: 1,
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 2),
+          child,
+        ],
       ),
     );
   }

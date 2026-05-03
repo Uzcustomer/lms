@@ -10,11 +10,14 @@
              x-data="{
                 makeups: @js($excuse->makeups->map(fn($m) => ['id' => $m->id, 'subject_name' => $m->subject_name, 'assessment_type' => $m->assessment_type, 'assessment_type_label' => $m->assessment_type_label, 'original_date' => $m->original_date->format('Y-m-d'), 'makeup_date' => $m->makeup_date ? $m->makeup_date->format('Y-m-d') : ''])),
                 maxDays: {{ $absentDaysCount }},
+                noDayLimit: @js($noDayLimit ?? false),
                 calendarDays: [],
 
                 init() {
                     const today = new Date();
-                    for (let i = 0; i < 60; i++) {
+                    const startOffset = this.noDayLimit ? -60 : 0;
+                    const endOffset = 60;
+                    for (let i = startOffset; i < endOffset; i++) {
                         const d = new Date(today);
                         d.setDate(d.getDate() + i);
                         this.calendarDays.push({

@@ -22,6 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
+            'nazoratchi.readonly' => \App\Http\Middleware\NazoratchiReadOnly::class,
+        ]);
+
+        // Nazoratchi rolida ishlayotgan har qanday foydalanuvchi uchun yozish
+        // operatsiyalari (POST/PUT/PATCH/DELETE) global ravishda bloklanadi.
+        $middleware->web(append: [
+            \App\Http\Middleware\NazoratchiReadOnly::class,
         ]);
 
         // locale cookie ni encrypt qilmaslik
@@ -37,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'telegram/webhook/*',
             'moodle/import',
             'moodle/should-sync',
+            'moodle/exam-event',
         ]);
 
     })
@@ -65,6 +73,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
+
+        // Qayta o'qish: muddati o'tgan oynalardagi pending arizalarni har kuni
+        // ertalab 02:00 da avtomatik rad etish.
+        $schedule->command('retake:close-expired-windows')->dailyAt('02:00')->withoutOverlapping(30);
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {

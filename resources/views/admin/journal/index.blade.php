@@ -12,6 +12,24 @@
         </div>
     @endif
 
+    @if(session('journal_error'))
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                var msg = @json(session('journal_error'));
+                var overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+                overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:24px 28px;max-width:600px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
+                    '<svg width="24" height="24" viewBox="0 0 20 20" fill="#dc2626"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>' +
+                    '<h3 style="font-size:16px;font-weight:700;color:#991b1b;">Jurnal ochishda xatolik</h3></div>' +
+                    '<pre style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;font-size:13px;color:#991b1b;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;">' + msg.replace(/</g,'&lt;') + '</pre>' +
+                    '<div style="margin-top:16px;text-align:right;"><button onclick="this.closest(\'div[style*=fixed]\').remove()" style="padding:8px 20px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">Yopish</button></div>' +
+                    '</div>';
+                document.body.appendChild(overlay);
+            });
+        </script>
+    @endif
+
     @if(session('success'))
         <div class="relative px-4 py-3 mb-4 text-green-700 bg-green-100 border border-green-400 rounded" role="alert">
             <strong class="font-bold">Muvaffaqiyatli!</strong>

@@ -26,7 +26,28 @@
             <h4 class="text-lg font-semibold text-gray-800">{{ __('Pasport ma\'lumotlarim') }}</h4>
         </div>
         @if($studentPassport)
-            @if($studentPassport->is_match)
+            @if(($studentPassport->status ?? 'pending') === 'approved')
+                <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+                    </svg>
+                    {{ __('Tasdiqlangan') }}
+                </span>
+            @elseif(($studentPassport->status ?? 'pending') === 'rejected')
+                <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    {{ __('Rad etildi') }}
+                </span>
+            @elseif(($studentPassport->status ?? 'pending') === 'resubmitted')
+                <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    {{ __('Qayta yuborildi') }}
+                </span>
+            @elseif($studentPassport->is_match)
                 <span class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700 border border-green-200">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
@@ -38,7 +59,7 @@
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
                     </svg>
-                    {{ __('Pasport ma\'lumotlar bazadagi ma\'lumotlarga mos kelmadi') }}
+                    {{ __('Kutilmoqda') }}
                 </span>
             @endif
         @else
@@ -50,6 +71,33 @@
             </span>
         @endif
     </div>
+
+    @if($studentPassport && ($studentPassport->status ?? 'pending') === 'rejected' && $studentPassport->rejection_reason)
+        <div class="mb-4 p-4 bg-red-50 border border-red-300 rounded-lg flex items-start gap-3">
+            <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            <div>
+                <p class="text-sm font-bold text-red-800">Rad etildi</p>
+                <p class="text-sm text-red-700 mt-1">Sabab: {{ $studentPassport->rejection_reason }}</p>
+                @if($studentPassport->reviewed_by)
+                    <p class="text-xs text-red-500 mt-1">{{ $studentPassport->reviewed_by }}</p>
+                @endif
+            </div>
+        </div>
+    @elseif($studentPassport && ($studentPassport->status ?? 'pending') === 'approved')
+        <div class="mb-4 p-4 bg-green-50 border border-green-300 rounded-lg flex items-start gap-3">
+            <svg class="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+            </svg>
+            <div>
+                <p class="text-sm font-bold text-green-800">Hujjatlaringiz tasdiqlandi</p>
+                @if($studentPassport->reviewed_by)
+                    <p class="text-xs text-green-600 mt-1">{{ $studentPassport->reviewed_by }}</p>
+                @endif
+            </div>
+        </div>
+    @endif
 
     {{-- Form (shown when toggled) --}}
     <div x-show="showPassportForm" x-transition class="border-t border-gray-200 pt-5">

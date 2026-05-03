@@ -107,6 +107,70 @@
                     </div>
                 </div>
 
+                @php
+                    $tcDefaults = \App\Services\ExamCapacityService::getSettings();
+                    $tcReadOnly = $readOnly ?? false;
+                @endphp
+                @if(!$tcReadOnly)
+                <!-- Inline day override panel -->
+                <div id="day-override-panel" data-defaults='@json($tcDefaults)' style="margin:0 16px 14px 16px;background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:1px solid #5eead4;border-radius:12px;padding:12px 14px;">
+                    <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;">
+                        <div style="display:flex;align-items:center;gap:8px;min-width:170px;">
+                            <svg style="width:18px;height:18px;color:#0f766e;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div>
+                                <div style="font-size:13px;font-weight:700;color:#115e59;">Kun sozlamasi</div>
+                                <div style="font-size:11px;color:#0f766e;">Tanlangan kunlar uchun</div>
+                            </div>
+                        </div>
+
+                        <div style="flex:1;min-width:240px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Sanalar</label>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <input type="date" id="do-date-input" style="padding:6px 10px;border:1px solid #5eead4;border-radius:6px;font-size:13px;background:#fff;">
+                                <button type="button" onclick="tcAddDate()" style="padding:6px 10px;background:#0d9488;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">+ Qo'shish</button>
+                            </div>
+                            <div id="do-dates-chips" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;min-height:22px;"></div>
+                        </div>
+
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Ish boshl.</label>
+                            <input type="time" id="do-work-start" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Ish tug.</label>
+                            <input type="time" id="do-work-end" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#92400e;margin-bottom:4px;">Tushlik boshl.</label>
+                            <input type="time" id="do-lunch-start" style="padding:6px 8px;border:1px solid #fbbf24;border-radius:6px;font-size:13px;width:100%;background:#fffbeb;">
+                        </div>
+                        <div style="min-width:115px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#92400e;margin-bottom:4px;">Tushlik tug.</label>
+                            <input type="time" id="do-lunch-end" style="padding:6px 8px;border:1px solid #fbbf24;border-radius:6px;font-size:13px;width:100%;background:#fffbeb;">
+                        </div>
+                        <div style="min-width:90px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Kompyuter</label>
+                            <input type="number" id="do-computers" min="1" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="min-width:95px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Davomiyligi</label>
+                            <input type="number" id="do-duration" min="1" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+                        <div style="flex:1;min-width:160px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Izoh</label>
+                            <input type="text" id="do-note" maxlength="255" placeholder="ixtiyoriy" style="padding:6px 10px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
+                        </div>
+
+                        <div style="display:flex;gap:6px;align-items:flex-end;">
+                            <button type="button" onclick="tcResetOverrideForm()" title="Default qiymatlarga qaytarish" style="padding:6px 10px;background:#fff;color:#475569;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;font-size:12px;">↺ Reset</button>
+                            <button type="button" onclick="tcSaveDayOverride(true)" title="Tanlangan kunlardagi maxsus sozlamani o'chirish" style="padding:6px 10px;background:#fff;color:#e11d48;border:1px solid #fda4af;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">Tozalash</button>
+                            <button type="button" onclick="tcSaveDayOverride(false)" style="padding:6px 14px;background:linear-gradient(135deg,#14b8a6,#0d9488);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;">Saqlash</button>
+                        </div>
+                    </div>
+                    <div id="do-status" style="margin-top:8px;font-size:12px;color:#64748b;min-height:16px;"></div>
+                </div>
+                @endif
+
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
                 <div>
@@ -226,10 +290,12 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 6px;">
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
-                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;" oninput="formatTimeInput(this)" onblur="validateTimeInput(this)">
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:{{ $tcReadOnly ? 'default' : 'pointer' }};{{ $tcReadOnly ? 'background:#f1f5f9;color:#475569;' : '' }}" {{ $tcReadOnly ? 'readonly' : '' }} @if(!$tcReadOnly) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
+                                                        @if(!$tcReadOnly)
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
+                                                        @endif
                                                         @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
                                                             <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
                                                                 <span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o'zgarishi mumkin</span>
@@ -365,7 +431,7 @@
             input.value = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
         }
 
-        function saveTestTime(btn) {
+        function saveTestTime(btn, force) {
             var container = btn.parentElement;
             var input = container.querySelector('.test-time-input');
             var timeVal = input.value.trim();
@@ -399,7 +465,8 @@
                     semester_code: input.getAttribute('data-semester-code'),
                     yn_type: input.getAttribute('data-yn-type') || 'Test',
                     test_time: timeVal,
-                    yn_submitted: input.getAttribute('data-yn-submitted') === '1'
+                    yn_submitted: input.getAttribute('data-yn-submitted') === '1',
+                    force: force === true
                 })
             })
             .then(function(resp) { return resp.json(); })
@@ -426,16 +493,96 @@
                     } else if (existingNote) {
                         existingNote.remove();
                     }
+                } else if (data.error_code === 'lesson_conflict') {
+                    input.value = '';
+                    showLessonConflictModal(data, subjectName, timeVal, btn, input);
                 } else {
                     showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
                 }
             })
-            .catch(function() {
-                showToast('Xatolik', 'Xatolik yuz berdi', true);
+            .catch(function(err) {
+                if (err && err.error_code === 'lesson_conflict') {
+                    input.value = '';
+                    showLessonConflictModal(err, subjectName, timeVal, btn, input);
+                } else {
+                    showToast('Xatolik', 'Xatolik yuz berdi', true);
+                }
             })
             .finally(function() {
                 btn.disabled = false;
                 btn.style.opacity = '1';
+            });
+        }
+
+        // Dars to'qnashuvi modali — shu guruhning shu sanada/vaqtda darslari mavjud
+        function showLessonConflictModal(data, subjectName, timeVal, btn, input) {
+            closeLessonConflictModal();
+            window.__lessonConflictPending = { btn: btn, input: input, timeVal: timeVal };
+            var lessons = Array.isArray(data.lessons) ? data.lessons : [];
+            var rowsHtml = '';
+            lessons.forEach(function(l, i) {
+                rowsHtml += '<tr>'
+                    + '<td style="padding:8px 10px;color:#475569;font-size:12px;">' + (i + 1) + '</td>'
+                    + '<td style="padding:8px 10px;font-weight:600;color:#0f172a;">' + (l.subject_name || '-') + '</td>'
+                    + '<td style="padding:8px 10px;color:#64748b;font-size:12px;">' + (l.training_type || '-') + '</td>'
+                    + '<td style="padding:8px 10px;color:#1e293b;font-weight:600;text-align:center;">' + (l.start || '') + ' – ' + (l.end || '') + '</td>'
+                    + '<td style="padding:8px 10px;color:#475569;font-size:12px;">' + (l.pair_name || '-') + '</td>'
+                    + '</tr>';
+            });
+            var html = ''
+                + '<div id="lesson-conflict-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;">'
+                + '<div style="background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;">'
+                + '<div style="padding:14px 22px;background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;display:flex;align-items:center;justify-content:space-between;">'
+                + '<h3 style="margin:0;font-size:16px;font-weight:700;">⚠️ Vaqt ustma-ust tushdi — guruh darsda</h3>'
+                + '<button type="button" onclick="closeLessonConflictModal()" style="background:none;border:none;color:#fff;font-size:24px;cursor:pointer;line-height:1;padding:0 6px;">&times;</button>'
+                + '</div>'
+                + '<div style="padding:18px 22px;overflow-y:auto;">'
+                + '<p style="margin:0 0 12px;color:#475569;font-size:13px;">'
+                + '<b>' + esc(subjectName) + '</b> uchun tanlangan <b>' + esc(data.date || '') + '</b> sanasida <b>' + esc(data.time_range || timeVal) + '</b> oralig\'ida bu guruhning quyidagi darslari mavjud:'
+                + '</p>'
+                + '<table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">'
+                + '<thead><tr style="background:#f8fafc;">'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">#</th>'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Fan</th>'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Tur</th>'
+                + '<th style="padding:8px 10px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Vaqt</th>'
+                + '<th style="padding:8px 10px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:1px solid #e5e7eb;">Juftlik</th>'
+                + '</tr></thead>'
+                + '<tbody>' + (rowsHtml || '<tr><td colspan="5" style="padding:14px;text-align:center;color:#94a3b8;">Ma\'lumot yo\'q</td></tr>') + '</tbody>'
+                + '</table>'
+                + '<div style="margin-top:14px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:12px;font-weight:500;">'
+                + 'Bu vaqt oralig\'ida YN belgilab bo\'lmaydi. Iltimos boshqa vaqt yoki sanani tanlang.'
+                + '</div>'
+                + '</div>'
+                + '<div style="padding:12px 22px;border-top:1px solid #e5e7eb;background:#f8fafc;display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">'
+                + '<button type="button" onclick="closeLessonConflictModal()" style="padding:8px 22px;background:#fff;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Yopish</button>'
+                + '<button type="button" onclick="forceSaveTestTime()" style="padding:8px 22px;background:linear-gradient(135deg,#ea580c,#f97316);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;box-shadow:0 4px 12px rgba(234,88,12,0.35);">Baribir saqlansin</button>'
+                + '</div>'
+                + '</div>'
+                + '</div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+        function closeLessonConflictModal() {
+            var el = document.getElementById('lesson-conflict-overlay');
+            if (el) el.remove();
+            window.__lessonConflictPending = null;
+        }
+
+        // "Baribir saqlash" — dars to'qnashishi e'tiborsiz qoldirilib, force=true bilan qayta jo'natiladi
+        function forceSaveTestTime() {
+            var pending = window.__lessonConflictPending;
+            if (!pending || !pending.btn || !pending.input) {
+                closeLessonConflictModal();
+                return;
+            }
+            // Tozalangan inputga vaqtni qaytaramiz
+            pending.input.value = pending.timeVal;
+            closeLessonConflictModal();
+            saveTestTime(pending.btn, true);
+        }
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+                return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
             });
         }
     </script>
@@ -633,6 +780,126 @@
             url.searchParams.set('current_semester', cs);
             window.location.href = url.toString();
         }
+
+        // ===== Inline day override panel =====
+        var DAY_OVERRIDE_SAVE = '{{ route($routePrefix . ".academic-schedule.test-center.day-override.save") }}';
+        var DO_SELECTED_DATES = [];
+        var DO_DEFAULTS = (function(){
+            var el = document.getElementById('day-override-panel');
+            try { return JSON.parse(el.getAttribute('data-defaults') || '{}'); } catch(e){ return {}; }
+        })();
+
+        function tcResetOverrideForm() {
+            document.getElementById('do-work-start').value = DO_DEFAULTS.work_hours_start || '';
+            document.getElementById('do-work-end').value = DO_DEFAULTS.work_hours_end || '';
+            document.getElementById('do-lunch-start').value = DO_DEFAULTS.lunch_start || '';
+            document.getElementById('do-lunch-end').value = DO_DEFAULTS.lunch_end || '';
+            document.getElementById('do-computers').value = DO_DEFAULTS.computer_count || '';
+            document.getElementById('do-duration').value = DO_DEFAULTS.test_duration_minutes || '';
+            document.getElementById('do-note').value = '';
+        }
+
+        function tcRenderDateChips() {
+            var box = document.getElementById('do-dates-chips');
+            if (!DO_SELECTED_DATES.length) {
+                box.innerHTML = '<span style="font-size:11px;color:#94a3b8;font-style:italic;">Sana qo\'shilmagan</span>';
+                return;
+            }
+            box.innerHTML = DO_SELECTED_DATES.map(function(d, i){
+                var human = d.split('-').reverse().join('.');
+                return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#0d9488;color:#fff;border-radius:12px;font-size:11px;font-weight:600;">'
+                    + human
+                    + '<button type="button" onclick="tcRemoveDate(' + i + ')" style="background:none;border:none;color:#fff;cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">&times;</button>'
+                    + '</span>';
+            }).join('');
+        }
+
+        function tcAddDate() {
+            var input = document.getElementById('do-date-input');
+            var d = input.value;
+            if (!d) return;
+            if (DO_SELECTED_DATES.indexOf(d) === -1) {
+                DO_SELECTED_DATES.push(d);
+                DO_SELECTED_DATES.sort();
+                tcRenderDateChips();
+            }
+            input.value = '';
+        }
+
+        function tcRemoveDate(idx) {
+            DO_SELECTED_DATES.splice(idx, 1);
+            tcRenderDateChips();
+        }
+
+        function tcSaveDayOverride(clearAll) {
+            var status = document.getElementById('do-status');
+            if (!DO_SELECTED_DATES.length) {
+                status.textContent = 'Avval kamida bitta sana qo\'shing.';
+                status.style.color = '#dc2626';
+                return;
+            }
+            var payload = { dates: DO_SELECTED_DATES };
+            if (clearAll) {
+                payload.clear = true;
+            } else {
+                payload.work_hours_start = document.getElementById('do-work-start').value || null;
+                payload.work_hours_end = document.getElementById('do-work-end').value || null;
+                payload.lunch_start = document.getElementById('do-lunch-start').value || null;
+                payload.lunch_end = document.getElementById('do-lunch-end').value || null;
+                payload.computer_count = document.getElementById('do-computers').value || null;
+                payload.test_duration_minutes = document.getElementById('do-duration').value || null;
+                payload.note = document.getElementById('do-note').value || null;
+            }
+            status.textContent = 'Saqlanmoqda...';
+            status.style.color = '#64748b';
+            fetch(DAY_OVERRIDE_SAVE, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,data:j}; }); })
+              .then(function(res){
+                if (res.ok && res.data.success) {
+                    var msg = res.data.message || 'Saqlandi';
+                    if (res.data.per_day) {
+                        var lines = [];
+                        Object.keys(res.data.per_day).forEach(function(d){
+                            var p = res.data.per_day[d];
+                            var human = d.split('-').reverse().join('.');
+                            lines.push(human + ': ish ' + p.effective.work_hours_start + '–' + p.effective.work_hours_end
+                                + (p.effective.lunch_start ? ', tushlik ' + p.effective.lunch_start + '–' + p.effective.lunch_end : '')
+                                + ', sig\'im ' + p.daily_capacity);
+                        });
+                        msg += ' (' + lines.join(' | ') + ')';
+                    }
+                    status.textContent = msg;
+                    status.style.color = '#16a34a';
+                } else {
+                    status.textContent = (res.data && res.data.message) ? res.data.message : 'Xatolik yuz berdi';
+                    status.style.color = '#dc2626';
+                }
+              }).catch(function(){
+                status.textContent = 'Tarmoq xatosi.';
+                status.style.color = '#dc2626';
+              });
+        }
+
+        // Sahifa yuklanganda default qiymatlarni va bo'sh sanalar ro'yxatini ko'rsatish
+        document.addEventListener('DOMContentLoaded', function(){
+            tcResetOverrideForm();
+            tcRenderDateChips();
+            // Filterdagi dateFrom ni boshlang'ich sana sifatida qo'yish
+            try {
+                var df = $('#date_from').val();
+                if (df) {
+                    var p = df.split('.');
+                    if (p.length === 3) document.getElementById('do-date-input').value = p[2] + '-' + p[1] + '-' + p[0];
+                }
+            } catch(e){}
+        });
 
         function tcExportExcel() {
             var url = new URL('{{ route($routePrefix . ".academic-schedule.test-center.export-excel") }}');

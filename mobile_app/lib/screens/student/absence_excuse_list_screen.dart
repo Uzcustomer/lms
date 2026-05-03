@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/student_provider.dart';
 import '../../widgets/loading_widget.dart';
+import '../../utils/page_transitions.dart';
 import 'absence_excuse_create_screen.dart';
 import 'absence_excuse_detail_screen.dart';
 
@@ -65,7 +66,7 @@ class _AbsenceExcuseListScreenState extends State<AbsenceExcuseListScreen> {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const AbsenceExcuseCreateScreen()),
+            SlideFadePageRoute(builder: (_) => const AbsenceExcuseCreateScreen()),
           );
           if (result == true && mounted) {
             context.read<StudentProvider>().loadExcuses();
@@ -117,7 +118,7 @@ class _AbsenceExcuseListScreenState extends State<AbsenceExcuseListScreen> {
                   onTap: () async {
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      SlideFadePageRoute(
                         builder: (_) => AbsenceExcuseDetailScreen(excuseId: excuse['id'] as int),
                       ),
                     );

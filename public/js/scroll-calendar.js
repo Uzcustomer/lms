@@ -68,8 +68,8 @@
         this.display.type = 'text';
         this.display.className = 'date-input';
         this.display.placeholder = this.options.placeholder || 'kk.oo.yyyy';
-        this.display.readOnly = true;
-        this.display.style.cursor = 'pointer';
+        this.display.readOnly = false;
+        this.display.style.cursor = 'text';
         wrap.appendChild(this.display);
 
         this.clearBtn = document.createElement('span');
@@ -176,6 +176,19 @@
             if (self.isOpen) self.close(); else self.open();
         });
 
+        this.display.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                self._parseManual();
+            }
+        });
+
+        this.display.addEventListener('blur', function() {
+            if (self.display.value.trim() !== '' && !self.isOpen) {
+                self._parseManual();
+            }
+        });
+
         this.clearBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             self.clear();
@@ -274,6 +287,31 @@
         if (this.options.onChange) this.options.onChange(d);
     };
 
+    P._parseManual = function() {
+        var val = this.display.value.trim();
+        if (!val) return;
+        var d = null;
+        // dd.mm.yyyy
+        var m = val.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+        if (m) {
+            d = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+        }
+        // yyyy-mm-dd
+        if (!d) {
+            m = val.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (m) d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
+        }
+        if (d && !isNaN(d.getTime())) {
+            d.setHours(0, 0, 0, 0);
+            this.selected = d;
+            this.input.value = toYmd(d);
+            this.display.value = toDmy(d);
+            this.clearBtn.style.display = 'block';
+            this._refreshCells();
+            if (this.options.onChange) this.options.onChange(d);
+        }
+    };
+
     P._refreshCells = function() {
         var cells = this.body.querySelectorAll('.sc-day');
         var sel = this.selected;
@@ -294,8 +332,17 @@
     P._updateHeader = function() {
         var midY = this.body.scrollTop + (VISIBLE_ROWS * ROW_H) / 2;
         var idx = Math.max(0, Math.min(Math.floor(midY / ROW_H), this.weeks.length - 1));
-        var thu = this.weeks[idx][3];
-        this.monthLabel.textContent = MONTHS[thu.getMonth()] + ' ' + thu.getFullYear();
+        var wk = this.weeks[idx];
+        // Hafta ichidagi eng ko'p uchraydigan oyni topish
+        var mc = {};
+        for (var i = 0; i < 7; i++) {
+            var k = wk[i].getMonth() + '-' + wk[i].getFullYear();
+            mc[k] = (mc[k] || 0) + 1;
+        }
+        var best = null, bestC = 0;
+        for (var key in mc) { if (mc[key] > bestC) { bestC = mc[key]; best = key; } }
+        var p = best.split('-');
+        this.monthLabel.textContent = MONTHS[parseInt(p[0])] + ' ' + p[1];
     };
 
     /** Dasturiy ravishda sanani o'rnatish */

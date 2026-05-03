@@ -2,13 +2,19 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+import 'dart:async';
+import 'dart:ui';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
+import '../../config/aurora_themes.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
-import '../../widgets/stat_card.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/scale_tap.dart';
+import 'student_home_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -18,15 +24,155 @@ class StudentDashboardScreen extends StatefulWidget {
 }
 
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  Timer? _clockTimer;
+  List<dynamic> _todayLessons = [];
+  Map<String, dynamic>? _nextDayLesson;
+  DateTime _now = DateTime.now();
+
   @override
   void initState() {
     super.initState();
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<StudentProvider>();
       provider.loadDashboard();
       provider.loadProfile();
       provider.loadContract();
+      provider.loadSubjects();
+      // Use cached schedule immediately, then refresh in background
+      _parseSchedule(provider.schedule);
+      _loadTodaySchedule();
     });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  void _parseSchedule(Map<String, dynamic>? schedule) {
+    if (schedule == null) {
+      debugPrint('[SCHEDULE] schedule is null');
+      return;
+    }
+    try {
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      debugPrint('[SCHEDULE] today=$today');
+      final scheduleList = schedule['schedule'];
+      if (scheduleList == null || scheduleList is! List) {
+        debugPrint('[SCHEDULE] scheduleList is null or not List, keys=${schedule.keys.toList()}');
+        return;
+      }
+      debugPrint('[SCHEDULE] days count=${scheduleList.length}');
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        final d = day['date']?.toString() ?? '?';
+        final les = day['lessons'];
+        final count = (les is List) ? les.length : 0;
+        debugPrint('[SCHEDULE] day=$d lessons=$count');
+      }
+
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        if (day['date']?.toString() == today) {
+          final lessons = day['lessons'];
+          if (lessons is List && lessons.isNotEmpty) {
+            setState(() {
+              _todayLessons = lessons;
+              _nextDayLesson = null;
+            });
+            return;
+          }
+        }
+      }
+
+      setState(() => _todayLessons = []);
+      final todayDate = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      // Collect future days with lessons, then sort to find nearest
+      final futureDays = <Map<String, dynamic>>[];
+      for (final day in scheduleList) {
+        if (day is! Map<String, dynamic>) continue;
+        final dateStr = day['date']?.toString() ?? '';
+        if (dateStr.isEmpty) continue;
+        final dayDate = DateTime.tryParse(dateStr);
+        if (dayDate == null) continue;
+        final dayOnly = DateTime(dayDate.year, dayDate.month, dayDate.day);
+        if (!dayOnly.isAfter(todayDate)) continue;
+        final lessons = day['lessons'];
+        if (lessons is! List || lessons.isEmpty) continue;
+        futureDays.add(day);
+      }
+      if (futureDays.isNotEmpty) {
+        futureDays.sort((a, b) => a['date'].toString().compareTo(b['date'].toString()));
+        final nearest = futureDays.first;
+        final firstLesson = (nearest['lessons'] as List).first;
+        if (firstLesson is Map<String, dynamic>) {
+          final dStr = nearest['date'].toString();
+          setState(() {
+            _nextDayLesson = {
+              ...firstLesson,
+              '_date': dStr,
+              '_day_date': DateTime.parse(dStr),
+            };
+          });
+          return;
+        }
+      }
+      setState(() => _nextDayLesson = null);
+    } catch (_) {}
+  }
+
+  Future<void> _loadTodaySchedule() async {
+    try {
+      final provider = context.read<StudentProvider>();
+      await provider.loadSchedule();
+      if (!mounted) return;
+      _parseSchedule(provider.schedule);
+    } catch (_) {
+      if (mounted) setState(() {
+        _todayLessons = [];
+        _nextDayLesson = null;
+      });
+    }
+  }
+
+  Map<String, dynamic>? _getCurrentOrNextLesson() {
+    if (_todayLessons.isEmpty) return null;
+    final now = _now;
+    Map<String, dynamic>? nextLesson;
+
+    for (final lesson in _todayLessons) {
+      if (lesson is! Map<String, dynamic>) continue;
+      final startStr = lesson['lesson_pair_start_time']?.toString() ?? '';
+      final endStr = lesson['lesson_pair_end_time']?.toString() ?? '';
+      if (startStr.isEmpty || endStr.isEmpty) continue;
+
+      final startParts = startStr.split(':');
+      final endParts = endStr.split(':');
+      if (startParts.length < 2 || endParts.length < 2) continue;
+
+      final startH = int.tryParse(startParts[0]);
+      final startM = int.tryParse(startParts[1]);
+      final endH = int.tryParse(endParts[0]);
+      final endM = int.tryParse(endParts[1]);
+      if (startH == null || startM == null || endH == null || endM == null) continue;
+
+      final start = DateTime(now.year, now.month, now.day, startH, startM);
+      final end = DateTime(now.year, now.month, now.day, endH, endM);
+
+      if (now.isAfter(start.subtract(const Duration(minutes: 1))) && now.isBefore(end)) {
+        return {...lesson, '_is_active': true, '_end': end, '_start': start};
+      }
+      if (now.isBefore(start)) {
+        if (nextLesson == null) {
+          nextLesson = {...lesson, '_is_active': false, '_start': start, '_end': end};
+        }
+      }
+    }
+    return nextLesson;
   }
 
   String? _buildImageUrl(String? imagePath) {
@@ -50,13 +196,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final aurora = context.watch<SettingsProvider>().auroraTheme;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
-            return const LoadingWidget();
+            return Container(
+              color: auroraBase(aurora, isDark),
+              child: const LoadingWidget(),
+            );
           }
 
           final data = provider.dashboard;
@@ -83,81 +232,110 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              await Future.wait([
-                provider.loadDashboard(),
-                provider.loadProfile(),
-                provider.loadContract(),
-              ]);
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                children: [
-                  _buildProfileHeader(context, data, profile, l, isDark),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: StatCard(
-                                title: l.gpa,
-                                value: (data?['gpa'] ?? profile?['avg_gpa'] ?? 0).toString(),
-                                icon: Icons.trending_up,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: StatCard(
-                                title: l.avgGrade,
-                                value: (data?['avg_grade'] ?? profile?['avg_grade'] ?? 0).toString(),
-                                icon: Icons.star_outline,
-                                color: AppTheme.accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: StatCard(
-                                title: l.debts,
-                                value: (data?['debt_subjects'] ?? 0).toString(),
-                                icon: Icons.warning_amber_outlined,
-                                color: data?['debt_subjects'] != null && data!['debt_subjects'] > 0
-                                    ? AppTheme.errorColor
-                                    : AppTheme.successColor,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: StatCard(
-                                title: l.absences,
-                                value: (data?['total_absences'] ?? 0).toString(),
-                                icon: Icons.event_busy_outlined,
-                                color: AppTheme.warningColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
-                        const SizedBox(height: 100),
-                      ],
+          return Container(
+            color: auroraBase(aurora, isDark),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await Future.wait([
+                  provider.loadDashboard(),
+                  provider.loadProfile(),
+                  provider.loadContract(),
+                  provider.loadSubjects(),
+                ]);
+                _loadTodaySchedule();
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    _buildProfileHeader(context, data, profile, l, isDark),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLiveClassCard(),
+                          _buildGpaRow(data, profile, l),
+                          const SizedBox(height: 16),
+                          _buildSubjectsOverview(provider.subjects, isDark, l),
+                          _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
+                          const SizedBox(height: 100),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
+    final cc = cardColor ?? const Color(0xFF0A1A3A);
+    final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
+    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: surface,
+            border: Border.all(color: border),
+            borderRadius: BorderRadius.circular(borderRadius),
+            boxShadow: [
+              BoxShadow(
+                color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1A1340).withOpacity(0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                top: -50,
+                right: -50,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                  child: Container(
+                    width: 140,
+                    height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [cc.withOpacity(isDark ? 0.4 : 0.32), cc.withOpacity(0)],
+                        stops: const [0.0, 0.7],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlob(Color color) {
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+      child: Container(
+        width: 240,
+        height: 240,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color, color.withOpacity(0)],
+            stops: const [0.0, 0.7],
+          ),
+        ),
       ),
     );
   }
@@ -174,169 +352,227 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         '';
     final studentId = profile?['student_id_number']?.toString() ?? '';
     final faculty = profile?['department_name']?.toString() ?? '';
-    final specialty = profile?['specialty_name']?.toString() ?? '';
     final imageUrl = _buildImageUrl(profile?['image']?.toString());
-    // Use calculated course from backend (not level_code)
     final course = profile?['course']?.toString() ?? '';
     final yearOfEnter = profile?['year_of_enter']?.toString() ?? '';
     final educationYear = profile?['education_year_name']?.toString() ?? '';
     final semesterName = profile?['semester_name']?.toString() ?? '';
+    final paymentFormName = profile?['payment_form_name']?.toString() ?? '';
 
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final divColor = isDark ? AppTheme.darkDivider : AppTheme.dividerColor;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
-    return Stack(
+    return Column(
       children: [
-        // Dark blue curved background
+        // Top bar
         Container(
-          width: double.infinity,
-          padding: EdgeInsets.only(
-            top: statusBarHeight + 12,
-            bottom: 200,
-          ),
+          padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 4),
+          height: statusBarHeight + 64,
           decoration: const BoxDecoration(
-            color: AppTheme.primaryColor,
+            color: Color(0xFF0A1A3A),
             borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
+              bottomLeft: Radius.circular(18),
+              bottomRight: Radius.circular(18),
             ),
           ),
-          child: Column(
+          child: Row(
             children: [
-              // Top bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.account_balance, color: Colors.white, size: 28),
-                        const SizedBox(width: 10),
-                        Text(
-                          l.appTitle,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
-                          onPressed: () {},
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.settings, color: Colors.white, size: 24),
-                          onPressed: () => _showSettingsSheet(context),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              const Icon(Icons.account_balance, color: Colors.white, size: 24),
+              const Spacer(),
+              Text(l.home, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
+                onPressed: () {},
               ),
-              const SizedBox(height: 16),
-
-              // Profile photo
-              _buildProfileAvatar(imageUrl, fullName),
+              IconButton(
+                icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
+                onPressed: () => _showSettingsSheet(context),
+              ),
             ],
           ),
         ),
 
-        // White card
-        Container(
-          width: double.infinity,
-          margin: EdgeInsets.only(
-            top: statusBarHeight + 210,
-            left: 16,
-            right: 16,
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(20),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Text(
-                fullName,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withAlpha(20),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  studentId,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (faculty.isNotEmpty)
-                Text(
-                  faculty,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.warningColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              if (specialty.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  specialty,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: subTextColor,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 16),
-              Divider(height: 1, color: divColor),
-              const SizedBox(height: 12),
-              Row(
+        const SizedBox(height: 16),
+
+        // Glass profile card
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: _buildGlassCard(
+            isDark: isDark,
+            cardColor: const Color(0xFF1565C0),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  _buildMiniStat(l.enrollmentYear, yearOfEnter.isNotEmpty ? yearOfEnter : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.educationYear, educationYear.isNotEmpty ? educationYear : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.semester, semesterName.isNotEmpty ? semesterName : '-', subTextColor, AppTheme.successColor),
-                  _buildVerticalDivider(divColor),
-                  _buildMiniStat(l.course, course.isNotEmpty ? '$course-kurs' : '-', subTextColor, AppTheme.successColor),
+                  // Photo + name row
+                  Row(
+                    children: [
+                      // Avatar
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark ? Colors.white24 : Colors.white,
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: imageUrl != null && imageUrl.isNotEmpty
+                            ? ClipOval(
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  width: 64,
+                                  height: 64,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.grey[200],
+                                    child: Text(_getInitials(fullName),
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor)),
+                                  ),
+                                  errorWidget: (_, __, ___) => CircleAvatar(
+                                    radius: 32,
+                                    backgroundColor: isDark
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.grey[200],
+                                    child: Text(_getInitials(fullName),
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            color: textColor)),
+                                  ),
+                                ),
+                              )
+                            : CircleAvatar(
+                                radius: 32,
+                                backgroundColor: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : const Color(0xFFE8D5C4),
+                                child: Text(
+                                  _getInitials(fullName),
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 14),
+                      // Name + ID + badge
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              fullName.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: textColor,
+                                letterSpacing: 0.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              'ID: $studentId',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: subTextColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF43A047).withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                paymentFormName.isNotEmpty
+                                    ? paymentFormName
+                                    : (faculty.isNotEmpty ? faculty : ''),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF43A047),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  // Stats row pills
+                  Row(
+                    children: [
+                      _buildStatPill(yearOfEnter.isNotEmpty ? yearOfEnter : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(course.isNotEmpty ? '$course-kurs' : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(semesterName.isNotEmpty ? '$semesterName' : '-', isDark),
+                      const SizedBox(width: 8),
+                      _buildStatPill(educationYear.isNotEmpty ? educationYear : '-', isDark),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildStatPill(String text, bool isDark) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withOpacity(0.08)
+              : Colors.white.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.white.withOpacity(0.9),
+          ),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF5C3D2E),
+          ),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
     );
   }
 
@@ -654,6 +890,163 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return buf.toString();
   }
 
+  static const List<List<Color>> _subjectGradients = [
+    [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
+    [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+    [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+    [Color(0xFFF3E5F5), Color(0xFFE1BEE7)],
+    [Color(0xFFFCE4EC), Color(0xFFF8BBD0)],
+    [Color(0xFFE0F7FA), Color(0xFFB2EBF2)],
+    [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
+    [Color(0xFFE8EAF6), Color(0xFFC5CAE9)],
+  ];
+
+  static const List<Color> _subjectAccents = [
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFFE65100),
+    Color(0xFF7B1FA2),
+    Color(0xFFC62828),
+    Color(0xFF00838F),
+    Color(0xFFF9A825),
+    Color(0xFF283593),
+  ];
+
+  Widget _buildSubjectsOverview(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
+    if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
+
+    final items = <Map<String, dynamic>>[];
+    for (final s in subjects) {
+      if (s is! Map<String, dynamic>) continue;
+      final grades = s['grades'] as Map<String, dynamic>? ?? {};
+      final jn = grades['jn'];
+      final jnVal = jn != null
+          ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0)
+          : null;
+      final absentHours = _toDouble(s['absent_hours']);
+      final totalHours = _toDouble(s['auditorium_hours']);
+      final attendance = totalHours > 0
+          ? ((totalHours - absentHours) / totalHours * 100).clamp(0.0, 100.0)
+          : 100.0;
+      items.add({
+        'name': s['subject_name']?.toString() ?? '',
+        'jn': jnVal,
+        'attendance': attendance,
+        'absent': absentHours.round(),
+        'total': totalHours.round(),
+      });
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Fanlar',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: textColor,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...List.generate(items.length, (index) {
+          final item = items[index];
+          final jn = item['jn'] as double?;
+          final att = item['attendance'] as double;
+
+          Color jnColor;
+          if (jn == null) {
+            jnColor = AppTheme.textSecondary;
+          } else if (jn >= 71) {
+            jnColor = const Color(0xFF4A6CF7);
+          } else if (jn >= 56) {
+            jnColor = const Color(0xFFFFA726);
+          } else {
+            jnColor = const Color(0xFFE53935);
+          }
+
+          const subjectColors = [Color(0xFF43A047), Color(0xFF7C4DFF), Color(0xFFE65100), Color(0xFF0097A7), Color(0xFFE91E63), Color(0xFF1565C0)];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: ScaleTap(
+              onTap: () => StudentHomeScreen.switchToGrades(context),
+              child: _buildGlassCard(
+              isDark: isDark,
+              cardColor: subjectColors[index % subjectColors.length],
+              borderRadius: 16,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: jnColor.withOpacity(isDark ? 0.2 : 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          jn != null ? jn.round().toString() : '-',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: jnColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['name'] as String,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: textColor,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.access_time_rounded,
+                                  size: 12, color: subTextColor),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${att.round()}% · ${item['absent']}/${item['total']} soat',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: subTextColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            ),
+          );
+        }),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   Widget _buildTuitionFeeSection(
     BuildContext context,
     Map<String, dynamic>? profile,
@@ -666,9 +1059,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final isContract = paymentFormName.toLowerCase().contains('kontrakt') ||
         paymentFormName.toLowerCase().contains('shartnoma') ||
         (profile?['payment_form_code']?.toString() ?? '') == '12';
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
     final summary = contractData?['summary'] as Map<String, dynamic>?;
     final totalAmount = (summary?['total_amount'] ?? 0).toDouble();
@@ -681,26 +1073,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       children: [
         Text(
           l.tuitionFee,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: textColor,
+            letterSpacing: 0.3,
+          ),
         ),
         const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(isDark ? 40 : 12),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
+        _buildGlassCard(
+          isDark: isDark,
+          borderRadius: 16,
+          cardColor: const Color(0xFF00897B),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Payment form badge
@@ -824,14 +1211,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ],
           ),
         ),
+        ),
         // Contract list section
         if (isContract && contractList != null && contractList.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(
             l.contractList,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+              letterSpacing: 0.3,
+            ),
           ),
           const SizedBox(height: 12),
           ...contractList.map((contract) {
@@ -843,22 +1234,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             final educYear = c['education_year']?.toString() ?? '';
             final isPaid = cStatus == 'paid';
 
-            return Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(isDark ? 30 : 8),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _buildGlassCard(
+                isDark: isDark,
+                borderRadius: 14,
+                cardColor: const Color(0xFF4A6CF7),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Education year & status row
@@ -919,6 +1303,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   ),
                 ],
               ),
+            ),
+            ),
             );
           }),
         ],
@@ -946,6 +1332,326 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
+  Widget _buildLiveClassCard() {
+    final lesson = _getCurrentOrNextLesson();
+
+    if (lesson == null) {
+      if (_nextDayLesson == null) return const SizedBox.shrink();
+      return _buildNextDayCard(_nextDayLesson!);
+    }
+
+    final isActive = lesson['_is_active'] == true;
+    final subjectName = lesson['subject_name']?.toString() ?? '';
+    final startTime = lesson['lesson_pair_start_time']?.toString() ?? '';
+    final endTime = lesson['lesson_pair_end_time']?.toString() ?? '';
+    final room = lesson['auditorium_name']?.toString() ?? '';
+    final start = lesson['_start'] as DateTime;
+    final end = lesson['_end'] as DateTime;
+
+    final Duration remaining;
+    final String statusText;
+
+    if (isActive) {
+      remaining = end.difference(_now);
+      statusText = 'HOZIR DAVOM ETMOQDA';
+    } else {
+      remaining = start.difference(_now);
+      statusText = 'KEYINGI DARS';
+    }
+
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes % 60;
+    String timeLeft;
+    if (hours > 0) {
+      timeLeft = '$hours soat $minutes daqiqa qoldi';
+    } else {
+      timeLeft = '${minutes > 0 ? minutes : 1} daqiqa qoldi';
+    }
+
+    final progress = isActive
+        ? 1.0 - (remaining.inSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    final gradientColors = isActive
+        ? [const Color(0xFF2E7D32), const Color(0xFF43A047), const Color(0xFF66BB6A)]
+        : [const Color(0xFFE65100), const Color(0xFFF57C00), const Color(0xFFFFA726)];
+    final shadowColor = isActive ? const Color(0xFF43A047) : const Color(0xFFF57C00);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: shadowColor.withAlpha(70),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -30,
+              top: -30,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(15),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 20,
+              bottom: -20,
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(10),
+                ),
+              ),
+            ),
+            Positioned(
+              left: -15,
+              bottom: -15,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withAlpha(8),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (isActive)
+                        _buildBlinkingDot()
+                      else
+                        Container(
+                          width: 8, height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(200),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white.withAlpha(220),
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    subjectName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, size: 16, color: Colors.white.withAlpha(200)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$startTime–$endTime',
+                        style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500),
+                      ),
+                      if (room.isNotEmpty) ...[
+                        const SizedBox(width: 10),
+                        Text('·', style: TextStyle(fontSize: 18, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                        const SizedBox(width: 6),
+                        Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(230), fontWeight: FontWeight.w500)),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (isActive) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        backgroundColor: Colors.white.withAlpha(40),
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Text(
+                    timeLeft,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withAlpha(200),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBlinkingDot() {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.3, end: 1.0),
+      duration: const Duration(milliseconds: 800),
+      builder: (context, val, child) {
+        return Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withAlpha((val * 255).toInt()),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withAlpha((val * 120).toInt()),
+                blurRadius: 6,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        );
+      },
+      onEnd: () {
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  String _weekdayName(int weekday) {
+    const days = ['', 'Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+    return days[weekday.clamp(1, 7)];
+  }
+
+  Widget _buildNextDayCard(Map<String, dynamic> lesson) {
+    final subjectName = lesson['subject_name']?.toString() ?? '';
+    final startTime = lesson['lesson_pair_start_time']?.toString() ?? '';
+    final endTime = lesson['lesson_pair_end_time']?.toString() ?? '';
+    final room = lesson['auditorium_name']?.toString() ?? '';
+    final dayDate = lesson['_day_date'] as DateTime?;
+    final dateStr = lesson['_date']?.toString() ?? '';
+
+    String dayLabel = '';
+    if (dayDate != null) {
+      final diff = dayDate.difference(DateTime(
+        _now.year, _now.month, _now.day,
+      )).inDays;
+      if (diff == 1) {
+        dayLabel = 'Ertaga';
+      } else {
+        dayLabel = '${_weekdayName(dayDate.weekday)}, ${DateFormat('d-MMMM').format(dayDate)}';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF5C6BC0), Color(0xFF7986CB)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF5C6BC0).withAlpha(60),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.event, size: 16, color: Colors.white70),
+                const SizedBox(width: 6),
+                Text(
+                  dayLabel.isNotEmpty ? dayLabel : dateStr,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white.withAlpha(220),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subjectName,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 16, color: Colors.white.withAlpha(200)),
+                const SizedBox(width: 4),
+                Text(
+                  '$startTime–$endTime',
+                  style: TextStyle(fontSize: 14, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500),
+                ),
+                if (room.isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  Text('·', style: TextStyle(fontSize: 16, color: Colors.white.withAlpha(180), fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 6),
+                  Text(room, style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(220), fontWeight: FontWeight.w500)),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _toDouble(dynamic val) {
+    if (val == null) return 0;
+    if (val is num) return val.toDouble();
+    return double.tryParse(val.toString()) ?? 0;
+  }
+
   Color _gradeColor(dynamic grade) {
     if (grade == null) return AppTheme.textSecondary;
     final g = grade is num ? grade.toDouble() : double.tryParse(grade.toString()) ?? 0;
@@ -953,5 +1659,139 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (g >= 71) return AppTheme.primaryColor;
     if (g >= 56) return AppTheme.warningColor;
     return AppTheme.errorColor;
+  }
+
+  Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
+    final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
+
+    return Row(
+      children: [
+        Expanded(
+          child: _buildDonutCard(
+            label: 'GPA',
+            value: gpa,
+            maxValue: 5.0,
+            displayText: gpa.toStringAsFixed(2),
+            ringColor: const Color(0xFF43A047),
+            isDark: isDark,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildDonutCard(
+            label: l.avgGrade,
+            value: avgGrade,
+            maxValue: 100.0,
+            displayText: avgGrade.toStringAsFixed(1),
+            ringColor: const Color(0xFFFFC107),
+            isDark: isDark,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDonutCard({
+    required String label,
+    required double value,
+    required double maxValue,
+    required String displayText,
+    required Color ringColor,
+    required bool isDark,
+  }) {
+    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
+    final subTextColor = isDark ? Colors.white70 : Colors.grey[600]!;
+    final trackColor = isDark ? Colors.white.withOpacity(0.08) : ringColor.withOpacity(0.12);
+    final percent = (value / maxValue).clamp(0.0, 1.0);
+
+    return _buildGlassCard(
+      isDark: isDark,
+      cardColor: ringColor,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: percent),
+              duration: const Duration(milliseconds: 1400),
+              curve: Curves.easeOutCubic,
+              builder: (context, animVal, _) {
+                return SizedBox(
+                  width: 110,
+                  height: 110,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 110,
+                        height: 110,
+                        child: PieChart(
+                          PieChartData(
+                            startDegreeOffset: -90,
+                            sectionsSpace: 0,
+                            centerSpaceRadius: 38,
+                            sections: [
+                              PieChartSectionData(
+                                value: animVal * maxValue,
+                                color: ringColor,
+                                radius: 14,
+                                showTitle: false,
+                              ),
+                              PieChartSectionData(
+                                value: maxValue - (animVal * maxValue),
+                                color: trackColor,
+                                radius: 14,
+                                showTitle: false,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            displayText,
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: ringColor,
+                            ),
+                          ),
+                          Text(
+                            '/ ${maxValue % 1 == 0 ? maxValue.toInt() : maxValue}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: subTextColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+      ),
+    );
   }
 }

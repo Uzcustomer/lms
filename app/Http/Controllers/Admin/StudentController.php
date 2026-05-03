@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -98,6 +99,22 @@ class StudentController extends Controller
             $query->where('country_name', $request->country);
         }
 
+        if ($request->filled('has_files')) {
+            if ($request->has_files === 'yes') {
+                $query->whereHas('files');
+            } elseif ($request->has_files === 'no') {
+                $query->whereDoesntHave('files');
+            }
+        }
+
+        if ($request->filled('has_admission_data')) {
+            if ($request->has_admission_data === 'yes') {
+                $query->whereHas('admissionData');
+            } elseif ($request->has_admission_data === 'no') {
+                $query->whereDoesntHave('admissionData');
+            }
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->paginate($perPage)->appends($request->query());
 
@@ -114,6 +131,149 @@ class StudentController extends Controller
             ->pluck('country_name');
 
         return view('admin.students.index', compact('students', 'educationTypes', 'countries'));
+    }
+
+    public function disabledIndex(Request $request)
+    {
+        $disabledFilter = function ($q) {
+            $q->whereRaw('LOWER(social_category_name) LIKE ?', ['%nogiron%']);
+        };
+
+        $hasInfoTable = Schema::hasTable('student_disability_infos');
+
+        $query = Student::query()->where($disabledFilter);
+        if ($hasInfoTable) {
+            $query->with('disabilityInfo');
+        }
+
+        if ($request->filled('disability_type')) {
+            $query->where('social_category_code', $request->disability_type);
+        }
+
+        if ($request->filled('full_name')) {
+            $query->where('full_name', 'like', '%' . $request->full_name . '%');
+        }
+
+        if ($request->filled('student_id_number')) {
+            $query->where('student_id_number', $request->student_id_number);
+        }
+
+        if ($request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+
+        if ($request->filled('group')) {
+            $query->where('group_id', $request->group);
+        }
+
+        if ($request->filled('level_code')) {
+            $query->where('level_code', $request->level_code);
+        }
+
+        if ($hasInfoTable && $request->filled('info_status')) {
+            if ($request->info_status === 'filled') {
+                $query->whereHas('disabilityInfo');
+            } elseif ($request->info_status === 'empty') {
+                $query->whereDoesntHave('disabilityInfo');
+            }
+        }
+
+        if ($request->filled('student_status')) {
+            if ($request->student_status === 'expelled') {
+                $query->whereRaw('LOWER(student_status_name) LIKE ?', ['%chetlash%']);
+            } elseif ($request->student_status === 'active') {
+                $query->where(function ($q) {
+                    $q->whereNull('student_status_name')
+                      ->orWhereRaw('LOWER(student_status_name) NOT LIKE ?', ['%chetlash%']);
+                });
+            }
+        }
+
+        $perPage = (int) $request->get('per_page', 50);
+        $students = $query->orderBy('full_name')->paginate($perPage)->appends($request->query());
+
+        $totalAll = Student::where($disabledFilter)->count();
+        $totalFilled = $hasInfoTable
+            ? Student::where($disabledFilter)->whereHas('disabilityInfo')->count()
+            : 0;
+        $totalEmpty = $totalAll - $totalFilled;
+        $totalExpelled = Student::where($disabledFilter)
+            ->whereRaw('LOWER(student_status_name) LIKE ?', ['%chetlash%'])
+            ->count();
+
+        $disabilityTypes = Student::select('social_category_code', 'social_category_name')
+            ->where($disabledFilter)
+            ->whereNotNull('social_category_code')
+            ->distinct()
+            ->orderBy('social_category_name')
+            ->get();
+
+        $departments = Student::select('department_id', 'department_name')
+            ->where($disabledFilter)
+            ->whereNotNull('department_id')
+            ->distinct()
+            ->orderBy('department_name')
+            ->get();
+
+        $groups = Student::select('group_id', 'group_name')
+            ->where($disabledFilter)
+            ->whereNotNull('group_id')
+            ->distinct()
+            ->orderBy('group_name')
+            ->get();
+
+        $levels = Student::select('level_code', 'level_name')
+            ->where($disabledFilter)
+            ->whereNotNull('level_code')
+            ->distinct()
+            ->orderBy('level_code')
+            ->get();
+
+        return view('admin.students.disabled', compact(
+            'students', 'disabilityTypes', 'departments', 'groups', 'levels',
+            'totalAll', 'totalFilled', 'totalEmpty', 'totalExpelled', 'hasInfoTable'
+        ));
+    }
+
+    public function disabledInfo(Student $student)
+    {
+        if (!Schema::hasTable('student_disability_infos')) {
+            return response()->json(['error' => 'Migratsiya bajarilmagan.'], 503);
+        }
+
+        $info = \App\Models\StudentDisabilityInfo::where('student_id', $student->id)->first();
+        $hasCertificate = $info && Schema::hasColumn('student_disability_infos', 'certificate_path') && $info->certificate_path;
+
+        return response()->json([
+            'student' => [
+                'id' => $student->id,
+                'full_name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'department_name' => $student->department_name,
+                'specialty_name' => $student->specialty_name,
+                'group_name' => $student->group_name,
+                'level_name' => $student->level_name,
+                'social_category_name' => $student->social_category_name,
+            ],
+            'info' => $info ? [
+                'examined_at' => optional($info->examined_at)->format('d.m.Y'),
+                'disability_group' => \App\Models\StudentDisabilityInfo::GROUPS[$info->disability_group] ?? $info->disability_group,
+                'disability_reason' => $info->disability_reason,
+                'disability_duration' => optional($info->disability_duration)->format('d.m.Y'),
+                'reexamination_at' => optional($info->reexamination_at)->format('d.m.Y'),
+                'updated_at' => optional($info->updated_at)->format('d.m.Y H:i'),
+            ] : null,
+            'certificate_url' => $hasCertificate ? route('admin.students.disabled.certificate', $student->id) : null,
+        ]);
+    }
+
+    public function disabledCertificate(Student $student)
+    {
+        $info = \App\Models\StudentDisabilityInfo::where('student_id', $student->id)->firstOrFail();
+        if (!$info->certificate_path) {
+            abort(404);
+        }
+        return \Storage::disk('public')->response($info->certificate_path);
     }
 
     public function getFilterDepartments(Request $request)
@@ -1234,6 +1394,7 @@ class StudentController extends Controller
         $filters = $request->only([
             'student_id_number', 'full_name', 'level_code', 'semester_code',
             'department', 'specialty', 'group', 'education_type',
+            'country', 'has_files', 'has_admission_data',
         ]);
         $filename = 'talabalar_' . now()->format('Y-m-d_H-i') . '.xlsx';
         return Excel::download(new StudentsExport($filters), $filename);

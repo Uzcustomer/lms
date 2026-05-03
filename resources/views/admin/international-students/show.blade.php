@@ -53,7 +53,7 @@
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         @if($visaInfo->status === 'approved')
                             <span class="sv-badge sv-badge-green">Tasdiqlangan</span>
                         @elseif($visaInfo->status === 'rejected')
@@ -64,6 +64,10 @@
                         @if($visaInfo->firm)
                             <span class="sv-badge sv-badge-indigo">{{ $visaInfo->firm_display }}</span>
                         @endif
+                        <a href="#tarix-section" class="sv-badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+                            <svg style="width:12px;height:12px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Tarix ({{ $history->count() }})
+                        </a>
                     </div>
                 </div>
 
@@ -225,6 +229,19 @@
                     </div>
                     <div x-show="editOpen" x-transition style="padding:0 16px 14px;border-top:1px solid #f1f5f9;">
                         @include('admin.international-students._visa-form', ['student' => $student, 'visaInfo' => $visaInfo])
+                    </div>
+                </div>
+
+                {{-- O'zgarishlar tarixi --}}
+                <div id="tarix-section" style="margin-top:16px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;overflow:hidden;" x-data="{histOpen:{{ $history->isNotEmpty() ? 'true' : 'false' }}}">
+                    <div @click="histOpen=!histOpen" style="padding:10px 16px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+                        <svg style="width:14px;height:14px;color:#475569;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span style="font-size:13px;font-weight:600;color:#334155;flex:1;">O'zgarishlar tarixi</span>
+                        <span style="font-size:11px;color:#94a3b8;">{{ $history->count() }} ta yozuv</span>
+                        <span style="width:10px;color:#94a3b8;transition:transform 0.2s;" :style="histOpen&&'transform:rotate(180deg)'">&#9660;</span>
+                    </div>
+                    <div x-show="histOpen" x-cloak x-transition style="padding:12px 16px 16px;border-top:1px solid #f1f5f9;background:#fafbfc;">
+                        @include('admin.international-students._history-list', ['history' => $history, 'student' => $student])
                     </div>
                 </div>
             @endif

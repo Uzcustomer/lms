@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
+use App\Http\Controllers\Api\V1\ChatApiController;
+use App\Http\Controllers\Api\V1\ClubApiController;
+use App\Http\Controllers\Api\V1\ExamAppealApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -46,11 +49,14 @@ Route::prefix('v1')->group(function () {
             Route::get('/pending-lessons', [StudentApiController::class, 'pendingLessons']);
             Route::get('/attendance', [StudentApiController::class, 'attendance']);
             Route::get('/contract', [StudentApiController::class, 'contract']);
+            Route::get('/exam-schedule', [StudentApiController::class, 'examSchedule']);
+            Route::get('/rating', [StudentApiController::class, 'studentRating']);
 
             // Profile completion
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);
             Route::post('/complete-profile/telegram', [StudentApiController::class, 'saveTelegram']);
             Route::get('/complete-profile/telegram/check', [StudentApiController::class, 'checkTelegramVerification']);
+            Route::post('/exam-language', [StudentApiController::class, 'saveExamLanguage']);
 
             // Absence excuses
             Route::get('/excuses/reasons', [AbsenceExcuseApiController::class, 'reasons']);
@@ -60,6 +66,29 @@ Route::prefix('v1')->group(function () {
             Route::post('/excuses/missed-assessments', [AbsenceExcuseApiController::class, 'missedAssessments']);
             Route::get('/excuses/{id}/download', [AbsenceExcuseApiController::class, 'download']);
             Route::get('/excuses/{id}/download-pdf', [AbsenceExcuseApiController::class, 'downloadPdf']);
+
+            // Clubs
+            Route::get('/clubs', [ClubApiController::class, 'index']);
+            Route::get('/clubs/my', [ClubApiController::class, 'myClubs']);
+            Route::post('/clubs/join', [ClubApiController::class, 'join']);
+            Route::post('/clubs/cancel', [ClubApiController::class, 'cancel']);
+
+            // Exam appeals (apellyatsiya)
+            Route::get('/appeals', [ExamAppealApiController::class, 'index']);
+            Route::get('/appeals/available-grades', [ExamAppealApiController::class, 'availableGrades']);
+            Route::post('/appeals', [ExamAppealApiController::class, 'store']);
+            Route::get('/appeals/{id}', [ExamAppealApiController::class, 'show']);
+            Route::post('/appeals/{id}/comment', [ExamAppealApiController::class, 'addComment']);
+            Route::get('/appeals/{id}/download', [ExamAppealApiController::class, 'download']);
+        });
+
+        // ── Chat endpoints ───────────────────────────────
+        Route::prefix('chat')->group(function () {
+            Route::get('/contacts', [ChatApiController::class, 'contacts']);
+            Route::get('/messages/{contactId}', [ChatApiController::class, 'messages']);
+            Route::post('/send', [ChatApiController::class, 'send']);
+            Route::get('/group', [ChatApiController::class, 'groupMessages']);
+            Route::post('/group/send', [ChatApiController::class, 'groupSend']);
         });
 
         // ── Teacher endpoints ─────────────────────────────

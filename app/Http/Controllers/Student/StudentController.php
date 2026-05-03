@@ -595,37 +595,60 @@ class StudentController extends Controller
 
             $dailySum = 0;
             foreach ($jbLessonDates as $date) {
+                if (!isset($jbLessonDatesForAverageLookup[$date])) continue;
+
                 $dayGrades = $jbGradesByDatePair[$date] ?? [];
-                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                if (empty($dayGrades)) continue;
+
                 $gradeSum = array_sum($dayGrades);
-                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                if (isset($jbLessonDatesForAverageLookup[$date])) {
-                    $dailySum += $dayAverage;
-                }
+                $dailyAvg = round($gradeSum / count($dayGrades), 0, PHP_ROUND_HALF_UP);
+                $dailySum += $dailyAvg;
             }
             $jnAverage = $totalJbDaysForAverage > 0
                 ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
-            // JB daily data for horizontal view
+            // JB daily data for horizontal view — retake info bilan
             $jbAbsentDates = [];
+            $jbRetakeInfo = [];
+            $jbSababliDates = [];
             foreach ($jbGradesRaw as $g) {
                 if ($g->reason === 'absent') {
                     $jbAbsentDates[$g->lesson_date] = true;
+                }
+                if ($g->retake_grade !== null) {
+                    $jbRetakeInfo[$g->lesson_date] = [
+                        'original' => $g->grade,
+                        'retake' => $g->retake_grade,
+                        'is_absent' => $g->reason === 'absent',
+                    ];
+                }
+            }
+            // Sababli/sababsiz aniqlash (HEMIS davomat orqali)
+            $subjectAttendance = $allAttendance->get($subjectId) ?? collect();
+            foreach ($subjectAttendance as $att) {
+                if ((int) ($att->absent_on ?? 0) > 0) {
+                    $dateKey = \Carbon\Carbon::parse($att->lesson_date)->format('Y-m-d');
+                    $jbSababliDates[$dateKey] = true;
                 }
             }
             $jbDailyData = [];
             foreach ($jbLessonDates as $date) {
                 $dayGradesH = $jbGradesByDatePair[$date] ?? [];
-                $pairsInDayH = $jbPairsPerDay[$date] ?? 1;
                 $hasGradesH = !empty($dayGradesH);
                 $gradeSumH = array_sum($dayGradesH);
-                $dayAvgH = $hasGradesH ? round($gradeSumH / $pairsInDayH, 0, PHP_ROUND_HALF_UP) : 0;
+                $dayAvgH = $hasGradesH ? round($gradeSumH / count($dayGradesH), 0, PHP_ROUND_HALF_UP) : 0;
+                $retake = $jbRetakeInfo[$date] ?? null;
                 $jbDailyData[] = [
                     'date' => $date,
                     'average' => $dayAvgH,
                     'has_grades' => $hasGradesH,
                     'is_absent' => !$hasGradesH && isset($jbAbsentDates[$date]),
+                    'is_sababli' => isset($jbSababliDates[substr($date, 0, 10)]),
+                    'has_retake' => $retake !== null,
+                    'retake_original' => $retake['original'] ?? null,
+                    'retake_grade' => $retake['retake'] ?? null,
+                    'retake_is_absent' => $retake['is_absent'] ?? false,
                 ];
             }
 
@@ -664,9 +687,9 @@ class StudentController extends Controller
             $mtDailySum = 0;
             foreach ($mtLessonDates as $date) {
                 $dayGrades = $mtGradesByDatePair[$date] ?? [];
-                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                if (empty($dayGrades)) continue;
                 $gradeSum = array_sum($dayGrades);
-                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                $mtDailySum += round($gradeSum / count($dayGrades), 0, PHP_ROUND_HALF_UP);
             }
             $mtAverage = $totalMtDays > 0
                 ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
@@ -685,7 +708,7 @@ class StudentController extends Controller
                 $pairsInDayH = $mtPairsPerDay[$date] ?? 1;
                 $hasGradesH = !empty($dayGradesH);
                 $gradeSumH = array_sum($dayGradesH);
-                $dayAvgH = $hasGradesH ? round($gradeSumH / $pairsInDayH, 0, PHP_ROUND_HALF_UP) : 0;
+                $dayAvgH = $hasGradesH ? round($gradeSumH / count($dayGradesH), 0, PHP_ROUND_HALF_UP) : 0;
                 $mtDailyData[] = [
                     'date' => $date,
                     'average' => $dayAvgH,
@@ -1181,15 +1204,38 @@ class StudentController extends Controller
             ->where('is_active', true)
             ->get();
 
-        // Independentlarni subject_hemis_id bo'yicha guruhlash
+        // Independentlarni bir nechta kalit bo'yicha indekslash (Fanlar sahifasidagi mantiq bilan bir xil)
         $independentsByHemisId = $independents->groupBy('subject_hemis_id');
+        $independentsByName = $independents->groupBy('subject_name');
 
-        // Har bir CurriculumSubject uchun independentlarni biriktirish
-        $subjectsList = $curriculumSubjects->map(function ($cs) use ($independentsByHemisId) {
+        $indHemisIds = $independents->pluck('subject_hemis_id')->unique()->filter()->toArray();
+        $hemisToSubjectId = [];
+        if (!empty($indHemisIds)) {
+            $hemisToSubjectId = CurriculumSubject::whereIn('curriculum_subject_hemis_id', $indHemisIds)
+                ->pluck('subject_id', 'curriculum_subject_hemis_id')
+                ->toArray();
+        }
+        $independentsBySubjectId = collect();
+        foreach ($independents as $ind) {
+            $resolvedSubjectId = $hemisToSubjectId[$ind['subject_hemis_id']] ?? null;
+            if ($resolvedSubjectId) {
+                if (!$independentsBySubjectId->has($resolvedSubjectId)) {
+                    $independentsBySubjectId[$resolvedSubjectId] = collect();
+                }
+                $independentsBySubjectId[$resolvedSubjectId]->push($ind);
+            }
+        }
+
+        // Har bir CurriculumSubject uchun independentlarni biriktirish: hemis_id -> subject_id -> name fallback
+        $subjectsList = $curriculumSubjects->map(function ($cs) use ($independentsByHemisId, $independentsBySubjectId, $independentsByName) {
+            $matched = $independentsByHemisId->get($cs->curriculum_subject_hemis_id)
+                ?? $independentsBySubjectId->get($cs->subject_id)
+                ?? $independentsByName->get($cs->subject_name)
+                ?? collect();
             return [
                 'name' => $cs->subject_name,
                 'hemis_id' => $cs->curriculum_subject_hemis_id,
-                'independents' => $independentsByHemisId->get($cs->curriculum_subject_hemis_id, collect()),
+                'independents' => $matched,
             ];
         });
 
@@ -1482,7 +1528,7 @@ class StudentController extends Controller
         return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli saqlandi');
     }
 
-    public function examSchedule()
+    public function examSchedule(\Illuminate\Http\Request $request)
     {
         $student = Auth::guard('student')->user();
 
@@ -1500,7 +1546,24 @@ class StudentController extends Controller
             ->orderBy('test_date')
             ->get();
 
-        return view('student.exam-schedule', compact('examSchedules', 'student'));
+        // Personal computer assignments for this student. Keyed as
+        // "{schedule_id}:{yn_type}" so the view can quickly look them up.
+        $assignments = \App\Models\ComputerAssignment::query()
+            ->whereIn('exam_schedule_id', $examSchedules->pluck('id'))
+            ->where('student_id_number', $student->student_id_number)
+            ->get()
+            ->keyBy(fn($a) => $a->exam_schedule_id . ':' . $a->yn_type);
+
+        // Resolve the physical computer the student is currently on
+        // (test markazi network IP → registered PC number).
+        $currentComputerNumber = \App\Models\Computer::numberByIp($request->ip());
+
+        return view('student.exam-schedule', compact(
+            'examSchedules',
+            'student',
+            'assignments',
+            'currentComputerNumber'
+        ));
     }
 
     /**

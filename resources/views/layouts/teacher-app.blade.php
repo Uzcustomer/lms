@@ -45,6 +45,7 @@
             </div>
 
             <!-- Xabarnomalar ikonchasi — o'ng yuqori burchak -->
+            @if(session('active_role') !== 'tyutor')
                 @php
                     $notifUser = auth()->guard('teacher')->user() ?? auth()->user();
                     $notifUserId = $notifUser->id ?? 0;
@@ -125,6 +126,7 @@
                         </a>
                     </div>
                 </div>
+            @endif
 
             <!-- Page Heading -->
             @isset($header)

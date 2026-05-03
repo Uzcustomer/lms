@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class GraduatePassportController extends Controller
 {
@@ -73,38 +75,41 @@ class GraduatePassportController extends Controller
 
     public function data(Request $request)
     {
-        $query = DB::table('students as s')
-            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
-            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
-            ->leftJoin('departments as f', 'f.id', '=', 'd.parent_id')
-            ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11');
+        try {
+            $hasReviewFields = Schema::hasColumn('graduate_student_passports', 'status');
 
-        if ($request->filled('faculty_id')) {
-            $query->where('s.department_id', $request->faculty_id);
-        }
+            $query = DB::table('students as s')
+                ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+                ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
+                ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'd.parent_id')
+                ->where('s.is_graduate', true)
+                ->where('s.education_type_code', '11');
 
-        if ($request->filled('group_id')) {
-            $query->where('s.group_id', $request->group_id);
-        }
-
-        if ($request->filled('search')) {
-            $s = trim($request->search);
-            $query->where(function ($q) use ($s) {
-                $q->where('s.full_name', 'like', "%{$s}%")
-                  ->orWhere('s.student_id_number', 'like', "%{$s}%");
-            });
-        }
-
-        if ($request->filled('status')) {
-            if ($request->status === 'filled') {
-                $query->whereNotNull('gp.id');
-            } elseif ($request->status === 'empty') {
-                $query->whereNull('gp.id');
+            if ($request->filled('faculty_id')) {
+                $query->where('s.department_id', $request->faculty_id);
             }
-        }
 
-        $students = $query->select(
+            if ($request->filled('group_id')) {
+                $query->where('s.group_id', $request->group_id);
+            }
+
+            if ($request->filled('search')) {
+                $s = trim($request->search);
+                $query->where(function ($q) use ($s) {
+                    $q->where('s.full_name', 'like', "%{$s}%")
+                      ->orWhere('s.student_id_number', 'like', "%{$s}%");
+                });
+            }
+
+            if ($request->filled('status')) {
+                if ($request->status === 'filled') {
+                    $query->whereNotNull('gp.id');
+                } elseif ($request->status === 'empty') {
+                    $query->whereNull('gp.id');
+                }
+            }
+
+            $columns = [
                 's.id', 's.hemis_id', 's.student_id_number', 's.full_name',
                 's.department_name', 's.group_name', 's.gender_code', 's.gender_name',
                 'd.name as kafedra_name', 'f.name as faculty_name',
@@ -112,48 +117,69 @@ class GraduatePassportController extends Controller
                 'gp.first_name_en', 'gp.last_name_en',
                 'gp.passport_series', 'gp.passport_number', 'gp.jshshir',
                 'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path',
-                'gp.created_at as gp_created_at'
-            )
-            ->orderBy('s.full_name')
-            ->get()
-            ->map(function ($st) {
-                $filled = !empty($st->gp_id);
-                return [
-                    'full_name' => $st->full_name,
-                    'student_id_number' => $st->student_id_number,
-                    'group_name' => $st->group_name ?? '',
-                    'faculty_name' => $st->faculty_name ?? '',
-                    'kafedra_name' => $st->kafedra_name ?? ($st->department_name ?? ''),
-                    'gender_code' => $st->gender_code,
-                    'gender_name' => $st->gender_name,
+                'gp.created_at as gp_created_at',
+            ];
+            if ($hasReviewFields) {
+                $columns[] = 'gp.status as gp_status';
+                $columns[] = 'gp.reviewed_by';
+                $columns[] = 'gp.rejection_reason';
+            }
+
+            $students = $query->select($columns)
+                ->orderBy('s.full_name')
+                ->get()
+                ->map(function ($st) use ($hasReviewFields) {
+                    $filled = !empty($st->gp_id);
+                    return [
+                        'full_name' => $st->full_name,
+                        'student_id_number' => $st->student_id_number,
+                        'group_name' => $st->group_name ?? '',
+                        'faculty_name' => $st->faculty_name ?? '',
+                        'kafedra_name' => $st->kafedra_name ?? ($st->department_name ?? ''),
+                        'gender_code' => $st->gender_code,
+                        'gender_name' => $st->gender_name,
+                        'filled' => $filled,
+                        'gp_id' => $st->gp_id,
+                        'name_uz' => $filled ? trim(($st->last_name ?? '') . ' ' . ($st->first_name ?? '') . ' ' . ($st->father_name ?? '')) : '',
+                        'name_en' => $filled ? trim(($st->first_name_en ?? '') . ' ' . ($st->last_name_en ?? '')) : '',
+                        'passport' => $filled ? ($st->passport_series ?? '') . ($st->passport_number ?? '') : '',
+                        'jshshir' => $st->jshshir ?? '',
+                        'has_front' => !empty($st->passport_front_path),
+                        'has_back' => !empty($st->passport_back_path),
+                        'has_foreign' => !empty($st->foreign_passport_path),
+                        'gp_status' => $hasReviewFields ? ($st->gp_status ?? 'pending') : 'pending',
+                        'reviewed_by' => $hasReviewFields ? ($st->reviewed_by ?? '') : '',
+                        'rejection_reason' => $hasReviewFields ? ($st->rejection_reason ?? '') : '',
+                        'created_at' => $st->gp_created_at ? date('d.m.Y', strtotime($st->gp_created_at)) : '',
+                    ];
+                });
+
+            $total = $students->count();
+            $male = $students->where('gender_code', '11')->count();
+            $female = $students->where('gender_code', '12')->count();
+            $filled = $students->where('filled', true)->count();
+
+            return response()->json([
+                'students' => $students,
+                'stats' => [
+                    'total' => $total,
+                    'male' => $male,
+                    'female' => $female,
                     'filled' => $filled,
-                    'gp_id' => $st->gp_id,
-                    'name_uz' => $filled ? trim(($st->last_name ?? '') . ' ' . ($st->first_name ?? '') . ' ' . ($st->father_name ?? '')) : '',
-                    'name_en' => $filled ? trim(($st->first_name_en ?? '') . ' ' . ($st->last_name_en ?? '')) : '',
-                    'passport' => $filled ? ($st->passport_series ?? '') . ($st->passport_number ?? '') : '',
-                    'jshshir' => $st->jshshir ?? '',
-                    'has_front' => !empty($st->passport_front_path),
-                    'has_back' => !empty($st->passport_back_path),
-                    'has_foreign' => !empty($st->foreign_passport_path),
-                    'created_at' => $st->gp_created_at ? date('d.m.Y', strtotime($st->gp_created_at)) : '',
-                ];
-            });
-
-        $total = $students->count();
-        $male = $students->where('gender_code', '11')->count();
-        $female = $students->where('gender_code', '12')->count();
-        $filled = $students->where('filled', true)->count();
-
-        return response()->json([
-            'students' => $students,
-            'stats' => [
-                'total' => $total,
-                'male' => $male,
-                'female' => $female,
-                'filled' => $filled,
-                'empty' => $total - $filled,
-            ],
-        ]);
+                    'empty' => $total - $filled,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('GraduatePassportController@data failed', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+            return response()->json([
+                'error' => true,
+                'message' => 'Ma\'lumotlarni yuklab bo\'lmadi: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     public function showFile($id, $field)
@@ -168,5 +194,104 @@ class GraduatePassportController extends Controller
         if (!file_exists($path)) abort(404);
 
         return response()->file($path);
+    }
+
+    public function approve($id)
+    {
+        $gp = DB::table('graduate_student_passports')->where('id', $id)->first();
+        if (!$gp) abort(404);
+
+        $user = auth()->user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        DB::table('graduate_student_passports')->where('id', $id)->update([
+            'status' => 'approved',
+            'reviewed_by' => $reviewerName,
+            'reviewed_at' => now(),
+            'rejection_reason' => null,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Tasdiqlandi']);
+    }
+
+    public function reject(Request $request, $id)
+    {
+        $request->validate(['rejection_reason' => 'required|string|max:500']);
+
+        $gp = DB::table('graduate_student_passports')->where('id', $id)->first();
+        if (!$gp) abort(404);
+
+        $user = auth()->user();
+        $reviewerName = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        DB::table('graduate_student_passports')->where('id', $id)->update([
+            'status' => 'rejected',
+            'reviewed_by' => $reviewerName,
+            'reviewed_at' => now(),
+            'rejection_reason' => $request->rejection_reason,
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Rad etildi']);
+    }
+
+    public function downloadZip(Request $request)
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $query = DB::table('students as s')
+            ->join('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11');
+
+        if ($request->filled('faculty_id')) {
+            $query->where('s.department_id', $request->faculty_id);
+        }
+        if ($request->filled('group_id')) {
+            $query->where('s.group_id', $request->group_id);
+        }
+
+        $rows = $query->select(
+            's.full_name', 's.student_id_number', 's.group_name',
+            'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path'
+        )->orderBy('s.group_name')->orderBy('s.full_name')->get();
+
+        if ($rows->isEmpty()) {
+            return back()->with('error', 'Hujjatlar topilmadi.');
+        }
+
+        $zipName = 'Bitiruvchilar_hujjatlari_' . date('Y-m-d_H-i') . '.zip';
+        $zipPath = tempnam(sys_get_temp_dir(), 'grad_') . '.zip';
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return back()->with('error', 'ZIP fayl yaratib bo\'lmadi.');
+        }
+
+        $addedFiles = 0;
+        foreach ($rows as $row) {
+            $safeName = preg_replace('/[\/\\\\:*?"<>|]/', '', $row->full_name);
+            $folder = trim($row->group_name . '/' . $row->student_id_number . '_' . $safeName);
+
+            foreach (['passport_front_path' => 'passport_old', 'passport_back_path' => 'passport_orqa', 'foreign_passport_path' => 'xorijiy_passport'] as $field => $label) {
+                if (empty($row->$field)) continue;
+                $filePath = storage_path('app/public/' . $row->$field);
+                if (!file_exists($filePath)) continue;
+                $ext = pathinfo($filePath, PATHINFO_EXTENSION) ?: 'jpg';
+                $zip->addFile($filePath, $folder . '/' . $label . '.' . $ext);
+                $addedFiles++;
+            }
+        }
+
+        $zip->close();
+
+        if ($addedFiles === 0) {
+            @unlink($zipPath);
+            return back()->with('error', 'Yuklanadigan fayllar topilmadi.');
+        }
+
+        return response()->download($zipPath, $zipName, [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
     }
 }

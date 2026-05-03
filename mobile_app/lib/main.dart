@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'config/theme.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'services/student_service.dart';
+import 'services/student_data_cache.dart';
 import 'services/teacher_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/student_provider.dart';
@@ -20,6 +22,7 @@ import 'screens/teacher/teacher_home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = true;
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -42,6 +45,8 @@ class LmsApp extends StatelessWidget {
     final authService = AuthService(apiService);
     final studentService = StudentService(apiService);
     final teacherService = TeacherService(apiService);
+
+    StudentDataCache().attachService(studentService);
 
     return MultiProvider(
       providers: [
@@ -76,6 +81,9 @@ class LmsApp extends StatelessWidget {
             ],
             home: Consumer<AuthProvider>(
               builder: (context, auth, _) {
+                if (auth.state == AuthState.authenticated && auth.isStudent) {
+                  StudentDataCache().ensureFresh();
+                }
                 switch (auth.state) {
                   case AuthState.initial:
                     return const SplashScreen();

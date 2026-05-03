@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/student_data_cache.dart';
 
 enum AuthState { initial, loading, authenticated, profileIncomplete, unauthenticated, requires2fa, error }
 
@@ -80,19 +81,23 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> checkAuth() async {
-    final isLoggedIn = await _apiService.isLoggedIn();
-    if (isLoggedIn) {
-      try {
-        final response = await _authService.getMe();
-        _user = response['user'] as Map<String, dynamic>?;
-        _guard = await _apiService.getGuard();
-        _parseRoles(response);
-        _state = AuthState.authenticated;
-      } catch (_) {
-        await _apiService.clearToken();
+    try {
+      final isLoggedIn = await _apiService.isLoggedIn();
+      if (isLoggedIn) {
+        try {
+          final response = await _authService.getMe();
+          _user = response['user'] as Map<String, dynamic>?;
+          _guard = await _apiService.getGuard();
+          _parseRoles(response);
+          _state = AuthState.authenticated;
+        } catch (_) {
+          await _apiService.clearToken();
+          _state = AuthState.unauthenticated;
+        }
+      } else {
         _state = AuthState.unauthenticated;
       }
-    } else {
+    } catch (_) {
       _state = AuthState.unauthenticated;
     }
     notifyListeners();
@@ -279,6 +284,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     await _authService.logout();
+    await StudentDataCache().clear();
     _user = null;
     _guard = null;
     _pendingLogin = null;

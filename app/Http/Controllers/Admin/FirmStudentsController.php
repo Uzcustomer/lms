@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\StudentNotification;
 use App\Models\StudentVisaInfo;
+use App\Models\StudentVisaInfoHistory;
+use App\Services\StudentVisaHistoryService;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -82,12 +84,23 @@ class FirmStudentsController extends Controller
         }
 
         $field = $request->process_type === 'registration' ? 'registration_process_status' : 'visa_process_status';
+        $historyService = app(StudentVisaHistoryService::class);
+        $oldValues = $historyService->fieldsFrom($visaInfo);
 
         $visaInfo->update([
             $field => StudentVisaInfo::PROCESS_PASSPORT_ACCEPTED,
             'passport_handed_over' => true,
             'passport_handed_at' => now(),
         ]);
+
+        $label = $request->process_type === 'visa' ? 'Viza' : 'Registratsiya';
+        $historyService->snapshot(
+            $student,
+            $visaInfo->fresh(),
+            StudentVisaInfoHistory::CHANGE_PASSPORT_ACCEPTED,
+            $oldValues,
+            "Firma tomonidan pasport qabul qilindi ({$label})"
+        );
 
         StudentNotification::create([
             'student_id' => $student->id,

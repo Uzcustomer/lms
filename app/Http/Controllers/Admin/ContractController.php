@@ -171,6 +171,20 @@ class ContractController extends Controller
             });
         }
 
+        // Nazoratchi: faqat biriktirilgan guruhlardagi talabalar kontraktlari
+        if (is_active_nazoratchi()) {
+            $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
+            if (empty($nazoratchiHemisIds)) {
+                return response()->json(['items' => [], 'total' => 0, 'totalInDb' => $totalInDb]);
+            }
+            $query->whereExists(function ($sub) use ($nazoratchiHemisIds) {
+                $sub->select(DB::raw(1))
+                    ->from('students')
+                    ->whereColumn('students.hemis_id', 'contract_list.student_hemis_id')
+                    ->whereIn('students.group_id', $nazoratchiHemisIds);
+            });
+        }
+
         if ($request->filled('_current_course')) {
             $query->whereExists(function ($sub) {
                 $sub->select(DB::raw(1))
@@ -228,6 +242,14 @@ class ContractController extends Controller
         if ($request->filled('faculty_id')) {
             $dept = Department::find($request->input('faculty_id'));
             if ($dept) $query->where('department_code', $dept->code);
+        }
+
+        if (is_active_nazoratchi()) {
+            $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
+            if (empty($nazoratchiHemisIds)) {
+                return response()->json([]);
+            }
+            $query->whereIn('group_id', $nazoratchiHemisIds);
         }
 
         $groups = $query->pluck('group_name');

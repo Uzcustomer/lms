@@ -51,26 +51,39 @@ class MoodleImportController extends Controller
         // =========================
         if ($mode === 'ids_grade') {
             $updated = 0;
+            $allAttemptIds = [];
 
             foreach ($records as $r) {
                 $aid = (int)($r['attempt_id'] ?? 0);
                 if ($aid <= 0) continue;
 
+                $allAttemptIds[] = $aid;
+
                 // old_grade decimal, grade_rounded int (or null)
                 $oldGrade = array_key_exists('old_grade', $r) ? $r['old_grade'] : null;
                 $gradeRounded = array_key_exists('grade_rounded', $r) ? $r['grade_rounded'] : null;
 
-                DB::table('hemis_quiz_results')
+                $affected = DB::table('hemis_quiz_results')
                     ->where('attempt_id', $aid)
                     ->update([
                         'is_active' => 1,
                         'old_grade' => $oldGrade,
-                        'grade'     => $gradeRounded, // your column is DECIMAL, int fits OK
+                        'grade'     => $gradeRounded,
                         'synced_at' => $now,
                         'updated_at'=> $now,
                     ]);
 
-                $updated++;
+                if ($affected > 0) $updated++;
+            }
+
+            $missingIds = [];
+            if (!empty($allAttemptIds)) {
+                $existingIds = DB::table('hemis_quiz_results')
+                    ->whereIn('attempt_id', $allAttemptIds)
+                    ->pluck('attempt_id')
+                    ->map(fn($v) => (int)$v)
+                    ->toArray();
+                $missingIds = array_values(array_diff($allAttemptIds, $existingIds));
             }
 
             return response()->json([
@@ -78,6 +91,7 @@ class MoodleImportController extends Controller
                 'mode' => $mode,
                 'received' => count($records),
                 'updated' => $updated,
+                'missing_ids' => $missingIds,
             ]);
         }
 

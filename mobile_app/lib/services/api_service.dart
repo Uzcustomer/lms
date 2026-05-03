@@ -7,7 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
 class ApiService {
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
   static const String _tokenKey = 'auth_token';
   static const String _guardKey = 'auth_guard';
 
@@ -17,7 +19,12 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString(key);
     }
-    return await _secureStorage.read(key: key);
+    try {
+      final value = await _secureStorage.read(key: key);
+      if (value != null) return value;
+    } catch (_) {}
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key);
   }
 
   Future<void> _write(String key, String value) async {
@@ -25,7 +32,12 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(key, value);
     } else {
-      await _secureStorage.write(key: key, value: value);
+      try {
+        await _secureStorage.write(key: key, value: value);
+      } catch (_) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(key, value);
+      }
     }
   }
 
@@ -35,7 +47,12 @@ class ApiService {
       await prefs.remove(_tokenKey);
       await prefs.remove(_guardKey);
     } else {
-      await _secureStorage.deleteAll();
+      try {
+        await _secureStorage.deleteAll();
+      } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_guardKey);
     }
   }
 

@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/teacher_provider.dart';
 import '../../widgets/loading_widget.dart';
+import '../../utils/page_transitions.dart';
 import 'teacher_group_detail_screen.dart';
 
 class TeacherGroupsScreen extends StatefulWidget {
@@ -122,7 +123,7 @@ class _TeacherGroupsScreenState extends State<TeacherGroupsScreen> {
                           : int.tryParse(group['id'].toString()) ?? 0;
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        SlideFadePageRoute(
                           builder: (_) => TeacherGroupDetailScreen(
                             groupId: groupId,
                             groupName: group['name']?.toString() ?? '',

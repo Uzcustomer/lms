@@ -160,77 +160,7 @@ class StudentContractController extends Controller
 
     public function generate(Request $request)
     {
-        $student = Auth::guard('student')->user();
-
-        $request->validate([
-            'contract_type' => 'required|in:3_tomonlama,4_tomonlama',
-            'student_name' => 'required|string|max:255',
-            'student_address' => 'required|string|max:255',
-            'specialty_name' => 'required|string|max:255',
-            'contract_year' => 'required|string|max:10',
-            'student_phone' => 'required|string|max:50',
-            'student_passport_series' => 'required|string|max:2|regex:/^[A-Z]{2}$/',
-            'student_passport_number' => 'required|string|max:7|regex:/^\d{7}$/',
-            'student_inn' => 'required|string|max:14|regex:/^\d{14}$/',
-            'employer_name' => 'required|string|max:255',
-            'employer_director_name' => 'required|string|max:255',
-            'fourth_party_name' => 'nullable|string|max:255',
-            'fourth_party_director_name' => 'nullable|string|max:255',
-        ], [
-            'student_name.required' => 'F.I.SH kiritish majburiy.',
-            'student_address.required' => 'Manzilni kiritish majburiy.',
-            'specialty_name.required' => 'Yo\'nalishni kiritish majburiy.',
-            'contract_year.required' => 'Bitirish yilini kiritish majburiy.',
-            'student_phone.required' => 'Telefon raqamni kiritish majburiy.',
-            'student_passport_series.required' => 'Passport seriyasini kiritish majburiy.',
-            'student_passport_series.regex' => 'Passport seriyasi 2 ta harfdan iborat bo\'lishi kerak.',
-            'student_passport_number.required' => 'Passport raqamini kiritish majburiy.',
-            'student_passport_number.regex' => 'Passport raqami 7 ta raqamdan iborat bo\'lishi kerak.',
-            'student_inn.required' => 'JSHSHIR kiritish majburiy.',
-            'student_inn.regex' => 'JSHSHIR 14 ta raqamdan iborat bo\'lishi kerak.',
-            'employer_name.required' => 'Viloyat sog\'liqni saqlash bosh boshqarmasi nomini kiritish majburiy.',
-            'employer_director_name.required' => 'Viloyat sog\'liqni saqlash bosh boshqarmasi boshlig\'ini kiritish majburiy.',
-        ]);
-
-        // StudentContract yaratish yoki mavjudini yangilash
-        $contract = StudentContract::updateOrCreate(
-            [
-                'student_id' => $student->id,
-                'contract_type' => $request->contract_type,
-                'status' => StudentContract::STATUS_PENDING,
-            ],
-            [
-                'student_hemis_id' => $student->hemis_id,
-                'student_full_name' => $request->student_name,
-                'group_name' => $student->group_name,
-                'department_name' => $student->department_name,
-                'specialty_name' => $request->specialty_name ?? $student->specialty_name,
-                'level_name' => $student->level_name,
-                'student_address' => $request->student_address,
-                'student_phone' => $request->student_phone,
-                'student_passport' => strtoupper($request->student_passport_series) . $request->student_passport_number,
-                'student_inn' => $request->student_inn,
-                'employer_name' => $request->employer_name,
-                'employer_director_name' => $request->employer_director_name,
-                'fourth_party_name' => $request->fourth_party_name,
-                'fourth_party_address' => $request->fourth_party_address,
-                'fourth_party_phone' => $request->fourth_party_phone,
-                'fourth_party_director_name' => $request->fourth_party_director_name,
-            ]
-        );
-
-        // Word hujjat generatsiya qilish
-        try {
-            $service = new StudentContractService();
-            $documentPath = $service->generateContractDocument($contract);
-            $contract->update(['document_path' => $documentPath]);
-
-            return redirect()->route('student.contracts.index')
-                ->with('success', 'Shartnoma tayyor! Pastdan yuklab olishingiz mumkin.');
-        } catch (\Throwable $e) {
-            return redirect()->route('student.contracts.index')
-                ->with('error', 'Shartnoma yaratishda xatolik: ' . $e->getMessage());
-        }
+        return $this->store($request);
     }
 
     public function download(StudentContract $contract)

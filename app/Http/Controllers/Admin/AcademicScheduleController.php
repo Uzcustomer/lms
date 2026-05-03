@@ -255,6 +255,7 @@ class AcademicScheduleController extends Controller
 
         $studentsByGroup = DB::table('students')
             ->whereIn('group_id', $allGroupHemisIds)
+            ->where('student_status_code', 11)
             ->select('hemis_id', 'full_name', 'group_id')
             ->orderBy('full_name')
             ->get()
@@ -335,13 +336,33 @@ class AcademicScheduleController extends Controller
         $allSubjectIds = array_unique(array_column($triples, 1));
         $allSemCodes = array_unique(array_column($triples, 2));
 
-        // Talabalarning hemis_id va group_id xaritasi
+        // Talabalarning hemis_id va group_id xaritasi (faqat faol talabalar)
         $studentGroup = DB::table('students')
             ->whereIn('group_id', $allGroupHids)
+            ->where('student_status_code', 11)
             ->pluck('group_id', 'hemis_id')
             ->toArray();
         $allStudentHids = array_keys($studentGroup);
         if (empty($allStudentHids)) return $result;
+
+        // exam_schedules dan oski_na / test_na flaglarini olish (asosiy schedule, student_hemis_id NULL)
+        $naMap = []; // group|subj|sem => ['oski_na'=>bool, 'test_na'=>bool]
+        try {
+            $rows = DB::table('exam_schedules')
+                ->whereNull('student_hemis_id')
+                ->whereIn('group_hemis_id', $allGroupHids)
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->select('group_hemis_id', 'subject_id', 'semester_code', 'oski_na', 'test_na')
+                ->get();
+            foreach ($rows as $r) {
+                $k = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                $naMap[$k] = [
+                    'oski_na' => (bool) $r->oski_na,
+                    'test_na' => (bool) $r->test_na,
+                ];
+            }
+        } catch (\Throwable $e) {}
 
         // 1) JN/MT olish — snapshot va tirik AVG ni birlashtirib ishlatamiz.
         $jnMtMap = []; // hemis_id|subj|sem => [jn, mt]
@@ -575,23 +596,38 @@ class AcademicScheduleController extends Controller
                 $audHours = $audHoursMap[$s . '|' . $sem] ?? 0;
                 $davomatPct = $audHours > 0 ? round(($absentOff / $audHours) * 100, 2) : 0;
 
+                // Agar talaba haqida hech qanday ma'lumot yo'q bo'lsa (boshqa fanga
+                // o'tkazilgan, chet ellik almashinuv va h.k.), urinish ro'yxatiga kiritmaslik
+                $hasAnyData = ($jn !== null) || ($mt !== null)
+                    || ($oski !== null) || ($test !== null)
+                    || ($oski2 !== null) || ($test2 !== null)
+                    || ($absentOff > 0);
+                if (!$hasAnyData) {
+                    continue;
+                }
+
+                // OSKI/Test fan uchun talab qilinadimi? (exam_schedules.oski_na/test_na)
+                $naKey = $g . '|' . $s . '|' . $sem;
+                $oskiRequired = !($naMap[$naKey]['oski_na'] ?? false);
+                $testRequired = !($naMap[$naKey]['test_na'] ?? false);
+
                 // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz
                 $jnLow = ($jn !== null) && ($jn < $minLimit);
                 $mtLow = ($mt !== null) && ($mt < $minLimit);
                 $isPullik = $jnLow || $mtLow || ($davomatPct >= 25);
 
-                // Yiqilgan attempt=1: pullik yoki OSKI/Test < 60 yoki kelmagan
+                // Yiqilgan attempt=1: pullik yoki kerakli OSKI/Test < 60 yoki kelmagan
                 $oskiNum = $oski !== null ? (float) $oski : null;
                 $testNum = $test !== null ? (float) $test : null;
-                $failed1 = $isPullik
-                    || ($oskiNum === null) || ($oskiNum < $minLimit)
-                    || ($testNum === null) || ($testNum < $minLimit);
+                $oskiFailed1 = $oskiRequired && (($oskiNum === null) || ($oskiNum < $minLimit));
+                $testFailed1 = $testRequired && (($testNum === null) || ($testNum < $minLimit));
+                $failed1 = $isPullik || $oskiFailed1 || $testFailed1;
 
                 $oski2Num = $oski2 !== null ? (float) $oski2 : null;
                 $test2Num = $test2 !== null ? (float) $test2 : null;
-                $failed2 = $isPullik
-                    || ($oski2Num === null) || ($oski2Num < $minLimit)
-                    || ($test2Num === null) || ($test2Num < $minLimit);
+                $oskiFailed2 = $oskiRequired && (($oski2Num === null) || ($oski2Num < $minLimit));
+                $testFailed2 = $testRequired && (($test2Num === null) || ($test2Num < $minLimit));
+                $failed2 = $isPullik || $oskiFailed2 || $testFailed2;
 
                 $key = $g . '|' . $s . '|' . $sem;
                 if (!isset($result[$key])) $result[$key] = [];

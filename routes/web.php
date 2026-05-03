@@ -191,6 +191,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
         });
 
+        // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)
+        Route::prefix('yn-form-corrections')->name('yn-form-corrections.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'index'])->name('index');
+            Route::get('/{id}/pdf', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'pdf'])->name('pdf');
+        });
+
         // Imtihon apellyatsiyalari (Admin panel)
         Route::prefix('exam-appeals')->name('exam-appeals.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\ExamAppealController::class, 'index'])->name('index');

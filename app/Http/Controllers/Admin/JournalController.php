@@ -1295,10 +1295,25 @@ class JournalController extends Controller
             ->get()
             ->keyBy('student_hemis_id');
 
+        // YN submission'lar (asosiy / 12a / 12b) — agar attempt ustuni bo'lsa
+        $hasYnSubAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
         $ynSubmission = YnSubmission::where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('group_hemis_id', $group->group_hemis_id)
+            ->when($hasYnSubAttemptCol, fn($q) => $q->where(function ($qq) {
+                $qq->where('attempt', 1)->orWhereNull('attempt');
+            }))
             ->first();
+        $ynSubmission12a = $hasYnSubAttemptCol ? YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->where('attempt', 2)
+            ->first() : null;
+        $ynSubmission12b = $hasYnSubAttemptCol ? YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->where('attempt', 3)
+            ->first() : null;
 
         // exam_schedules dan OSKI/Test sanalarini olish
         $examSchedule = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
@@ -1389,6 +1404,117 @@ class JournalController extends Controller
             }
         }
 
+        // Har talaba uchun joriy bosqichni hisoblash (badge ko'rsatish uchun).
+        // exportYnQaydnoma ichidagi V hisoblash mantig'ini soddalashtirilgan
+        // ko'rinishda — joriy holatdagi (sababli retake bilan) baholar bilan.
+        $studentStages = [];
+        try {
+            $hasOskiForWeights = !($examSchedule && $examSchedule->oski_na);
+            $hasTestForWeights = !($examSchedule && $examSchedule->test_na);
+            if ($hasOskiForWeights && $hasTestForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
+            } elseif ($hasOskiForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
+            } elseif ($hasTestForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
+            } else {
+                $defaultWeights = ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+            }
+
+            $stageLevelCode = (string) ($semester?->level_code ?? '');
+
+            foreach ($students as $stu) {
+                $h = $stu->hemis_id;
+
+                // JN o'rtacha
+                $jnSum = 0;
+                $jnDays = 0;
+                foreach ($jbLessonDates as $date) {
+                    $dayGrades = $jbGrades[$h][$date] ?? [];
+                    if (empty($dayGrades)) continue;
+                    $pairs = $jbPairsPerDay[$date] ?? 1;
+                    $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
+                    $jnSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
+                    $jnDays++;
+                }
+                $jn = $jnDays > 0 ? (int) round($jnSum / $jnDays, 0, PHP_ROUND_HALF_UP) : 0;
+
+                // MT o'rtacha
+                $mtSum = 0;
+                $mtDays = 0;
+                foreach ($mtLessonDates as $date) {
+                    $dayGrades = $mtGrades[$h][$date] ?? [];
+                    if (empty($dayGrades)) continue;
+                    $pairs = $mtPairsPerDay[$date] ?? 1;
+                    $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
+                    $mtSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
+                    $mtDays++;
+                }
+                $mt = $mtDays > 0 ? (int) round($mtSum / $mtDays, 0, PHP_ROUND_HALF_UP) : 0;
+
+                // Manual MT override
+                if (isset($manualMtGrades[$h])) {
+                    $mt = (int) round((float) $manualMtGrades[$h]->grade, 0, PHP_ROUND_HALF_UP);
+                }
+
+                $other = $otherGrades[$h] ?? ['on' => null, 'oski' => null, 'test' => null];
+                $davomat = (float) ($attendanceData[$h] ?? 0);
+                $auditH = (float) ($auditoriumHours ?? 0);
+                $davomatPct = $auditH > 0 ? round(($davomat / $auditH) * 100, 2) : 0.0;
+
+                $vCurrent = \App\Services\YnAttemptStatusService::computeV(
+                    $jn, $mt,
+                    $other['on'] ?? null, $other['oski'] ?? null, $other['test'] ?? null,
+                    $davomatPct,
+                    $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'],
+                    $defaultWeights['oski'], $defaultWeights['test'],
+                    $stageLevelCode
+                );
+
+                // Sababli retake bormi? (jb/mt/other dagi flag)
+                $hasSababliRetake = false;
+                foreach (($jbGrades[$h] ?? []) as $dg) {
+                    foreach ($dg as $g) {
+                        if (!empty($g['retake_was_sababli'])) { $hasSababliRetake = true; break 2; }
+                    }
+                }
+                if (!$hasSababliRetake) {
+                    foreach (($mtGrades[$h] ?? []) as $dg) {
+                        foreach ($dg as $g) {
+                            if (!empty($g['retake_was_sababli'])) { $hasSababliRetake = true; break 2; }
+                        }
+                    }
+                }
+                if (!$hasSababliRetake) {
+                    if (!empty($other['on_sababli']) || !empty($other['oski_sababli']) || !empty($other['test_sababli'])) {
+                        $hasSababliRetake = true;
+                    }
+                }
+
+                // Bosqich aniqlash (soddalashtirilgan)
+                $passing = is_numeric($vCurrent) && (float) $vCurrent >= 60;
+                $jnMtOk = $jn >= 60 && $mt >= 60;
+
+                if ($passing) {
+                    $stageKey = $hasSababliRetake
+                        ? \App\Services\YnAttemptStatusService::STAGE_QOSHIMCHA_PASSED
+                        : \App\Services\YnAttemptStatusService::STAGE_ASOSIY_PASSED;
+                } else {
+                    $stageKey = $jnMtOk
+                        ? \App\Services\YnAttemptStatusService::STAGE_IN_12A
+                        : \App\Services\YnAttemptStatusService::STAGE_IN_12A_PULLIK;
+                }
+
+                $studentStages[$h] = array_merge(
+                    \App\Services\YnAttemptStatusService::stageLabel($stageKey),
+                    ['stage' => $stageKey, 'v' => $vCurrent]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Student stage computation failed: ' . $e->getMessage());
+            $studentStages = [];
+        }
+
         $absFlat = collect($jbAbsences)->flatten(2);
         $retakeGraderIds = $absFlat->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
         $retakeGraderNames = [];
@@ -1466,7 +1592,10 @@ class JournalController extends Controller
             'levelDeadline',
             'approvedExcuses',
             'excuseGradeSnapshots',
-            'excuseOpenedDatesPerStudent'
+            'excuseOpenedDatesPerStudent',
+            'studentStages',
+            'ynSubmission12a',
+            'ynSubmission12b'
         ));
     }
 
@@ -5131,6 +5260,145 @@ class JournalController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * 12a ga (1-urinish) yoki 12b ga (2-urinish) o'tkazish.
+     * Kerakli kategoriya: yiqilgan talabalar uchun yangi yn_submission(attempt=2|3)
+     * yaratiladi va 12a/12b OSKI/Test sanalari belgilanadi.
+     */
+    public function transferToNextAttempt(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'attempt' => 'required|integer|min:2|max:3',
+            'oski_date' => 'nullable|date',
+            'oski_time' => 'nullable',
+            'test_date' => 'nullable|date',
+            'test_time' => 'nullable',
+        ]);
+
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $groupHemisId = $request->group_hemis_id;
+        $attempt = (int) $request->attempt;
+
+        if (!$request->oski_date && !$request->test_date) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kamida OSKI yoki Test sanasi belgilanishi kerak.',
+            ], 422);
+        }
+
+        // Asosiy YN yuborilgan bo'lishi shart
+        $mainSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt'),
+                fn($q) => $q->where(function ($qq) {
+                    $qq->where('attempt', 1)->orWhereNull('attempt');
+                }))
+            ->first();
+        if (!$mainSubmission) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Avval asosiy YN ga yuborish kerak.',
+            ], 422);
+        }
+
+        // 12b ga o'tish uchun avval 12a bo'lgan bo'lishi kerak
+        if ($attempt === 3) {
+            $aSubmission = YnSubmission::where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('group_hemis_id', $groupHemisId)
+                ->where('attempt', 2)
+                ->first();
+            if (!$aSubmission) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '12b ga o\'tkazish uchun avval 12a yaratilishi kerak.',
+                ], 422);
+            }
+        }
+
+        // Bu attempt uchun submission allaqachon bormi?
+        $existing = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('attempt', $attempt)
+            ->first();
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => ($attempt === 2 ? '12a' : '12b') . ' ga avval o\'tkazilgan.',
+            ], 409);
+        }
+
+        $submittedByUserId = auth()->guard('web')->id() ?? auth()->guard('teacher')->id();
+        $submittedByGuard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
+
+        DB::beginTransaction();
+        try {
+            $submissionData = [
+                'subject_id' => $subjectId,
+                'semester_code' => $semesterCode,
+                'group_hemis_id' => $groupHemisId,
+                'attempt' => $attempt,
+                'status' => 'draft',
+                'submitted_by' => $submittedByUserId,
+                'submitted_by_guard' => $submittedByGuard,
+                'submitted_at' => now(),
+            ];
+            $submission = YnSubmission::create($submissionData);
+
+            // exam_schedules ni 12a/12b sanalari bilan yangilash
+            $examSchedule = ExamSchedule::firstOrNew([
+                'group_hemis_id' => $groupHemisId,
+                'subject_id' => $subjectId,
+                'semester_code' => $semesterCode,
+            ]);
+            if ($attempt === 2) {
+                if ($request->oski_date) {
+                    $examSchedule->oski_resit_date = $request->oski_date;
+                    $examSchedule->oski_resit_time = $request->oski_time;
+                }
+                if ($request->test_date) {
+                    $examSchedule->test_resit_date = $request->test_date;
+                    $examSchedule->test_resit_time = $request->test_time;
+                }
+            } else {
+                if ($request->oski_date) {
+                    $examSchedule->oski_resit2_date = $request->oski_date;
+                    $examSchedule->oski_resit2_time = $request->oski_time;
+                }
+                if ($request->test_date) {
+                    $examSchedule->test_resit2_date = $request->test_date;
+                    $examSchedule->test_resit2_time = $request->test_time;
+                }
+            }
+            $examSchedule->save();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => ($attempt === 2 ? '12a' : '12b') . ' shakl yaratildi. Talabalar OSKI/Test ga ruxsat oldi.',
+                'submission_id' => $submission->id,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('transferToNextAttempt error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Xatolik: ' . $e->getMessage(),

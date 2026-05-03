@@ -2684,12 +2684,7 @@ class AcademicScheduleController extends Controller
             \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
         }
 
-        // Filter "2" yoki "3" tanlangan bo'lsa, tegishli urinish qatorlarini barcha guruhlar uchun majburiy ko'rsatamiz.
-        // Aks holda — yiqilgan talabalar bo'lsagina avtomatik chiqaradi.
-        $force2 = ($urinishFilter === '2');
-        $force3 = ($urinishFilter === '3');
-
-        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $force2, $force3) {
+        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey) {
             $expanded = collect();
             foreach ($items as $item) {
                 $groupHid = $item['group']->group_hemis_id ?? '';
@@ -2705,10 +2700,10 @@ class AcademicScheduleController extends Controller
                 $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
                 $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
 
-                // 2-urinish — mavjud yoki kerakli (yoki filter majburiy)
+                // 2-urinish — FAQAT mavjud yoki haqiqatan kerakli (yiqilgan talabalar bor)
                 $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
                 $needs2 = isset($needsByKey[$needsKeyBase . '|2']);
-                $show2 = $has2Data || $needs2 || $force2;
+                $show2 = $has2Data || $needs2;
 
                 $row2 = null;
                 if ($show2) {
@@ -2720,10 +2715,10 @@ class AcademicScheduleController extends Controller
                     $row2['test_na_for_urinish'] = false;
                 }
 
-                // 3-urinish — mavjud yoki kerakli (yoki filter majburiy)
+                // 3-urinish — FAQAT mavjud yoki haqiqatan kerakli (12a yiqilganlar bor)
                 $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
                 $needs3 = isset($needsByKey[$needsKeyBase . '|3']);
-                $show3 = $has3Data || $needs3 || $force3;
+                $show3 = $has3Data || $needs3;
 
                 $row3 = null;
                 if ($show3) {

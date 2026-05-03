@@ -355,9 +355,14 @@
                                             </td>
                                         </tr>
 
-                                        @if(($showStudents ?? false) && !empty($item['students']))
+                                        {{-- Per-student qatorlar — faqat 2/3-urinish ostida (1-urinish da hammaga umumiy sana) --}}
+                                        @if(($showStudents ?? false) && $itemUrinish > 1 && !empty($item['students']))
                                             @foreach($item['students'] as $stuRow)
-                                                @php $rowIndex++; @endphp
+                                                @php
+                                                    $rowIndex++;
+                                                    $stuValueOski = $itemUrinish === 3 ? ($stuRow['oski_resit2_date'] ?? '') : ($stuRow['oski_resit_date'] ?? '');
+                                                    $stuValueTest = $itemUrinish === 3 ? ($stuRow['test_resit2_date'] ?? '') : ($stuRow['test_resit_date'] ?? '');
+                                                @endphp
                                                 <tr class="student-sub-row" style="background:#fafafa;border-top:1px dashed #e2e8f0;">
                                                     <td></td>
                                                     <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:#475569;">
@@ -365,44 +370,20 @@
                                                         {{ $stuRow['full_name'] }}
                                                     </td>
                                                     <td style="text-align:center;font-size:9px;color:#64748b;">
-                                                        @php
-                                                            $stuMaxAttempt = 1;
-                                                            if (!empty($stuRow['oski_resit_date']) || !empty($stuRow['test_resit_date'])) $stuMaxAttempt = 2;
-                                                            if (!empty($stuRow['oski_resit2_date']) || !empty($stuRow['test_resit2_date'])) $stuMaxAttempt = 3;
-                                                        @endphp
-                                                        @if($stuMaxAttempt > 1)
-                                                            <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuMaxAttempt === 3 ? '#ffedd5' : '#fef3c7' }};color:{{ $stuMaxAttempt === 3 ? '#ea580c' : '#d97706' }};">{{ $stuMaxAttempt }}-urinish</span>
-                                                        @else
-                                                            <span style="color:#cbd5e1;">—</span>
-                                                        @endif
+                                                        <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $itemUrinish === 3 ? '#ffedd5' : '#fef3c7' }};color:{{ $itemUrinish === 3 ? '#ea580c' : '#d97706' }};">{{ $itemUrinish }}-urinish</span>
                                                     </td>
-                                                    <td style="padding:4px 8px;">
-                                                        <div style="display:flex; flex-direction:column; gap:2px; max-width:170px;">
-                                                            <div style="display:flex; align-items:center; gap:4px;">
-                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">2-urinish:</span>
-                                                                <input type="date" name="schedules[{{ $rowIndex }}][oski_resit_date]" value="{{ $stuRow['oski_resit_date'] ?? '' }}"
-                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
-                                                            </div>
-                                                            <div style="display:flex; align-items:center; gap:4px;">
-                                                                <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">3-urinish:</span>
-                                                                <input type="date" name="schedules[{{ $rowIndex }}][oski_resit2_date]" value="{{ $stuRow['oski_resit2_date'] ?? '' }}"
-                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
-                                                            </div>
-                                                        </div>
+                                                    <td style="text-align:center;padding:4px 8px;">
+                                                        <input type="date" name="schedules[{{ $rowIndex }}][oski_date]"
+                                                               value="{{ $stuValueOski }}"
+                                                               title="{{ $itemUrinish }}-urinish OSKI sanasi"
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $itemUrinish === 3 ? '#fdba74' : '#fcd34d' }}; border-radius:4px; max-width:135px;" />
                                                     </td>
-                                                    <td style="padding:4px 8px;">
-                                                        <div style="display:flex; flex-direction:column; gap:2px; max-width:170px;">
-                                                            <div style="display:flex; align-items:center; gap:4px;">
-                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">2-urinish:</span>
-                                                                <input type="date" name="schedules[{{ $rowIndex }}][test_resit_date]" value="{{ $stuRow['test_resit_date'] ?? '' }}"
-                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
-                                                            </div>
-                                                            <div style="display:flex; align-items:center; gap:4px;">
-                                                                <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">3-urinish:</span>
-                                                                <input type="date" name="schedules[{{ $rowIndex }}][test_resit2_date]" value="{{ $stuRow['test_resit2_date'] ?? '' }}"
-                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
-                                                            </div>
-                                                        </div>
+                                                    <td style="text-align:center;padding:4px 8px;">
+                                                        <input type="date" name="schedules[{{ $rowIndex }}][test_date]"
+                                                               value="{{ $stuValueTest }}"
+                                                               title="{{ $itemUrinish }}-urinish Test sanasi"
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $itemUrinish === 3 ? '#fdba74' : '#fcd34d' }}; border-radius:4px; max-width:135px;" />
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">

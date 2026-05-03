@@ -2685,7 +2685,11 @@ class AcademicScheduleController extends Controller
             \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
         }
 
-        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey) {
+        // Filter "2" yoki "3" tanlangan bo'lsa, tegishli urinish qatorlarini barcha guruhlar uchun majburiy ko'rsatamiz
+        $force2 = ($urinishFilter === '2');
+        $force3 = ($urinishFilter === '3');
+
+        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $force2, $force3) {
             $expanded = collect();
             foreach ($items as $item) {
                 $subjectId = $item['subject']->subject_id ?? '';
@@ -2699,10 +2703,10 @@ class AcademicScheduleController extends Controller
                 $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
                 $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
 
-                // 2-urinish — mavjud yoki kerakli
+                // 2-urinish — mavjud yoki kerakli (yoki filter majburiy)
                 $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
                 $needs2 = isset($needsByKey['__any__|' . $subjectId . '|' . $semCode . '|2']);
-                $show2 = $has2Data || $needs2;
+                $show2 = $has2Data || $needs2 || $force2;
 
                 $row2 = null;
                 if ($show2) {
@@ -2714,10 +2718,10 @@ class AcademicScheduleController extends Controller
                     $row2['test_na_for_urinish'] = false;
                 }
 
-                // 3-urinish — mavjud yoki kerakli
+                // 3-urinish — mavjud yoki kerakli (yoki filter majburiy)
                 $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
                 $needs3 = isset($needsByKey['__any__|' . $subjectId . '|' . $semCode . '|3']);
-                $show3 = $has3Data || $needs3;
+                $show3 = $has3Data || $needs3 || $force3;
 
                 $row3 = null;
                 if ($show3) {

@@ -1879,33 +1879,57 @@
                                 </button>
                             @endif
 
+                            @php
+                                $isFinal12 = isset($ynSubmission) && $ynSubmission && ($ynSubmission->status ?? null) === 'final';
+                                $isFinal12a = !empty($ynSubmission12a) && ($ynSubmission12a->status ?? null) === 'final';
+                                $isFinal12b = !empty($ynSubmission12b) && ($ynSubmission12b->status ?? null) === 'final';
+                            @endphp
+
                             @if(!empty($ynSubmission12b ?? null))
-                                <div class="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
-                                    12b shakl faol
+                                <div class="{{ $isFinal12b ? 'bg-orange-200 border-2 border-orange-600' : 'bg-orange-100' }} text-orange-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
+                                    @if($isFinal12b) 🔒 @endif 12b shakl @if($isFinal12b) yakuniy @else faol @endif
                                     @if(!empty($examSchedule) && ($examSchedule->oski_resit2_date || $examSchedule->test_resit2_date))
                                         <div class="text-xs text-orange-700 mt-1">
                                             @if($examSchedule->oski_resit2_date) OSKI: {{ \Carbon\Carbon::parse($examSchedule->oski_resit2_date)->format('d.m.Y') }} @endif
                                             @if($examSchedule->test_resit2_date) | Test: {{ \Carbon\Carbon::parse($examSchedule->test_resit2_date)->format('d.m.Y') }} @endif
                                         </div>
                                     @endif
+                                    @if($isFinal12b && $ynSubmission12b->finalized_at)
+                                        <div class="text-[10px] text-orange-600 mt-1">{{ \Carbon\Carbon::parse($ynSubmission12b->finalized_at)->format('d.m.Y H:i') }}</div>
+                                    @endif
+                                    @if($isAdminRoleForTransfer && !$isFinal12b)
+                                        <button type="button" onclick="openFinalizeModal(3)" class="ml-2 text-[11px] underline hover:text-orange-900">Yakuniy qilish</button>
+                                    @endif
                                 </div>
                             @elseif(!empty($ynSubmission12a ?? null))
-                                <div class="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
-                                    12a shakl faol
+                                <div class="{{ $isFinal12a ? 'bg-amber-200 border-2 border-amber-600' : 'bg-amber-100' }} text-amber-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
+                                    @if($isFinal12a) 🔒 @endif 12a shakl @if($isFinal12a) yakuniy @else faol @endif
                                     @if(!empty($examSchedule) && ($examSchedule->oski_resit_date || $examSchedule->test_resit_date))
                                         <div class="text-xs text-amber-700 mt-1">
                                             @if($examSchedule->oski_resit_date) OSKI: {{ \Carbon\Carbon::parse($examSchedule->oski_resit_date)->format('d.m.Y') }} @endif
                                             @if($examSchedule->test_resit_date) | Test: {{ \Carbon\Carbon::parse($examSchedule->test_resit_date)->format('d.m.Y') }} @endif
                                         </div>
                                     @endif
+                                    @if($isFinal12a && $ynSubmission12a->finalized_at)
+                                        <div class="text-[10px] text-amber-600 mt-1">{{ \Carbon\Carbon::parse($ynSubmission12a->finalized_at)->format('d.m.Y H:i') }}</div>
+                                    @endif
+                                    @if($isAdminRoleForTransfer && !$isFinal12a)
+                                        <button type="button" onclick="openFinalizeModal(2)" class="ml-2 text-[11px] underline hover:text-amber-900">Yakuniy qilish</button>
+                                    @endif
                                 </div>
                             @endif
 
                             @if(isset($ynSubmission) && $ynSubmission)
-                                <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
-                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at?->format('d.m.Y H:i') ?? '-' }})
+                                <div class="{{ $isFinal12 ? 'bg-blue-200 border-2 border-blue-600' : 'bg-blue-100' }} text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
+                                    @if($isFinal12) 🔒 @endif YN ga yuborilgan ({{ $ynSubmission->submitted_at?->format('d.m.Y H:i') ?? '-' }})
                                     @if($ynSubmission->submittedBy)
                                         <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
+                                    @endif
+                                    @if($isFinal12 && $ynSubmission->finalized_at)
+                                        <div class="text-[10px] text-blue-600 mt-1">Yakuniylashtirildi: {{ \Carbon\Carbon::parse($ynSubmission->finalized_at)->format('d.m.Y H:i') }}</div>
+                                    @endif
+                                    @if($isAdminRoleForTransfer && !$isFinal12)
+                                        <button type="button" onclick="openFinalizeModal(1)" class="ml-2 text-[11px] underline hover:text-blue-900">Yakuniy qilish</button>
                                     @endif
                                 </div>
                             @elseif($canSubmitYn ?? false)
@@ -2189,6 +2213,39 @@
                                 <button type="button" id="transfer-submit-btn" onclick="submitTransfer()"
                                     class="px-5 py-2.5 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm text-sm">
                                     Tasdiqlash va o'tkazish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Yakuniylash modali — kontekstli ogohlantirish bilan --}}
+                <div id="finalize-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeFinalizeModal()"></div>
+                    <div class="fixed inset-0 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl relative max-h-[85vh] flex flex-col">
+                            <div class="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                                <h3 class="text-lg font-bold text-gray-800" id="finalize-modal-title">Shaklni yakuniy qilish</h3>
+                                <p class="text-sm text-gray-500 mt-1" id="finalize-modal-desc">Yakuniy bo'lgandan keyin sababli arizalar tuzatish dalolatnomasi sifatida qo'shiladi.</p>
+                            </div>
+                            <div class="px-6 py-4 overflow-y-auto flex-1" id="finalize-modal-body">
+                                <div id="finalize-loading" class="text-center py-8 text-gray-500">
+                                    <svg class="animate-spin w-6 h-6 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                    Yuklanmoqda...
+                                </div>
+                                <div id="finalize-warning-content" class="hidden"></div>
+                            </div>
+                            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 flex-shrink-0">
+                                <button type="button" onclick="closeFinalizeModal()"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                                    Bekor qilish
+                                </button>
+                                <button type="button" id="finalize-submit-btn" onclick="submitFinalize()"
+                                    class="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm text-sm">
+                                    Yakuniy qilish
                                 </button>
                             </div>
                         </div>
@@ -5026,6 +5083,120 @@
                 alert('Tarmoq xatosi: ' + err.message);
                 btn.disabled = false;
                 btn.textContent = 'Tasdiqlash va o\'tkazish';
+            });
+        }
+
+        // Yakuniylash modali — kontekstli ogohlantirish
+        var _finalizeAttempt = 1;
+        var _finalizeOverride = false;
+        function openFinalizeModal(attempt) {
+            _finalizeAttempt = attempt;
+            _finalizeOverride = false;
+            var formLabels = {1: 'YN (asosiy)', 2: '12a-shakl', 3: '12b-shakl'};
+            document.getElementById('finalize-modal-title').textContent = formLabels[attempt] + ' yakuniy qilish';
+            document.getElementById('finalize-loading').classList.remove('hidden');
+            document.getElementById('finalize-warning-content').classList.add('hidden');
+            document.getElementById('finalize-warning-content').innerHTML = '';
+            document.getElementById('finalize-modal').classList.remove('hidden');
+
+            var btn = document.getElementById('finalize-submit-btn');
+            btn.disabled = false;
+            btn.textContent = 'Yakuniy qilish';
+
+            var url = '{{ route("admin.journal.finalization-warning-data") }}'
+                + '?subject_id={{ $subjectId }}&semester_code={{ $semesterCode }}&group_hemis_id={{ $group->group_hemis_id }}';
+
+            fetch(url, { headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') } })
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('finalize-loading').classList.add('hidden');
+                    var content = document.getElementById('finalize-warning-content');
+                    content.classList.remove('hidden');
+                    if (!data.success) {
+                        content.innerHTML = '<p class="text-red-600">Xatolik: ' + (data.message || '?') + '</p>';
+                        return;
+                    }
+                    if (data.count === 0) {
+                        content.innerHTML = '<div class="rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-800">'
+                            + '<strong>✓ Hech kim NB olmagan</strong> oxirgi ' + data.window_days + ' kun ichida. '
+                            + 'Yakuniy qilish xavfsiz.</div>';
+                        return;
+                    }
+                    var html = '<div class="rounded-lg bg-amber-50 border border-amber-300 p-4 mb-3">';
+                    html += '<div class="flex items-start gap-2 mb-2">';
+                    html += '<svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+                        + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+                    html += '<div><strong class="text-amber-900">Diqqat:</strong> <span class="text-amber-800">'
+                        + 'Quyidagi ' + data.count + ' ta talaba oxirgi ' + data.window_days + ' kunda darslarga yoki imtihonlarga kelmagan. '
+                        + 'Ularning sababli ma\'lumotnomasi kelishi mumkin.</span></div></div>';
+                    html += '<div class="overflow-x-auto rounded-lg border border-amber-200 bg-white max-h-64 overflow-y-auto">';
+                    html += '<table class="min-w-full text-xs">';
+                    html += '<thead class="bg-amber-100 sticky top-0"><tr>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">FISH</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Sana</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Juftlik</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Turi</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Fan</th></tr></thead><tbody>';
+                    data.absentees.forEach(function(a) {
+                        var d = a.lesson_date ? new Date(a.lesson_date).toLocaleDateString('uz-UZ') : '-';
+                        html += '<tr class="border-t border-amber-100">'
+                            + '<td class="px-2 py-1 text-gray-900">' + (a.full_name || a.student_hemis_id) + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + d + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + (a.lesson_pair_name || '-') + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + (a.training_type_name || '-') + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + (a.subject_name || '-') + '</td>'
+                            + '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                    html += '<p class="text-xs text-amber-700 mt-2">Yakuniy qilingandan keyin sababli arizalar "Tuzatish dalolatnomasi" sifatida qo\'shiladi.</p>';
+                    html += '</div>';
+                    content.innerHTML = html;
+                    _finalizeOverride = true;
+                })
+                .catch(err => {
+                    document.getElementById('finalize-loading').classList.add('hidden');
+                    document.getElementById('finalize-warning-content').classList.remove('hidden');
+                    document.getElementById('finalize-warning-content').innerHTML = '<p class="text-red-600">Tarmoq xatosi: ' + err.message + '</p>';
+                });
+        }
+        function closeFinalizeModal() {
+            document.getElementById('finalize-modal').classList.add('hidden');
+        }
+        function submitFinalize() {
+            var btn = document.getElementById('finalize-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+
+            fetch('{{ route("admin.journal.finalize-attempt") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                    attempt: _finalizeAttempt,
+                    override_warning: _finalizeOverride
+                })
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    alert(data.message || 'Yakuniylashtirildi.');
+                    location.reload();
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Noma\'lum xato'));
+                    btn.disabled = false;
+                    btn.textContent = 'Yakuniy qilish';
+                }
+            })
+            .catch(err => {
+                alert('Tarmoq xatosi: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Yakuniy qilish';
             });
         }
 

@@ -5407,6 +5407,202 @@ class JournalController extends Controller
     }
 
     /**
+     * Yakuniylashga ogohlantirish ma'lumotlari — oxirgi N kunda
+     * dars/imtihonga kelmagan talabalar ro'yxati. Modal'da ko'rsatish uchun.
+     */
+    public function finalizationWarningData(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        $windowDays = (int) \App\Models\Setting::get('spravka_deadline_days', 10);
+
+        $absentees = \App\Services\YnAttemptStatusService::findRecentAbsenteesForFinalizationWarning(
+            $request->subject_id,
+            $request->semester_code,
+            $request->group_hemis_id,
+            $windowDays
+        );
+
+        return response()->json([
+            'success' => true,
+            'window_days' => $windowDays,
+            'absentees' => $absentees,
+            'count' => count($absentees),
+        ]);
+    }
+
+    /**
+     * yn_submission'ni yakuniylash. status='final' qilinadi va finalized_at/by yoziladi.
+     * Yakuniy bo'lgandan keyin sababli arizalar "tuzatish dalolatnomasi" ga aylanadi.
+     */
+    public function finalizeAttempt(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'attempt' => 'required|integer|min:1|max:3',
+            'override_warning' => 'nullable|boolean',
+        ]);
+
+        $hasStatusCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'status');
+        if (!$hasStatusCol) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Yakuniy rejim uchun migratsiya kerak.',
+            ], 422);
+        }
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
+
+        $subQuery = YnSubmission::where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('group_hemis_id', $request->group_hemis_id);
+        if ($hasAttemptCol) {
+            if ((int) $request->attempt === 1) {
+                $subQuery->where(fn($q) => $q->where('attempt', 1)->orWhereNull('attempt'));
+            } else {
+                $subQuery->where('attempt', (int) $request->attempt);
+            }
+        }
+        $submission = $subQuery->first();
+
+        if (!$submission) {
+            return response()->json([
+                'success' => false,
+                'message' => ((int)$request->attempt === 1 ? 'Asosiy YN' : ($request->attempt === 2 ? '12a' : '12b')) . ' yuborilmagan.',
+            ], 404);
+        }
+
+        if (($submission->status ?? null) === 'final') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu shakl allaqachon yakuniy qilingan.',
+            ], 409);
+        }
+
+        $userId = auth()->guard('web')->id() ?? auth()->guard('teacher')->id();
+        $userGuard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
+        $userName = auth()->user()?->name ?? auth()->user()?->full_name ?? '';
+
+        DB::beginTransaction();
+        try {
+            $submission->update([
+                'status' => 'final',
+                'finalized_at' => now(),
+                'finalized_by_id' => $userId,
+                'finalized_by_guard' => $userGuard,
+            ]);
+
+            // Audit yozuv
+            if (\Illuminate\Support\Facades\Schema::hasTable('yn_form_corrections')) {
+                DB::table('yn_form_corrections')->insert([
+                    'subject_id' => $request->subject_id,
+                    'semester_code' => $request->semester_code,
+                    'group_hemis_id' => $request->group_hemis_id,
+                    'student_hemis_id' => '',
+                    'attempt' => (int) $request->attempt,
+                    'correction_type' => 'finalized',
+                    'from_form' => null,
+                    'to_form' => $this->formNameForAttempt((int) $request->attempt),
+                    'reason' => $request->override_warning
+                        ? 'Spravka muddati tugamagan holda yakuniylashtirildi'
+                        : 'Yakuniylashtirish',
+                    'performed_at' => now(),
+                    'performed_by_id' => $userId,
+                    'performed_by_guard' => $userGuard,
+                    'performed_by_name' => $userName,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => $this->formNameForAttempt((int) $request->attempt) . ' yakuniylashtirildi.',
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('finalizeAttempt error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Yakuniylashtirilgan submissionni Loyiha holatiga qaytarish (faqat superadmin).
+     */
+    public function unfinalizeAttempt(Request $request)
+    {
+        if (!auth()->user()?->hasRole('superadmin')) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin'], 403);
+        }
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'attempt' => 'required|integer|min:1|max:3',
+        ]);
+
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'status')) {
+            return response()->json(['success' => false, 'message' => 'Migratsiya yo\'q'], 422);
+        }
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
+        $subQuery = YnSubmission::where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('group_hemis_id', $request->group_hemis_id);
+        if ($hasAttemptCol) {
+            if ((int) $request->attempt === 1) {
+                $subQuery->where(fn($q) => $q->where('attempt', 1)->orWhereNull('attempt'));
+            } else {
+                $subQuery->where('attempt', (int) $request->attempt);
+            }
+        }
+        $submission = $subQuery->first();
+
+        if (!$submission) {
+            return response()->json(['success' => false, 'message' => 'Topilmadi'], 404);
+        }
+
+        $submission->update([
+            'status' => 'draft',
+            'finalized_at' => null,
+            'finalized_by_id' => null,
+            'finalized_by_guard' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $this->formNameForAttempt((int) $request->attempt) . ' loyiha holatiga qaytarildi.',
+        ]);
+    }
+
+    private function formNameForAttempt(int $attempt): string
+    {
+        return match ($attempt) {
+            2 => '12a-shakl',
+            3 => '12b-shakl',
+            default => '12-shakl',
+        };
+    }
+
+    /**
      * Admin/Superadmin: OSKI (101) va Test (102) baholarini kiritish yoki yangilash.
      * YN yuborilgan bo'lsa ham ruxsat beriladi — faqat admin va superadmin uchun.
      */

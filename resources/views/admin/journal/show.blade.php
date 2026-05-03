@@ -32,6 +32,26 @@
             background: #ddd6fe !important;
         }
 
+        /* Talabaning joriy bosqichi (12-shakl/12-qo'shimcha/12a/...) badge'i */
+        .stage-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 8px;
+            margin-left: 4px;
+            line-height: 1.4;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .stage-badge.stage-green  { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .stage-badge.stage-amber  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .stage-badge.stage-orange { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+        .stage-badge.stage-red    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .stage-badge.stage-blue   { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+        .stage-badge.stage-indigo { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+        .stage-badge.stage-gray   { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+
         .tab-content {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -916,7 +936,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($lectureLessonDates as $idx => $date)
                                                 @php
                                                     $scheduledPairs = $lecturePairsByDate[$date] ?? [];
@@ -971,7 +991,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($lectureColumns as $idx => $col)
                                                 @php
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
@@ -1152,7 +1172,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
@@ -1351,7 +1371,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($jbColumns as $colIndex => $col)
                                                 @php
@@ -2098,7 +2118,7 @@
                                         @endphp
                                         <tr id="mt-row-{{ $student->hemis_id }}" {!! $rowBg ? 'style="background:' . $rowBg . '"' : '' !!}>
                                             <td class="px-2 py-1 text-center" style="color: #111827;">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase student-name-cell" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
                                                     <div class="mt-file-cell" style="display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative;">
@@ -2274,7 +2294,7 @@
                                             @endphp
                                             <tr>
                                                 <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
@@ -2362,7 +2382,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($mtColumns as $colIndex => $col)
                                                 @php

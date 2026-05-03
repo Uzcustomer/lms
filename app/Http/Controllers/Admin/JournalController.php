@@ -1346,6 +1346,117 @@ class JournalController extends Controller
             }
         }
 
+        // Har talaba uchun joriy bosqichni hisoblash (badge ko'rsatish uchun).
+        // exportYnQaydnoma ichidagi V hisoblash mantig'ini soddalashtirilgan
+        // ko'rinishda — joriy holatdagi (sababli retake bilan) baholar bilan.
+        $studentStages = [];
+        try {
+            $hasOskiForWeights = !($examSchedule && $examSchedule->oski_na);
+            $hasTestForWeights = !($examSchedule && $examSchedule->test_na);
+            if ($hasOskiForWeights && $hasTestForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
+            } elseif ($hasOskiForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
+            } elseif ($hasTestForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
+            } else {
+                $defaultWeights = ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+            }
+
+            $stageLevelCode = (string) ($semester?->level_code ?? '');
+
+            foreach ($students as $stu) {
+                $h = $stu->hemis_id;
+
+                // JN o'rtacha
+                $jnSum = 0;
+                $jnDays = 0;
+                foreach ($jbLessonDates as $date) {
+                    $dayGrades = $jbGrades[$h][$date] ?? [];
+                    if (empty($dayGrades)) continue;
+                    $pairs = $jbPairsPerDay[$date] ?? 1;
+                    $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
+                    $jnSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
+                    $jnDays++;
+                }
+                $jn = $jnDays > 0 ? (int) round($jnSum / $jnDays, 0, PHP_ROUND_HALF_UP) : 0;
+
+                // MT o'rtacha
+                $mtSum = 0;
+                $mtDays = 0;
+                foreach ($mtLessonDates as $date) {
+                    $dayGrades = $mtGrades[$h][$date] ?? [];
+                    if (empty($dayGrades)) continue;
+                    $pairs = $mtPairsPerDay[$date] ?? 1;
+                    $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
+                    $mtSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
+                    $mtDays++;
+                }
+                $mt = $mtDays > 0 ? (int) round($mtSum / $mtDays, 0, PHP_ROUND_HALF_UP) : 0;
+
+                // Manual MT override
+                if (isset($manualMtGrades[$h])) {
+                    $mt = (int) round((float) $manualMtGrades[$h]->grade, 0, PHP_ROUND_HALF_UP);
+                }
+
+                $other = $otherGrades[$h] ?? ['on' => null, 'oski' => null, 'test' => null];
+                $davomat = (float) ($attendanceData[$h] ?? 0);
+                $auditH = (float) ($auditoriumHours ?? 0);
+                $davomatPct = $auditH > 0 ? round(($davomat / $auditH) * 100, 2) : 0.0;
+
+                $vCurrent = \App\Services\YnAttemptStatusService::computeV(
+                    $jn, $mt,
+                    $other['on'] ?? null, $other['oski'] ?? null, $other['test'] ?? null,
+                    $davomatPct,
+                    $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'],
+                    $defaultWeights['oski'], $defaultWeights['test'],
+                    $stageLevelCode
+                );
+
+                // Sababli retake bormi? (jb/mt/other dagi flag)
+                $hasSababliRetake = false;
+                foreach (($jbGrades[$h] ?? []) as $dg) {
+                    foreach ($dg as $g) {
+                        if (!empty($g['retake_was_sababli'])) { $hasSababliRetake = true; break 2; }
+                    }
+                }
+                if (!$hasSababliRetake) {
+                    foreach (($mtGrades[$h] ?? []) as $dg) {
+                        foreach ($dg as $g) {
+                            if (!empty($g['retake_was_sababli'])) { $hasSababliRetake = true; break 2; }
+                        }
+                    }
+                }
+                if (!$hasSababliRetake) {
+                    if (!empty($other['on_sababli']) || !empty($other['oski_sababli']) || !empty($other['test_sababli'])) {
+                        $hasSababliRetake = true;
+                    }
+                }
+
+                // Bosqich aniqlash (soddalashtirilgan)
+                $passing = is_numeric($vCurrent) && (float) $vCurrent >= 60;
+                $jnMtOk = $jn >= 60 && $mt >= 60;
+
+                if ($passing) {
+                    $stageKey = $hasSababliRetake
+                        ? \App\Services\YnAttemptStatusService::STAGE_QOSHIMCHA_PASSED
+                        : \App\Services\YnAttemptStatusService::STAGE_ASOSIY_PASSED;
+                } else {
+                    $stageKey = $jnMtOk
+                        ? \App\Services\YnAttemptStatusService::STAGE_IN_12A
+                        : \App\Services\YnAttemptStatusService::STAGE_IN_12A_PULLIK;
+                }
+
+                $studentStages[$h] = array_merge(
+                    \App\Services\YnAttemptStatusService::stageLabel($stageKey),
+                    ['stage' => $stageKey, 'v' => $vCurrent]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Student stage computation failed: ' . $e->getMessage());
+            $studentStages = [];
+        }
+
         return view('admin.journal.show', compact(
             'group',
             'subject',
@@ -1408,7 +1519,8 @@ class JournalController extends Controller
             'levelDeadline',
             'approvedExcuses',
             'excuseGradeSnapshots',
-            'excuseOpenedDatesPerStudent'
+            'excuseOpenedDatesPerStudent',
+            'studentStages'
         ));
     }
 

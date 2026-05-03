@@ -154,6 +154,143 @@ class YnAttemptStatusService
     }
 
     /**
+     * Yakuniy ko'rsatkich V ni hisoblash. exportYnQaydnoma ichidagi mantiq bilan
+     * mos. Berilgan komponentlar (jn/mt/on/oski/test) va vaznlar asosida.
+     *
+     * @return int|string  Sonli V yoki maxsus belgi: '', -1, -2, -3
+     */
+    public static function computeV(
+        int $jnVal,
+        int $mtVal,
+        ?float $onRaw,
+        ?float $oskiRaw,
+        ?float $testRaw,
+        float $davomatPct,
+        int $weightJn,
+        int $weightMt,
+        int $weightOn,
+        int $weightOski,
+        int $weightTest,
+        string $levelCode = ''
+    ) {
+        $onVal = $onRaw !== null ? (int) round((float) $onRaw) : 0;
+        $oskiVal = $oskiRaw !== null ? (int) round((float) $oskiRaw) : 0;
+        $testVal = $testRaw !== null ? (int) round((float) $testRaw) : 0;
+        $davomatFailed = $davomatPct >= 25;
+        $roundJnMtToInt = in_array($levelCode, ['14', '15'], true);
+
+        if ($roundJnMtToInt) {
+            $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+            $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+            $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+        } else {
+            $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
+            $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
+            $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+        }
+
+        if ($weightOski > 0 && $weightTest > 0) {
+            $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
+            $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+        } elseif ($weightOski > 0) {
+            $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+            $tBall = 0;
+        } elseif ($weightTest > 0) {
+            $qBall = 0;
+            $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+        } else {
+            $qBall = 0;
+            $tBall = 0;
+        }
+
+        $maxJbMtOn = $weightJn + $weightMt + $weightOn;
+        $mSum = (($jnVal < 60) || ($mtVal < 60)) ? 0 : round($eBall + $hBall + $kBall, 1);
+        $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+        if ($jnVal === 0 && $mtVal === 0) {
+            $v = '';
+        } elseif ($davomatFailed) {
+            $v = -3;
+        } elseif ($nPct < 0.6) {
+            $v = -2;
+        } elseif (($weightOski > 0 && $oskiVal == 0) || ($weightTest > 0 && $testVal == 0)) {
+            $v = -1;
+        } elseif (($weightJn > 0 && $jnVal < 60) || ($weightMt > 0 && $mtVal < 60)
+            || ($weightOn > 0 && $onVal < 60)
+            || ($weightOski > 0 && $oskiVal < 60) || ($weightTest > 0 && $testVal < 60)) {
+            $v = 0;
+        } else {
+            $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+            if ($weightOski > 0 && $weightTest > 0) {
+                $examSum = round($qBall + $tBall, 1);
+            } elseif ($weightOski > 0) {
+                $examSum = round($qBall, 1);
+            } elseif ($weightTest > 0) {
+                $examSum = round($tBall, 1);
+            } else {
+                $examSum = 0;
+            }
+            $v = $jbMtOnSum + $examSum;
+        }
+
+        if (is_numeric($v) && $v > 0) {
+            $v = (int) floor((float) $v + 0.5);
+        }
+
+        return $v;
+    }
+
+    /**
+     * Stsenariy — bitta urinish uchun JN/MT/OSKI/Test va V bilan birga.
+     * determineStage ga uzatiladi.
+     */
+    public static function buildScenario(
+        int $jnVal,
+        int $mtVal,
+        ?float $onRaw,
+        ?float $oskiRaw,
+        ?float $testRaw,
+        float $davomatPct,
+        int $weightJn,
+        int $weightMt,
+        int $weightOn,
+        int $weightOski,
+        int $weightTest,
+        string $levelCode = ''
+    ): array {
+        $v = self::computeV($jnVal, $mtVal, $onRaw, $oskiRaw, $testRaw, $davomatPct,
+            $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $levelCode);
+        return [
+            'v' => $v,
+            'jn' => $jnVal,
+            'mt' => $mtVal,
+            'oski' => $oskiRaw !== null ? (int) round((float) $oskiRaw) : null,
+            'test' => $testRaw !== null ? (int) round((float) $testRaw) : null,
+        ];
+    }
+
+    /**
+     * Bosqich uchun foydalanuvchiga ko'rsatiladigan label va rang.
+     */
+    public static function stageLabel(string $stage): array
+    {
+        $map = [
+            self::STAGE_ASOSIY_PASSED        => ['label' => 'Asosiy urinishda o\'tgan',     'color' => 'green',  'short' => 'Asosiy ✓'],
+            self::STAGE_QOSHIMCHA_PASSED     => ['label' => 'Sababli orqali o\'tgan',         'color' => 'green',  'short' => 'Sababli ✓'],
+            self::STAGE_IN_12A               => ['label' => '12a-shaklda (1-urinish)',       'color' => 'amber',  'short' => '12a'],
+            self::STAGE_IN_12A_PULLIK        => ['label' => 'Pullik (JN/MT past)',           'color' => 'gray',   'short' => 'Pullik'],
+            self::STAGE_12A_PASSED           => ['label' => '1-urinishda o\'tgan',           'color' => 'blue',   'short' => '1-urinish ✓'],
+            self::STAGE_12A_QOSHIMCHA_PASSED => ['label' => 'Sababli orqali 1-urinishda o\'tgan', 'color' => 'blue', 'short' => '1-urinish ✓ (sab)'],
+            self::STAGE_IN_12B               => ['label' => '12b-shaklda (2-urinish)',       'color' => 'orange', 'short' => '12b'],
+            self::STAGE_IN_12B_PULLIK        => ['label' => 'Pullik (JN/MT past)',           'color' => 'gray',   'short' => 'Pullik'],
+            self::STAGE_12B_PASSED           => ['label' => '2-urinishda o\'tgan',           'color' => 'indigo', 'short' => '2-urinish ✓'],
+            self::STAGE_12B_QOSHIMCHA_PASSED => ['label' => 'Sababli orqali 2-urinishda o\'tgan', 'color' => 'indigo', 'short' => '2-urinish ✓ (sab)'],
+            self::STAGE_FAILED_PULLIK        => ['label' => 'Pullik qayta o\'qish',          'color' => 'red',    'short' => 'Pullik'],
+        ];
+        return $map[$stage] ?? ['label' => $stage, 'color' => 'gray', 'short' => $stage];
+    }
+
+    /**
      * Berilgan bosqich qaysi shakl ro'yxatlarida ko'rinadi:
      *  - stage'ga qarab talaba qaysi sheetlarda ko'rinishini qaytaradi
      */

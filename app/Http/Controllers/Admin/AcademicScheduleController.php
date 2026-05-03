@@ -366,7 +366,13 @@ class AcademicScheduleController extends Controller
             foreach ($ynRows as $r) {
                 $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
                 if (!isset($jnMtMap[$k])) {
-                    $jnMtMap[$k] = ['jn' => (int) $r->jn, 'mt' => (int) $r->mt];
+                    // Default 0 in snapshot = "not yet graded", treat as null
+                    $jnInt = (int) $r->jn;
+                    $mtInt = (int) $r->mt;
+                    $jnMtMap[$k] = [
+                        'jn' => $jnInt > 0 ? $jnInt : null,
+                        'mt' => $mtInt > 0 ? $mtInt : null,
+                    ];
                 }
             }
         } catch (\Throwable $e) {}
@@ -414,26 +420,55 @@ class AcademicScheduleController extends Controller
             \Log::warning('Live JN/MT aggregate failed: ' . $e->getMessage());
         }
 
-        // 2) OSKI / Test attempt=1 baholari
-        $examMap = []; // hemis_id|subj|sem|type => grade
+        // 2) OSKI / Test attempt=1 baholari (101, 102, va legacy 103 quiz)
+        // Legacy code 103 quiz grades: resolve to OSKI(101) or Test(102) via quiz_result
+        $examMap = []; // hemis_id|subj|sem|type => avg grade
+        $examLists = []; // hemis_id|subj|sem|type => [grades] (for averaging)
         try {
             $rows = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->whereIn('training_type_code', [101, 102])
+                ->whereIn('training_type_code', [101, 102, 103])
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade')
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id')
                 ->get();
+
+            $quizIds = $rows->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->values()->all();
+            $quizTypeMap = [];
+            if (!empty($quizIds)) {
+                $quizTypeMap = DB::table('hemis_quiz_results')->whereIn('id', $quizIds)->pluck('quiz_type', 'id')->toArray();
+            }
+            $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+            $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
             foreach ($rows as $r) {
-                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $r->training_type_code;
-                $examMap[$k] = $r->retake_grade ?? $r->grade; // null bo'lsa ham nullni saqlaymiz
+                $typeCode = (int) $r->training_type_code;
+                if ($typeCode === 103) {
+                    if (!$r->quiz_result_id) continue;
+                    $quizType = $quizTypeMap[$r->quiz_result_id] ?? null;
+                    if (in_array($quizType, $oskiTypes, true)) {
+                        $typeCode = 101;
+                    } elseif (in_array($quizType, $testTypes, true)) {
+                        $typeCode = 102;
+                    } else {
+                        continue;
+                    }
+                }
+                $effective = $r->retake_grade ?? $r->grade;
+                if ($effective === null) continue;
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
+                $examLists[$k][] = (float) $effective;
+            }
+            foreach ($examLists as $k => $list) {
+                $examMap[$k] = count($list) ? array_sum($list) / count($list) : null;
             }
         } catch (\Throwable $e) {}
 
         // 2b) OSKI / Test attempt=2 baholari (12a) — failed_attempt2 ni aniqlash uchun
         $examMap2 = [];
+        $examLists2 = [];
         try {
             if ($hasAttemptCol) {
                 $rows = DB::table('student_grades')
@@ -441,13 +476,39 @@ class AcademicScheduleController extends Controller
                     ->whereIn('student_hemis_id', $allStudentHids)
                     ->whereIn('subject_id', $allSubjectIds)
                     ->whereIn('semester_code', $allSemCodes)
-                    ->whereIn('training_type_code', [101, 102])
+                    ->whereIn('training_type_code', [101, 102, 103])
                     ->where('attempt', 2)
-                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade')
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id')
                     ->get();
+
+                $quizIds2 = $rows->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->values()->all();
+                $quizTypeMap2 = [];
+                if (!empty($quizIds2)) {
+                    $quizTypeMap2 = DB::table('hemis_quiz_results')->whereIn('id', $quizIds2)->pluck('quiz_type', 'id')->toArray();
+                }
+                $oskiTypes2 = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+                $testTypes2 = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
                 foreach ($rows as $r) {
-                    $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $r->training_type_code;
-                    $examMap2[$k] = $r->retake_grade ?? $r->grade;
+                    $typeCode = (int) $r->training_type_code;
+                    if ($typeCode === 103) {
+                        if (!$r->quiz_result_id) continue;
+                        $quizType = $quizTypeMap2[$r->quiz_result_id] ?? null;
+                        if (in_array($quizType, $oskiTypes2, true)) {
+                            $typeCode = 101;
+                        } elseif (in_array($quizType, $testTypes2, true)) {
+                            $typeCode = 102;
+                        } else {
+                            continue;
+                        }
+                    }
+                    $effective = $r->retake_grade ?? $r->grade;
+                    if ($effective === null) continue;
+                    $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
+                    $examLists2[$k][] = (float) $effective;
+                }
+                foreach ($examLists2 as $k => $list) {
+                    $examMap2[$k] = count($list) ? array_sum($list) / count($list) : null;
                 }
             }
         } catch (\Throwable $e) {}

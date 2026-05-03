@@ -343,12 +343,10 @@ class AcademicScheduleController extends Controller
         $allStudentHids = array_keys($studentGroup);
         if (empty($allStudentHids)) return $result;
 
-        // 1) JN/MT olish — yn_student_grades snapshot eski bo'lishi mumkin (YN yuborilgandan
-        // keyin baholar o'zgargan bo'lsa). Joriy holatni ham tekshirish uchun student_grades dan
-        // tirik hisoblaymiz va snapshot bilan birlashtiramiz.
+        // 1) JN/MT olish — snapshot va tirik AVG ni birlashtirib ishlatamiz.
         $jnMtMap = []; // hemis_id|subj|sem => [jn, mt]
 
-        // 1a) Snapshot (defolt — agar tirik hisoblanmasa)
+        // 1a) Snapshot (yn_student_grades) — defolt
         try {
             $hasYnSubAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
             $ynQuery = DB::table('yn_student_grades as ysg')
@@ -373,87 +371,47 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 1b) Tirik JN/MT — student_grades dan bevosita hisoblaymiz va snapshot ustiga yozamiz
+        // 1b) Tirik AVG — DB darajasida aggregatsiya (memory uchun yengil).
+        // JN: training_type_code NOT IN [99,100,101,102,103] uchun AVG
+        // MT: training_type_code=99 uchun AVG yoki manual MT
         try {
-            $liveRows = DB::table('student_grades')
+            $jnAvg = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->whereNotIn('training_type_code', [100, 101, 102, 103]) // ON/OSKI/Test/Quiz emas
+                ->whereNotIn('training_type_code', [99, 100, 101, 102, 103])
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
-                ->where(function ($q) {
-                    $q->whereNotNull('grade')->orWhereNotNull('retake_grade');
-                })
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code',
-                    'grade', 'retake_grade', 'reason', 'status', 'lesson_date')
+                ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
+                ->selectRaw('student_hemis_id, subject_id, semester_code,
+                    AVG(COALESCE(retake_grade, grade)) as avg_grade')
+                ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
                 ->get();
-
-            // Per-student JN va MT to'plamlari
-            $jnAccum = []; // hemis|subj|sem => [grades by date => avg per day]
-            $mtAccum = []; // hemis|subj|sem => sum/count
-            $manualMt = []; // hemis|subj|sem => manual mt grade
-            foreach ($liveRows as $r) {
-                $key = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                $effective = null;
-                if ($r->reason === 'absent' && $r->grade === null) {
-                    $effective = $r->retake_grade !== null ? (float) $r->retake_grade : null;
-                } elseif ($r->status === 'pending') {
-                    $effective = $r->reason === 'low_grade' && $r->grade !== null ? (float) $r->grade : null;
-                } else {
-                    $effective = $r->grade !== null ? (float) $r->grade : ($r->retake_grade !== null ? (float) $r->retake_grade : null);
-                }
-                if ($effective === null) continue;
-
-                if ((int) $r->training_type_code === 99) {
-                    // MT
-                    if ($r->lesson_date === null) {
-                        // Manual MT (one row, lesson_date null)
-                        $manualMt[$key] = $effective;
-                    } else {
-                        if (!isset($mtAccum[$key])) $mtAccum[$key] = ['sum' => 0, 'count' => 0];
-                        $mtAccum[$key]['sum'] += $effective;
-                        $mtAccum[$key]['count']++;
-                    }
-                } else {
-                    // JN (har sanada o'rtachasini hisoblaymiz)
-                    $dateKey = $r->lesson_date ? substr($r->lesson_date, 0, 10) : '';
-                    if ($dateKey === '') continue;
-                    if (!isset($jnAccum[$key])) $jnAccum[$key] = [];
-                    if (!isset($jnAccum[$key][$dateKey])) $jnAccum[$key][$dateKey] = ['sum' => 0, 'count' => 0];
-                    $jnAccum[$key][$dateKey]['sum'] += $effective;
-                    $jnAccum[$key][$dateKey]['count']++;
-                }
+            foreach ($jnAvg as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
+                $jnMtMap[$k]['jn'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
             }
 
-            // JN o'rtachalarini hisoblab, snapshot bilan tenglashtiramiz
-            foreach ($jnAccum as $key => $byDate) {
-                if (empty($byDate)) continue;
-                $dailySum = 0; $days = 0;
-                foreach ($byDate as $stats) {
-                    if ($stats['count'] === 0) continue;
-                    $dailySum += round($stats['sum'] / $stats['count'], 0, PHP_ROUND_HALF_UP);
-                    $days++;
-                }
-                $jn = $days > 0 ? (int) round($dailySum / $days, 0, PHP_ROUND_HALF_UP) : null;
-                if ($jn !== null) {
-                    if (!isset($jnMtMap[$key])) $jnMtMap[$key] = ['jn' => null, 'mt' => null];
-                    $jnMtMap[$key]['jn'] = $jn;
-                }
-            }
-
-            foreach ($mtAccum as $key => $stats) {
-                if ($stats['count'] === 0) continue;
-                $mt = (int) round($stats['sum'] / $stats['count'], 0, PHP_ROUND_HALF_UP);
-                if (!isset($jnMtMap[$key])) $jnMtMap[$key] = ['jn' => null, 'mt' => null];
-                $jnMtMap[$key]['mt'] = $mt;
-            }
-            foreach ($manualMt as $key => $val) {
-                if (!isset($jnMtMap[$key])) $jnMtMap[$key] = ['jn' => null, 'mt' => null];
-                $jnMtMap[$key]['mt'] = (int) round($val, 0, PHP_ROUND_HALF_UP);
+            $mtAvg = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $allStudentHids)
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->where('training_type_code', 99)
+                ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
+                ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
+                ->selectRaw('student_hemis_id, subject_id, semester_code,
+                    AVG(COALESCE(retake_grade, grade)) as avg_grade')
+                ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
+                ->get();
+            foreach ($mtAvg as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
+                $jnMtMap[$k]['mt'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
             }
         } catch (\Throwable $e) {
-            \Log::warning('Live JN/MT compute failed: ' . $e->getMessage());
+            \Log::warning('Live JN/MT aggregate failed: ' . $e->getMessage());
         }
 
         // 2) OSKI / Test attempt=1 baholari

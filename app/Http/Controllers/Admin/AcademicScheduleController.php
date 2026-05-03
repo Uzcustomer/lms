@@ -288,7 +288,7 @@ class AcademicScheduleController extends Controller
                 foreach ($studentList as $stu) {
                     $key = $gHid . '|' . $subjectId . '|' . $semCode . '|' . $stu->hemis_id;
                     $perRow = $perStudentMap[$key] ?? null;
-                    $stat = $statusByStudent[$stu->hemis_id] ?? ['failed1' => false, 'failed2' => false, 'pullik' => false];
+                    $stat = $statusByStudent[$stu->hemis_id] ?? ['failed1' => false, 'failed2' => false, 'pullik' => false, 'held_back' => false];
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'full_name' => $stu->full_name,
@@ -299,6 +299,7 @@ class AcademicScheduleController extends Controller
                         'failed_attempt1' => $stat['failed1'],
                         'failed_attempt2' => $stat['failed2'],
                         'is_pullik' => $stat['pullik'],
+                        'is_held_back' => $stat['held_back'] ?? false,
                     ];
                 }
                 $item['students'] = $rows;
@@ -635,7 +636,32 @@ class AcademicScheduleController extends Controller
                     'failed1' => $failed1,
                     'failed2' => $failed2,
                     'pullik' => $isPullik,
+                    'held_back' => false,
                 ];
+            }
+        }
+
+        // 4+ ta fandan qarz bo'lsa — qayta o'qishga (2-urinishga) ruxsat berilmaydi.
+        // Talaba bo'yicha guruh + semestr bo'yicha failed1 fanlar sonini sanab,
+        // chegaradan oshganlarni held_back deb belgilaymiz.
+        $debtThreshold = 4;
+        $debtCount = []; // hemis_id|gHid|sem => count
+        foreach ($result as $key => $studs) {
+            [$g, $s, $sem] = explode('|', $key);
+            foreach ($studs as $hid => $stat) {
+                if (!empty($stat['failed1'])) {
+                    $bucket = $hid . '|' . $g . '|' . $sem;
+                    $debtCount[$bucket] = ($debtCount[$bucket] ?? 0) + 1;
+                }
+            }
+        }
+        foreach ($result as $key => $studs) {
+            [$g, $s, $sem] = explode('|', $key);
+            foreach ($studs as $hid => $stat) {
+                $bucket = $hid . '|' . $g . '|' . $sem;
+                if (($debtCount[$bucket] ?? 0) >= $debtThreshold) {
+                    $result[$key][$hid]['held_back'] = true;
+                }
             }
         }
 

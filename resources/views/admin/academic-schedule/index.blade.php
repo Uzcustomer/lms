@@ -400,13 +400,21 @@
                                                     }
                                                     // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
                                                     $pullikBlocked = ($itemUrinish > 1) && !empty($stuRow['is_pullik']);
+                                                    // 4+ ta fandan qarz → kursdan qoldiriladi, qayta topshira olmaydi
+                                                    $heldBackBlocked = ($itemUrinish > 1) && !empty($stuRow['is_held_back']);
+                                                    $isBlocked = $pullikBlocked || $heldBackBlocked;
+                                                    $blockedTitle = $heldBackBlocked
+                                                        ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, qayta topshira olmaydi'
+                                                        : 'Pullik talaba — sana belgilab bo\'lmaydi';
                                                 @endphp
-                                                <tr class="student-sub-row" style="background:{{ $pullikBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
+                                                <tr class="student-sub-row" style="background:{{ $isBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
                                                     <td></td>
-                                                    <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $pullikBlocked ? '#991b1b' : '#475569' }};">
-                                                        <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $pullikBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
+                                                    <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $isBlocked ? '#991b1b' : '#475569' }};">
+                                                        <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $isBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
                                                         {{ $stuRow['full_name'] }}
-                                                        @if($pullikBlocked)
+                                                        @if($heldBackBlocked)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
+                                                        @elseif($pullikBlocked)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi (pullik)">Pullik</span>
                                                         @endif
                                                     </td>
@@ -421,16 +429,16 @@
                                                     <td style="text-align:center;padding:4px 8px;">
                                                         <input type="date" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                value="{{ $stuValueOski }}"
-                                                               title="{{ $pullikBlocked ? 'Pullik talaba — sana belgilab bo\'lmaydi' : ($itemUrinish . '-urinish OSKI sanasi') }}"
-                                                               @if($pullikBlocked) disabled @endif
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $pullikBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $pullikBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
+                                                               title="{{ $isBlocked ? $blockedTitle : ($itemUrinish . '-urinish OSKI sanasi') }}"
+                                                               @if($isBlocked) disabled @endif
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $isBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $isBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
                                                         <input type="date" name="schedules[{{ $rowIndex }}][test_date]"
                                                                value="{{ $stuValueTest }}"
-                                                               title="{{ $pullikBlocked ? 'Pullik talaba — sana belgilab bo\'lmaydi' : ($itemUrinish . '-urinish Test sanasi') }}"
-                                                               @if($pullikBlocked) disabled @endif
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $pullikBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $pullikBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
+                                                               title="{{ $isBlocked ? $blockedTitle : ($itemUrinish . '-urinish Test sanasi') }}"
+                                                               @if($isBlocked) disabled @endif
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $isBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $isBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">

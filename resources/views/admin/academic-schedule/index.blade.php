@@ -191,12 +191,12 @@
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
                                         @php
-                                            // Virtual urinish-aware item
+                                            // Virtual urinish-aware item (oski_date_for_urinish har doim set qilingan, fallback yo'q)
                                             $itemUrinish = $item['urinish'] ?? 1;
-                                            $itemOski = $item['oski_date_for_urinish'] ?? $item['oski_date'] ?? null;
-                                            $itemTest = $item['test_date_for_urinish'] ?? ($item['test_date'] ?? null);
-                                            $itemOskiNa = $item['oski_na_for_urinish'] ?? ($item['oski_na'] ?? false);
-                                            $itemTestNa = $item['test_na_for_urinish'] ?? ($item['test_na'] ?? false);
+                                            $itemOski = $item['oski_date_for_urinish'] ?? null;
+                                            $itemTest = $item['test_date_for_urinish'] ?? null;
+                                            $itemOskiNa = $item['oski_na_for_urinish'] ?? false;
+                                            $itemTestNa = $item['test_na_for_urinish'] ?? false;
                                             $oskiSaved = !empty($itemOski) || $itemOskiNa;
                                             $testSaved = !empty($itemTest) || $itemTestNa;
                                         @endphp
@@ -204,7 +204,14 @@
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
-                                            <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
+                                            <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">
+                                                <a href="{{ route('admin.journal.show', [$item['group']->id, $item['subject']->subject_id, $item['subject']->semester_code]) }}"
+                                                   target="_blank"
+                                                   class="hover:text-blue-600 hover:underline"
+                                                   title="Jurnalni yangi oynada ochish">
+                                                    {{ $item['subject']->subject_name }}
+                                                </a>
+                                            </td>
                                             <td data-sort-value="{{ $item['subject']->credit }}" style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
                                             <td data-sort-value="{{ $item['lesson_start_date'] ? \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['lesson_start_date'])
@@ -355,13 +362,22 @@
                                             </td>
                                         </tr>
 
-                                        {{-- Per-student qatorlar — faqat 2/3-urinish ostida (1-urinish da hammaga umumiy sana) --}}
-                                        @if(($showStudents ?? false) && $itemUrinish > 1 && !empty($item['students']))
+                                        {{-- Per-student qatorlar — har urinish (1/2/3) ostida.
+                                             1-urinish da ham talabaga individual sana belgilash mumkin. --}}
+                                        @if(($showStudents ?? false) && !empty($item['students']))
                                             @foreach($item['students'] as $stuRow)
                                                 @php
                                                     $rowIndex++;
-                                                    $stuValueOski = $itemUrinish === 3 ? ($stuRow['oski_resit2_date'] ?? '') : ($stuRow['oski_resit_date'] ?? '');
-                                                    $stuValueTest = $itemUrinish === 3 ? ($stuRow['test_resit2_date'] ?? '') : ($stuRow['test_resit_date'] ?? '');
+                                                    if ($itemUrinish === 1) {
+                                                        $stuValueOski = $stuRow['oski_date'] ?? '';
+                                                        $stuValueTest = $stuRow['test_date'] ?? '';
+                                                    } elseif ($itemUrinish === 2) {
+                                                        $stuValueOski = $stuRow['oski_resit_date'] ?? '';
+                                                        $stuValueTest = $stuRow['test_resit_date'] ?? '';
+                                                    } else {
+                                                        $stuValueOski = $stuRow['oski_resit2_date'] ?? '';
+                                                        $stuValueTest = $stuRow['test_resit2_date'] ?? '';
+                                                    }
                                                 @endphp
                                                 <tr class="student-sub-row" style="background:#fafafa;border-top:1px dashed #e2e8f0;">
                                                     <td></td>
@@ -370,19 +386,24 @@
                                                         {{ $stuRow['full_name'] }}
                                                     </td>
                                                     <td style="text-align:center;font-size:9px;color:#64748b;">
-                                                        <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $itemUrinish === 3 ? '#ffedd5' : '#fef3c7' }};color:{{ $itemUrinish === 3 ? '#ea580c' : '#d97706' }};">{{ $itemUrinish }}-urinish</span>
+                                                        @php
+                                                            $stuBadgeBg = $itemUrinish === 1 ? '#dcfce7' : ($itemUrinish === 3 ? '#ffedd5' : '#fef3c7');
+                                                            $stuBadgeFg = $itemUrinish === 1 ? '#16a34a' : ($itemUrinish === 3 ? '#ea580c' : '#d97706');
+                                                            $stuBorderColor = $itemUrinish === 1 ? '#86efac' : ($itemUrinish === 3 ? '#fdba74' : '#fcd34d');
+                                                        @endphp
+                                                        <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $itemUrinish }}-urinish</span>
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
                                                         <input type="date" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                value="{{ $stuValueOski }}"
                                                                title="{{ $itemUrinish }}-urinish OSKI sanasi"
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $itemUrinish === 3 ? '#fdba74' : '#fcd34d' }}; border-radius:4px; max-width:135px;" />
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
                                                         <input type="date" name="schedules[{{ $rowIndex }}][test_date]"
                                                                value="{{ $stuValueTest }}"
                                                                title="{{ $itemUrinish }}-urinish Test sanasi"
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $itemUrinish === 3 ? '#fdba74' : '#fcd34d' }}; border-radius:4px; max-width:135px;" />
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">

@@ -2685,7 +2685,8 @@ class AcademicScheduleController extends Controller
             \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
         }
 
-        // Filter "2" yoki "3" tanlangan bo'lsa, tegishli urinish qatorlarini barcha guruhlar uchun majburiy ko'rsatamiz
+        // Filter "2" yoki "3" tanlangan bo'lsa, tegishli urinish qatorlarini barcha guruhlar uchun majburiy ko'rsatamiz.
+        // Aks holda — yiqilgan talabalar bo'lsagina avtomatik chiqaradi.
         $force2 = ($urinishFilter === '2');
         $force3 = ($urinishFilter === '3');
 

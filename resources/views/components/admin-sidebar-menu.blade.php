@@ -396,7 +396,7 @@
             </svg>
             JN o'zlashtirish
         </a>
-        @elseif(!$hasActiveRole(['kafedra_mudiri', 'tyutor', 'nazoratchi']) && !auth()->guard('teacher')->check())
+        @elseif(!$hasActiveRole(['kafedra_mudiri', 'tyutor', 'nazoratchi']) && (!auth()->guard('teacher')->check() || in_array($activeRole, $adminRoles, true)))
         <div class="sidebar-section">Qo'shimcha</div>
 
         <a href="{{ $r('admin.independent.index', 'teacher.independent.index') }}"

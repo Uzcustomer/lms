@@ -1522,7 +1522,9 @@ class JournalController extends Controller
                 $mt = $mtDays > 0 ? (int) round($mtSum / $mtDays, 0, PHP_ROUND_HALF_UP) : 0;
 
                 if (isset($manualMtGrades[$h])) {
-                    $mt = (int) round((float) $manualMtGrades[$h]->grade, 0, PHP_ROUND_HALF_UP);
+                    // $manualMtGrades qiymati bevosita float (object emas, 999-qatordagi map natijasi)
+                    $manualVal = is_object($manualMtGrades[$h]) ? ($manualMtGrades[$h]->grade ?? 0) : $manualMtGrades[$h];
+                    $mt = (int) round((float) $manualVal, 0, PHP_ROUND_HALF_UP);
                 }
 
                 $other = $otherGrades[$h] ?? ['on' => null, 'oski' => null, 'test' => null];

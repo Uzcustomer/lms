@@ -107,6 +107,7 @@ class AcademicScheduleController extends Controller
         $testDateTo = $request->get('test_date_to');
         $currentSemesterToggle = $request->get('current_semester', '1');
         $showStudents = $request->get('show_students') === '1';
+        $urinishFilter = $request->get('urinish'); // '1', '2', '3' yoki null (barchasi)
         $isSearched = $request->has('searched');
 
         // Fanlar ro'yxati va jadval ma'lumotlari
@@ -167,6 +168,12 @@ class AcademicScheduleController extends Controller
             $scheduleData = $this->attachStudentsToSchedule($scheduleData);
         }
 
+        // Har bir item ni urinish bo'yicha kengaytirib, alohida virtual qatorlarga aylantirish.
+        // Bu YN kunini belgilash sahifasida 1-urinish / 2-urinish / 3-urinish ro'yxatda alohida qatorlarda paydo bo'ladi.
+        if ($isSearched) {
+            $scheduleData = $this->expandByUrinish($scheduleData, $urinishFilter);
+        }
+
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
             'selectedEducationType',
@@ -185,6 +192,7 @@ class AcademicScheduleController extends Controller
             'testDateTo',
             'currentSemesterToggle',
             'showStudents',
+            'urinishFilter',
             'isSearched',
             'currentEducationYear',
             'routePrefix',
@@ -1057,37 +1065,50 @@ class AcademicScheduleController extends Controller
                     }
                 }
 
+                // Urinish bo'yicha qaysi DB ustuniga yozish kerakligini aniqlaymiz.
+                // Form har bir virtual qator uchun oski_date/test_date submit qiladi,
+                // lekin urinish=2 bo'lsa oski_resit_date, urinish=3 bo'lsa oski_resit2_date.
+                $rowUrinish = (int) ($schedule['urinish'] ?? 1);
+                $oskiCol = match ($rowUrinish) { 2 => 'oski_resit_date', 3 => 'oski_resit2_date', default => 'oski_date' };
+                $testCol = match ($rowUrinish) { 2 => 'test_resit_date', 3 => 'test_resit2_date', default => 'test_date' };
+
                 // Cheklov 1: Allaqachon saqlangan sanani o'zgartirish mumkin emas
                 $newOskiDate = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;
                 $newOskiNa = $oskiNa;
                 $newTestDate = !empty($schedule['test_date']) ? $schedule['test_date'] : null;
                 $newTestNa = $testNa;
 
-                if ($record->exists && !$canEditSaved) {
-                    // Agar OSKI sana yoki N/A allaqachon saqlangan bo'lsa — o'zgartirma
+                if ($record->exists && !$canEditSaved && $rowUrinish === 1) {
+                    // Faqat 1-urinish uchun mavjud sanani himoya qilamiz
                     if ($record->oski_date || $record->oski_na) {
                         $newOskiDate = $record->oski_date?->format('Y-m-d');
                         $newOskiNa = (bool) $record->oski_na;
                     }
-                    // Agar Test sana yoki N/A allaqachon saqlangan bo'lsa — o'zgartirma
                     if ($record->test_date || $record->test_na) {
                         $newTestDate = $record->test_date?->format('Y-m-d');
                         $newTestNa = (bool) $record->test_na;
                     }
                 }
 
-                $record->fill([
+                $fillData = [
                     'department_hemis_id' => $schedule['department_hemis_id'] ?? '',
                     'specialty_hemis_id' => $schedule['specialty_hemis_id'] ?? '',
                     'curriculum_hemis_id' => $schedule['curriculum_hemis_id'] ?? '',
                     'subject_name' => $schedule['subject_name'] ?? '',
-                    'oski_date' => $newOskiDate,
-                    'oski_na' => $newOskiNa,
-                    'test_date' => $newTestDate,
-                    'test_na' => $newTestNa,
                     'education_year' => $educationYear,
                     'updated_by' => $userId,
-                ]);
+                ];
+                if ($rowUrinish === 1) {
+                    $fillData['oski_date'] = $newOskiDate;
+                    $fillData['oski_na'] = $newOskiNa;
+                    $fillData['test_date'] = $newTestDate;
+                    $fillData['test_na'] = $newTestNa;
+                } else {
+                    // 2/3-urinish uchun resit ustuniga yozish (na flaglarini bu yerda saqlamaymiz)
+                    $fillData[$oskiCol] = $newOskiDate;
+                    $fillData[$testCol] = $newTestDate;
+                }
+                $record->fill($fillData);
 
                 if (!$record->exists) {
                     $record->created_by = $userId;
@@ -2606,6 +2627,120 @@ class AcademicScheduleController extends Controller
             'slots' => $slots,
             'totalComputers' => $totalComputers,
         ]);
+    }
+
+    /**
+     * Har bir guruh+fan yozuvini urinishlar (1/2/3) bo'yicha alohida virtual
+     * qatorlarga ajratish.
+     *  - 1-urinish — har doim ko'rinadi
+     *  - 2-urinish — agar mavjud yozuv bo'lsa YOKI talabalar V<60 bo'lib qolgan bo'lsa
+     *  - 3-urinish — xuddi shu mantiq, attempt=2 dan o'tmaganlar uchun
+     */
+    private function expandByUrinish($scheduleData, ?string $urinishFilter)
+    {
+        if ($scheduleData->isEmpty()) return $scheduleData;
+
+        // Talabalar qaysi urinishda V<60 bo'lib qolganligini aniqlash
+        // (oddiy SQL tekshiruvi: OSKI/Test grade < 60 mavjudmi shu attempt da)
+        $needsByKey = [];
+        try {
+            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+            $allKeys = [];
+            $scheduleData->each(function ($items) use (&$allKeys) {
+                foreach ($items as $it) {
+                    $allKeys[] = ($it['group']->group_hemis_id) . '|' . ($it['subject']->subject_id ?? '') . '|' . ($it['subject']->semester_code ?? '');
+                }
+            });
+
+            if (!empty($allKeys)) {
+                // attempt=1 ichida V<60 bo'lgan talabalar mavjudmi (2-urinish kerakmi)
+                // attempt=2 ichida V<60 bo'lgan talabalar mavjudmi (3-urinish kerakmi)
+                foreach ([2, 3] as $att) {
+                    $check = $att === 2 ? 1 : 2; // attempt=N kerakmi → attempt=(N-1) dagi V<60
+                    $rows = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->whereIn('training_type_code', [101, 102])
+                        ->whereRaw('COALESCE(retake_grade, grade, 0) < 60')
+                        ->when($hasAttemptCol, function ($q) use ($check) {
+                            $q->where(function ($qq) use ($check) {
+                                if ($check === 1) {
+                                    $qq->where('attempt', 1)->orWhereNull('attempt');
+                                } else {
+                                    $qq->where('attempt', $check);
+                                }
+                            });
+                        })
+                        ->select('subject_id', 'semester_code', DB::raw('COUNT(*) as c'))
+                        ->groupBy('subject_id', 'semester_code')
+                        ->get();
+                    foreach ($rows as $r) {
+                        // Har bir item key uchun mosini belgilaymiz — bu o'qigan talabalar
+                        // qaysi guruhda ekanligini aniqlash uchun har item da group bor
+                        // shuning uchun ehtiyotkorlik bilan: V<60 bor — kerak deb qaramiz
+                        $needsByKey['__any__|' . $r->subject_id . '|' . $r->semester_code . '|' . $att] = true;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
+        }
+
+        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey) {
+            $expanded = collect();
+            foreach ($items as $item) {
+                $subjectId = $item['subject']->subject_id ?? '';
+                $semCode = $item['subject']->semester_code ?? '';
+
+                // 1-urinish — har doim
+                $row1 = $item;
+                $row1['urinish'] = 1;
+                $row1['oski_date_for_urinish'] = $item['oski_date'] ?? null;
+                $row1['test_date_for_urinish'] = $item['test_date'] ?? null;
+                $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
+                $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
+
+                // 2-urinish — mavjud yoki kerakli
+                $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
+                $needs2 = isset($needsByKey['__any__|' . $subjectId . '|' . $semCode . '|2']);
+                $show2 = $has2Data || $needs2;
+
+                $row2 = null;
+                if ($show2) {
+                    $row2 = $item;
+                    $row2['urinish'] = 2;
+                    $row2['oski_date_for_urinish'] = $item['oski_resit_date'] ?? null;
+                    $row2['test_date_for_urinish'] = $item['test_resit_date'] ?? null;
+                    $row2['oski_na_for_urinish'] = false;
+                    $row2['test_na_for_urinish'] = false;
+                }
+
+                // 3-urinish — mavjud yoki kerakli
+                $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
+                $needs3 = isset($needsByKey['__any__|' . $subjectId . '|' . $semCode . '|3']);
+                $show3 = $has3Data || $needs3;
+
+                $row3 = null;
+                if ($show3) {
+                    $row3 = $item;
+                    $row3['urinish'] = 3;
+                    $row3['oski_date_for_urinish'] = $item['oski_resit2_date'] ?? null;
+                    $row3['test_date_for_urinish'] = $item['test_resit2_date'] ?? null;
+                    $row3['oski_na_for_urinish'] = false;
+                    $row3['test_na_for_urinish'] = false;
+                }
+
+                // Filter qo'llash
+                $rowsToAdd = [];
+                if ($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '1') $rowsToAdd[] = $row1;
+                if (($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '2') && $row2) $rowsToAdd[] = $row2;
+                if (($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '3') && $row3) $rowsToAdd[] = $row3;
+
+                foreach ($rowsToAdd as $r) {
+                    if ($r) $expanded->push($r);
+                }
+            }
+            return $expanded;
+        })->filter(fn($items) => $items->isNotEmpty());
     }
 
     /**

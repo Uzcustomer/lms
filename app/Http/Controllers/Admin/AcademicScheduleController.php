@@ -105,17 +105,34 @@ class AcademicScheduleController extends Controller
         // Agar foydalanuvchi faqat "gacha" sanani bersa va "Joriy semestr" toggle yoqilgan bo'lsa,
         // "dan" sanani joriy semestr boshlanish sanasidan boshlaymiz —
         // shunda eski semestrlardagi tugagan darslar ro'yxatga tushib qolmaydi.
-        // Joriy semestr boshlanish sanasi curriculum_weeks dan olinadi (HEMIS API manbai).
         if (empty($dateFrom) && !empty($dateTo) && $currentSemesterToggle === '1') {
             try {
-                $currentSemHemisIds = Semester::where('current', true)->pluck('semester_hemis_id')->toArray();
-                if (!empty($currentSemHemisIds)) {
+                $currentSemesters = Semester::where('current', true)->get();
+                $semHemisIds = $currentSemesters->pluck('semester_hemis_id')->filter()->toArray();
+                $semCodes = $currentSemesters->pluck('code')->filter()->toArray();
+
+                $earliestStartDate = null;
+                // 1) HEMIS API curriculum_weeks (eng aniq manba)
+                if (!empty($semHemisIds)) {
                     $earliestStartDate = DB::table('curriculum_weeks')
-                        ->whereIn('semester_hemis_id', $currentSemHemisIds)
+                        ->whereIn('semester_hemis_id', $semHemisIds)
                         ->min('start_date');
-                    if ($earliestStartDate) {
-                        $dateFrom = substr($earliestStartDate, 0, 10);
-                    }
+                }
+                // 2) schedules.lesson_date — joriy semestr kodlari bo'yicha
+                if (!$earliestStartDate && !empty($semCodes)) {
+                    $earliestStartDate = DB::table('schedules')
+                        ->whereIn('semester_code', $semCodes)
+                        ->whereNotNull('lesson_date')
+                        ->whereNull('deleted_at')
+                        ->min('lesson_date');
+                }
+                // 3) date_to ga ko'ra mantiqiy minimum: gacha sananing 6 oy oldingisi
+                if (!$earliestStartDate) {
+                    $earliestStartDate = \Carbon\Carbon::parse($dateTo)->subMonths(6)->format('Y-m-d');
+                }
+
+                if ($earliestStartDate) {
+                    $dateFrom = substr($earliestStartDate, 0, 10);
                 }
             } catch (\Throwable $e) {
                 // semestr boshlanish sanasini topa olmasak filtrsiz qoldiramiz

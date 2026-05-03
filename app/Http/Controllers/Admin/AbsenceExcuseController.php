@@ -262,24 +262,27 @@ class AbsenceExcuseController extends Controller
                 $jnOpeningDays = max((int) Setting::get('lesson_opening_days', 3), 1);
                 $deadline = now()->addDays($jnOpeningDays)->endOfDay();
 
-                // Har bir fan uchun faqat bitta opening yaratish (dublikat oldini olish)
-                $processedSubjects = [];
+                // Har bir fan uchun har xil assessment_type uchun alohida opening
+                $processedKeys = [];
 
                 foreach ($excuse->makeups as $makeup) {
                     if (!$makeup->subject_id) {
                         continue;
                     }
-                    // Bitta fan uchun bir marta ochish
-                    if (in_array($makeup->subject_id, $processedSubjects)) {
+                    // (subject + assessment_type) juftligi uchun bir marta ochish
+                    $key = $makeup->subject_id . '_' . ($makeup->assessment_type ?? 'all');
+                    if (in_array($key, $processedKeys, true)) {
                         continue;
                     }
-                    $processedSubjects[] = $makeup->subject_id;
+                    $processedKeys[] = $key;
 
                     ExcuseGradeOpening::create([
                         'absence_excuse_id' => $excuse->id,
                         'absence_excuse_makeup_id' => $makeup->id,
                         'student_hemis_id' => $excuse->student_hemis_id,
                         'subject_id' => $makeup->subject_id,
+                        'attempt' => 1, // sababli asosiy urinish doirasida
+                        'assessment_type' => $makeup->assessment_type ?? null,
                         'date_from' => $dateFrom,
                         'date_to' => $dateTo,
                         'deadline' => $deadline,

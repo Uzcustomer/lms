@@ -11,6 +11,8 @@ class ExcuseGradeOpening extends Model
         'absence_excuse_makeup_id',
         'student_hemis_id',
         'subject_id',
+        'attempt',
+        'assessment_type',
         'date_from',
         'date_to',
         'deadline',
@@ -44,6 +46,35 @@ class ExcuseGradeOpening extends Model
             ->where('date_to', '>=', $lessonDate)
             ->where('status', 'active')
             ->where('deadline', '>', now())
+            ->exists();
+    }
+
+    /**
+     * Berilgan talaba+fan uchun muayyan turdagi (jn/mt/oski/test) imtihon
+     * sababli ravishda ochilganmi tekshirish.
+     */
+    public static function isAssessmentTypeOpenForStudent(
+        string $studentHemisId,
+        string $subjectId,
+        string $assessmentType
+    ): bool {
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('excuse_grade_openings', 'assessment_type')) {
+            // Migratsiya yo'q — eski mantiq bo'yicha (har qanday opening hisoblanadi)
+            return static::where('student_hemis_id', $studentHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('status', 'active')
+                ->where('deadline', '>', now())
+                ->exists();
+        }
+
+        return static::where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('status', 'active')
+            ->where('deadline', '>', now())
+            ->where(function ($q) use ($assessmentType) {
+                $q->where('assessment_type', $assessmentType)
+                  ->orWhereNull('assessment_type');
+            })
             ->exists();
     }
 

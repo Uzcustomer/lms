@@ -106,6 +106,7 @@ class AcademicScheduleController extends Controller
         $testDateFrom = $request->get('test_date_from');
         $testDateTo = $request->get('test_date_to');
         $currentSemesterToggle = $request->get('current_semester', '1');
+        $showStudents = $request->get('show_students') === '1';
         $isSearched = $request->has('searched');
 
         // Fanlar ro'yxati va jadval ma'lumotlari
@@ -160,6 +161,12 @@ class AcademicScheduleController extends Controller
         // Edit huquqi: admin yoki sozlamalarda biror kurs uchun ruxsatga ega rol
         $canEdit = $canDelete || !empty($allowedLevelCodes);
 
+        // Talabani ko'rsatish toggle yoqilgan bo'lsa — har guruh+fan uchun
+        // talabalar ro'yxati va ularning shaxsiy resit/resit2 sanalarini olish
+        if ($showStudents && $isSearched) {
+            $scheduleData = $this->attachStudentsToSchedule($scheduleData);
+        }
+
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
             'selectedEducationType',
@@ -177,6 +184,7 @@ class AcademicScheduleController extends Controller
             'testDateFrom',
             'testDateTo',
             'currentSemesterToggle',
+            'showStudents',
             'isSearched',
             'currentEducationYear',
             'routePrefix',
@@ -184,6 +192,64 @@ class AcademicScheduleController extends Controller
             'canEdit',
             'allowedLevelCodes',
         ));
+    }
+
+    /**
+     * Har guruh+fan uchun talabalar ro'yxatini va ularning shaxsiy
+     * resit/resit2 sanalarini olib biriktirish.
+     */
+    private function attachStudentsToSchedule($scheduleData)
+    {
+        $hasStudentCol = \Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'student_hemis_id');
+        if (!$hasStudentCol) {
+            return $scheduleData;
+        }
+
+        $allGroupHemisIds = $scheduleData->flatMap(fn($items) => $items->pluck('group')->pluck('group_hemis_id'))
+            ->unique()->values()->toArray();
+        if (empty($allGroupHemisIds)) return $scheduleData;
+
+        $studentsByGroup = DB::table('students')
+            ->whereIn('group_id', $allGroupHemisIds)
+            ->select('hemis_id', 'full_name', 'group_id')
+            ->orderBy('full_name')
+            ->get()
+            ->groupBy('group_id');
+
+        // Per-student exam_schedules yozuvlarini olish (student_hemis_id NOT NULL)
+        $perStudentMap = [];
+        $perStudentRows = ExamSchedule::whereNotNull('student_hemis_id')
+            ->whereIn('group_hemis_id', $allGroupHemisIds)
+            ->get();
+        foreach ($perStudentRows as $row) {
+            $key = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $row->student_hemis_id;
+            $perStudentMap[$key] = $row;
+        }
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap) {
+                $gHid = $item['group']->group_hemis_id;
+                $subjectId = $item['subject']->subject_id ?? null;
+                $semCode = $item['subject']->semester_code ?? null;
+                $studentList = $studentsByGroup->get($gHid, collect());
+
+                $rows = [];
+                foreach ($studentList as $stu) {
+                    $key = $gHid . '|' . $subjectId . '|' . $semCode . '|' . $stu->hemis_id;
+                    $perRow = $perStudentMap[$key] ?? null;
+                    $rows[] = [
+                        'hemis_id' => $stu->hemis_id,
+                        'full_name' => $stu->full_name,
+                        'oski_resit_date' => $perRow?->oski_resit_date?->format('Y-m-d'),
+                        'oski_resit2_date' => $perRow?->oski_resit2_date?->format('Y-m-d'),
+                        'test_resit_date' => $perRow?->test_resit_date?->format('Y-m-d'),
+                        'test_resit2_date' => $perRow?->test_resit2_date?->format('Y-m-d'),
+                    ];
+                }
+                $item['students'] = $rows;
+                return $item;
+            });
+        });
     }
 
     /**
@@ -651,9 +717,13 @@ class AcademicScheduleController extends Controller
                     'oski_date' => $existing?->oski_date?->format('Y-m-d'),
                     'oski_na' => (bool) $existing?->oski_na,
                     'oski_time' => $existing?->oski_time,
+                    'oski_resit_date' => $existing?->oski_resit_date?->format('Y-m-d'),
+                    'oski_resit2_date' => $existing?->oski_resit2_date?->format('Y-m-d'),
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
                     'test_na' => (bool) $existing?->test_na,
                     'test_time' => $existing?->test_time,
+                    'test_resit_date' => $existing?->test_resit_date?->format('Y-m-d'),
+                    'test_resit2_date' => $existing?->test_resit2_date?->format('Y-m-d'),
                     'schedule_id' => $existing?->id,
                 ];
 
@@ -928,21 +998,64 @@ class AcademicScheduleController extends Controller
             foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
                 $testNa = !empty($schedule['test_na']);
-                $hasAnyData = !empty($schedule['oski_date']) || !empty($schedule['test_date']) || $oskiNa || $testNa;
+                $hasResitData = !empty($schedule['oski_resit_date']) || !empty($schedule['test_resit_date'])
+                              || !empty($schedule['oski_resit2_date']) || !empty($schedule['test_resit2_date']);
+                $hasAnyData = !empty($schedule['oski_date']) || !empty($schedule['test_date'])
+                              || $oskiNa || $testNa || $hasResitData;
+                $isPerStudent = !empty($schedule['student_hemis_id']);
 
                 if (!$hasAnyData) {
-                    ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
+                    // Per-student rowni o'chirsa, faqat shu talabaning yozuvini tozalaymiz
+                    $delQuery = ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
                         ->where('subject_id', $schedule['subject_id'])
-                        ->where('semester_code', $schedule['semester_code'])
-                        ->delete();
+                        ->where('semester_code', $schedule['semester_code']);
+                    if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'student_hemis_id')) {
+                        if ($isPerStudent) {
+                            $delQuery->where('student_hemis_id', $schedule['student_hemis_id']);
+                        } else {
+                            $delQuery->whereNull('student_hemis_id');
+                        }
+                    }
+                    $delQuery->delete();
                     continue;
                 }
 
-                $record = ExamSchedule::firstOrNew([
+                $studentHemisIdForRow = !empty($schedule['student_hemis_id']) ? $schedule['student_hemis_id'] : null;
+                $hasStudentCol = \Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'student_hemis_id');
+
+                $recordQuery = ExamSchedule::query()
+                    ->where('group_hemis_id', $schedule['group_hemis_id'])
+                    ->where('subject_id', $schedule['subject_id'])
+                    ->where('semester_code', $schedule['semester_code']);
+                if ($hasStudentCol) {
+                    if ($studentHemisIdForRow) {
+                        $recordQuery->where('student_hemis_id', $studentHemisIdForRow);
+                    } else {
+                        $recordQuery->whereNull('student_hemis_id');
+                    }
+                }
+                $record = $recordQuery->first() ?? new ExamSchedule([
                     'group_hemis_id' => $schedule['group_hemis_id'],
                     'subject_id' => $schedule['subject_id'],
                     'semester_code' => $schedule['semester_code'],
                 ]);
+                if ($hasStudentCol) {
+                    $record->student_hemis_id = $studentHemisIdForRow;
+                }
+
+                // Per-student qatorlar uchun asosiy oski_date/test_date saqlanmaydi —
+                // faqat resit/resit2 sanalari yoziladi (asosiy guruhga umumiy)
+                if ($studentHemisIdForRow) {
+                    $resitOnly = ['oski_resit_date', 'oski_resit2_date', 'test_resit_date', 'test_resit2_date'];
+                    $hasAnyResit = false;
+                    foreach ($resitOnly as $rf) {
+                        if (!empty($schedule[$rf])) { $hasAnyResit = true; break; }
+                    }
+                    if (!$hasAnyResit && !$record->exists) {
+                        // Bo'sh per-student row — yaratmaymiz
+                        continue;
+                    }
+                }
 
                 // Cheklov 1: Allaqachon saqlangan sanani o'zgartirish mumkin emas
                 $newOskiDate = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;

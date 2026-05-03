@@ -75,6 +75,13 @@
                                 <span class="toggle-label">Joriy semestr</span>
                             </div>
                         </div>
+                        <div class="filter-item" style="min-width: 180px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch {{ request('show_students') === '1' ? 'active' : '' }}" id="show-students-toggle" onclick="toggleShowStudents()">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Talabani ko'rsatish</span>
+                            </div>
+                        </div>
                     </div>
                     <!-- Row 2: Kurs, Semestr, Guruh, Fan, Holat, Qidirish -->
                     <div class="filter-row">
@@ -165,6 +172,7 @@
                                     <th class="sortable" data-col="4" style="width:70px;text-align:center;">Kredit <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="5" style="width:160px;text-align:center;">Dars boshlanish <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="6" style="width:160px;text-align:center;">Dars tugash <span class="sort-icon"></span></th>
+                                    <th style="width:80px;text-align:center;">Urinish</th>
                                     <th style="width:190px;text-align:center;">OSKI sanasi</th>
                                     <th style="width:190px;text-align:center;">Test sanasi</th>
                                 </tr>
@@ -196,6 +204,18 @@
                                                 @else
                                                     <span style="color:#cbd5e1;">—</span>
                                                 @endif
+                                            </td>
+                                            <td style="text-align:center;padding:4px 8px;">
+                                                @php
+                                                    $maxAttempt = 1;
+                                                    if (!empty($item['oski_resit_date']) || !empty($item['test_resit_date'])) $maxAttempt = 2;
+                                                    if (!empty($item['oski_resit2_date']) || !empty($item['test_resit2_date'])) $maxAttempt = 3;
+                                                    $attemptColors = [1 => '#16a34a', 2 => '#d97706', 3 => '#ea580c'];
+                                                    $attemptBgs = [1 => '#dcfce7', 2 => '#fef3c7', 3 => '#ffedd5'];
+                                                @endphp
+                                                <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;background:{{ $attemptBgs[$maxAttempt] }};color:{{ $attemptColors[$maxAttempt] }};">
+                                                    {{ $maxAttempt }}-urinish
+                                                </span>
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
@@ -252,6 +272,28 @@
                                                                    onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                    @endif
+
+                                                    {{-- Qayta topshirish sanalari (2-urinish / 3-urinish) — asosiy saqlangandan keyin ko'rinadi --}}
+                                                    @if($oskiSaved && !$item['oski_na'])
+                                                        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 3px; padding-top: 4px; border-top: 1px dashed #cbd5e1;">
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">2-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][oski_resit_date]"
+                                                                       value="{{ $item['oski_resit_date'] ?? '' }}"
+                                                                       title="12a-shakl OSKI sanasi"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                            @if(!empty($item['oski_resit_date']))
+                                                                <div style="display:flex; align-items:center; gap:4px;">
+                                                                    <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">3-urinish:</span>
+                                                                    <input type="date" name="schedules[{{ $rowIndex }}][oski_resit2_date]"
+                                                                           value="{{ $item['oski_resit2_date'] ?? '' }}"
+                                                                           title="12b-shakl OSKI sanasi"
+                                                                           style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
+                                                                </div>
+                                                            @endif
+                                                        </div>
                                                     @endif
                                                 </div>
                                             </td>
@@ -311,6 +353,28 @@
                                                             <span class="na-label">N/A</span>
                                                         </label>
                                                     @endif
+
+                                                    {{-- Qayta topshirish sanalari (2-urinish / 3-urinish) — asosiy saqlangandan keyin ko'rinadi --}}
+                                                    @if($testSaved && !$item['test_na'])
+                                                        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 3px; padding-top: 4px; border-top: 1px dashed #cbd5e1;">
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">2-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][test_resit_date]"
+                                                                       value="{{ $item['test_resit_date'] ?? '' }}"
+                                                                       title="12a-shakl Test sanasi"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                            @if(!empty($item['test_resit_date']))
+                                                                <div style="display:flex; align-items:center; gap:4px;">
+                                                                    <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">3-urinish:</span>
+                                                                    <input type="date" name="schedules[{{ $rowIndex }}][test_resit2_date]"
+                                                                           value="{{ $item['test_resit2_date'] ?? '' }}"
+                                                                           title="12b-shakl Test sanasi"
+                                                                           style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
+                                                                </div>
+                                                            @endif
+                                                        </div>
+                                                    @endif
                                                 </div>
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
@@ -321,6 +385,67 @@
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
                                             </td>
                                         </tr>
+
+                                        @if(($showStudents ?? false) && !empty($item['students']))
+                                            @foreach($item['students'] as $stuRow)
+                                                @php $rowIndex++; @endphp
+                                                <tr class="student-sub-row" style="background:#fafafa;border-top:1px dashed #e2e8f0;">
+                                                    <td></td>
+                                                    <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:#475569;">
+                                                        <span style="display:inline-block;padding:0 4px;border-left:3px solid #93c5fd;margin-right:6px;">↳</span>
+                                                        {{ $stuRow['full_name'] }}
+                                                    </td>
+                                                    <td style="text-align:center;font-size:9px;color:#64748b;">
+                                                        @php
+                                                            $stuMaxAttempt = 1;
+                                                            if (!empty($stuRow['oski_resit_date']) || !empty($stuRow['test_resit_date'])) $stuMaxAttempt = 2;
+                                                            if (!empty($stuRow['oski_resit2_date']) || !empty($stuRow['test_resit2_date'])) $stuMaxAttempt = 3;
+                                                        @endphp
+                                                        @if($stuMaxAttempt > 1)
+                                                            <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuMaxAttempt === 3 ? '#ffedd5' : '#fef3c7' }};color:{{ $stuMaxAttempt === 3 ? '#ea580c' : '#d97706' }};">{{ $stuMaxAttempt }}-urinish</span>
+                                                        @else
+                                                            <span style="color:#cbd5e1;">—</span>
+                                                        @endif
+                                                    </td>
+                                                    <td style="padding:4px 8px;">
+                                                        <div style="display:flex; flex-direction:column; gap:2px; max-width:170px;">
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">2-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][oski_resit_date]" value="{{ $stuRow['oski_resit_date'] ?? '' }}"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">3-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][oski_resit2_date]" value="{{ $stuRow['oski_resit2_date'] ?? '' }}"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td style="padding:4px 8px;">
+                                                        <div style="display:flex; flex-direction:column; gap:2px; max-width:170px;">
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#92400e; font-weight:600; min-width:55px;">2-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][test_resit_date]" value="{{ $stuRow['test_resit_date'] ?? '' }}"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fcd34d; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                                <span style="font-size:9px; color:#9a3412; font-weight:600; min-width:55px;">3-urinish:</span>
+                                                                <input type="date" name="schedules[{{ $rowIndex }}][test_resit2_date]" value="{{ $stuRow['test_resit2_date'] ?? '' }}"
+                                                                       style="font-size:10px; padding:1px 3px; border:1px solid #fdba74; border-radius:3px; max-width:115px;" />
+                                                            </div>
+                                                        </div>
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][subject_name]" value="{{ $item['subject']->subject_name }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][department_hemis_id]" value="{{ $item['group']->department_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][specialty_hemis_id]" value="{{ $item['group']->specialty_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        @endif
                                     @endforeach
                                 @endforeach
                             </tbody>
@@ -681,7 +806,14 @@
             if (testDateFrom) url.searchParams.set('test_date_from', testDateFrom);
             if (testDateTo) url.searchParams.set('test_date_to', testDateTo);
             url.searchParams.set('current_semester', cs);
+            var showStudents = document.getElementById('show-students-toggle')?.classList.contains('active') ? '1' : '0';
+            if (showStudents === '1') url.searchParams.set('show_students', '1');
             window.location.href = url.toString();
+        }
+
+        function toggleShowStudents() {
+            var btn = document.getElementById('show-students-toggle');
+            btn.classList.toggle('active');
         }
 
         $(document).ready(function() {

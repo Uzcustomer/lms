@@ -15,6 +15,7 @@ class ExamSchedule extends Model
         'curriculum_hemis_id',
         'semester_code',
         'group_hemis_id',
+        'student_hemis_id',
         'subject_id',
         'subject_name',
         'oski_date',

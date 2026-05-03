@@ -275,17 +275,17 @@ class YnAttemptStatusService
     public static function stageLabel(string $stage): array
     {
         $map = [
-            self::STAGE_ASOSIY_PASSED        => ['label' => 'Asosiy urinishda o\'tgan',     'color' => 'green',  'short' => 'Asosiy ✓'],
-            self::STAGE_QOSHIMCHA_PASSED     => ['label' => 'Sababli orqali o\'tgan',         'color' => 'green',  'short' => 'Sababli ✓'],
-            self::STAGE_IN_12A               => ['label' => '12a-shaklda (1-urinish)',       'color' => 'amber',  'short' => '12a'],
-            self::STAGE_IN_12A_PULLIK        => ['label' => 'Pullik (JN/MT past)',           'color' => 'gray',   'short' => 'Pullik'],
-            self::STAGE_12A_PASSED           => ['label' => '1-urinishda o\'tgan',           'color' => 'blue',   'short' => '1-urinish ✓'],
-            self::STAGE_12A_QOSHIMCHA_PASSED => ['label' => 'Sababli orqali 1-urinishda o\'tgan', 'color' => 'blue', 'short' => '1-urinish ✓ (sab)'],
-            self::STAGE_IN_12B               => ['label' => '12b-shaklda (2-urinish)',       'color' => 'orange', 'short' => '12b'],
-            self::STAGE_IN_12B_PULLIK        => ['label' => 'Pullik (JN/MT past)',           'color' => 'gray',   'short' => 'Pullik'],
-            self::STAGE_12B_PASSED           => ['label' => '2-urinishda o\'tgan',           'color' => 'indigo', 'short' => '2-urinish ✓'],
-            self::STAGE_12B_QOSHIMCHA_PASSED => ['label' => 'Sababli orqali 2-urinishda o\'tgan', 'color' => 'indigo', 'short' => '2-urinish ✓ (sab)'],
-            self::STAGE_FAILED_PULLIK        => ['label' => 'Pullik qayta o\'qish',          'color' => 'red',    'short' => 'Pullik'],
+            self::STAGE_ASOSIY_PASSED        => ['label' => '1-urinishda o\'tgan (12-shakl)', 'color' => 'green',  'short' => '1-urinish ✓'],
+            self::STAGE_QOSHIMCHA_PASSED     => ['label' => 'Sababli orqali 1-urinishda o\'tgan',  'color' => 'green',  'short' => 'Sababli ✓'],
+            self::STAGE_IN_12A               => ['label' => '2-urinishda (12a-shakl)',          'color' => 'amber',  'short' => '2-urinish'],
+            self::STAGE_IN_12A_PULLIK        => ['label' => 'Pullik (JN/MT past)',              'color' => 'gray',   'short' => 'Pullik'],
+            self::STAGE_12A_PASSED           => ['label' => '2-urinishda o\'tgan (12a-shakl)',  'color' => 'blue',   'short' => '2-urinish ✓'],
+            self::STAGE_12A_QOSHIMCHA_PASSED => ['label' => 'Sababli orqali 2-urinishda o\'tgan', 'color' => 'blue', 'short' => '2-urinish ✓ (sab)'],
+            self::STAGE_IN_12B               => ['label' => '3-urinishda (12b-shakl)',          'color' => 'orange', 'short' => '3-urinish'],
+            self::STAGE_IN_12B_PULLIK        => ['label' => 'Pullik (JN/MT past)',              'color' => 'gray',   'short' => 'Pullik'],
+            self::STAGE_12B_PASSED           => ['label' => '3-urinishda o\'tgan (12b-shakl)',  'color' => 'indigo', 'short' => '3-urinish ✓'],
+            self::STAGE_12B_QOSHIMCHA_PASSED => ['label' => 'Sababli orqali 3-urinishda o\'tgan', 'color' => 'indigo', 'short' => '3-urinish ✓ (sab)'],
+            self::STAGE_FAILED_PULLIK        => ['label' => 'Pullik qayta o\'qish',             'color' => 'red',    'short' => 'Pullik'],
         ];
         return $map[$stage] ?? ['label' => $stage, 'color' => 'gray', 'short' => $stage];
     }

@@ -1875,8 +1875,8 @@
                             @if($isAdminRoleForTransfer && isset($ynSubmission) && $ynSubmission && empty($ynSubmission12a ?? null) && $failed12aCount > 0)
                                 <a href="{{ route('admin.academic-schedule.index') }}"
                                     class="inline-flex items-center px-4 py-2 mr-2 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm text-sm"
-                                    title="V<60 olgan {{ $failed12aCount }} ta talaba uchun 1-urinish OSKI/Test sanasi belgilash">
-                                    1-urinish sana belgilash
+                                    title="V<60 olgan {{ $failed12aCount }} ta talaba uchun 2-urinish (12a-shakl) OSKI/Test sanasi belgilash">
+                                    2-urinish sana belgilash
                                     <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-white text-amber-700">{{ $failed12aCount }}</span>
                                 </a>
                             @endif
@@ -1884,8 +1884,8 @@
                             @if($isAdminRoleForTransfer && !empty($ynSubmission12a ?? null) && empty($ynSubmission12b ?? null) && $failed12bCount > 0)
                                 <a href="{{ route('admin.academic-schedule.index') }}"
                                     class="inline-flex items-center px-4 py-2 mr-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition shadow-sm text-sm"
-                                    title="12a dan ham yiqilgan {{ $failed12bCount }} ta talaba uchun 2-urinish sanasi belgilash">
-                                    2-urinish sana belgilash
+                                    title="12a-shakldan ham yiqilgan {{ $failed12bCount }} ta talaba uchun 3-urinish (12b-shakl) sanasi belgilash">
+                                    3-urinish sana belgilash
                                     <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-white text-orange-700">{{ $failed12bCount }}</span>
                                 </a>
                             @endif

@@ -29,6 +29,7 @@ class YnAttemptStatusService
 {
     public const STAGE_ASOSIY_PASSED         = 'asosiy_passed';
     public const STAGE_QOSHIMCHA_PASSED      = 'qoshimcha_passed';
+    public const STAGE_IN_PROGRESS           = 'in_progress';
     public const STAGE_IN_12A                = 'in_12a';
     public const STAGE_IN_12A_PULLIK         = 'in_12a_pullik';
     public const STAGE_12A_PASSED            = '12a_passed';
@@ -279,6 +280,7 @@ class YnAttemptStatusService
         $map = [
             self::STAGE_ASOSIY_PASSED        => ['label' => '1-urinishda o\'tgan (12-shakl)', 'color' => 'green',  'short' => '1-urinish ✓'],
             self::STAGE_QOSHIMCHA_PASSED     => ['label' => 'Sababli orqali 1-urinishda o\'tgan',  'color' => 'green',  'short' => 'Sababli ✓'],
+            self::STAGE_IN_PROGRESS          => ['label' => '1-urinish hali tugamagan',           'color' => 'gray',   'short' => '1-urinish'],
             self::STAGE_IN_12A               => ['label' => '2-urinishda (12a-shakl)',          'color' => 'amber',  'short' => '2-urinish'],
             self::STAGE_IN_12A_PULLIK        => ['label' => 'Pullik (JN/MT past)',              'color' => 'gray',   'short' => 'Pullik'],
             self::STAGE_12A_PASSED           => ['label' => '2-urinishda o\'tgan (12a-shakl)',  'color' => 'blue',   'short' => '2-urinish ✓'],

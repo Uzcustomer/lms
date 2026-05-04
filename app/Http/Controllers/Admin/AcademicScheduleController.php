@@ -432,17 +432,19 @@ class AcademicScheduleController extends Controller
 
         // 1a) Snapshot (yn_student_grades) — defolt
         try {
-            $hasYnSubAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
+            $hasYnSubEduYearCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'education_year');
             $ynQuery = DB::table('yn_student_grades as ysg')
                 ->join('yn_submissions as yns', 'yns.id', '=', 'ysg.yn_submission_id')
                 ->whereIn('yns.subject_id', $allSubjectIds)
                 ->whereIn('yns.semester_code', $allSemCodes)
                 ->whereIn('yns.group_hemis_id', $allGroupHids);
-            if ($hasYnSubAttemptCol) {
-                $ynQuery->where(function ($q) {
-                    $q->where('yns.attempt', 1)->orWhereNull('yns.attempt');
-                });
+            if ($hasYnSubEduYearCol && !empty($relevantYears)) {
+                $ynQuery->whereIn('yns.education_year', $relevantYears);
             }
+            // Muhim: bu yerda attempt=1 bilan cheklamaymiz.
+            // Sababli/tuzatishlardan keyin (2/3-urinish) yangilangan JN/MT ham
+            // aynan shu snapshotlarda turadi va pullik holatini to'g'ri aniqlash
+            // uchun eng so'nggi yozuvni olish kerak.
             $ynRows = $ynQuery
                 ->orderBy('ysg.created_at', 'desc')
                 ->select('ysg.student_hemis_id', 'yns.subject_id', 'yns.semester_code', 'ysg.jn', 'ysg.mt')
@@ -477,7 +479,6 @@ class AcademicScheduleController extends Controller
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
                 ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
-                ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
                 ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
                 ->selectRaw('student_hemis_id, subject_id, semester_code,
                     AVG(COALESCE(retake_grade, grade)) as avg_grade')
@@ -500,6 +501,11 @@ class AcademicScheduleController extends Controller
                 ->whereIn('semester_code', $allSemCodes)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
+                // Bir nechta MT yozuvi bo'lsa eng oxirgisini (retake/tuzatishdan keyingi)
+                // ustuvor olish kerak. Aks holda eski past MT tasodifan olinib,
+                // talaba noto'g'ri "pullik" ko'rinib qolishi mumkin.
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade')
                 ->get();
             foreach ($manualMt as $r) {

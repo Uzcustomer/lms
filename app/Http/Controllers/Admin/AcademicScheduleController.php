@@ -452,10 +452,15 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 1b) Tirik AVG — DB darajasida aggregatsiya (memory uchun yengil).
-        // JN: training_type_code NOT IN [11,99,100,101,102,103] uchun AVG
-        //   (11 = ma'ruza ham JN ga kirmaydi — jurnaldagi mantiq bilan mos)
-        // MT: training_type_code=99 uchun AVG yoki manual MT
+        // 1b) Tirik manbalar — snapshot yo'q (jarayonda) bo'lganlar uchun.
+        // Tartib: snapshot (1a) eng birinchi va eng kuchli — YN topshirilganida
+        // jurnal qulflagan qiymat kanonik. Snapshot null bo'lsa, tirik qiymatlar
+        // bilan to'ldiramiz.
+        //
+        // JN: training_type_code NOT IN [11,99,100,101,102,103] uchun AVG.
+        //   (11 = ma'ruza ham JN ga kirmaydi — jurnaldagi mantiq bilan mos.)
+        // MT: jurnaldagi MT jadvalida yagona baho — training_type_code=99
+        //   AND lesson_date IS NULL. Per-day MT (lesson_date bor) ishlatilmaydi.
         try {
             $jnAvg = DB::table('student_grades')
                 ->whereNull('deleted_at')
@@ -472,31 +477,13 @@ class AcademicScheduleController extends Controller
             foreach ($jnAvg as $r) {
                 $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
                 if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
-                $jnMtMap[$k]['jn'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
+                // Snapshot ustun: faqat snapshot null bo'lsa to'ldiramiz
+                if ($jnMtMap[$k]['jn'] === null) {
+                    $jnMtMap[$k]['jn'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
+                }
             }
 
-            // Per-day MT (lesson_date NOT NULL) — fallback
-            $mtAvg = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $allStudentHids)
-                ->whereIn('subject_id', $allSubjectIds)
-                ->whereIn('semester_code', $allSemCodes)
-                ->where('training_type_code', 99)
-                ->whereNotNull('lesson_date')
-                ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
-                ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
-                ->selectRaw('student_hemis_id, subject_id, semester_code,
-                    AVG(COALESCE(retake_grade, grade)) as avg_grade')
-                ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
-                ->get();
-            foreach ($mtAvg as $r) {
-                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
-                $jnMtMap[$k]['mt'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
-            }
-
-            // Manual MT (lesson_date NULL) — agar mavjud bo'lsa, jurnaldagi
-            // mantiqqa mos ravishda per-day o'rtachasini override qiladi
+            // Manual MT (lesson_date NULL) — jurnaldagi MT jadvalining yagona bahosi
             $manualMt = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $allStudentHids)
@@ -511,7 +498,9 @@ class AcademicScheduleController extends Controller
                 if ($effective === null) continue;
                 $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
                 if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
-                $jnMtMap[$k]['mt'] = (int) round((float) $effective, 0, PHP_ROUND_HALF_UP);
+                if ($jnMtMap[$k]['mt'] === null) {
+                    $jnMtMap[$k]['mt'] = (int) round((float) $effective, 0, PHP_ROUND_HALF_UP);
+                }
             }
         } catch (\Throwable $e) {
             \Log::warning('Live JN/MT aggregate failed: ' . $e->getMessage());

@@ -392,8 +392,8 @@ def identify(req: IdentifyRequest):
     # Xavfsizlik filtri:
     # 1) Eng yaxshi cos >= MIN_COSINE bo'lishi kerak (boshqa odamlardan ajralib turish)
     # 2) Top1 va top2 farqi >= MIN_MARGIN bo'lishi kerak (ko'p odamlarga o'xshamasligi)
-    MIN_COSINE = 0.55     # raw cosine pol
-    MIN_MARGIN = 0.04     # top1 va top2 o'rtasida shu farq bo'lmasa - shubhali
+    MIN_COSINE = 0.65     # raw cosine pol (false positive'ga qarshi qattiq)
+    MIN_MARGIN = 0.12     # top1 va top2 farqi (ambiguity'ga qarshi qattiq)
 
     if top1_cos < MIN_COSINE or margin < MIN_MARGIN:
         # Match topilmadi - tashqaridan kelgan yoki ko'p odamga o'xshash

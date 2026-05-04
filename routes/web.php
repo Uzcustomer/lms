@@ -786,6 +786,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{groupId}/payment-receipt', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'paymentReceipt'])->name('payment-receipt');
             Route::post('/{groupId}/verify-payment', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'verifyPayment'])->name('verify-payment');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'show'])->name('show');
+            Route::post('/applications/bulk-decide', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'bulkDecide'])->name('applications.bulk-decide');
             Route::post('/applications/{applicationId}/decide', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'decide'])->name('decide');
         });
 

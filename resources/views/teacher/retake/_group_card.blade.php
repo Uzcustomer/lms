@@ -4,6 +4,7 @@
     $otherStatusField = $role === 'dean' ? 'registrar_status' : 'dean_status';
     $otherLabel = $role === 'dean' ? __('Registrator') : __('Dekan');
     $canBulkDelete = $canBulkDelete ?? false;
+    $canBulkDecide = $canBulkDecide ?? false;
 @endphp
 
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
@@ -59,8 +60,25 @@
     {{-- Fanlar --}}
     <div class="divide-y divide-gray-100">
         @foreach($group->applications as $app)
+            @php
+                $myAppStatus = $app->{$myStatusField};
+                $isPendingForMe = $myAppStatus === 'pending' && $app->final_status === 'pending';
+            @endphp
             <div class="p-4">
                 <div class="flex items-start justify-between flex-wrap gap-3">
+                    @if($canBulkDecide && $isPendingForMe)
+                        <label class="flex items-center pt-1 cursor-pointer">
+                            <input type="checkbox"
+                                   :checked="bulkApps.includes({{ $app->id }})"
+                                   @change="if ($event.target.checked) {
+                                        if (!bulkApps.includes({{ $app->id }})) bulkApps.push({{ $app->id }});
+                                   } else {
+                                        const idx = bulkApps.indexOf({{ $app->id }});
+                                        if (idx > -1) bulkApps.splice(idx, 1);
+                                   }"
+                                   class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        </label>
+                    @endif
                     <div class="flex-1 min-w-[200px]">
                         <p class="text-sm font-medium text-gray-900">
                             {{ $app->subject_name }}

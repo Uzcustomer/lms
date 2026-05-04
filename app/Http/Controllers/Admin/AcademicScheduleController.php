@@ -432,11 +432,15 @@ class AcademicScheduleController extends Controller
 
         // 1a) Snapshot (yn_student_grades) — defolt
         try {
+            $hasYnSubEduYearCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'education_year');
             $ynQuery = DB::table('yn_student_grades as ysg')
                 ->join('yn_submissions as yns', 'yns.id', '=', 'ysg.yn_submission_id')
                 ->whereIn('yns.subject_id', $allSubjectIds)
                 ->whereIn('yns.semester_code', $allSemCodes)
                 ->whereIn('yns.group_hemis_id', $allGroupHids);
+            if ($hasYnSubEduYearCol && !empty($relevantYears)) {
+                $ynQuery->whereIn('yns.education_year', $relevantYears);
+            }
             // Muhim: bu yerda attempt=1 bilan cheklamaymiz.
             // Sababli/tuzatishlardan keyin (2/3-urinish) yangilangan JN/MT ham
             // aynan shu snapshotlarda turadi va pullik holatini to'g'ri aniqlash

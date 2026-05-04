@@ -453,7 +453,8 @@ class AcademicScheduleController extends Controller
         } catch (\Throwable $e) {}
 
         // 1b) Tirik AVG — DB darajasida aggregatsiya (memory uchun yengil).
-        // JN: training_type_code NOT IN [99,100,101,102,103] uchun AVG
+        // JN: training_type_code NOT IN [11,99,100,101,102,103] uchun AVG
+        //   (11 = ma'ruza ham JN ga kirmaydi — jurnaldagi mantiq bilan mos)
         // MT: training_type_code=99 uchun AVG yoki manual MT
         try {
             $jnAvg = DB::table('student_grades')
@@ -461,7 +462,7 @@ class AcademicScheduleController extends Controller
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->whereNotIn('training_type_code', [99, 100, 101, 102, 103])
+                ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
                 ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
                 ->selectRaw('student_hemis_id, subject_id, semester_code,

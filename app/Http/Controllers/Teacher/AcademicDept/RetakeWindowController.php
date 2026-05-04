@@ -115,11 +115,15 @@ class RetakeWindowController extends Controller
             'specialty_name' => 'required|string|max:255',
             'level_code' => 'required|string|max:10',
             'level_name' => 'nullable|string|max:100',
-            'semester_code' => 'required|string|max:50',
-            'semester_name' => 'required|string|max:255',
+            'semester_code' => 'nullable|string|max:50',
+            'semester_name' => 'nullable|string|max:255',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
+
+        // Semestr tanlanmagan bo'lsa (Xalqaro talim emas), bo'sh qator sifatida saqlaymiz
+        $data['semester_code'] = $data['semester_code'] ?? '';
+        $data['semester_name'] = $data['semester_name'] ?? '';
 
         // Yopilgan sessiyaga oyna qo'shish mumkin emas
         $session = \App\Models\RetakeWindowSession::findOrFail($data['session_id']);

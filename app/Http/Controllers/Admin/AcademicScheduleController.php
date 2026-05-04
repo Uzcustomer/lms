@@ -475,12 +475,14 @@ class AcademicScheduleController extends Controller
                 $jnMtMap[$k]['jn'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
             }
 
+            // Per-day MT (lesson_date NOT NULL) — fallback
             $mtAvg = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
                 ->where('training_type_code', 99)
+                ->whereNotNull('lesson_date')
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
                 ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
                 ->selectRaw('student_hemis_id, subject_id, semester_code,
@@ -491,6 +493,25 @@ class AcademicScheduleController extends Controller
                 $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
                 if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
                 $jnMtMap[$k]['mt'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
+            }
+
+            // Manual MT (lesson_date NULL) — agar mavjud bo'lsa, jurnaldagi
+            // mantiqqa mos ravishda per-day o'rtachasini override qiladi
+            $manualMt = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $allStudentHids)
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->where('training_type_code', 99)
+                ->whereNull('lesson_date')
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade')
+                ->get();
+            foreach ($manualMt as $r) {
+                $effective = $r->retake_grade ?? $r->grade;
+                if ($effective === null) continue;
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
+                $jnMtMap[$k]['mt'] = (int) round((float) $effective, 0, PHP_ROUND_HALF_UP);
             }
         } catch (\Throwable $e) {
             \Log::warning('Live JN/MT aggregate failed: ' . $e->getMessage());

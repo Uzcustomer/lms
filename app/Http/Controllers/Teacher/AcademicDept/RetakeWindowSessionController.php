@@ -106,8 +106,8 @@ class RetakeWindowSessionController extends Controller
     }
 
     /**
-     * Sessiyani butunlay o'chirish — faqat hech qanday ariza yuborilmagan bo'lsa.
-     * Sessiya bilan birga uning oynalari ham o'chiriladi.
+     * Sessiyani arxivga ko'chirish (soft delete) — faqat ariza yuborilmagan
+     * bo'lsa. Sessiya bilan birga uning oynalari ham arxivga ko'chadi.
      */
     public function destroy(int $sessionId): RedirectResponse
     {
@@ -122,17 +122,16 @@ class RetakeWindowSessionController extends Controller
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($session) {
-            // Avval oynalarni o'chiramiz (foreign key restrict)
-            $session->windows()->delete();
+            $session->windows()->delete();  // soft delete kaskadi yo'q — qo'lda
             $session->delete();
         });
 
         return redirect()->route('admin.retake-sessions.index')
-            ->with('success', __('Sessiya o\'chirildi'));
+            ->with('success', __('Sessiya arxivga ko\'chirildi'));
     }
 
     /**
-     * Tanlangan sessiyalarni ommaviy o'chirish — faqat arizasizlari.
+     * Tanlangan sessiyalarni ommaviy arxivga ko'chirish.
      */
     public function bulkDestroy(Request $request): RedirectResponse
     {
@@ -162,12 +161,75 @@ class RetakeWindowSessionController extends Controller
             }
         });
 
-        $msg = "{$deleted} ta sessiya o'chirildi";
+        $msg = "{$deleted} ta sessiya arxivga ko'chirildi";
         if ($skipped > 0) {
             $msg .= ", {$skipped} ta sessiyada arizalar mavjudligi sababli o'tkazib yuborildi";
         }
 
         return redirect()->route('admin.retake-sessions.index')->with('success', $msg);
+    }
+
+    /**
+     * Tarix (arxiv) sahifasi — o'chirilgan sessiyalar.
+     */
+    public function trashed()
+    {
+        $this->authorizeAccess();
+
+        $sessions = RetakeWindowSession::onlyTrashed()
+            ->withCount(['windows' => fn ($q) => $q->withTrashed()])
+            ->orderByDesc('deleted_at')
+            ->get();
+
+        // Eslatma: window_count yuqorida `withTrashed` bilan chunki sessiya
+        // arxivlanganda windowlar ham soft-delete bo'ladi.
+
+        return view('teacher.academic-dept.retake-sessions.trashed', [
+            'sessions' => $sessions,
+            'canForceDelete' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+        ]);
+    }
+
+    /**
+     * Arxivdan tiklash.
+     */
+    public function restore(int $sessionId): RedirectResponse
+    {
+        $this->authorizeAccess();
+
+        $session = RetakeWindowSession::onlyTrashed()->findOrFail($sessionId);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($session) {
+            // Tegishli oynalarni ham qaytaramiz
+            \App\Models\RetakeApplicationWindow::onlyTrashed()
+                ->where('session_id', $session->id)
+                ->restore();
+            $session->restore();
+        });
+
+        return redirect()->route('admin.retake-sessions.trashed')
+            ->with('success', __('Sessiya tiklandi'));
+    }
+
+    /**
+     * Arxivdan butunlay o'chirish (faqat super-admin).
+     */
+    public function forceDestroy(int $sessionId): RedirectResponse
+    {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
+            abort(403);
+        }
+
+        $session = RetakeWindowSession::onlyTrashed()->findOrFail($sessionId);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($session) {
+            \App\Models\RetakeApplicationWindow::onlyTrashed()
+                ->where('session_id', $session->id)
+                ->forceDelete();
+            $session->forceDelete();
+        });
+
+        return redirect()->route('admin.retake-sessions.trashed')
+            ->with('success', __('Sessiya butunlay o\'chirildi'));
     }
 
     private function sessionHasApplications(RetakeWindowSession $session): bool

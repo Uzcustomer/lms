@@ -47,10 +47,65 @@
                 @endif
             </div>
 
+            {{-- Bir martalik amallar --}}
+            <div class="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100" style="background: linear-gradient(135deg, #fef3c7, #fde68a);">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-500">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                        </div>
+                        <div>
+                            <div class="font-bold text-gray-800 text-sm">Bir martalik amallar</div>
+                            <div class="text-xs text-gray-500">Ehtiyotkorlik bilan foydalaning</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-5 flex items-center justify-between">
+                    <div>
+                        <div class="font-semibold text-gray-800 text-sm">Tasdiqlangan sababli arizalarni qaytarish</div>
+                        <div class="text-xs text-gray-400 mt-0.5">Barcha "approved" arizalar "pending" holatiga qaytariladi va PDF lari o'chiriladi — qayta tasdiqlaganda yangi PDF yaratiladi</div>
+                    </div>
+                    <div class="flex-shrink-0 ml-6">
+                        <button type="button" onclick="resetApprovedExcuses(this)"
+                                class="px-4 py-2 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition">
+                            Pending ga qaytarish
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
     <script>
+        function resetApprovedExcuses(btn) {
+            if (!confirm('Barcha tasdiqlangan sababli arizalar "pending" holatiga qaytariladi va PDF lari o\'chiriladi. Davom etilsinmi?')) return;
+            btn.disabled = true;
+            btn.textContent = 'Kutilmoqda...';
+
+            fetch('{{ route("admin.feature-toggles.reset-approved-excuses") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                } else {
+                    alert(data.message || 'Xatolik');
+                }
+                btn.disabled = false;
+                btn.textContent = 'Pending ga qaytarish';
+            })
+            .catch(() => { alert('Tarmoq xatosi'); btn.disabled = false; btn.textContent = 'Pending ga qaytarish'; });
+        }
+
         function toggleFeature(key, btn) {
             btn.disabled = true;
             const currentlyEnabled = btn.dataset.enabled === '1';

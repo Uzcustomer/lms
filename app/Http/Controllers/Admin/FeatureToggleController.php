@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AbsenceExcuse;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class FeatureToggleController extends Controller
 {
@@ -67,6 +69,39 @@ class FeatureToggleController extends Controller
             'success' => true,
             'key' => $request->key,
             'enabled' => $request->enabled,
+        ]);
+    }
+
+    public function resetApprovedExcuses(Request $request)
+    {
+        if (!auth()->user()?->hasRole('superadmin')) {
+            abort(403);
+        }
+
+        $excuses = AbsenceExcuse::where('status', 'approved')->get();
+        $count = 0;
+
+        foreach ($excuses as $excuse) {
+            // Eski PDF faylni o'chirish
+            if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
+                Storage::disk('public')->delete($excuse->approved_pdf_path);
+            }
+
+            $excuse->update([
+                'status' => 'pending',
+                'approved_pdf_path' => null,
+                'reviewed_by' => null,
+                'reviewed_by_name' => null,
+                'reviewed_at' => null,
+            ]);
+
+            $count++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$count} ta tasdiqlangan ariza pending holatiga qaytarildi.",
+            'count' => $count,
         ]);
     }
 }

@@ -829,6 +829,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/applications/{applicationId}/reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'rejectApplication'])->name('applications.reject');
         });
 
+        // Qayta o'qish jurnali — kunlik baholar (o'qituvchi/admin tahrirlaydi, registrator/o'quv bo'limi/dekan ko'radi)
+        Route::prefix('retake-journal')->name('retake-journal.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'index'])->name('index');
+            Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'show'])->name('show');
+            Route::post('/{groupId}/save-grade', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'saveGrade'])->name('save-grade');
+        });
+
         // Statistika va eksport
         Route::prefix('retake-statistics')->name('retake-statistics.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'index'])->name('index');
@@ -991,6 +998,12 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::post('/{groupId}/payment', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'uploadPayment'])->name('upload-payment');
             Route::get('/{groupId}/docx', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'downloadDocx'])->name('download-docx');
             Route::get('/{groupId}/certificate', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'downloadCertificate'])->name('download-certificate');
+        });
+
+        // Talaba qayta o'qish jurnali — read-only
+        Route::prefix('retake-journal')->name('retake-journal.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\RetakeJournalController::class, 'index'])->name('index');
+            Route::get('/{groupId}', [\App\Http\Controllers\Student\RetakeJournalController::class, 'show'])->name('show');
         });
 
         // Imtihon natijalari bo'yicha apellyatsiya

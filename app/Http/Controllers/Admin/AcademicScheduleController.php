@@ -289,6 +289,15 @@ class AcademicScheduleController extends Controller
                     $key = $gHid . '|' . $subjectId . '|' . $semCode . '|' . $stu->hemis_id;
                     $perRow = $perStudentMap[$key] ?? null;
                     $stat = $statusByStudent[$stu->hemis_id] ?? ['failed1' => false, 'failed2' => false, 'pullik' => false, 'held_back' => false];
+                    // [DEBUG] Vaqtinchalik — BAHOROV (5634) ning Bolalar xirurgiyasi (260) status
+                    if ((int) $stu->hemis_id === 5634 && (int) $subjectId === 260) {
+                        \Log::info('DBG_BAHOROV', [
+                            'gHid' => $gHid, 'subj' => $subjectId, 'sem' => $semCode,
+                            'statusByStudent_keys' => array_keys($statusByStudent),
+                            'stat_for_5634' => $stat,
+                            'is_pullik_will_be' => $stat['pullik'],
+                        ]);
+                    }
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'full_name' => $stu->full_name,

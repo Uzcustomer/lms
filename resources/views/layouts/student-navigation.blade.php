@@ -1,4 +1,4 @@
-<nav class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+<nav class="bg-blue-600 dark:bg-blue-700 border-b border-blue-700 dark:border-blue-800">
     <!-- Primary Navigation Menu -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16">
@@ -38,6 +38,9 @@
                     </x-nav-link>
                     <x-nav-link :href="route('student.retake.index')" :active="request()->routeIs('student.retake.*')">
                         {{ __("Qayta o'qish arizasi") }}
+                    </x-nav-link>
+                    <x-nav-link :href="route('student.retake-journal.index')" :active="request()->routeIs('student.retake-journal.*')">
+                        {{ __("Qayta o'qish jurnali") }}
                     </x-nav-link>
                     @if(Auth::guard('student')->user()->is_graduate)
                     <x-nav-link :href="route('student.contracts.index')" :active="request()->routeIs('student.contracts.*')">

@@ -83,37 +83,16 @@ class RebuildFaceEmbeddings extends Command
 
     private function pushCacheToPython(): void
     {
-        $this->info('Python /refresh-cache ga yuborilmoqda...');
+        $this->info('Python /reload-from-db ga yuborilmoqda (Python o\'zi MySQL\'dan o\'qiydi)...');
 
-        $items = [];
-        StudentPhoto::where('status', StudentPhoto::STATUS_APPROVED)
-            ->whereNotNull('face_embedding')
-            ->select('student_id_number', 'full_name', 'face_embedding')
-            ->orderBy('id')
-            ->chunk(500, function ($chunk) use (&$items) {
-                foreach ($chunk as $row) {
-                    $items[] = [
-                        'student_id_number' => $row->student_id_number,
-                        'full_name'         => $row->full_name,
-                        'embedding'         => $row->face_embedding,
-                    ];
-                }
-            });
-
-        if (empty($items)) {
-            $this->warn('Cache uchun yozuv yo\'q.');
-            return;
-        }
-
-        $result = FaceIdService::refreshArcFaceCache($items, true);
+        $result = FaceIdService::reloadArcFaceCacheFromDb();
         if (!$result) {
-            $this->error('Cache yangilanmadi (Python service javob bermadi)');
+            $this->error('Cache yangilanmadi (Python service javob bermadi). Qo\'lda chaqiring: curl -X POST http://127.0.0.1:5005/reload-from-db');
             return;
         }
 
-        $this->info("Python cache yangilandi. cache_size={$result['cache_size']}, added={$result['added_or_updated']}");
-        if (!empty($result['failed'])) {
-            $this->warn('Cache failed entries: ' . count($result['failed']));
-        }
+        $cacheSize = $result['cache_size'] ?? '?';
+        $failed = $result['failed'] ?? 0;
+        $this->info("Python cache yangilandi. cache_size={$cacheSize}, failed={$failed}");
     }
 }

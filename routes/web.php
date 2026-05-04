@@ -570,6 +570,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('feature-toggles')->name('feature-toggles.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\FeatureToggleController::class, 'index'])->name('index');
             Route::post('/update', [\App\Http\Controllers\Admin\FeatureToggleController::class, 'update'])->name('update');
+            Route::post('/reset-approved-excuses', [\App\Http\Controllers\Admin\FeatureToggleController::class, 'resetApprovedExcuses'])->name('reset-approved-excuses');
         });
 
         Route::get('/reports/jn', [ReportController::class, 'jnReport'])->name('reports.jn');

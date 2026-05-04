@@ -192,6 +192,79 @@ class RetakeWindowController extends Controller
             ->with('success', __('Oyna o\'chirildi'));
     }
 
+    /**
+     * Bitta oynaning to'liq tarixi: barcha arizalar, statistikasi,
+     * kim qaysi guruhga biriktirildi, kim rad etildi.
+     */
+    public function show(int $windowId)
+    {
+        $this->authorizeAccess();
+
+        $window = RetakeApplicationWindow::with('session')->findOrFail($windowId);
+
+        // Bu oynadagi barcha ariza-guruhlar va ulardagi arizalar
+        $applicationGroups = \App\Models\RetakeApplicationGroup::query()
+            ->where('window_id', $window->id)
+            ->with([
+                'student',
+                'applications' => fn ($q) => $q->orderBy('subject_name'),
+                'applications.deanUser',
+                'applications.registrarUser',
+                'applications.academicDeptUser',
+                'applications.retakeGroup.teacher',
+            ])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $allApplications = $applicationGroups->flatMap->applications;
+
+        $stats = [
+            'students' => $applicationGroups->count(),
+            'applications' => $allApplications->count(),
+            'approved' => $allApplications->where('final_status', 'approved')->count(),
+            'rejected' => $allApplications->where('final_status', 'rejected')->count(),
+            'pending' => $allApplications->where('final_status', 'pending')->count(),
+        ];
+
+        // Arizalarni RetakeGroup (o'qitish guruhi) bo'yicha guruhlash
+        $byRetakeGroup = $allApplications
+            ->where('final_status', 'approved')
+            ->whereNotNull('retake_group_id')
+            ->groupBy('retake_group_id')
+            ->map(function ($apps) {
+                $first = $apps->first();
+                return [
+                    'group' => $first->retakeGroup,
+                    'applications' => $apps->values(),
+                ];
+            })
+            ->values();
+
+        // Tasdiqlangan, ammo guruh biriktirilmagan
+        $approvedNoGroup = $allApplications
+            ->where('final_status', 'approved')
+            ->whereNull('retake_group_id')
+            ->values();
+
+        $rejected = $allApplications
+            ->where('final_status', 'rejected')
+            ->values();
+
+        $pending = $allApplications
+            ->where('final_status', 'pending')
+            ->values();
+
+        return view('teacher.academic-dept.retake-windows.show', [
+            'window' => $window,
+            'stats' => $stats,
+            'applicationGroups' => $applicationGroups,
+            'byRetakeGroup' => $byRetakeGroup,
+            'approvedNoGroup' => $approvedNoGroup,
+            'rejected' => $rejected,
+            'pending' => $pending,
+        ]);
+    }
+
     // ──────────────────────────────────────────────────────────────────
 
     private function authorizeAccess(): void

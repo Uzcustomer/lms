@@ -532,6 +532,29 @@ class AbsenceExcuseController extends Controller
         return back()->with('success', $message);
     }
 
+    public function resetToPending($id)
+    {
+        $excuse = AbsenceExcuse::findOrFail($id);
+
+        if (!$excuse->isApproved()) {
+            return back()->with('error', 'Faqat tasdiqlangan arizani qaytarish mumkin.');
+        }
+
+        if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
+            Storage::disk('public')->delete($excuse->approved_pdf_path);
+        }
+
+        $excuse->update([
+            'status' => 'pending',
+            'approved_pdf_path' => null,
+            'reviewed_by' => null,
+            'reviewed_by_name' => null,
+            'reviewed_at' => null,
+        ]);
+
+        return back()->with('success', 'Ariza pending holatiga qaytarildi. Endi qayta tasdiqlashingiz mumkin.');
+    }
+
     public function downloadPdf($id)
     {
         $excuse = AbsenceExcuse::findOrFail($id);

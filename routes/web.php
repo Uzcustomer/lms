@@ -189,6 +189,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'destroy'])->name('destroy');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+            Route::post('/{id}/reset-to-pending', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'resetToPending'])->name('reset-to-pending');
         });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)

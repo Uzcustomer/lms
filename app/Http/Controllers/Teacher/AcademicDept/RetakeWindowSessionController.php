@@ -23,7 +23,6 @@ class RetakeWindowSessionController extends Controller
 
         $sessions = RetakeWindowSession::query()
             ->withCount('windows')
-            ->with('windows:id,session_id')
             ->orderByDesc('is_closed')
             ->orderByDesc('created_at')
             ->orderBy('is_closed') // ochiqlar yuqorida
@@ -31,30 +30,22 @@ class RetakeWindowSessionController extends Controller
             ->sortBy(fn ($s) => [$s->is_closed ? 1 : 0, -$s->id])
             ->values();
 
-        // Har sessiya uchun "o'chirib bo'ladimi?" — hech qanday arizа yuborilmagan bo'lsa
-        $sessionsWithApps = collect();
+        // Har sessiya uchun "o'chirib bo'ladimi?" — bitta join + distinct
+        // orqali — eager-load + per-session loop o'rniga.
+        $sessionsWithApps = [];
         if ($sessions->isNotEmpty()) {
-            $allWindowIds = $sessions->flatMap->windows->pluck('id');
-            if ($allWindowIds->isNotEmpty()) {
-                $windowsWithApps = \App\Models\RetakeApplicationGroup::query()
-                    ->whereIn('window_id', $allWindowIds)
-                    ->select('window_id')
-                    ->distinct()
-                    ->pluck('window_id')
-                    ->all();
-
-                foreach ($sessions as $s) {
-                    $hasApps = $s->windows->pluck('id')->intersect($windowsWithApps)->isNotEmpty();
-                    if ($hasApps) {
-                        $sessionsWithApps->push($s->id);
-                    }
-                }
-            }
+            $sessionsWithApps = \Illuminate\Support\Facades\DB::table('retake_application_groups')
+                ->join('retake_application_windows', 'retake_application_windows.id', '=', 'retake_application_groups.window_id')
+                ->whereIn('retake_application_windows.session_id', $sessions->pluck('id'))
+                ->whereNull('retake_application_windows.deleted_at')
+                ->distinct()
+                ->pluck('retake_application_windows.session_id')
+                ->all();
         }
 
         return view('teacher.academic-dept.retake-sessions.index', [
             'sessions' => $sessions,
-            'sessionsWithApps' => $sessionsWithApps->all(),
+            'sessionsWithApps' => $sessionsWithApps,
         ]);
     }
 
@@ -298,12 +289,7 @@ class RetakeWindowSessionController extends Controller
 
         $windows = $windowsQuery->paginate($perPage)->withQueryString();
 
-        $educationTypes = \App\Models\Student::query()
-            ->select('education_type_code', 'education_type_name')
-            ->whereNotNull('education_type_code')
-            ->distinct()
-            ->orderBy('education_type_name')
-            ->get();
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
 
         $specialtyToFaculty = Specialty::query()
             ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')

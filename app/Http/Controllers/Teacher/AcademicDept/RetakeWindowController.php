@@ -88,12 +88,7 @@ class RetakeWindowController extends Controller
         // Faqat 12 ta unikal semestr (1-semestr ... 12-semestr)
         $semesters = $this->semesters();
 
-        $educationTypes = \App\Models\Student::query()
-            ->select('education_type_code', 'education_type_name')
-            ->whereNotNull('education_type_code')
-            ->distinct()
-            ->orderBy('education_type_name')
-            ->get();
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
 
         return view('teacher.academic-dept.retake-windows.index', [
             'windows' => $windows,

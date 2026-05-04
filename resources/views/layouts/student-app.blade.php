@@ -471,7 +471,7 @@
         </div>
 
         <!-- Bottom Navigation Tabs -->
-        <div class="flex items-center justify-between" style="background-color:#065f46;height:60px;padding:0 15px;padding-bottom:max(5px, env(safe-area-inset-bottom));margin:0 10px 10px 10px;border-radius:10px;">
+        <div class="flex items-center justify-between" style="background-color:rgb(13 43 153);height:60px;padding:0 15px;padding-bottom:max(5px, env(safe-area-inset-bottom));margin:0 10px 10px 10px;border-radius:10px;">
             <!-- 1. Fanlar -->
             <a href="{{ route('student.subjects') }}" class="flex flex-col items-center justify-center" style="width:55px;gap:3px;">
                 @if($activeTab === 'fanlar')

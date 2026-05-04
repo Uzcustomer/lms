@@ -6,8 +6,10 @@ use App\Models\FaceIdLog;
 use App\Models\FaceIdDescriptor;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Models\StudentPhoto;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class FaceIdService
 {
@@ -25,8 +27,28 @@ class FaceIdService
 
     public static function getThreshold(): float
     {
-        // Euclidean distance threshold: 0.4 ~ 90% yaqinlik
+        // Euclidean distance threshold: 0.4 ~ 90% yaqinlik (face-api.js client descriptor)
         return (float) Setting::get('faceid_threshold', 0.40);
+    }
+
+    /**
+     * ArcFace similarity_percent bo'yicha minimal qabul qilinadigan foiz (0-100).
+     * Yangi formula bilan: 60% ≈ cosine 0.64 (real talaba uchun mos), Python
+     * tomonida raw cosine 0.55 va top1-top2 margin 0.04 ham qo'shimcha tekshiriladi.
+     */
+    public static function getArcFaceThreshold(): float
+    {
+        // 1:1 verifikatsiya uchun (talaba ID kiritadi) — talaba o'zi va rasmi
+        // o'rtasida 85% similarity talab qilinadi (yangi formula bilan cos ≈ 0.74).
+        return (float) Setting::get('faceid_arcface_threshold', 85.0);
+    }
+
+    /**
+     * ArcFace (server-side) login mexanizmi yoqilganmi?
+     */
+    public static function isArcFaceEnabled(): bool
+    {
+        return (bool) Setting::get('faceid_arcface_enabled', true);
     }
 
     public static function getLivenessConfig(): array
@@ -170,6 +192,263 @@ class FaceIdService
             ];
         } catch (\Throwable $e) {
             Log::warning('[FaceID] Student rasm fetch xatosi', ['url' => $url, 'error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    // ─────────────────────── ArcFace (server-side) ───────────────────────
+
+    /**
+     * Talabaning tasdiqlangan student_photos rasmini topish.
+     * Faqat status=approved bo'lganlarni tekshiradi.
+     * @return StudentPhoto|null
+     */
+    public static function getApprovedStudentPhoto(Student $student): ?StudentPhoto
+    {
+        if (empty($student->student_id_number)) {
+            return null;
+        }
+
+        return StudentPhoto::where('student_id_number', $student->student_id_number)
+            ->where('status', StudentPhoto::STATUS_APPROVED)
+            ->orderByDesc('reviewed_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Tasdiqlangan student_photos rasmi mavjudligini tekshirish.
+     */
+    public static function hasApprovedPhoto(Student $student): bool
+    {
+        return self::getApprovedStudentPhoto($student) !== null;
+    }
+
+    /**
+     * Live snapshot (data URL yoki base64) ni vaqtinchalik faylga yozish.
+     * public/uploads/face-temp/ ga yoziladi (storage:link mavjud bo'lmasa ham
+     * to'g'ridan-to'g'ri /uploads/face-temp/... URL orqali yetib keladi).
+     * Tozalash uchun shaxsiy yo'lni qaytaradi.
+     *
+     * @return array{path: string, url: string, rel: string}|null
+     */
+    public static function saveTemporarySnapshot(string $base64OrDataUrl): ?array
+    {
+        // data:image/jpeg;base64,xxxx → base64 qismini ajratish
+        if (str_starts_with($base64OrDataUrl, 'data:')) {
+            $parts = explode(',', $base64OrDataUrl, 2);
+            if (count($parts) !== 2) return null;
+            $base64 = $parts[1];
+        } else {
+            $base64 = $base64OrDataUrl;
+        }
+
+        $binary = base64_decode($base64, true);
+        if ($binary === false || strlen($binary) < 100) {
+            return null;
+        }
+
+        $relPath = 'uploads/face-temp/' . uniqid('live_', true) . '.jpg';
+        $absPath = public_path($relPath);
+
+        $dir = dirname($absPath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        if (file_put_contents($absPath, $binary) === false) {
+            return null;
+        }
+
+        return [
+            'path' => $absPath,
+            'url'  => asset($relPath),
+            'rel'  => $relPath,
+        ];
+    }
+
+    /**
+     * Vaqtinchalik snapshot faylini o'chirish.
+     */
+    public static function deleteTemporarySnapshot(string $relPath): void
+    {
+        try {
+            $abs = public_path($relPath);
+            if (is_file($abs)) {
+                @unlink($abs);
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
+    /**
+     * Python ArcFace service /embed endpoint orqali rasm uchun embedding olish.
+     * @return array<int, float>|null  L2-normalized 512-float vector
+     */
+    public static function extractEmbedding(string $imageUrlOrPath): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/embed', ['image' => $imageUrlOrPath]);
+
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /embed HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            $json = $response->json();
+            return $json['embedding'] ?? null;
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /embed exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Python /identify orqali 1:N tanish — eng yaqin talabani topadi.
+     * @return array{matches: array, cache_size: int}|null
+     */
+    public static function identifyViaArcFace(string $imageUrlOrPath, int $topK = 1): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/identify', [
+                    'image' => $imageUrlOrPath,
+                    'top_k' => $topK,
+                ]);
+
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /identify HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            $json = $response->json();
+            if (!is_array($json) || !isset($json['matches'])) {
+                return null;
+            }
+
+            return [
+                'matches'    => $json['matches'],
+                'cache_size' => (int) ($json['cache_size'] ?? 0),
+            ];
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /identify exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Python /reload-from-db orqali cache'ni MySQL'dan qayta yuklash.
+     * Bu Python service'ning startup'da ham qiladigan ishi — DB'dagi barcha
+     * tasdiqlangan embedding'larni yuklaydi. Manual qayta sinxron uchun ishlatiladi.
+     */
+    public static function reloadArcFaceCacheFromDb(): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)->acceptJson()->post($serviceUrl . '/reload-from-db');
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /reload-from-db HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+            return $response->json();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /reload-from-db exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Python /refresh-cache orqali identifikatsiya cache'ini yangilash.
+     * Items: [['student_id_number' => ..., 'embedding' => [...], 'full_name' => ...], ...]
+     */
+    public static function refreshArcFaceCache(array $items, bool $replace = true): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 120);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/refresh-cache', [
+                    'items'   => $items,
+                    'replace' => $replace,
+                ]);
+
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /refresh-cache HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            return $response->json();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /refresh-cache exception', ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Python ArcFace service /compare endpoint'iga ikki rasm yo'lini yuborish.
+     * @return array{similarity_percent: float, distance: float, threshold: float, match: bool}|null
+     */
+    public static function compareViaArcFace(string $liveImageUrlOrPath, string $referenceImageUrlOrPath): ?array
+    {
+        $serviceUrl = rtrim((string) config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = (int) config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/compare', [
+                    'image1' => $liveImageUrlOrPath,
+                    'image2' => $referenceImageUrlOrPath,
+                ]);
+
+            if (!$response->successful()) {
+                Log::warning('[FaceID/ArcFace] /compare HTTP xato', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return null;
+            }
+
+            $json = $response->json();
+            if (!is_array($json) || !isset($json['similarity_percent'])) {
+                Log::warning('[FaceID/ArcFace] /compare javobi noto\'g\'ri', ['body' => $response->body()]);
+                return null;
+            }
+
+            return [
+                'similarity_percent' => (float) $json['similarity_percent'],
+                'distance'           => (float) ($json['distance'] ?? 0),
+                'threshold'          => (float) ($json['threshold'] ?? 0),
+                'match'              => (bool) ($json['match'] ?? false),
+            ];
+        } catch (\Throwable $e) {
+            Log::error('[FaceID/ArcFace] /compare exception', ['error' => $e->getMessage()]);
             return null;
         }
     }

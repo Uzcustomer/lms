@@ -30,75 +30,97 @@
                     $rejectMin = $settings->get('reject_reason_min_length');
                 @endphp
 
-                {{-- Kredit narxi --}}
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                        {{ __("Bir kredit narxi (UZS)") }} <span class="text-red-500">*</span>
-                    </label>
-                    <input type="number"
-                           name="credit_price"
-                           step="100"
-                           min="0"
-                           value="{{ old('credit_price', $creditPrice?->value ?? 175000) }}"
-                           required
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                    <p class="text-[11px] text-gray-500 mt-1">
-                        {{ __("Talaba ariza yuborganda summa avtomatik hisoblanadi: tanlangan fanlar kreditlari × shu narx") }}
-                    </p>
-                    @if($creditPrice?->updated_by_name)
-                        <p class="text-[11px] text-gray-400 mt-0.5">
-                            {{ __("Oxirgi yangilangan") }}: {{ $creditPrice->updated_by_name }} · {{ $creditPrice->updated_at->format('Y-m-d H:i') }}
+                @php
+                    $editableKeys = $editableKeys ?? [];
+                    $can = fn ($k) => in_array($k, $editableKeys, true);
+                @endphp
+
+                @if(empty($editableKeys))
+                    <p class="text-sm text-gray-500">{{ __("Sizda tahrirlanadigan sozlama yo'q") }}</p>
+                @endif
+
+                {{-- Kredit narxi (Registrator) --}}
+                @if($can('credit_price'))
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            {{ __("Bir kredit narxi (UZS)") }} <span class="text-red-500">*</span>
+                        </label>
+                        <input type="number"
+                               name="credit_price"
+                               step="100"
+                               min="0"
+                               value="{{ old('credit_price', $creditPrice?->value ?? 175000) }}"
+                               required
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                        <p class="text-[11px] text-gray-500 mt-1">
+                            {{ __("Talaba ariza yuborganda summa avtomatik hisoblanadi: tanlangan fanlar kreditlari × shu narx") }}
                         </p>
-                    @endif
-                </div>
+                        @if($creditPrice?->updated_by_name)
+                            <p class="text-[11px] text-gray-400 mt-0.5">
+                                {{ __("Oxirgi yangilangan") }}: {{ $creditPrice->updated_by_name }} · {{ $creditPrice->updated_at->format('Y-m-d H:i') }}
+                            </p>
+                        @endif
+                    </div>
+                @endif
 
-                {{-- Min guruh hajmi --}}
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                        {{ __("Guruhda minimal talabalar soni") }} <span class="text-red-500">*</span>
-                    </label>
-                    <input type="number"
-                           name="min_group_size"
-                           min="1"
-                           value="{{ old('min_group_size', $minGroupSize?->value ?? 1) }}"
-                           required
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                    <p class="text-[11px] text-gray-500 mt-1">
-                        {{ __("O'quv bo'limi shundan kam talaba bilan guruh shakllantira olmaydi") }}
-                    </p>
-                </div>
+                {{-- Min guruh hajmi (O'quv bo'limi) --}}
+                @if($can('min_group_size'))
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            {{ __("Guruhda minimal talabalar soni") }} <span class="text-red-500">*</span>
+                        </label>
+                        <input type="number"
+                               name="min_group_size"
+                               min="1"
+                               value="{{ old('min_group_size', $minGroupSize?->value ?? 1) }}"
+                               required
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                        <p class="text-[11px] text-gray-500 mt-1">
+                            {{ __("O'quv bo'limi shundan kam talaba bilan guruh shakllantira olmaydi") }}
+                        </p>
+                        @if($minGroupSize?->updated_by_name)
+                            <p class="text-[11px] text-gray-400 mt-0.5">
+                                {{ __("Oxirgi yangilangan") }}: {{ $minGroupSize->updated_by_name }} · {{ $minGroupSize->updated_at->format('Y-m-d H:i') }}
+                            </p>
+                        @endif
+                    </div>
+                @endif
 
-                {{-- Kvitansiya max hajm --}}
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                        {{ __("Kvitansiya fayli max hajmi (MB)") }} <span class="text-red-500">*</span>
-                    </label>
-                    <input type="number"
-                           name="receipt_max_mb"
-                           min="1" max="50"
-                           value="{{ old('receipt_max_mb', $receiptMaxMb?->value ?? 5) }}"
-                           required
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                    <p class="text-[11px] text-gray-500 mt-1">
-                        {{ __("Talaba kvitansiya yuklayotganda fayl shundan katta bo'lsa rad etiladi") }}
-                    </p>
-                </div>
+                {{-- Kvitansiya max hajm (Registrator) --}}
+                @if($can('receipt_max_mb'))
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            {{ __("Kvitansiya fayli max hajmi (MB)") }} <span class="text-red-500">*</span>
+                        </label>
+                        <input type="number"
+                               name="receipt_max_mb"
+                               min="1" max="50"
+                               value="{{ old('receipt_max_mb', $receiptMaxMb?->value ?? 5) }}"
+                               required
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                        <p class="text-[11px] text-gray-500 mt-1">
+                            {{ __("Talaba kvitansiya yuklayotganda fayl shundan katta bo'lsa rad etiladi") }}
+                        </p>
+                    </div>
+                @endif
 
-                {{-- Rad etish sababi min --}}
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                        {{ __("Rad etish sababi minimal belgilar soni") }} <span class="text-red-500">*</span>
-                    </label>
-                    <input type="number"
-                           name="reject_reason_min_length"
-                           min="3" max="200"
-                           value="{{ old('reject_reason_min_length', $rejectMin?->value ?? 10) }}"
-                           required
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                    <p class="text-[11px] text-gray-500 mt-1">
-                        {{ __("Dekan/Registrator/O'quv bo'limi rad etganda sabab shundan kam bo'lmaydi") }}
-                    </p>
-                </div>
+                {{-- Rad etish sababi min (Registrator) --}}
+                @if($can('reject_reason_min_length'))
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            {{ __("Rad etish sababi minimal belgilar soni") }} <span class="text-red-500">*</span>
+                        </label>
+                        <input type="number"
+                               name="reject_reason_min_length"
+                               min="3" max="200"
+                               value="{{ old('reject_reason_min_length', $rejectMin?->value ?? 10) }}"
+                               required
+                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                        <p class="text-[11px] text-gray-500 mt-1">
+                            {{ __("Dekan/Registrator/O'quv bo'limi rad etganda sabab shundan kam bo'lmaydi") }}
+                        </p>
+                    </div>
+                @endif
 
                 <div class="pt-4 border-t border-gray-100">
                     <button type="submit"

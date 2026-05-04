@@ -31,7 +31,7 @@
                 <i>qonuniy xal qiling</i>
             </div>
             <div class="header">
-                <u>Termiz Shahar IIB M va FRB</u><br>
+                <u>Termiz Shahar IIB M va PB</u><br>
                 <u>boshlig'i podpolkovnik</u><br>
                 <u>S. S. Kabilovga</u>
             </div>

@@ -100,13 +100,13 @@
                         @endif
                     </div>
                 @else
-                    <p class="text-xs text-orange-600">⚠️ {{ __("Boshlangan/tugagan guruhni faqat super-admin tahrirlay oladi") }}</p>
+                    <p class="text-xs text-gray-500">⚠️ {{ __("Tahrirlash imkoniyati mavjud emas") }}</p>
                 @endif
             </form>
 
             @if($canOverride)
                 <div class="mt-6 pt-4 border-t border-gray-100">
-                    <p class="text-xs text-gray-500 mb-2">{{ __("Super-admin: holatni override qilish") }}</p>
+                    <p class="text-xs text-gray-500 mb-2">{{ __("Holatni o'zgartirish") }}</p>
                     <form method="POST" action="{{ route('admin.retake-groups.override-status', $group->id) }}" class="flex gap-2">
                         @csrf
                         <select name="status" class="px-3 py-1.5 text-xs border border-gray-300 rounded">

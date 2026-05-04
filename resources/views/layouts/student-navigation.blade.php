@@ -39,6 +39,9 @@
                     <x-nav-link :href="route('student.retake.index')" :active="request()->routeIs('student.retake.*')">
                         {{ __("Qayta o'qish arizasi") }}
                     </x-nav-link>
+                    <x-nav-link :href="route('student.retake-journal.index')" :active="request()->routeIs('student.retake-journal.*')">
+                        {{ __("Qayta o'qish jurnali") }}
+                    </x-nav-link>
                     @if(Auth::guard('student')->user()->is_graduate)
                     <x-nav-link :href="route('student.contracts.index')" :active="request()->routeIs('student.contracts.*')">
                         {{ __('Ishga joylashish') }}
@@ -48,6 +51,11 @@
                     @if(str_starts_with(strtolower($navStudent->group_name ?? ''), 'xd') || str_contains(strtolower($navStudent->citizenship_name ?? ''), 'orijiy'))
                     <x-nav-link :href="route('student.visa-info.index')" :active="request()->routeIs('student.visa-info.*')">
                         {{ __('Viza ma\'lumotlarim') }}
+                    </x-nav-link>
+                    @endif
+                    @if($navStudent && method_exists($navStudent, 'isDisabled') && $navStudent->isDisabled())
+                    <x-nav-link :href="route('student.disability-info.index')" :active="request()->routeIs('student.disability-info.*')">
+                        {{ __("Nogironlik ma'lumotlarim") }}
                     </x-nav-link>
                     @endif
                 </div>

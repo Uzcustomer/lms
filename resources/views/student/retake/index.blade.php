@@ -317,6 +317,11 @@
                                         {{ $g->applications->count() }} {{ __("ta fan") }} ·
                                         {{ number_format($g->receipt_amount, 0, '.', ' ') }} UZS
                                     </p>
+                                    @if($g->window?->session?->name)
+                                        <p class="text-[11px] text-gray-500 mt-0.5">
+                                            {{ __("Sessiya") }}: <span class="font-medium">{{ $g->window->session->name }}</span>
+                                        </p>
+                                    @endif
                                 </div>
                                 <div class="flex flex-wrap gap-2">
                                     @if($g->docx_path)

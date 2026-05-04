@@ -26,19 +26,84 @@
 
         <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
             <p class="text-sm text-gray-500">
-                {{ __("Har yo'nalish + kurs + semestr uchun alohida oyna ochiladi") }}
+                {{ __("Barcha sessiyalardagi oynalar — yangi oyna ochish uchun sessiyaga kiring") }}
             </p>
-            <button type="button"
-                    @click="showCreate = true"
-                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                + {{ __("Yangi oyna ochish") }}
-            </button>
+            <a href="{{ route('admin.retake-sessions.index') }}"
+               class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                {{ __("Sessiyalarga o'tish") }}
+            </a>
         </div>
 
-        {{-- Filtrlar --}}
+        {{-- Hozir ochiq oynalar — yuqorida ko'zga tashlanadigan tarzda --}}
+        @if(($activeWindows ?? collect())->isNotEmpty())
+            <div class="bg-green-50 border-2 border-green-300 rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-white">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </span>
+                    <h3 class="text-sm font-semibold text-green-900">
+                        {{ __("Hozir ochiq qayta o'qish oynalari") }}
+                        <span class="text-green-700 font-medium">({{ $activeWindows->count() }})</span>
+                    </h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    @foreach($activeWindows as $aw)
+                        <a href="{{ route('admin.retake-windows.show', $aw->id) }}"
+                           class="block bg-white rounded-lg border border-green-200 p-3 hover:border-green-400 hover:shadow-sm transition">
+                            <p class="text-xs text-gray-500 mb-1">
+                                @if($aw->session)
+                                    <span class="font-medium text-gray-700">{{ $aw->session->name }}</span> ·
+                                @endif
+                                {{ $specialtyToFaculty[$aw->specialty_id] ?? '—' }}
+                            </p>
+                            <p class="text-sm font-semibold text-gray-900">
+                                {{ $aw->specialty_name ?? $aw->specialty_id }}
+                            </p>
+                            <p class="text-xs text-gray-700 mt-0.5">
+                                {{ $aw->level_name ?? $aw->level_code }}
+                                @if($aw->semester_name)· {{ $aw->semester_name }}@endif
+                            </p>
+                            <div class="flex items-center justify-between mt-2 text-[11px]">
+                                <span class="text-gray-500">
+                                    {{ $aw->start_date->format('Y-m-d') }} → {{ $aw->end_date->format('Y-m-d') }}
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
+                                    {{ $aw->applications_count }} {{ __("ariza") }}
+                                </span>
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @else
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-center">
+                <p class="text-sm text-gray-500">
+                    {{ __("Hozircha ochiq oyna yo'q") }}
+                </p>
+            </div>
+        @endif
+
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr) --}}
+        @include('partials._retake_filters', [
+            'formAction' => route('admin.retake-windows.index'),
+            'educationTypes' => $educationTypes ?? collect(),
+            'hiddenFilters' => ['group', 'full_name', 'subject'],
+            'extraQueryFields' => array_filter([
+                'status' => $statusFilter !== 'all' ? $statusFilter : null,
+            ]),
+        ])
+
+        {{-- Holat filtri (qo'shimcha) --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4">
-            <form method="GET" action="{{ route('admin.retake-windows.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-2 items-end">
-                <div>
+            <form method="GET" action="{{ route('admin.retake-windows.index') }}" class="flex items-end gap-2 flex-wrap">
+                @foreach(['education_type','department','specialty','level_code','semester_code','per_page'] as $kept)
+                    @if(request($kept))
+                        <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
+                    @endif
+                @endforeach
+                <div class="min-w-[180px]">
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
                     <select name="status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="all" {{ ($statusFilter ?? 'all') === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
@@ -47,28 +112,7 @@
                         <option value="closed" {{ ($statusFilter ?? '') === 'closed' ? 'selected' : '' }}>{{ __("Yopilgan") }}</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Fakultet") }}</label>
-                    <select name="department_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        @foreach($departments as $d)
-                            <option value="{{ $d->department_hemis_id }}" {{ (string)($departmentIdFilter ?? '') === (string)$d->department_hemis_id ? 'selected' : '' }}>{{ $d->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Kurs") }}</label>
-                    <select name="level_code" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        @foreach($levels as $lv)
-                            <option value="{{ $lv['code'] }}" {{ ($levelCodeFilter ?? '') === $lv['code'] ? 'selected' : '' }}>{{ $lv['name'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="flex gap-2">
-                    <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
-                    <a href="{{ route('admin.retake-windows.index') }}" class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">{{ __("Tozalash") }}</a>
-                </div>
+                <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Qo'llash") }}</button>
             </form>
         </div>
 
@@ -121,7 +165,9 @@
                                     </span>
                                 </td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700 text-right">{{ $w->applications_count }}</td>
-                                <td class="px-3 py-2.5 text-right">
+                                <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                    <a href="{{ route('admin.retake-windows.show', $w->id) }}"
+                                       class="text-xs text-blue-600 hover:underline mr-2">{{ __("Ko'rish") }}</a>
                                     @if($canOverride)
                                         <button type="button"
                                                 @click="overrideId = {{ $w->id }}; overrideStart = '{{ $w->start_date->format('Y-m-d') }}'; overrideEnd = '{{ $w->end_date->format('Y-m-d') }}'"
@@ -237,7 +283,7 @@
                         </div>
 
                         <p class="text-[11px] text-gray-500">
-                            ⚠️ {{ __("Yaratilgandan keyin sanalarni faqat super-admin o'zgartira oladi") }}
+                            ⚠️ {{ __("Yaratilgandan keyin sanalarni o'zgartirish imkoniyati mavjud emas") }}
                         </p>
 
                         <div class="flex gap-2 pt-3">

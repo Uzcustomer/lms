@@ -46,7 +46,7 @@ class StudentServicesScreen extends StatelessWidget {
         icon: Icons.gavel_outlined,
         title: l.appeal,
         subtitle: l.appealDesc,
-        color: const Color(0xFF7C3AED),
+        color: const Color(0xFFD97706),
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const AppealsListScreen()),
@@ -98,9 +98,8 @@ class StudentServicesScreen extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: GridView.builder(
+                child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,
@@ -112,7 +111,6 @@ class StudentServicesScreen extends StatelessWidget {
                       final item = services[index];
                       return _ServiceCard(item: item, isDark: isDark);
                     },
-                  ),
                 ),
               ),
             ],
@@ -192,28 +190,23 @@ class _ServiceCard extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                Positioned(
-                  top: -50,
-                  right: -50,
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                    child: Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            item.color.withOpacity(isDark ? 0.42 : 0.35),
-                            item.color.withOpacity(0),
-                          ],
-                          stops: const [0.0, 0.7],
-                        ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      gradient: LinearGradient(
+                        begin: Alignment.topRight,
+                        end: Alignment.bottomLeft,
+                        colors: [
+                          item.color.withOpacity(isDark ? 0.15 : 0.08),
+                          item.color.withOpacity(0),
+                        ],
                       ),
                     ),
                   ),
                 ),
-                Material(
+                Positioned.fill(
+                  child: Material(
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: item.onTap,
@@ -224,6 +217,7 @@ class _ServiceCard extends StatelessWidget {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Container(
                             width: 56,
@@ -278,6 +272,7 @@ class _ServiceCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                ),
                 ),
               ],
             ),

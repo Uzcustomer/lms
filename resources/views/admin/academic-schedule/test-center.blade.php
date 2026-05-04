@@ -109,7 +109,9 @@
 
                 @php
                     $tcDefaults = \App\Services\ExamCapacityService::getSettings();
+                    $tcReadOnly = $readOnly ?? false;
                 @endphp
+                @if(!$tcReadOnly)
                 <!-- Inline day override panel -->
                 <div id="day-override-panel" data-defaults='@json($tcDefaults)' style="margin:0 16px 14px 16px;background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:1px solid #5eead4;border-radius:12px;padding:12px 14px;">
                     <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;">
@@ -167,6 +169,7 @@
                     </div>
                     <div id="do-status" style="margin-top:8px;font-size:12px;color:#64748b;min-height:16px;"></div>
                 </div>
+                @endif
 
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
@@ -287,10 +290,12 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 6px;">
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
-                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:pointer;" oninput="formatTimeInput(this)" onblur="validateTimeInput(this)">
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:{{ $tcReadOnly ? 'default' : 'pointer' }};{{ $tcReadOnly ? 'background:#f1f5f9;color:#475569;' : '' }}" {{ $tcReadOnly ? 'readonly' : '' }} @if(!$tcReadOnly) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
+                                                        @if(!$tcReadOnly)
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
+                                                        @endif
                                                         @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
                                                             <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
                                                                 <span style="font-size:10px;color:#d97706;font-style:italic;">⚠️ Vaqt o'zgarishi mumkin</span>

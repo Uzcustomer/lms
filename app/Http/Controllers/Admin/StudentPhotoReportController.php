@@ -401,9 +401,49 @@ class StudentPhotoReportController extends Controller
             'rejection_reason' => null,
         ]);
 
+        // ArcFace embedding'ni hisoblab DB ga va Python identify cache'iga qo'shish
+        $this->extractAndCacheEmbedding($photo);
+
         $this->notifyTutor($photo, true);
 
         return $this->reviewResponse($request, true, 'Rasm tasdiqlandi.');
+    }
+
+    /**
+     * Tasdiqlangan rasm uchun ArcFace embedding'ni hisoblab DB ga yozish va
+     * Python identify cache'iga qo'shish.
+     */
+    private function extractAndCacheEmbedding(StudentPhoto $photo): void
+    {
+        try {
+            $url = asset($photo->photo_path);
+            $embedding = \App\Services\FaceIdService::extractEmbedding($url);
+            if (!$embedding) {
+                Log::warning('[FaceID] Approve hook: embedding hisoblanmadi', [
+                    'photo_id' => $photo->id,
+                    'student_id_number' => $photo->student_id_number,
+                ]);
+                return;
+            }
+
+            $photo->face_embedding = $embedding;
+            $photo->embedding_extracted_at = now();
+            $photo->saveQuietly();
+
+            // Python cache'ga qo'shish (replace=false — faqat ushbu yozuvni qo'shish/yangilash)
+            \App\Services\FaceIdService::refreshArcFaceCache([
+                [
+                    'student_id_number' => $photo->student_id_number,
+                    'full_name'         => $photo->full_name,
+                    'embedding'         => $embedding,
+                ],
+            ], false);
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Approve hook: embedding xato', [
+                'photo_id' => $photo->id,
+                'error'    => $e->getMessage(),
+            ]);
+        }
     }
 
     public function reject(Request $request, $id)

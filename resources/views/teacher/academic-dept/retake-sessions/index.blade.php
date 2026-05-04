@@ -53,11 +53,17 @@
             <p class="text-sm text-gray-500">
                 {{ __("Har o'quv yili / muddat uchun alohida sessiya yarating va uning ichida fakultet/kurs/yo'nalish bo'yicha oynalar oching") }}
             </p>
-            <button type="button"
-                    @click="showCreate = true"
-                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                + {{ __("Yangi sessiya") }}
-            </button>
+            <div class="flex gap-2">
+                <a href="{{ route('admin.retake-sessions.trashed') }}"
+                   class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                    📦 {{ __("Tarix") }}
+                </a>
+                <button type="button"
+                        @click="showCreate = true"
+                        class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    + {{ __("Yangi sessiya") }}
+                </button>
+            </div>
         </div>
 
         {{-- Bulk delete panel --}}

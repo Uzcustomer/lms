@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 class RetakeApplicationWindow extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'session_id',
         'specialty_id',

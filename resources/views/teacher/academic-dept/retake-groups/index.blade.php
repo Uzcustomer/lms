@@ -85,31 +85,89 @@
         ])
 
         {{-- Mavjud guruhlar --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100"
+             x-data="{
+                bulkSelected: [],
+                get bulkDeletableIds() { return @js($deletableGroupIds ?? []); },
+                get bulkAllChecked() { return this.bulkDeletableIds.length > 0 && this.bulkDeletableIds.every(id => this.bulkSelected.includes(id)); },
+                bulkToggleAll(ev) {
+                    if (ev.target.checked) {
+                        this.bulkDeletableIds.forEach(id => { if (!this.bulkSelected.includes(id)) this.bulkSelected.push(id); });
+                    } else {
+                        this.bulkDeletableIds.forEach(id => {
+                            const idx = this.bulkSelected.indexOf(id);
+                            if (idx > -1) this.bulkSelected.splice(idx, 1);
+                        });
+                    }
+                },
+                bulkConfirmDelete(ev) {
+                    if (this.bulkSelected.length === 0) { ev.preventDefault(); return; }
+                    if (!confirm(this.bulkSelected.length + ' ta guruhni arxivga ko\'chirishni tasdiqlaysizmi?')) {
+                        ev.preventDefault();
+                    }
+                }
+             }">
             <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <h3 class="text-sm font-semibold text-gray-900">{{ __("Mavjud guruhlar") }}</h3>
-                <form method="GET" action="{{ route('admin.retake-groups.index') }}" class="flex gap-2 items-center flex-wrap">
-                    @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','per_page'] as $kept)
-                        @if(request($kept))
-                            <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <a href="{{ route('admin.retake-groups.trashed') }}"
+                       class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                        📦 {{ __("Tarix") }}
+                        @if(($trashedCount ?? 0) > 0)
+                            <span class="ml-1 text-gray-500">({{ $trashedCount }})</span>
                         @endif
-                    @endforeach
-                    <input type="text" name="search" value="{{ $search ?? '' }}"
-                           placeholder="{{ __('Nom, fan yoki o\'qituvchi') }}"
-                           class="px-3 py-1.5 text-xs border border-gray-300 rounded w-56">
-                    <select name="status" class="px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="all" {{ $statusFilter === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
-                        <option value="forming" {{ $statusFilter === 'forming' ? 'selected' : '' }}>{{ __("Shakllantirilmoqda") }}</option>
-                        <option value="scheduled" {{ $statusFilter === 'scheduled' ? 'selected' : '' }}>{{ __("Tasdiqlangan") }}</option>
-                        <option value="in_progress" {{ $statusFilter === 'in_progress' ? 'selected' : '' }}>{{ __("Borayotgan") }}</option>
-                        <option value="completed" {{ $statusFilter === 'completed' ? 'selected' : '' }}>{{ __("Tugagan") }}</option>
-                    </select>
-                    <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
-                    @if(($search ?? '') !== '' || $statusFilter !== 'all')
-                        <a href="{{ route('admin.retake-groups.index') }}" class="text-xs text-gray-500 hover:underline">{{ __("Tozalash") }}</a>
-                    @endif
-                </form>
+                    </a>
+                    <form method="GET" action="{{ route('admin.retake-groups.index') }}" class="flex gap-2 items-center flex-wrap">
+                        @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','per_page'] as $kept)
+                            @if(request($kept))
+                                <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
+                            @endif
+                        @endforeach
+                        <input type="text" name="search" value="{{ $search ?? '' }}"
+                               placeholder="{{ __('Nom, fan yoki o\'qituvchi') }}"
+                               class="px-3 py-1.5 text-xs border border-gray-300 rounded w-56">
+                        <select name="status" class="px-3 py-1.5 text-xs border border-gray-300 rounded">
+                            <option value="all" {{ $statusFilter === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
+                            <option value="forming" {{ $statusFilter === 'forming' ? 'selected' : '' }}>{{ __("Shakllantirilmoqda") }}</option>
+                            <option value="scheduled" {{ $statusFilter === 'scheduled' ? 'selected' : '' }}>{{ __("Tasdiqlangan") }}</option>
+                            <option value="in_progress" {{ $statusFilter === 'in_progress' ? 'selected' : '' }}>{{ __("Borayotgan") }}</option>
+                            <option value="completed" {{ $statusFilter === 'completed' ? 'selected' : '' }}>{{ __("Tugagan") }}</option>
+                        </select>
+                        <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
+                        @if(($search ?? '') !== '' || $statusFilter !== 'all')
+                            <a href="{{ route('admin.retake-groups.index') }}" class="text-xs text-gray-500 hover:underline">{{ __("Tozalash") }}</a>
+                        @endif
+                    </form>
+                </div>
             </div>
+
+            @if(!empty($deletableGroupIds))
+                <div class="px-5 py-2.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
+                    <label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                        <input type="checkbox"
+                               :checked="bulkAllChecked"
+                               @change="bulkToggleAll($event)"
+                               class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <span>{{ __("Bo'sh guruhlarning barchasini tanlash") }}</span>
+                        <span class="text-gray-500" x-show="bulkSelected.length > 0">
+                            (<span x-text="bulkSelected.length"></span> {{ __("ta tanlangan") }})
+                        </span>
+                    </label>
+                    <form method="POST" action="{{ route('admin.retake-groups.bulk-delete') }}" @submit="bulkConfirmDelete($event)">
+                        @csrf
+                        <template x-for="id in bulkSelected" :key="id">
+                            <input type="hidden" name="group_ids[]" :value="id">
+                        </template>
+                        <button type="submit"
+                                :disabled="bulkSelected.length === 0"
+                                :class="bulkSelected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'"
+                                class="px-3 py-1.5 text-xs font-medium rounded">
+                            {{ __("Tanlanganlarni arxivga") }}
+                            <span x-show="bulkSelected.length > 0">(<span x-text="bulkSelected.length"></span>)</span>
+                        </button>
+                    </form>
+                </div>
+            @endif
 
             @if($groups->count() === 0)
                 <div class="p-8 text-center text-gray-500 text-sm">{{ __("Guruh topilmadi") }}</div>
@@ -118,6 +176,7 @@
                     <table class="min-w-full divide-y divide-gray-100">
                         <thead class="bg-gray-50">
                         <tr>
+                            <th class="w-10 px-3 py-2"></th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Nom") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("O'qituvchi") }}</th>
@@ -129,7 +188,21 @@
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-100">
                         @foreach($groups as $g)
+                            @php $isDeletable = ($g->students_count ?? 0) === 0; @endphp
                             <tr>
+                                <td class="px-3 py-2.5">
+                                    @if($isDeletable)
+                                        <input type="checkbox"
+                                               :checked="bulkSelected.includes({{ $g->id }})"
+                                               @change="if ($event.target.checked) {
+                                                    if (!bulkSelected.includes({{ $g->id }})) bulkSelected.push({{ $g->id }});
+                                               } else {
+                                                    const idx = bulkSelected.indexOf({{ $g->id }});
+                                                    if (idx > -1) bulkSelected.splice(idx, 1);
+                                               }"
+                                               class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    @endif
+                                </td>
                                 <td class="px-3 py-2.5 text-sm text-gray-900">{{ $g->name }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">
                                     {{ $g->subject_name }}
@@ -153,7 +226,7 @@
                                         {{ $g->statusLabel() }}
                                     </span>
                                 </td>
-                                <td class="px-3 py-2.5 text-right">
+                                <td class="px-3 py-2.5 text-right whitespace-nowrap">
                                     @if($g->status === 'forming')
                                         <form method="POST" action="{{ route('admin.retake-groups.publish', $g->id) }}" class="inline">
                                             @csrf
@@ -161,7 +234,15 @@
                                         </form>
                                     @endif
                                     <a href="{{ route('admin.retake-groups.edit', $g->id) }}"
-                                       class="text-xs text-blue-600 hover:underline">{{ __("Tahrirlash") }}</a>
+                                       class="text-xs text-blue-600 hover:underline mr-2">{{ __("Tahrirlash") }}</a>
+                                    @if($isDeletable)
+                                        <form method="POST" action="{{ route('admin.retake-groups.destroy', $g->id) }}"
+                                              onsubmit="return confirm('{{ __("Guruhni arxivga ko'chirishni tasdiqlaysizmi?") }}')"
+                                              class="inline">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="text-xs text-red-600 hover:underline">{{ __("O'chirish") }}</button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach

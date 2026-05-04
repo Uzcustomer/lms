@@ -107,6 +107,14 @@ class RetakeGroupController extends Controller
             ->get()
             ->mapWithKeys(fn ($a) => [$a->subject_id => $a->subject_name]);
 
+        // Bo'sh (talabasiz) guruh ID'lari — o'chirish mumkin
+        $deletableGroupIds = $groups->getCollection()
+            ->filter(fn ($g) => ($g->students_count ?? 0) === 0)
+            ->pluck('id')
+            ->all();
+
+        $trashedCount = RetakeGroup::onlyTrashed()->count();
+
         return view('teacher.academic-dept.retake-groups.index', [
             'aggregations' => $aggregations,
             'groups' => $groups,
@@ -115,6 +123,8 @@ class RetakeGroupController extends Controller
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
             'educationTypes' => $educationTypes,
             'subjects' => $subjects,
+            'deletableGroupIds' => $deletableGroupIds,
+            'trashedCount' => $trashedCount,
         ]);
     }
 
@@ -317,6 +327,113 @@ class RetakeGroupController extends Controller
         $group->update(['status' => $data['status']]);
 
         return redirect()->back()->with('success', __('Holat o\'zgartirildi'));
+    }
+
+    /**
+     * Guruhni arxivga ko'chirish (soft delete) — faqat hech qanday talaba
+     * biriktirilmagan bo'lsa.
+     */
+    public function destroy(int $groupId): RedirectResponse
+    {
+        $this->authorize();
+
+        $group = RetakeGroup::withCount('applications as students_count')->findOrFail($groupId);
+
+        if (($group->students_count ?? 0) > 0) {
+            return redirect()->back()->withErrors([
+                'group' => 'Bu guruhga talabalar biriktirilgan, o\'chirib bo\'lmaydi',
+            ]);
+        }
+
+        $group->delete();
+
+        return redirect()->route('admin.retake-groups.index')
+            ->with('success', __('Guruh arxivga ko\'chirildi'));
+    }
+
+    /**
+     * Tanlangan guruhlarni ommaviy arxivga ko'chirish.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $this->authorize();
+
+        $data = $request->validate([
+            'group_ids' => 'required|array|min:1',
+            'group_ids.*' => 'integer',
+        ]);
+
+        $groups = RetakeGroup::withCount('applications as students_count')
+            ->whereIn('id', $data['group_ids'])
+            ->get();
+
+        $deleted = 0;
+        $skipped = 0;
+
+        foreach ($groups as $group) {
+            if (($group->students_count ?? 0) > 0) {
+                $skipped++;
+                continue;
+            }
+            $group->delete();
+            $deleted++;
+        }
+
+        $msg = "{$deleted} ta guruh arxivga ko'chirildi";
+        if ($skipped > 0) {
+            $msg .= ", {$skipped} ta guruhga talabalar biriktirilgani sababli o'tkazib yuborildi";
+        }
+
+        return redirect()->route('admin.retake-groups.index')->with('success', $msg);
+    }
+
+    /**
+     * Tarix sahifasi — arxivlangan guruhlar.
+     */
+    public function trashed()
+    {
+        $this->authorize();
+
+        $groups = RetakeGroup::onlyTrashed()
+            ->with('teacher')
+            ->withCount('applications as students_count')
+            ->orderByDesc('deleted_at')
+            ->get();
+
+        return view('teacher.academic-dept.retake-groups.trashed', [
+            'groups' => $groups,
+            'canForceDelete' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+        ]);
+    }
+
+    /**
+     * Arxivdan tiklash.
+     */
+    public function restore(int $groupId): RedirectResponse
+    {
+        $this->authorize();
+
+        $group = RetakeGroup::onlyTrashed()->findOrFail($groupId);
+        $group->restore();
+
+        return redirect()->route('admin.retake-groups.trashed')
+            ->with('success', __('Guruh tiklandi'));
+    }
+
+    /**
+     * Arxivdan butunlay o'chirish (faqat super-admin).
+     */
+    public function forceDestroy(int $groupId): RedirectResponse
+    {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
+            abort(403);
+        }
+
+        $group = RetakeGroup::onlyTrashed()->findOrFail($groupId);
+        $group->forceDelete();
+
+        return redirect()->route('admin.retake-groups.trashed')
+            ->with('success', __('Guruh butunlay o\'chirildi'));
     }
 
     private function authorize(): void

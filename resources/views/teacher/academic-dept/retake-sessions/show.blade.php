@@ -236,7 +236,7 @@
                         </div>
 
                         <p class="text-[11px] text-gray-500">
-                            ⚠️ {{ __("Yaratilgandan keyin sanalarni faqat super-admin o'zgartira oladi") }}
+                            ⚠️ {{ __("Yaratilgandan keyin sanalarni o'zgartirish imkoniyati mavjud emas") }}
                         </p>
 
                         <div class="flex gap-2 pt-3">

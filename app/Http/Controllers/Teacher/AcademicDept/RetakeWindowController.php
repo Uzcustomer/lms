@@ -90,8 +90,20 @@ class RetakeWindowController extends Controller
 
         $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
 
+        // Hozir ochiq (faol) oynalar — sahifaning yuqorisida ko'rsatish uchun
+        $today = now()->toDateString();
+        $activeWindows = RetakeApplicationWindow::query()
+            ->with('session')
+            ->withCount('applicationGroups as applications_count')
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->whereHas('session', fn ($q) => $q->where('is_closed', false))
+            ->orderByDesc('start_date')
+            ->get();
+
         return view('teacher.academic-dept.retake-windows.index', [
             'windows' => $windows,
+            'activeWindows' => $activeWindows,
             'specialtyToFaculty' => $specialtyToFaculty,
             'departments' => $departments,
             'specialties' => $specialties,

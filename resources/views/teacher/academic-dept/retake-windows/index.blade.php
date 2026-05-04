@@ -34,6 +34,57 @@
             </a>
         </div>
 
+        {{-- Hozir ochiq oynalar — yuqorida ko'zga tashlanadigan tarzda --}}
+        @if(($activeWindows ?? collect())->isNotEmpty())
+            <div class="bg-green-50 border-2 border-green-300 rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-white">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </span>
+                    <h3 class="text-sm font-semibold text-green-900">
+                        {{ __("Hozir ochiq qayta o'qish oynalari") }}
+                        <span class="text-green-700 font-medium">({{ $activeWindows->count() }})</span>
+                    </h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    @foreach($activeWindows as $aw)
+                        <a href="{{ route('admin.retake-windows.show', $aw->id) }}"
+                           class="block bg-white rounded-lg border border-green-200 p-3 hover:border-green-400 hover:shadow-sm transition">
+                            <p class="text-xs text-gray-500 mb-1">
+                                @if($aw->session)
+                                    <span class="font-medium text-gray-700">{{ $aw->session->name }}</span> ·
+                                @endif
+                                {{ $specialtyToFaculty[$aw->specialty_id] ?? '—' }}
+                            </p>
+                            <p class="text-sm font-semibold text-gray-900">
+                                {{ $aw->specialty_name ?? $aw->specialty_id }}
+                            </p>
+                            <p class="text-xs text-gray-700 mt-0.5">
+                                {{ $aw->level_name ?? $aw->level_code }}
+                                @if($aw->semester_name)· {{ $aw->semester_name }}@endif
+                            </p>
+                            <div class="flex items-center justify-between mt-2 text-[11px]">
+                                <span class="text-gray-500">
+                                    {{ $aw->start_date->format('Y-m-d') }} → {{ $aw->end_date->format('Y-m-d') }}
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
+                                    {{ $aw->applications_count }} {{ __("ariza") }}
+                                </span>
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @else
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-center">
+                <p class="text-sm text-gray-500">
+                    {{ __("Hozircha ochiq oyna yo'q") }}
+                </p>
+            </div>
+        @endif
+
         {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr) --}}
         @include('partials._retake_filters', [
             'formAction' => route('admin.retake-windows.index'),

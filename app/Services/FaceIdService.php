@@ -38,7 +38,7 @@ class FaceIdService
      */
     public static function getArcFaceThreshold(): float
     {
-        return (float) Setting::get('faceid_arcface_threshold', 60.0);
+        return (float) Setting::get('faceid_arcface_threshold', 75.0);
     }
 
     /**

@@ -10,10 +10,6 @@ services:
       - ./:/var/www/html
       - ./storage:/var/www/html/storage
       - ./public:/var/www/html/public
-      - /usr/lib/libreoffice:/usr/lib/libreoffice:ro
-      - /usr/bin/soffice:/usr/bin/soffice:ro
-      - /usr/share/libreoffice:/usr/share/libreoffice:ro
-      - /usr/share/fonts:/usr/share/fonts:ro
     ports:
       - "9001:9000"
     networks:

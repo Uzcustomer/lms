@@ -38,19 +38,62 @@ class RetakeJournalController extends Controller
         $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
         $isTeacher = $actor instanceof Teacher;
 
+        // Cascade filtrlar (talaba ma'lumotlari + fan)
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
+
         $query = RetakeGroup::query()
             ->with('teacher')
             ->withCount('applications as students_count')
             ->orderByDesc('start_date');
 
+        // O'qituvchi faqat o'zining guruhlarini ko'radi (admin emas)
         if ($isTeacher && !$isAdmin) {
             $query->where('teacher_id', $actor->id);
         }
 
-        $groups = $query->paginate(30)->withQueryString();
+        // Fan bo'yicha filtr
+        if ($subjectFilter) {
+            $query->where('subject_id', $subjectFilter);
+        }
+
+        // Talaba ma'lumotlari bo'yicha — guruhdagi arizalardan hech bo'lmaganda
+        // bittasi tanlangan talaba shartiga mos kelishi kerak
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+        if ($hasStudentFilter) {
+            $query->whereHas('applications', function ($q) use ($studentFilters) {
+                $q->whereIn('student_hemis_id', function ($sub) use ($studentFilters) {
+                    $sub->select('hemis_id')->from('students');
+                    if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+                    if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+                    if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+                    if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+                    if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+                    if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+                });
+            });
+        }
+
+        $groups = $query->paginate($perPage)->withQueryString();
+
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
+        $subjects = \App\Services\Retake\RetakeFilterCache::subjects();
 
         return view('teacher.retake-journal.index', [
             'groups' => $groups,
+            'educationTypes' => $educationTypes,
+            'subjects' => $subjects,
         ]);
     }
 

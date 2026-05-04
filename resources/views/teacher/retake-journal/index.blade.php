@@ -6,6 +6,14 @@
     </x-slot>
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
+        @include('partials._retake_filters', [
+            'formAction' => route('admin.retake-journal.index'),
+            'educationTypes' => $educationTypes ?? collect(),
+            'subjects' => $subjects ?? collect(),
+            'hiddenFilters' => ['full_name'],
+        ])
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             @if($groups->isEmpty())
                 <div class="p-10 text-center text-sm text-gray-500">

@@ -500,6 +500,11 @@ class AcademicScheduleController extends Controller
                 ->whereIn('semester_code', $allSemCodes)
                 ->where('training_type_code', 99)
                 ->whereNull('lesson_date')
+                // Bir nechta MT yozuvi bo'lsa eng oxirgisini (retake/tuzatishdan keyingi)
+                // ustuvor olish kerak. Aks holda eski past MT tasodifan olinib,
+                // talaba noto'g'ri "pullik" ko'rinib qolishi mumkin.
+                ->orderByDesc('updated_at')
+                ->orderByDesc('id')
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade')
                 ->get();
             foreach ($manualMt as $r) {

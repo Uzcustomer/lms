@@ -23,6 +23,7 @@ class RetakeWindowSessionController extends Controller
 
         $sessions = RetakeWindowSession::query()
             ->withCount('windows')
+            ->with('windows:id,session_id')
             ->orderByDesc('is_closed')
             ->orderByDesc('created_at')
             ->orderBy('is_closed') // ochiqlar yuqorida
@@ -30,8 +31,30 @@ class RetakeWindowSessionController extends Controller
             ->sortBy(fn ($s) => [$s->is_closed ? 1 : 0, -$s->id])
             ->values();
 
+        // Har sessiya uchun "o'chirib bo'ladimi?" — hech qanday arizа yuborilmagan bo'lsa
+        $sessionsWithApps = collect();
+        if ($sessions->isNotEmpty()) {
+            $allWindowIds = $sessions->flatMap->windows->pluck('id');
+            if ($allWindowIds->isNotEmpty()) {
+                $windowsWithApps = \App\Models\RetakeApplicationGroup::query()
+                    ->whereIn('window_id', $allWindowIds)
+                    ->select('window_id')
+                    ->distinct()
+                    ->pluck('window_id')
+                    ->all();
+
+                foreach ($sessions as $s) {
+                    $hasApps = $s->windows->pluck('id')->intersect($windowsWithApps)->isNotEmpty();
+                    if ($hasApps) {
+                        $sessionsWithApps->push($s->id);
+                    }
+                }
+            }
+        }
+
         return view('teacher.academic-dept.retake-sessions.index', [
             'sessions' => $sessions,
+            'sessionsWithApps' => $sessionsWithApps->all(),
         ]);
     }
 
@@ -80,6 +103,82 @@ class RetakeWindowSessionController extends Controller
 
         return redirect()->route('admin.retake-sessions.index')
             ->with('success', __('Sessiya yopildi'));
+    }
+
+    /**
+     * Sessiyani butunlay o'chirish — faqat hech qanday ariza yuborilmagan bo'lsa.
+     * Sessiya bilan birga uning oynalari ham o'chiriladi.
+     */
+    public function destroy(int $sessionId): RedirectResponse
+    {
+        $this->authorizeAccess();
+
+        $session = RetakeWindowSession::with('windows')->findOrFail($sessionId);
+
+        if ($this->sessionHasApplications($session)) {
+            return redirect()->back()->withErrors([
+                'session' => 'Bu sessiyada arizalar mavjud, o\'chirib bo\'lmaydi',
+            ]);
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($session) {
+            // Avval oynalarni o'chiramiz (foreign key restrict)
+            $session->windows()->delete();
+            $session->delete();
+        });
+
+        return redirect()->route('admin.retake-sessions.index')
+            ->with('success', __('Sessiya o\'chirildi'));
+    }
+
+    /**
+     * Tanlangan sessiyalarni ommaviy o'chirish — faqat arizasizlari.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $this->authorizeAccess();
+
+        $data = $request->validate([
+            'session_ids' => 'required|array|min:1',
+            'session_ids.*' => 'integer',
+        ]);
+
+        $sessions = RetakeWindowSession::with('windows')
+            ->whereIn('id', $data['session_ids'])
+            ->get();
+
+        $deleted = 0;
+        $skipped = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($sessions, &$deleted, &$skipped) {
+            foreach ($sessions as $session) {
+                if ($this->sessionHasApplications($session)) {
+                    $skipped++;
+                    continue;
+                }
+                $session->windows()->delete();
+                $session->delete();
+                $deleted++;
+            }
+        });
+
+        $msg = "{$deleted} ta sessiya o'chirildi";
+        if ($skipped > 0) {
+            $msg .= ", {$skipped} ta sessiyada arizalar mavjudligi sababli o'tkazib yuborildi";
+        }
+
+        return redirect()->route('admin.retake-sessions.index')->with('success', $msg);
+    }
+
+    private function sessionHasApplications(RetakeWindowSession $session): bool
+    {
+        $windowIds = $session->windows->pluck('id');
+        if ($windowIds->isEmpty()) {
+            return false;
+        }
+        return \App\Models\RetakeApplicationGroup::query()
+            ->whereIn('window_id', $windowIds)
+            ->exists();
     }
 
     /**

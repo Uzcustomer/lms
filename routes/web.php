@@ -772,8 +772,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('retake-sessions')->name('retake-sessions.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'store'])->name('store');
+            Route::post('/bulk-delete', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'bulkDestroy'])->name('bulk-delete');
             Route::get('/{sessionId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'show'])->name('show');
             Route::post('/{sessionId}/close', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'close'])->name('close');
+            Route::delete('/{sessionId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'destroy'])->name('destroy');
         });
 
         // O'quv bo'limi: Qayta o'qish qabul oynalari (sessiya ichida boshqariladi)

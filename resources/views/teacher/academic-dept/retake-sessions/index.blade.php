@@ -5,7 +5,35 @@
         </h2>
     </x-slot>
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full" x-data="{ showCreate: false }">
+    @php
+        $deletableIds = array_values(array_diff(
+            $sessions->pluck('id')->all(),
+            $sessionsWithApps ?? []
+        ));
+    @endphp
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full"
+         x-data="{
+            showCreate: false,
+            selected: [],
+            get deletableIds() { return @js($deletableIds); },
+            get allChecked() { return this.deletableIds.length > 0 && this.deletableIds.every(id => this.selected.includes(id)); },
+            toggleAll(ev) {
+                if (ev.target.checked) {
+                    this.deletableIds.forEach(id => { if (!this.selected.includes(id)) this.selected.push(id); });
+                } else {
+                    this.deletableIds.forEach(id => {
+                        const idx = this.selected.indexOf(id);
+                        if (idx > -1) this.selected.splice(idx, 1);
+                    });
+                }
+            },
+            confirmBulkDelete(ev) {
+                if (this.selected.length === 0) { ev.preventDefault(); return; }
+                if (!confirm(this.selected.length + ' ta sessiyani o\'chirishni tasdiqlaysizmi? Bu amal qaytarib bo\'lmaydi.')) {
+                    ev.preventDefault();
+                }
+            }
+         }">
 
         @if(session('success'))
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">
@@ -32,6 +60,38 @@
             </button>
         </div>
 
+        {{-- Bulk delete panel --}}
+        @if(!$sessions->isEmpty() && !empty($deletableIds))
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-3 flex items-center justify-between flex-wrap gap-3">
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox"
+                           :checked="allChecked"
+                           @change="toggleAll($event)"
+                           class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <span>{{ __("Arizasiz sessiyalarning barchasini tanlash") }}</span>
+                    <span class="text-xs text-gray-500" x-show="selected.length > 0">
+                        (<span x-text="selected.length"></span> {{ __("ta tanlangan") }})
+                    </span>
+                </label>
+
+                <form method="POST"
+                      action="{{ route('admin.retake-sessions.bulk-delete') }}"
+                      @submit="confirmBulkDelete($event)">
+                    @csrf
+                    <template x-for="id in selected" :key="id">
+                        <input type="hidden" name="session_ids[]" :value="id">
+                    </template>
+                    <button type="submit"
+                            :disabled="selected.length === 0"
+                            :class="selected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'"
+                            class="px-4 py-2 text-sm font-medium rounded-lg">
+                        {{ __("Tanlanganlarni o'chirish") }}
+                        <span x-show="selected.length > 0">(<span x-text="selected.length"></span>)</span>
+                    </button>
+                </form>
+            </div>
+        @endif
+
         {{-- Sessiyalar ro'yxati --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             @if($sessions->isEmpty())
@@ -41,8 +101,24 @@
             @else
                 <div class="divide-y divide-gray-100">
                     @foreach($sessions as $session)
+                        @php $isDeletable = !in_array($session->id, $sessionsWithApps ?? [], true); @endphp
                         <div class="p-4 hover:bg-gray-50 transition flex items-center justify-between flex-wrap gap-3">
                             <div class="flex items-center gap-3 flex-1 min-w-0">
+                                @if($isDeletable)
+                                    <label class="flex items-center pt-1 cursor-pointer">
+                                        <input type="checkbox"
+                                               :checked="selected.includes({{ $session->id }})"
+                                               @change="if ($event.target.checked) {
+                                                    if (!selected.includes({{ $session->id }})) selected.push({{ $session->id }});
+                                               } else {
+                                                    const idx = selected.indexOf({{ $session->id }});
+                                                    if (idx > -1) selected.splice(idx, 1);
+                                               }"
+                                               class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    </label>
+                                @else
+                                    <div class="w-4"></div>
+                                @endif
                                 <div class="w-10 h-10 rounded-full flex items-center justify-center
                                             {{ $session->is_closed ? 'bg-gray-200 text-gray-500' : 'bg-green-100 text-green-700' }}">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -86,6 +162,18 @@
                                         <button type="submit"
                                                 class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
                                             {{ __("Yopish") }}
+                                        </button>
+                                    </form>
+                                @endif
+                                @if($isDeletable)
+                                    <form method="POST"
+                                          action="{{ route('admin.retake-sessions.destroy', $session->id) }}"
+                                          onsubmit="return confirm('{{ __("Sessiyani butunlay o'chirishni tasdiqlaysizmi? Bu amal qaytarib bo'lmaydi.") }}')"
+                                          class="inline">
+                                        @csrf @method('DELETE')
+                                        <button type="submit"
+                                                class="px-3 py-1.5 text-xs bg-red-50 text-red-700 rounded hover:bg-red-100">
+                                            {{ __("O'chirish") }}
                                         </button>
                                     </form>
                                 @endif

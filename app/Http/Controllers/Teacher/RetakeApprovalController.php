@@ -260,6 +260,93 @@ class RetakeApprovalController extends Controller
     }
 
     /**
+     * Tanlangan arizalarni bir vaqtda tasdiqlash yoki rad etish.
+     * - Dekan: tasdiqlash va rad etish ikkalasi ham bulk amalga oshiriladi
+     * - Registrator: faqat bulk rad etish (tasdiqlash uchun har ariza uchun
+     *   alohida baho/flaglar kiritilishi kerak — bulk emas)
+     */
+    public function bulkDecide(Request $request): RedirectResponse
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $minReason = \App\Models\RetakeSetting::rejectReasonMinLength();
+
+        $data = $request->validate([
+            'application_ids' => 'required|array|min:1',
+            'application_ids.*' => 'integer',
+            'decision' => 'required|in:approved,rejected',
+            'reason' => 'nullable|string|min:' . $minReason . '|max:1000',
+        ]);
+
+        // Registrator bulk tasdiqlash mumkin emas — har biriga baho kerak
+        if ($role === 'registrar' && $data['decision'] === 'approved') {
+            return redirect()->back()->withErrors([
+                'bulk' => 'Registrator tasdiqlash har bir ariza uchun alohida bajariladi (oldingi baholar majburiy).',
+            ]);
+        }
+
+        if ($data['decision'] === 'rejected' && empty($data['reason'])) {
+            return redirect()->back()->withErrors([
+                'reason' => 'Rad etish uchun sababni yozing (eng kamida ' . $minReason . ' belgi)',
+            ]);
+        }
+
+        $applications = RetakeApplication::whereIn('id', $data['application_ids'])->get();
+
+        $done = 0;
+        $skipped = 0;
+
+        foreach ($applications as $app) {
+            // Ruxsat tekshiruvi
+            try {
+                $this->authorizeApplicationDecision($user, $role, $app);
+            } catch (\Throwable $e) {
+                $skipped++;
+                continue;
+            }
+
+            // Allaqachon shu rol qaror chiqargan bo'lsa — o'tkazib yuboramiz
+            $myStatus = $role === 'dean' ? $app->dean_status : $app->registrar_status;
+            if ($myStatus !== RetakeApplication::STATUS_PENDING) {
+                $skipped++;
+                continue;
+            }
+
+            try {
+                if ($role === 'dean') {
+                    $this->applicationService->deanDecide(
+                        $app,
+                        $user,
+                        $data['decision'],
+                        $data['reason'] ?? null,
+                    );
+                } else {
+                    // Registrator bu yerda faqat rad etadi
+                    $this->applicationService->registrarDecide(
+                        $app,
+                        $user,
+                        $data['decision'],
+                        $data['reason'] ?? null,
+                        [],
+                    );
+                }
+                $done++;
+            } catch (\Throwable $e) {
+                $skipped++;
+            }
+        }
+
+        $action = $data['decision'] === 'approved' ? 'tasdiqlandi' : 'rad etildi';
+        $msg = "{$done} ta ariza {$action}";
+        if ($skipped > 0) {
+            $msg .= ", {$skipped} ta o'tkazib yuborildi";
+        }
+
+        return redirect()->back()->with('success', $msg);
+    }
+
+    /**
      * Registrator ofisi to'lov chekini tasdiqlaydi yoki rad etadi.
      */
     public function verifyPayment(Request $request, int $groupId): RedirectResponse

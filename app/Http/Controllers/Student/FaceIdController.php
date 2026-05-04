@@ -41,9 +41,9 @@ class FaceIdController extends Controller
 
         $idNumber = trim($request->student_id_number);
 
-        // Rate limit: 10 urinish / daqiqa bitta IP uchun
+        // Rate limit: 100 urinish / daqiqa bitta IP uchun (foydalanuvchi qulayligi uchun yumshoq)
         $key = 'faceid_check:' . $request->ip();
-        if (RateLimiter::tooManyAttempts($key, 10)) {
+        if (RateLimiter::tooManyAttempts($key, 100)) {
             return response()->json(['error' => 'Juda ko\'p so\'rov. Biroz kuting.'], 429);
         }
         RateLimiter::hit($key, 60);
@@ -133,10 +133,10 @@ class FaceIdController extends Controller
             'snapshot' => 'required|string|max:500000',
         ]);
 
-        // Rate limit
+        // Rate limit (yumshoq — foydalanuvchi qayta urinishi uchun)
         $key = 'faceid_identify:' . $request->ip();
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            return response()->json(['error' => 'Juda ko\'p urinish. 1 daqiqa kuting.'], 429);
+        if (RateLimiter::tooManyAttempts($key, 60)) {
+            return response()->json(['error' => 'Juda ko\'p urinish. Biroz kuting.'], 429);
         }
         RateLimiter::hit($key, 60);
 
@@ -272,10 +272,10 @@ class FaceIdController extends Controller
 
         $idNumber = trim($request->student_id_number);
 
-        // Rate limit: 5 urinish / daqiqa bitta IP uchun
+        // Rate limit: 60 urinish / daqiqa bitta IP uchun (foydalanuvchi qayta urinishi uchun yumshoq)
         $key = 'faceid_verify:' . $request->ip();
-        if (RateLimiter::tooManyAttempts($key, 5)) {
-            return response()->json(['error' => 'Juda ko\'p urinish. 1 daqiqa kuting.'], 429);
+        if (RateLimiter::tooManyAttempts($key, 60)) {
+            return response()->json(['error' => 'Juda ko\'p urinish. Biroz kuting.'], 429);
         }
         RateLimiter::hit($key, 60);
 

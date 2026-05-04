@@ -840,8 +840,8 @@
         </a>
         @endif
 
-        {{-- Sozlamalar: O'quv bo'limi boshlig'i + Registrator --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi_boshligi', 'registrator_ofisi']))
+        {{-- Sozlamalar: O'quv bo'limi (min_group_size) + Registrator (qolgani) --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'registrator_ofisi']))
         <a href="{{ route('admin.retake-settings.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-settings.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

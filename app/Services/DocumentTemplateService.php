@@ -162,8 +162,15 @@ class DocumentTemplateService
 
         // LibreOffice orqali PDF generatsiya (yagona sifatli usul)
         // HOME muhit o'zgaruvchisi kerak (www-data uchun)
+        $sofficePath = $this->findSoffice();
+        if (!$sofficePath) {
+            @unlink($tempDocx);
+            throw new \RuntimeException('LibreOffice (soffice) serverda topilmadi. PDF generatsiya uchun LibreOffice o\'rnatilishi kerak.');
+        }
+
         $command = sprintf(
-            'HOME=/tmp /usr/bin/soffice --headless --norestore --convert-to pdf --outdir %s %s 2>&1',
+            'HOME=/tmp %s --headless --norestore --convert-to pdf --outdir %s %s 2>&1',
+            escapeshellarg($sofficePath),
             escapeshellarg($tempDir),
             escapeshellarg($tempDocx)
         );

@@ -46,6 +46,7 @@ use App\Http\Controllers\Admin\StudentContractController as AdminStudentContract
 use App\Http\Controllers\Admin\KafedraController;
 use App\Http\Controllers\Admin\VedomostTekshirishController;
 use App\Http\Controllers\MoodleImportController;
+use App\Http\Controllers\MoodleExamEventController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Student\StudentContractController as StudentContractCtrl;
 use App\Http\Controllers\LanguageController;
@@ -127,6 +128,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         })->name('switch-role');
 
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
+        Route::get('/students/disabled', [AdminStudentController::class, 'disabledIndex'])->name('students.disabled');
+        Route::get('/students/disabled/{student}/info', [AdminStudentController::class, 'disabledInfo'])->name('students.disabled.info');
+        Route::get('/students/disabled/{student}/certificate', [AdminStudentController::class, 'disabledCertificate'])->name('students.disabled.certificate');
         Route::get('/students/export', [AdminStudentController::class, 'exportStudents'])->name('students.export');
         Route::get('/students/filter/departments', [AdminStudentController::class, 'getFilterDepartments'])->name('students.filter.departments');
         Route::get('/students/filter/specialties', [AdminStudentController::class, 'getFilterSpecialties'])->name('students.filter.specialties');
@@ -177,6 +181,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'index'])->name('index');
             Route::get('/import/template', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'importTemplate'])->name('import-template');
             Route::post('/import', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'import'])->name('import');
+            Route::get('/export/{status}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'exportByStatus'])->whereIn('status', ['pending', 'approved', 'rejected'])->name('export-status');
             Route::get('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'show'])->name('show');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'reject'])->name('reject');
@@ -184,6 +189,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'destroy'])->name('destroy');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'download'])->name('download');
             Route::get('/{id}/download-pdf', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'downloadPdf'])->name('download-pdf');
+        });
+
+        // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)
+        Route::prefix('yn-form-corrections')->name('yn-form-corrections.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'index'])->name('index');
+            Route::get('/{id}/pdf', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'pdf'])->name('pdf');
         });
 
         // Imtihon apellyatsiyalari (Admin panel)
@@ -301,6 +312,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/delete-mt-submission', [JournalController::class, 'deleteMtSubmission'])->name('delete-mt-submission');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
+            Route::post('/transfer-to-next-attempt', [JournalController::class, 'transferToNextAttempt'])->name('transfer-to-next-attempt');
+            Route::post('/finalize-attempt', [JournalController::class, 'finalizeAttempt'])->name('finalize-attempt');
+            Route::post('/unfinalize-attempt', [JournalController::class, 'unfinalizeAttempt'])->name('unfinalize-attempt');
+            Route::get('/finalization-warning-data', [JournalController::class, 'finalizationWarningData'])->name('finalization-warning-data');
             Route::get('/get-yn-consents', [JournalController::class, 'getYnConsents'])->name('get-yn-consents');
             Route::post('/save-excuse-grade', [JournalController::class, 'saveExcuseGrade'])->name('save-excuse-grade');
             Route::post('/submit-excuse-to-yn', [JournalController::class, 'submitExcuseToYn'])->name('submit-excuse-to-yn');
@@ -732,6 +747,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/filter-options', [TimetableViewController::class, 'filterOptions'])->name('filter-options');
         });
 
+        // Test markazi kompyuterlari (joylashuv + IP/MAC sozlamalari)
+        Route::prefix('computers')->name('computers.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\ComputerController::class, 'index'])->name('index');
+            Route::patch('/{computer}', [\App\Http\Controllers\Admin\ComputerController::class, 'update'])->name('update');
+        });
+
         // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
@@ -887,6 +908,7 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/check-student', [FaceIdController::class, 'checkStudent'])->name('check-student');
         Route::get('/photo/{id}', [FaceIdController::class, 'getPhoto'])->name('photo');
         Route::post('/verify', [FaceIdController::class, 'verifyAndLogin'])->name('verify');
+        Route::post('/identify', [FaceIdController::class, 'identifyAndLogin'])->name('identify');
         Route::post('/save-descriptor', [FaceIdController::class, 'saveDescriptor'])->name('save-descriptor');
     });
 
@@ -997,6 +1019,13 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\Student\StudentVisaController::class, 'store'])->name('store');
             Route::get('/file/{field}', [\App\Http\Controllers\Student\StudentVisaController::class, 'showFile'])->name('file');
+        });
+
+        // Nogironlik ma'lumotlari (nogiron talabalar)
+        Route::prefix('disability-info')->name('disability-info.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'store'])->name('store');
+            Route::get('/certificate', [\App\Http\Controllers\Student\StudentDisabilityController::class, 'showFile'])->name('file');
         });
 
         // Pasport ma'lumotlari
@@ -1268,6 +1297,9 @@ Route::post('/moodle/import', [MoodleImportController::class, 'import'])
     ->name('moodle.import');
 Route::get('/moodle/should-sync', [MoodleImportController::class, 'shouldSync'])
     ->name('moodle.should-sync');
+// Quiz attempt event push from local_hemisexport plugin (server-to-server)
+Route::post('/moodle/exam-event', [MoodleExamEventController::class, 'handle'])
+    ->name('moodle.exam-event');
 
 // Telegram bot webhook (CSRF excluded in bootstrap/app.php)
 Route::post('/telegram/webhook/{token}', [\App\Http\Controllers\TelegramWebhookController::class, 'handle'])

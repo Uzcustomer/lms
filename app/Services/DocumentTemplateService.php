@@ -78,7 +78,11 @@ class DocumentTemplateService
         $processor->setValue('verification_url', route('absence-excuse.verify', $excuse->verification_token));
 
         // Nazoratlar jadvali (cloneRow orqali)
-        $makeups = $excuse->makeups()->orderBy('subject_name')
+        // Faqat qayta topshirish sanasi tanlangan yozuvlarni chiqaramiz —
+        // "Topshirilgan" yoki "O'z vaqtida" tanlangani (jn_submitted=true) PDF'da yo'q
+        $makeups = $excuse->makeups()
+            ->where('jn_submitted', false)
+            ->orderBy('subject_name')
             ->orderByRaw("FIELD(assessment_type, 'jn', 'mt', 'oski', 'test')")
             ->get();
         $makeupCount = $makeups->count();

@@ -44,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'telegram/webhook/*',
             'moodle/import',
             'moodle/should-sync',
+            'moodle/exam-event',
         ]);
 
     })

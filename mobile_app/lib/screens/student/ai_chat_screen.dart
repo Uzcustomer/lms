@@ -7,10 +7,9 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../config/aurora_themes.dart';
 import '../../providers/settings_provider.dart';
-import '../../services/api_service.dart';
 import '../../services/gemini_service.dart';
 import '../../services/student_context_builder.dart';
-import '../../services/student_service.dart';
+import '../../services/student_data_cache.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
@@ -43,17 +42,23 @@ class _AiChatScreenState extends State<AiChatScreen>
     _loadStudentContext();
   }
 
-  Future<void> _loadStudentContext() async {
+  Future<void> _loadStudentContext({bool force = false}) async {
+    if (mounted) {
+      setState(() {
+        _contextLoading = true;
+        _contextLoaded = false;
+      });
+    }
     try {
-      final api = ApiService();
-      final service = StudentService(api);
-      final builder = StudentContextBuilder(service);
-      final context = await builder.build();
+      final cache = StudentDataCache();
+      await cache.ensureFresh(force: force);
+      final builder = StudentContextBuilder(cache);
+      final context = builder.build();
       _gemini.setStudentContext(context);
       if (mounted) {
         setState(() {
           _contextLoading = false;
-          _contextLoaded = true;
+          _contextLoaded = cache.hasData;
         });
       }
     } catch (_) {
@@ -64,6 +69,31 @@ class _AiChatScreenState extends State<AiChatScreen>
         });
       }
     }
+  }
+
+  Future<void> _refreshData() async {
+    if (_contextLoading) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Ma\'lumotlar yangilanmoqda...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+    await _loadStudentContext(force: true);
+    if (!mounted) return;
+    final cache = StudentDataCache();
+    final ts = cache.lastFetchedAt;
+    final tsStr = ts == null
+        ? ''
+        : ' (${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')})';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_contextLoaded
+            ? 'Ma\'lumotlar yangilandi$tsStr'
+            : 'Yangilashda xatolik'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -488,7 +518,24 @@ class _AiChatScreenState extends State<AiChatScreen>
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70, size: 22),
+                icon: _contextLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white70,
+                        ),
+                      )
+                    : const Icon(Icons.refresh_rounded,
+                        color: Colors.white70, size: 22),
+                tooltip: 'Ma\'lumotlarni yangilash',
+                onPressed: _contextLoading ? null : _refreshData,
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded,
+                    color: Colors.white70, size: 22),
+                tooltip: 'Chatni tozalash',
                 onPressed: _messages.isNotEmpty ? _clearChat : null,
               ),
             ],

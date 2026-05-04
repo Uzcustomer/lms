@@ -75,6 +75,13 @@
                                 <span class="toggle-label">Joriy semestr</span>
                             </div>
                         </div>
+                        <div class="filter-item" style="min-width: 180px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch {{ request('show_students') === '1' ? 'active' : '' }}" id="show-students-toggle" onclick="toggleShowStudents()">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Talabani ko'rsatish</span>
+                            </div>
+                        </div>
                     </div>
                     <!-- Row 2: Kurs, Semestr, Guruh, Fan, Holat, Qidirish -->
                     <div class="filter-row">
@@ -104,6 +111,15 @@
                                 <option value="">Barchasi</option>
                                 <option value="belgilangan" {{ ($selectedStatus ?? '') == 'belgilangan' ? 'selected' : '' }}>Belgilangan</option>
                                 <option value="belgilanmagan" {{ ($selectedStatus ?? '') == 'belgilanmagan' ? 'selected' : '' }}>Belgilanmagan</option>
+                            </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 130px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#d97706;"></span> Urinish</label>
+                            <select id="urinish_filter" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="1" {{ ($urinishFilter ?? '') === '1' ? 'selected' : '' }}>1-urinish</option>
+                                <option value="2" {{ ($urinishFilter ?? '') === '2' ? 'selected' : '' }}>2-urinish</option>
+                                <option value="3" {{ ($urinishFilter ?? '') === '3' ? 'selected' : '' }}>3-urinish</option>
                             </select>
                         </div>
                         <div class="filter-item" style="min-width: 120px;">
@@ -144,7 +160,17 @@
                             <span style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;font-weight:700;">
                                 Imtihon sanalari
                                 @if($currentEducationYear)
-                                    ({{ $currentEducationYear }})
+                                    @php
+                                        $eduYearLabel = (string) $currentEducationYear;
+                                        // Agar HEMIS API faqat boshlanish yili saqlasa (masalan "2025"),
+                                        // ko'rinishni "2025-2026 o'quv yili" formatiga keltiramiz.
+                                        if (preg_match('/^\d{4}$/', $eduYearLabel)) {
+                                            $eduYearLabel = $eduYearLabel . '-' . ((int) $eduYearLabel + 1) . ' o\'quv yili';
+                                        } elseif (!str_contains($eduYearLabel, 'o\'quv')) {
+                                            $eduYearLabel = $eduYearLabel . ' o\'quv yili';
+                                        }
+                                    @endphp
+                                    ({{ $eduYearLabel }})
                                 @endif
                             </span>
                         </div>
@@ -165,6 +191,7 @@
                                     <th class="sortable" data-col="4" style="width:70px;text-align:center;">Kredit <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="5" style="width:160px;text-align:center;">Dars boshlanish <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="6" style="width:160px;text-align:center;">Dars tugash <span class="sort-icon"></span></th>
+                                    <th style="width:80px;text-align:center;">Urinish</th>
                                     <th style="width:190px;text-align:center;">OSKI sanasi</th>
                                     <th style="width:190px;text-align:center;">Test sanasi</th>
                                 </tr>
@@ -174,14 +201,27 @@
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
                                         @php
-                                            $oskiSaved = !empty($item['oski_date']) || $item['oski_na'];
-                                            $testSaved = !empty($item['test_date']) || $item['test_na'];
+                                            // Virtual urinish-aware item (oski_date_for_urinish har doim set qilingan, fallback yo'q)
+                                            $itemUrinish = $item['urinish'] ?? 1;
+                                            $itemOski = $item['oski_date_for_urinish'] ?? null;
+                                            $itemTest = $item['test_date_for_urinish'] ?? null;
+                                            $itemOskiNa = $item['oski_na_for_urinish'] ?? false;
+                                            $itemTestNa = $item['test_na_for_urinish'] ?? false;
+                                            $oskiSaved = !empty($itemOski) || $itemOskiNa;
+                                            $testSaved = !empty($itemTest) || $itemTestNa;
                                         @endphp
                                         <tr class="data-row">
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
                                             <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
-                                            <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>
+                                            <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">
+                                                <a href="{{ route('admin.journal.show', [$item['group']->id, $item['subject']->subject_id, $item['subject']->semester_code]) }}"
+                                                   target="_blank"
+                                                   class="hover:text-blue-600 hover:underline"
+                                                   title="Jurnalni yangi oynada ochish">
+                                                    {{ $item['subject']->subject_name }}
+                                                </a>
+                                            </td>
                                             <td data-sort-value="{{ $item['subject']->credit }}" style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
                                             <td data-sort-value="{{ $item['lesson_start_date'] ? \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
                                                 @if($item['lesson_start_date'])
@@ -198,22 +238,31 @@
                                                 @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
+                                                @php
+                                                    $attemptColors = [1 => '#16a34a', 2 => '#d97706', 3 => '#ea580c'];
+                                                    $attemptBgs = [1 => '#dcfce7', 2 => '#fef3c7', 3 => '#ffedd5'];
+                                                @endphp
+                                                <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;background:{{ $attemptBgs[$itemUrinish] }};color:{{ $attemptColors[$itemUrinish] }};">
+                                                    {{ $itemUrinish }}-urinish
+                                                </span>
+                                            </td>
+                                            <td style="text-align:center;padding:4px 8px;">
                                                 <div class="exam-cell">
                                                     @if($oskiSaved && !($canEdit ?? false))
                                                         {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
-                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
+                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $itemOskiNa ? 'display:none;' : '' }}">
                                                             <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
-                                                                   value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('d.m.Y') : '' }}"
+                                                                   value="{{ $itemOski ? \Carbon\Carbon::parse($itemOski)->format('d.m.Y') : '' }}"
                                                                    maxlength="10" autocomplete="off" readonly
                                                                    title="Saqlangan sana o'zgartirib bo'lmaydi" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $item['oski_date'] }}" />
+                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $itemOski }}" />
                                                         </div>
                                                         <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
-                                                                   {{ $item['oski_na'] ? 'checked' : '' }} disabled>
+                                                                   {{ $itemOskiNa ? 'checked' : '' }} disabled>
                                                             <span class="na-label">N/A</span>
                                                         </label>
-                                                        @if($item['oski_na'])
+                                                        @if($itemOskiNa)
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
                                                         @endif
                                                         <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
@@ -225,14 +274,14 @@
                                                         @endif
                                                     @elseif($oskiSaved && ($canEdit ?? false))
                                                         {{-- Saqlangan lekin o'zgartirish mumkin (boshlig'i/admin) --}}
-                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $item['oski_na'] ? 'display:none;' : '' }}">
+                                                        <div class="exam-date-wrap" id="oski_wrap_{{ $rowIndex }}" style="{{ $itemOskiNa ? 'display:none;' : '' }}">
                                                             <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                    class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $item['oski_date'] ? \Carbon\Carbon::parse($item['oski_date'])->format('Y-m-d') : '' }}" />
+                                                                   data-initial-value="{{ $itemOski ? \Carbon\Carbon::parse($itemOski)->format('Y-m-d') : '' }}" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
-                                                                   {{ $item['oski_na'] ? 'checked' : '' }}
+                                                                   {{ $itemOskiNa ? 'checked' : '' }}
                                                                    onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
@@ -259,19 +308,19 @@
                                                 <div class="exam-cell">
                                                     @if($testSaved && !($canEdit ?? false))
                                                         {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
-                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
+                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $itemTestNa ? 'display:none;' : '' }}">
                                                             <input type="text" class="date-input-masked date-input-locked" placeholder="kk.oo.yyyy"
-                                                                   value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('d.m.Y') : '' }}"
+                                                                   value="{{ $itemTest ? \Carbon\Carbon::parse($itemTest)->format('d.m.Y') : '' }}"
                                                                    maxlength="10" autocomplete="off" readonly
                                                                    title="Saqlangan sana o'zgartirib bo'lmaydi" />
-                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $item['test_date'] }}" />
+                                                            <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $itemTest }}" />
                                                         </div>
                                                         <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
-                                                                   {{ $item['test_na'] ? 'checked' : '' }} disabled>
+                                                                   {{ $itemTestNa ? 'checked' : '' }} disabled>
                                                             <span class="na-label">N/A</span>
                                                         </label>
-                                                        @if($item['test_na'])
+                                                        @if($itemTestNa)
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
                                                         @endif
                                                         <span class="lock-icon" title="Saqlangan sana o'zgartirib bo'lmaydi">🔒</span>
@@ -283,14 +332,14 @@
                                                         @endif
                                                     @elseif($testSaved && ($canEdit ?? false))
                                                         {{-- Saqlangan lekin o'zgartirish mumkin (boshlig'i/admin) --}}
-                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $item['test_na'] ? 'display:none;' : '' }}">
+                                                        <div class="exam-date-wrap" id="test_wrap_{{ $rowIndex }}" style="{{ $itemTestNa ? 'display:none;' : '' }}">
                                                             <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
                                                                    class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $item['test_date'] ? \Carbon\Carbon::parse($item['test_date'])->format('Y-m-d') : '' }}" />
+                                                                   data-initial-value="{{ $itemTest ? \Carbon\Carbon::parse($itemTest)->format('Y-m-d') : '' }}" />
                                                         </div>
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
-                                                                   {{ $item['test_na'] ? 'checked' : '' }}
+                                                                   {{ $itemTestNa ? 'checked' : '' }}
                                                                    onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
@@ -319,8 +368,90 @@
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][specialty_hemis_id]" value="{{ $item['group']->specialty_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
                                             </td>
                                         </tr>
+
+                                        {{-- Per-student qatorlar — har urinish (1/2/3) ostida.
+                                             1-urinish: barcha talabalar (har biriga individual sana mumkin)
+                                             2-urinish: faqat 1-urinishdan o'tmaganlar (V<60). Pullik bo'lsa sana yopiq.
+                                             3-urinish: faqat 12a dan o'tmaganlar. Pullik bo'lsa sana yopiq. --}}
+                                        @php
+                                            $studentsForRow = $item['students'] ?? [];
+                                            if ($itemUrinish === 2) {
+                                                $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt1'])));
+                                            } elseif ($itemUrinish === 3) {
+                                                $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt2'])));
+                                            }
+                                        @endphp
+                                        @if(($showStudents ?? false) && !empty($studentsForRow))
+                                            @foreach($studentsForRow as $stuRow)
+                                                @php
+                                                    $rowIndex++;
+                                                    if ($itemUrinish === 1) {
+                                                        $stuValueOski = $stuRow['oski_date'] ?? '';
+                                                        $stuValueTest = $stuRow['test_date'] ?? '';
+                                                    } elseif ($itemUrinish === 2) {
+                                                        $stuValueOski = $stuRow['oski_resit_date'] ?? '';
+                                                        $stuValueTest = $stuRow['test_resit_date'] ?? '';
+                                                    } else {
+                                                        $stuValueOski = $stuRow['oski_resit2_date'] ?? '';
+                                                        $stuValueTest = $stuRow['test_resit2_date'] ?? '';
+                                                    }
+                                                    // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
+                                                    $pullikBlocked = ($itemUrinish > 1) && !empty($stuRow['is_pullik']);
+                                                    // 4+ ta fandan qarz → kursdan qoldiriladi, qayta topshira olmaydi
+                                                    $heldBackBlocked = ($itemUrinish > 1) && !empty($stuRow['is_held_back']);
+                                                    $isBlocked = $pullikBlocked || $heldBackBlocked;
+                                                    $blockedTitle = $heldBackBlocked
+                                                        ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, qayta topshira olmaydi'
+                                                        : 'Pullik talaba — sana belgilab bo\'lmaydi';
+                                                @endphp
+                                                <tr class="student-sub-row" style="background:{{ $isBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
+                                                    <td></td>
+                                                    <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $isBlocked ? '#991b1b' : '#475569' }};">
+                                                        <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $isBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
+                                                        {{ $stuRow['full_name'] }}
+                                                        @if($heldBackBlocked)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
+                                                        @elseif($pullikBlocked)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi (pullik)">Pullik</span>
+                                                        @endif
+                                                    </td>
+                                                    <td style="text-align:center;font-size:9px;color:#64748b;">
+                                                        @php
+                                                            $stuBadgeBg = $itemUrinish === 1 ? '#dcfce7' : ($itemUrinish === 3 ? '#ffedd5' : '#fef3c7');
+                                                            $stuBadgeFg = $itemUrinish === 1 ? '#16a34a' : ($itemUrinish === 3 ? '#ea580c' : '#d97706');
+                                                            $stuBorderColor = $itemUrinish === 1 ? '#86efac' : ($itemUrinish === 3 ? '#fdba74' : '#fcd34d');
+                                                        @endphp
+                                                        <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $itemUrinish }}-urinish</span>
+                                                    </td>
+                                                    <td style="text-align:center;padding:4px 8px;">
+                                                        <input type="date" name="schedules[{{ $rowIndex }}][oski_date]"
+                                                               value="{{ $stuValueOski }}"
+                                                               title="{{ $isBlocked ? $blockedTitle : ($itemUrinish . '-urinish OSKI sanasi') }}"
+                                                               @if($isBlocked) disabled @endif
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $isBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $isBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
+                                                    </td>
+                                                    <td style="text-align:center;padding:4px 8px;">
+                                                        <input type="date" name="schedules[{{ $rowIndex }}][test_date]"
+                                                               value="{{ $stuValueTest }}"
+                                                               title="{{ $isBlocked ? $blockedTitle : ($itemUrinish . '-urinish Test sanasi') }}"
+                                                               @if($isBlocked) disabled @endif
+                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $isBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $isBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][subject_name]" value="{{ $item['subject']->subject_name }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][department_hemis_id]" value="{{ $item['group']->department_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][specialty_hemis_id]" value="{{ $item['group']->specialty_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        @endif
                                     @endforeach
                                 @endforeach
                             </tbody>
@@ -681,7 +812,16 @@
             if (testDateFrom) url.searchParams.set('test_date_from', testDateFrom);
             if (testDateTo) url.searchParams.set('test_date_to', testDateTo);
             url.searchParams.set('current_semester', cs);
+            var showStudents = document.getElementById('show-students-toggle')?.classList.contains('active') ? '1' : '0';
+            if (showStudents === '1') url.searchParams.set('show_students', '1');
+            var urinishVal = $('#urinish_filter').val();
+            if (urinishVal) url.searchParams.set('urinish', urinishVal);
             window.location.href = url.toString();
+        }
+
+        function toggleShowStudents() {
+            var btn = document.getElementById('show-students-toggle');
+            btn.classList.toggle('active');
         }
 
         $(document).ready(function() {

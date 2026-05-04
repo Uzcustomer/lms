@@ -56,6 +56,17 @@ class AppServiceProvider extends ServiceProvider
 
             // Sidebar pending count — har user uchun 1 daqiqaga keshlanadi.
             // Har admin sahifa ochilganda DB'ga urilmasligi uchun.
+            // Yakuniydan keyin kelgan sababli arizalar (PDF kerak bo'lgan tuzatishlar)
+            $pendingFormCorrections = 0;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('yn_form_corrections')) {
+                    $pendingFormCorrections = \Illuminate\Support\Facades\DB::table('yn_form_corrections')
+                        ->where('correction_type', 'late_sababli')
+                        ->count();
+                }
+            } catch (\Throwable $e) {}
+            $view->with('pendingFormCorrectionsCount', $pendingFormCorrections);
+
             $pendingRetake = 0;
             try {
                 if (\Illuminate\Support\Facades\Schema::hasTable('retake_applications')) {

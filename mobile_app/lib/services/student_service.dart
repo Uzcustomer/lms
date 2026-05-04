@@ -133,6 +133,89 @@ class StudentService {
     );
   }
 
+  // Club methods
+  Future<Map<String, dynamic>> getClubs() async {
+    return await _api.get(ApiConfig.studentClubs);
+  }
+
+  Future<Map<String, dynamic>> getMyClubs() async {
+    return await _api.get(ApiConfig.studentMyClubs);
+  }
+
+  Future<Map<String, dynamic>> joinClub({
+    required String clubName,
+    String? clubPlace,
+    String? clubDay,
+    String? clubTime,
+    String? kafedraName,
+  }) async {
+    return await _api.post(
+      ApiConfig.studentJoinClub,
+      {
+        'club_name': clubName,
+        if (clubPlace != null) 'club_place': clubPlace,
+        if (clubDay != null) 'club_day': clubDay,
+        if (clubTime != null) 'club_time': clubTime,
+        if (kafedraName != null) 'kafedra_name': kafedraName,
+      },
+      auth: true,
+    );
+  }
+
+  Future<Map<String, dynamic>> cancelClub(String clubName) async {
+    return await _api.post(
+      ApiConfig.studentCancelClub,
+      {'club_name': clubName},
+      auth: true,
+    );
+  }
+
+  // Exam appeal methods
+  Future<Map<String, dynamic>> getAppeals() async {
+    return await _api.get(ApiConfig.studentAppeals);
+  }
+
+  Future<Map<String, dynamic>> getAppealAvailableGrades() async {
+    return await _api.get(ApiConfig.studentAppealAvailableGrades);
+  }
+
+  Future<Map<String, dynamic>> getAppealDetail(int id) async {
+    return await _api.get('${ApiConfig.studentAppeals}/$id');
+  }
+
+  Future<Map<String, dynamic>> submitAppeal({
+    required int studentGradeId,
+    required String reason,
+    Uint8List? fileBytes,
+    String? fileName,
+  }) async {
+    final fields = <String, String>{
+      'student_grade_id': studentGradeId.toString(),
+      'reason': reason,
+    };
+    return await _api.multipartPost(
+      ApiConfig.studentAppeals,
+      fields,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
+  }
+
+  Future<Map<String, dynamic>> addAppealComment({
+    required int appealId,
+    required String comment,
+    Uint8List? fileBytes,
+    String? fileName,
+  }) async {
+    final fields = <String, String>{'comment': comment};
+    return await _api.multipartPost(
+      '${ApiConfig.studentAppeals}/$appealId/comment',
+      fields,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
+  }
+
   // Chat methods
   Future<Map<String, dynamic>> getChatContacts() async {
     return await _api.get(ApiConfig.chatContacts);

@@ -256,6 +256,15 @@
                     <div style="flex:1; height:1px; background:#e5e7eb;"></div>
                 </div>
 
+                {{-- Face ID tugmasi --}}
+                <a href="{{ route('student.face-id.login') }}"
+                   style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:12px 0; background:linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color:#fff; font-size:14px; font-weight:700; border-radius:14px; text-decoration:none; letter-spacing:0.3px; transition:all .25s ease; margin-bottom:10px;"
+                   onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 24px rgba(79,70,229,0.4)'"
+                   onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5m0 9V18A2.25 2.25 0 0 1 18 20.25h-1.5m-9 0H6A2.25 2.25 0 0 1 3.75 18v-1.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+                    Face ID orqali kirish
+                </a>
+
                 {{-- HEMIS OAuth tugmasi --}}
                 <a href="{{ route('auth.hemis.redirect') }}"
                    style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:12px 0; background:linear-gradient(135deg, #065f46 0%, #047857 100%); color:#fff; font-size:14px; font-weight:700; border-radius:14px; text-decoration:none; letter-spacing:0.3px; transition:all .25s ease;"

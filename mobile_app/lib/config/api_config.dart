@@ -33,6 +33,16 @@ class ApiConfig {
   static const String studentExcuses = '/student/excuses';
   static const String studentExcuseMissedAssessments = '/student/excuses/missed-assessments';
 
+  // Club endpoints
+  static const String studentClubs = '/student/clubs';
+  static const String studentMyClubs = '/student/clubs/my';
+  static const String studentJoinClub = '/student/clubs/join';
+  static const String studentCancelClub = '/student/clubs/cancel';
+
+  // Exam appeal endpoints
+  static const String studentAppeals = '/student/appeals';
+  static const String studentAppealAvailableGrades = '/student/appeals/available-grades';
+
   // Chat endpoints
   static const String chatContacts = '/chat/contacts';
   static const String chatMessages = '/chat/messages';

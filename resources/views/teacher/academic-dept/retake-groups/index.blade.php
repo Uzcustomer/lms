@@ -303,6 +303,63 @@
                             </div>
                         </div>
 
+                        {{-- Baholash turi --}}
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <label class="block text-xs font-medium text-amber-900 mb-2">
+                                {{ __("Baholash turi") }} <span class="text-red-500">*</span>
+                            </label>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="assessment_type" value="oske" x-model="assessmentType" required>
+                                    <span class="font-medium">OSKE</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="assessment_type" value="test" x-model="assessmentType">
+                                    <span class="font-medium">TEST</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="assessment_type" value="oske_test" x-model="assessmentType">
+                                    <span class="font-medium">OSKE + TEST</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="assessment_type" value="sinov_fan" x-model="assessmentType">
+                                    <span class="font-medium">{{ __("Sinov fan") }}</span>
+                                </label>
+                            </div>
+
+                            {{-- OSKE va TEST sanalari (turiga qarab ko'rinadi) --}}
+                            <div class="grid grid-cols-2 gap-3 mt-3" x-show="assessmentType === 'oske' || assessmentType === 'test' || assessmentType === 'oske_test'">
+                                <div x-show="assessmentType === 'oske' || assessmentType === 'oske_test'">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                                        {{ __("OSKE sanasi") }} <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="date"
+                                           name="oske_date"
+                                           x-model="oskeDate"
+                                           :required="assessmentType === 'oske' || assessmentType === 'oske_test'"
+                                           :min="assessmentType === 'oske_test' ? null : null"
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                    <p class="text-[10px] text-gray-500 mt-0.5">{{ __("Vaqtini Test markazi belgilaydi") }}</p>
+                                </div>
+                                <div x-show="assessmentType === 'test' || assessmentType === 'oske_test'">
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                                        {{ __("TEST sanasi") }} <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="date"
+                                           name="test_date"
+                                           x-model="testDate"
+                                           :required="assessmentType === 'test' || assessmentType === 'oske_test'"
+                                           :min="assessmentType === 'oske_test' ? oskeDate : null"
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                    <p class="text-[10px] text-gray-500 mt-0.5">{{ __("Vaqtini Test markazi belgilaydi") }}</p>
+                                </div>
+                            </div>
+
+                            <p class="text-[11px] text-amber-800 mt-2" x-show="assessmentType === 'oske_test'" x-cloak>
+                                ⚠️ {{ __("OSKE+TEST holatida: avval OSKE topshiriladi, keyin TEST. TEST sanasi OSKE sanasidan oldin bo'lishi mumkin emas.") }}
+                            </p>
+                        </div>
+
                         {{-- Talabalar checkbox ro'yxati --}}
                         <div>
                             <div class="flex items-center justify-between mb-2">
@@ -366,6 +423,9 @@
                     applications: [],
                     teachers: [],
                     selected: [],
+                    assessmentType: '',
+                    oskeDate: '',
+                    testDate: '',
 
                     get selectedCount() { return this.selected.length; },
                     get allSelected() { return this.applications.length > 0 && this.selected.length === this.applications.length; },
@@ -382,6 +442,9 @@
                         this.applications = [];
                         this.teachers = [];
                         this.selected = [];
+                        this.assessmentType = '';
+                        this.oskeDate = '';
+                        this.testDate = '';
                         this.showFormation = true;
 
                         const url = `${this.lookupUrl}?subject_id=${encodeURIComponent(data.subject_id)}&semester_id=${encodeURIComponent(data.semester_id)}`;

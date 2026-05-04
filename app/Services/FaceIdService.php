@@ -38,10 +38,9 @@ class FaceIdService
      */
     public static function getArcFaceThreshold(): float
     {
-        // 1:1 verifikatsiya uchun (talaba ID kiritadi) — false positive xavfi yo'q,
-        // shuning uchun yumshoqroq qiymat real talabalar past confidence olganda ham
-        // login qila oladi. Default 60% ≈ cosine 0.64 (yangi formula bilan).
-        return (float) Setting::get('faceid_arcface_threshold', 60.0);
+        // 1:1 verifikatsiya uchun (talaba ID kiritadi) — talaba o'zi va rasmi
+        // o'rtasida 85% similarity talab qilinadi (yangi formula bilan cos ≈ 0.74).
+        return (float) Setting::get('faceid_arcface_threshold', 85.0);
     }
 
     /**

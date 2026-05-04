@@ -408,21 +408,29 @@ class AcademicScheduleController extends Controller
         $allStudentHids = array_keys($studentGroup);
         if (empty($allStudentHids)) return $result;
 
-        // exam_schedules dan oski_na / test_na flaglarini olish (asosiy schedule, student_hemis_id NULL)
-        $naMap = []; // group|subj|sem => ['oski_na'=>bool, 'test_na'=>bool]
+        // exam_schedules dan oski_na/test_na va sanalarini olish (asosiy schedule, student_hemis_id NULL).
+        // Sanalar 1-urinish/2-urinish "muddati tugaganmi" tekshiruvi uchun kerak.
+        $naMap = []; // group|subj|sem => ['oski_na'=>bool, 'test_na'=>bool, 'oski_date', 'test_date', 'oski_resit_date', 'test_resit_date']
         try {
             $rows = DB::table('exam_schedules')
                 ->whereNull('student_hemis_id')
                 ->whereIn('group_hemis_id', $allGroupHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->select('group_hemis_id', 'subject_id', 'semester_code', 'oski_na', 'test_na')
+                ->select('group_hemis_id', 'subject_id', 'semester_code',
+                    'oski_na', 'test_na',
+                    'oski_date', 'test_date',
+                    'oski_resit_date', 'test_resit_date')
                 ->get();
             foreach ($rows as $r) {
                 $k = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
                 $naMap[$k] = [
                     'oski_na' => (bool) $r->oski_na,
                     'test_na' => (bool) $r->test_na,
+                    'oski_date' => $r->oski_date,
+                    'test_date' => $r->test_date,
+                    'oski_resit_date' => $r->oski_resit_date,
+                    'test_resit_date' => $r->test_resit_date,
                 ];
             }
         } catch (\Throwable $e) {}
@@ -674,22 +682,40 @@ class AcademicScheduleController extends Controller
                 $oskiRequired = !($naMap[$naKey]['oski_na'] ?? false);
                 $testRequired = !($naMap[$naKey]['test_na'] ?? false);
 
+                // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun
+                $oskiDate = $naMap[$naKey]['oski_date'] ?? null;
+                $testDate = $naMap[$naKey]['test_date'] ?? null;
+                $oskiResitDate = $naMap[$naKey]['oski_resit_date'] ?? null;
+                $testResitDate = $naMap[$naKey]['test_resit_date'] ?? null;
+                $today = now()->format('Y-m-d');
+
                 // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz
                 $jnLow = ($jn !== null) && ($jn < $minLimit);
                 $mtLow = ($mt !== null) && ($mt < $minLimit);
                 $isPullik = $jnLow || $mtLow || ($davomatPct >= 25);
 
-                // Yiqilgan attempt=1: pullik yoki kerakli OSKI/Test < 60 yoki kelmagan
+                // "Tasdiqlangan yiqilish" mantiqi:
+                //  - Baho kiritilgan va past bo'lsa → yiqilgan
+                //  - Baho yo'q va imtihon sanasi o'tib ketgan bo'lsa → kelmagan = yiqilgan
+                //  - Baho yo'q va sana hali kelmagan/belgilanmagan bo'lsa → erta xulosa qilmaymiz
+                $confirmFailed = function (bool $required, $grade, $date) use ($today, $minLimit) {
+                    if (!$required) return false;
+                    if ($grade !== null) return ((float) $grade) < $minLimit;
+                    if ($date === null) return false; // sanasi belgilanmagan — hali baholay olmaymiz
+                    return ((string) $date) <= $today; // sana o'tdi, baho yo'q → kelmadi
+                };
+
+                // Yiqilgan attempt=1: pullik yoki tasdiqlangan OSKI/Test yiqilishi
                 $oskiNum = $oski !== null ? (float) $oski : null;
                 $testNum = $test !== null ? (float) $test : null;
-                $oskiFailed1 = $oskiRequired && (($oskiNum === null) || ($oskiNum < $minLimit));
-                $testFailed1 = $testRequired && (($testNum === null) || ($testNum < $minLimit));
+                $oskiFailed1 = $confirmFailed($oskiRequired, $oskiNum, $oskiDate);
+                $testFailed1 = $confirmFailed($testRequired, $testNum, $testDate);
                 $failed1 = $isPullik || $oskiFailed1 || $testFailed1;
 
                 $oski2Num = $oski2 !== null ? (float) $oski2 : null;
                 $test2Num = $test2 !== null ? (float) $test2 : null;
-                $oskiFailed2 = $oskiRequired && (($oski2Num === null) || ($oski2Num < $minLimit));
-                $testFailed2 = $testRequired && (($test2Num === null) || ($test2Num < $minLimit));
+                $oskiFailed2 = $confirmFailed($oskiRequired, $oski2Num, $oskiResitDate);
+                $testFailed2 = $confirmFailed($testRequired, $test2Num, $testResitDate);
                 $failed2 = $isPullik || $oskiFailed2 || $testFailed2;
 
                 $key = $g . '|' . $s . '|' . $sem;

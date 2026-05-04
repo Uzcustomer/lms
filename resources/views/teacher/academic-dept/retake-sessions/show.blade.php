@@ -176,11 +176,13 @@
 
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Fakultet") }} <span class="text-red-500">*</span></label>
-                            <select x-model="departmentId" required
+                            <select x-model="departmentId"
+                                    @change="departmentName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
+                                    required
                                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                 <option value="">— {{ __("Tanlang") }} —</option>
                                 @foreach($departments as $d)
-                                    <option value="{{ $d->department_hemis_id }}">{{ $d->name }}</option>
+                                    <option value="{{ $d->department_hemis_id }}" data-name="{{ $d->name }}">{{ $d->name }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -211,11 +213,13 @@
                             <input type="hidden" name="level_name" :value="levelName">
                         </div>
 
-                        <div>
+                        {{-- Semestr — faqat Xalqaro talim fakulteti uchun --}}
+                        <div x-show="isXalqaro" x-cloak>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Semestr") }} <span class="text-red-500">*</span></label>
                             <select name="semester_code" x-model="semesterCode"
                                     @change="semesterName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
-                                    required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                    :required="isXalqaro"
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                 <option value="">— {{ __("Tanlang") }} —</option>
                                 @foreach($semesters as $s)
                                     <option value="{{ $s['code'] }}" data-name="{{ $s['name'] }}">{{ $s['name'] }}</option>
@@ -291,12 +295,18 @@
                 return {
                     allSpecialties: specialties || [],
                     departmentId: '',
+                    departmentName: '',
                     specialtyId: '',
                     specialtyName: '',
                     levelCode: '',
                     levelName: '',
                     semesterCode: '',
                     semesterName: '',
+
+                    // Semestr maydoni faqat Xalqaro talim fakultetida ko'rinadi
+                    get isXalqaro() {
+                        return /xalqaro/i.test(this.departmentName || '');
+                    },
 
                     get filteredSpecialties() {
                         if (!this.departmentId) return [];

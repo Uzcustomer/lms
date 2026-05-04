@@ -377,27 +377,10 @@ class AcademicScheduleController extends Controller
             } catch (\Throwable $e) {}
         }
 
-        // Schedules dan o'quv yiliga tegishli barcha (group, subject, semester)
-        // uchligini qo'shamiz — qarzlarni yashirin semestrlardan ham hisoblash uchun
-        if (!empty($yearSemCodes) && count($yearSemCodes) > count($allSemCodes)) {
-            try {
-                $extra = DB::table('schedules')
-                    ->whereNull('deleted_at')
-                    ->whereIn('group_id', $allGroupHids)
-                    ->whereIn('semester_code', $yearSemCodes)
-                    ->select('group_id', 'subject_id', 'semester_code')
-                    ->distinct()
-                    ->get();
-                foreach ($extra as $r) {
-                    $k = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                    if (!isset($triples[$k])) {
-                        $triples[$k] = [$r->group_id, $r->subject_id, $r->semester_code];
-                    }
-                }
-                $allSubjectIds = array_unique(array_column($triples, 1));
-                $allSemCodes = array_unique(array_column($triples, 2));
-            } catch (\Throwable $e) {}
-        }
+        // Eslatma: o'quv yiliga to'liq kengaytirish (yashirin semestrlar uchun)
+        // og'ir SQL so'rovlariga aylanadi va sahifa 504 berib qoladi. Hozircha
+        // ko'rinadigan triples ustida ishlaymiz — agar foydalanuvchi yiliga
+        // tegishli har ikki semestrni filtr orqali yuklasa, hisob to'g'ri bo'ladi.
 
         // Talabalarning hemis_id va group_id xaritasi (faqat faol talabalar)
         $studentGroup = DB::table('students')
@@ -647,11 +630,17 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
+        // Guruh bo'yicha triplesni indekslab olamiz (O(N×M) ni O(N+M) ga aylantirish uchun)
+        $triplesByGroup = [];
+        foreach ($triples as $triple) {
+            $triplesByGroup[$triple[0]][] = $triple;
+        }
+
         // Endi har talaba uchun statusni hisoblaymiz
         foreach ($studentGroup as $hid => $gHid) {
-            foreach ($triples as $triple) {
+            $myTriples = $triplesByGroup[$gHid] ?? [];
+            foreach ($myTriples as $triple) {
                 [$g, $s, $sem] = $triple;
-                if ($g !== $gHid) continue;
 
                 $jnMtKey = $hid . '|' . $s . '|' . $sem;
                 // Snapshot bo'lmasa null — "yiqilgan" deb hisoblamaymiz, fallback yo'q

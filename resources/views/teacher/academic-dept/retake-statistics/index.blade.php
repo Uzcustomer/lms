@@ -5,14 +5,30 @@
         </h2>
     </x-slot>
 
-    @include('partials._retake_tom_select')
-
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
-        {{-- Filtrlar --}}
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
+        @include('partials._retake_filters', [
+            'formAction' => route('admin.retake-statistics.index'),
+            'educationTypes' => $educationTypes ?? collect(),
+            'subjects' => $subjects ?? collect(),
+            'hiddenFilters' => ['full_name'],
+            'extraQueryFields' => array_filter([
+                'final_status' => $filters['final_status'] ?? null,
+                'date_from' => $filters['date_from'] ?? null,
+                'date_to' => $filters['date_to'] ?? null,
+            ]),
+        ])
+
+        {{-- Holat va sana + eksport (qo'shimcha) --}}
         <form method="GET" action="{{ route('admin.retake-statistics.index') }}"
               class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','per_page'] as $kept)
+                @if(request($kept))
+                    <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
+                @endif
+            @endforeach
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                 <div>
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
                     <select name="final_status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
@@ -32,36 +48,9 @@
                     <input type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}"
                            class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
                 </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Kurs") }}</label>
-                    <select name="level_code" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        @foreach($levels as $lv)
-                            <option value="{{ $lv['code'] }}" @selected(($filters['level_code'] ?? '') === $lv['code'])>{{ $lv['name'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Fakultet") }}</label>
-                    <select name="department_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        @foreach($departments as $d)
-                            <option value="{{ $d->department_hemis_id }}" @selected((string)($filters['department_id'] ?? '') === (string)$d->department_hemis_id)>{{ $d->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Yo'nalish") }}</label>
-                    <select name="specialty_id" class="tom-select w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        @foreach($specialties as $s)
-                            <option value="{{ $s->specialty_hemis_id }}" @selected((string)($filters['specialty_id'] ?? '') === (string)$s->specialty_hemis_id)>{{ $s->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
             </div>
             <div class="flex gap-2">
-                <button type="submit" class="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Filtrlash") }}</button>
+                <button type="submit" class="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Qo'llash") }}</button>
                 <a href="{{ route('admin.retake-statistics.index') }}" class="px-4 py-1.5 text-xs bg-gray-200 text-gray-700 rounded">{{ __("Tozalash") }}</a>
                 <a href="{{ route('admin.retake-statistics.export', request()->query()) }}"
                    class="ml-auto px-4 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700">

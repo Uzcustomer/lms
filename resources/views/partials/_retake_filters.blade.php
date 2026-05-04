@@ -127,7 +127,20 @@
                 <label class="rf-label">&nbsp;</label>
                 <a href="{{ $formAction }}" class="rf-btn rf-btn-clear">Tozalash</a>
             </div>
+
+            @isset($extraButton)
+                <div class="rf-item" style="min-width: 120px;">
+                    <label class="rf-label">&nbsp;</label>
+                    {!! $extraButton !!}
+                </div>
+            @endisset
         </div>
+
+        @isset($extraRow)
+            <div class="rf-row">
+                {!! $extraRow !!}
+            </div>
+        @endisset
     </div>
 </form>
 

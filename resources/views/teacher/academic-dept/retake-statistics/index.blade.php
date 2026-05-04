@@ -7,57 +7,22 @@
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
-        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
+        @php
+            $extraRowHtml = view('teacher.academic-dept.retake-statistics._filter_extras', [
+                'filters' => $filters,
+            ])->render();
+            $exportButtonHtml = '<a href="' . route('admin.retake-statistics.export', request()->query()) . '" class="rf-btn" style="background:#16a34a;">📊 ' . __("Excel'ga eksport") . '</a>';
+        @endphp
+
+        {{-- Yagona filtr formasi: cascade + holat + sanalar + eksport --}}
         @include('partials._retake_filters', [
             'formAction' => route('admin.retake-statistics.index'),
             'educationTypes' => $educationTypes ?? collect(),
             'subjects' => $subjects ?? collect(),
             'hiddenFilters' => ['full_name'],
-            'extraQueryFields' => array_filter([
-                'final_status' => $filters['final_status'] ?? null,
-                'date_from' => $filters['date_from'] ?? null,
-                'date_to' => $filters['date_to'] ?? null,
-            ]),
+            'extraRow' => $extraRowHtml,
+            'extraButton' => $exportButtonHtml,
         ])
-
-        {{-- Holat va sana + eksport (qo'shimcha) --}}
-        <form method="GET" action="{{ route('admin.retake-statistics.index') }}"
-              class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-            @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','per_page'] as $kept)
-                @if(request($kept))
-                    <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
-                @endif
-            @endforeach
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
-                    <select name="final_status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                        <option value="">— {{ __("Barchasi") }} —</option>
-                        <option value="pending" @selected(($filters['final_status'] ?? '') === 'pending')>{{ __("Kutilmoqda") }}</option>
-                        <option value="approved" @selected(($filters['final_status'] ?? '') === 'approved')>{{ __("Tasdiqlangan") }}</option>
-                        <option value="rejected" @selected(($filters['final_status'] ?? '') === 'rejected')>{{ __("Rad etilgan") }}</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Sanadan") }}</label>
-                    <input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}"
-                           class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1">{{ __("Sanagacha") }}</label>
-                    <input type="date" name="date_to" value="{{ $filters['date_to'] ?? '' }}"
-                           class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
-                </div>
-            </div>
-            <div class="flex gap-2">
-                <button type="submit" class="px-4 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Qo'llash") }}</button>
-                <a href="{{ route('admin.retake-statistics.index') }}" class="px-4 py-1.5 text-xs bg-gray-200 text-gray-700 rounded">{{ __("Tozalash") }}</a>
-                <a href="{{ route('admin.retake-statistics.export', request()->query()) }}"
-                   class="ml-auto px-4 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700">
-                    📊 {{ __("Excel'ga eksport") }}
-                </a>
-            </div>
-        </form>
 
         {{-- Umumiy ko'rsatkichlar --}}
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">

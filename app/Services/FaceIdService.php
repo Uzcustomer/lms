@@ -222,10 +222,11 @@ class FaceIdService
 
     /**
      * Live snapshot (data URL yoki base64) ni vaqtinchalik faylga yozish.
-     * Public diskda — Python service URL orqali yuklab oladi.
+     * public/uploads/face-temp/ ga yoziladi (storage:link mavjud bo'lmasa ham
+     * to'g'ridan-to'g'ri /uploads/face-temp/... URL orqali yetib keladi).
      * Tozalash uchun shaxsiy yo'lni qaytaradi.
      *
-     * @return array{path: string, url: string}|null
+     * @return array{path: string, url: string, rel: string}|null
      */
     public static function saveTemporarySnapshot(string $base64OrDataUrl): ?array
     {
@@ -243,13 +244,22 @@ class FaceIdService
             return null;
         }
 
-        $filename = 'face-temp/' . uniqid('live_', true) . '.jpg';
-        Storage::disk('public')->put($filename, $binary);
+        $relPath = 'uploads/face-temp/' . uniqid('live_', true) . '.jpg';
+        $absPath = public_path($relPath);
+
+        $dir = dirname($absPath);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        if (file_put_contents($absPath, $binary) === false) {
+            return null;
+        }
 
         return [
-            'path' => Storage::disk('public')->path($filename),
-            'url'  => asset('storage/' . $filename),
-            'rel'  => $filename,
+            'path' => $absPath,
+            'url'  => asset($relPath),
+            'rel'  => $relPath,
         ];
     }
 
@@ -259,7 +269,10 @@ class FaceIdService
     public static function deleteTemporarySnapshot(string $relPath): void
     {
         try {
-            Storage::disk('public')->delete($relPath);
+            $abs = public_path($relPath);
+            if (is_file($abs)) {
+                @unlink($abs);
+            }
         } catch (\Throwable $e) {
             // ignore
         }

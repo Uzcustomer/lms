@@ -375,8 +375,13 @@ def identify(req: IdentifyRequest):
         raise HTTPException(status_code=422, detail="Yuz aniqlanmadi")
 
     sims = matrix @ query                    # cosine similarity (-1..1)
-    sims_norm = (sims + 1.0) / 2.0           # 0..1 range
-    percents = sims_norm * 100.0             # 0..100
+    # ArcFace uchun realroq mapping:
+    # cos < 0.40 → 0% (boshqa odam)
+    # cos = 0.625 → 50%
+    # cos > 0.85 → 100% (aniq mos)
+    LOW, HIGH = 0.40, 0.85
+    sims_clipped = np.clip(sims, LOW, HIGH)
+    percents = (sims_clipped - LOW) / (HIGH - LOW) * 100.0  # 0..100
 
     top_k = max(1, min(int(req.top_k or 1), 5))
     top_idx = np.argsort(-percents)[:top_k]
@@ -384,6 +389,10 @@ def identify(req: IdentifyRequest):
     matches = []
     for i in top_idx:
         sid = ids[int(i)]
+        # Xom cosine 0.5 dan past — hech qanday match deb hisoblanmaydi
+        # (boshqa odam, false positive xavfini kamaytirish)
+        if float(sims[int(i)]) < 0.50:
+            continue
         matches.append({
             "student_id_number": sid,
             "similarity_percent": round(float(percents[int(i)]), 2),

@@ -375,23 +375,45 @@ def identify(req: IdentifyRequest):
         raise HTTPException(status_code=422, detail="Yuz aniqlanmadi")
 
     sims = matrix @ query                    # cosine similarity (-1..1)
-    # ArcFace uchun realroq mapping:
+    # Realroq mapping: ArcFace uchun
     # cos < 0.40 → 0% (boshqa odam)
-    # cos = 0.625 → 50%
-    # cos > 0.85 → 100% (aniq mos)
-    LOW, HIGH = 0.40, 0.85
+    # cos = 0.60 → 50%
+    # cos > 0.80 → 100% (aniq mos)
+    LOW, HIGH = 0.40, 0.80
     sims_clipped = np.clip(sims, LOW, HIGH)
     percents = (sims_clipped - LOW) / (HIGH - LOW) * 100.0  # 0..100
 
     top_k = max(1, min(int(req.top_k or 1), 5))
-    top_idx = np.argsort(-percents)[:top_k]
+    top_idx = np.argsort(-sims)[:max(top_k, 2)]  # at least 2 for margin check
+    top1_cos = float(sims[top_idx[0]])
+    top2_cos = float(sims[top_idx[1]]) if len(top_idx) > 1 else 0.0
+    margin = top1_cos - top2_cos
+
+    # Xavfsizlik filtri:
+    # 1) Eng yaxshi cos >= MIN_COSINE bo'lishi kerak (boshqa odamlardan ajralib turish)
+    # 2) Top1 va top2 farqi >= MIN_MARGIN bo'lishi kerak (ko'p odamlarga o'xshamasligi)
+    MIN_COSINE = 0.55     # raw cosine pol
+    MIN_MARGIN = 0.04     # top1 va top2 o'rtasida shu farq bo'lmasa - shubhali
+
+    if top1_cos < MIN_COSINE or margin < MIN_MARGIN:
+        # Match topilmadi - tashqaridan kelgan yoki ko'p odamga o'xshash
+        return {
+            "matches": [],
+            "best_cos": round(top1_cos, 4),
+            "second_cos": round(top2_cos, 4),
+            "margin": round(margin, 4),
+            "rejected_reason": (
+                "low_cosine" if top1_cos < MIN_COSINE
+                else "ambiguous_match"  # ko'p odamga o'xshaydi
+            ),
+            "cache_size": len(ids),
+            "model": MODEL_NAME,
+        }
 
     matches = []
-    for i in top_idx:
+    for i in top_idx[:top_k]:
         sid = ids[int(i)]
-        # Xom cosine 0.5 dan past — hech qanday match deb hisoblanmaydi
-        # (boshqa odam, false positive xavfini kamaytirish)
-        if float(sims[int(i)]) < 0.50:
+        if float(sims[int(i)]) < MIN_COSINE:
             continue
         matches.append({
             "student_id_number": sid,
@@ -400,7 +422,12 @@ def identify(req: IdentifyRequest):
             "full_name": meta_snapshot.get(sid, {}).get("full_name", ""),
         })
 
-    return {"matches": matches, "cache_size": len(ids), "model": MODEL_NAME}
+    return {
+        "matches": matches,
+        "margin": round(margin, 4),
+        "cache_size": len(ids),
+        "model": MODEL_NAME,
+    }
 
 
 # ──────────────────────────── /quality-check ─────────────────────────

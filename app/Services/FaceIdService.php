@@ -33,10 +33,12 @@ class FaceIdService
 
     /**
      * ArcFace similarity_percent bo'yicha minimal qabul qilinadigan foiz (0-100).
+     * Yangi formula bilan: 60% ≈ cosine 0.64 (real talaba uchun mos), Python
+     * tomonida raw cosine 0.55 va top1-top2 margin 0.04 ham qo'shimcha tekshiriladi.
      */
     public static function getArcFaceThreshold(): float
     {
-        return (float) Setting::get('faceid_arcface_threshold', 80.0);
+        return (float) Setting::get('faceid_arcface_threshold', 60.0);
     }
 
     /**

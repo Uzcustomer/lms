@@ -62,21 +62,9 @@ class RetakeStatisticsController extends Controller
             ->orderByDesc('total')
             ->get();
 
-        // Cascade filtrlar uchun manbalar
-        $educationTypes = Student::query()
-            ->select('education_type_code', 'education_type_name')
-            ->whereNotNull('education_type_code')
-            ->distinct()
-            ->orderBy('education_type_name')
-            ->get();
-
-        $subjects = RetakeApplication::query()
-            ->select('subject_id', 'subject_name')
-            ->whereNotNull('subject_id')
-            ->orderBy('subject_name')
-            ->distinct()
-            ->get()
-            ->mapWithKeys(fn ($a) => [$a->subject_id => $a->subject_name]);
+        // Cascade filtrlar uchun manbalar (keshlangan)
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
+        $subjects = \App\Services\Retake\RetakeFilterCache::subjects();
 
         $totalApplications = (clone $base)->count();
         $groupIds = (clone $base)->distinct()->pluck('group_id');

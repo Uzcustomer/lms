@@ -54,44 +54,59 @@ class AppServiceProvider extends ServiceProvider
             } catch (\Throwable $e) {}
             $view->with('pendingAppealsCount', $pendingAppeals);
 
+            // Sidebar pending count — har user uchun 1 daqiqaga keshlanadi.
+            // Har admin sahifa ochilganda DB'ga urilmasligi uchun.
             $pendingRetake = 0;
             try {
                 if (\Illuminate\Support\Facades\Schema::hasTable('retake_applications')) {
                     $activeRole = (string) session('active_role', '');
                     $teacher = \Illuminate\Support\Facades\Auth::guard('teacher')->user();
+                    $userId = $teacher?->id ?? \Illuminate\Support\Facades\Auth::guard('web')->id() ?? 0;
 
-                    $registrarLikeRoles = [
-                        \App\Enums\ProjectRole::REGISTRAR_OFFICE->value,
-                        \App\Enums\ProjectRole::SUPERADMIN->value,
-                        \App\Enums\ProjectRole::ADMIN->value,
-                    ];
+                    $cacheKey = "retake.sidebar.{$activeRole}.{$userId}";
 
-                    if ($activeRole === \App\Enums\ProjectRole::DEAN->value && $teacher instanceof \App\Models\Teacher) {
-                        $facultyIds = array_map('intval', $teacher->deanFacultyIds);
-                        if (!empty($facultyIds)) {
-                            $pendingRetake = \App\Models\RetakeApplication::query()
-                                ->where('dean_status', 'pending')
-                                ->where('final_status', 'pending')
-                                ->whereIn('student_hemis_id', function ($q) use ($facultyIds) {
-                                    $q->select('hemis_id')->from('students')->whereIn('department_id', $facultyIds);
-                                })
-                                ->count();
+                    $pendingRetake = \Illuminate\Support\Facades\Cache::remember(
+                        $cacheKey,
+                        60, // 1 daqiqa
+                        function () use ($activeRole, $teacher) {
+                            $registrarLikeRoles = [
+                                \App\Enums\ProjectRole::REGISTRAR_OFFICE->value,
+                                \App\Enums\ProjectRole::SUPERADMIN->value,
+                                \App\Enums\ProjectRole::ADMIN->value,
+                            ];
+
+                            if ($activeRole === \App\Enums\ProjectRole::DEAN->value && $teacher instanceof \App\Models\Teacher) {
+                                $facultyIds = array_map('intval', $teacher->deanFacultyIds);
+                                if (empty($facultyIds)) {
+                                    return 0;
+                                }
+                                return \App\Models\RetakeApplication::query()
+                                    ->where('dean_status', 'pending')
+                                    ->where('final_status', 'pending')
+                                    ->whereIn('student_hemis_id', function ($q) use ($facultyIds) {
+                                        $q->select('hemis_id')->from('students')->whereIn('department_id', $facultyIds);
+                                    })
+                                    ->count();
+                            }
+
+                            if (in_array($activeRole, $registrarLikeRoles, true)) {
+                                $count = \App\Models\RetakeApplication::query()
+                                    ->where('registrar_status', 'pending')
+                                    ->where('final_status', 'pending')
+                                    ->count();
+
+                                if (\Illuminate\Support\Facades\Schema::hasColumn('retake_application_groups', 'payment_verification_status')) {
+                                    $count += \App\Models\RetakeApplicationGroup::query()
+                                        ->whereNotNull('payment_uploaded_at')
+                                        ->where('payment_verification_status', 'pending')
+                                        ->count();
+                                }
+                                return $count;
+                            }
+
+                            return 0;
                         }
-                    } elseif (in_array($activeRole, $registrarLikeRoles, true)) {
-                        $pendingRetake = \App\Models\RetakeApplication::query()
-                            ->where('registrar_status', 'pending')
-                            ->where('final_status', 'pending')
-                            ->count();
-
-                        // To'lov cheki tasdig'i kutilayotgan guruhlar — registrator
-                        // tekshiradi, shuning uchun ular ham hisoblanishi kerak.
-                        if (\Illuminate\Support\Facades\Schema::hasColumn('retake_application_groups', 'payment_verification_status')) {
-                            $pendingRetake += \App\Models\RetakeApplicationGroup::query()
-                                ->whereNotNull('payment_uploaded_at')
-                                ->where('payment_verification_status', 'pending')
-                                ->count();
-                        }
-                    }
+                    );
                 }
             } catch (\Throwable $e) {}
             $view->with('pendingRetakeCount', $pendingRetake);

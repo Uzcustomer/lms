@@ -92,20 +92,8 @@ class RetakeGroupController extends Controller
 
         $groups = $groupsQuery->paginate($perPage)->withQueryString();
 
-        $educationTypes = \App\Models\Student::query()
-            ->select('education_type_code', 'education_type_name')
-            ->whereNotNull('education_type_code')
-            ->distinct()
-            ->orderBy('education_type_name')
-            ->get();
-
-        $subjects = \App\Models\RetakeApplication::query()
-            ->select('subject_id', 'subject_name')
-            ->whereNotNull('subject_id')
-            ->orderBy('subject_name')
-            ->distinct()
-            ->get()
-            ->mapWithKeys(fn ($a) => [$a->subject_id => $a->subject_name]);
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
+        $subjects = \App\Services\Retake\RetakeFilterCache::subjects();
 
         // Bo'sh (talabasiz) guruh ID'lari — o'chirish mumkin
         $deletableGroupIds = $groups->getCollection()

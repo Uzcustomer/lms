@@ -228,6 +228,9 @@ class RetakeApplicationService
 
             $this->notificationService->notifyNewSubmission($loaded);
 
+            // Filtr keshini tozalaymiz (yangi fan/yangi ariza qo'shildi)
+            RetakeFilterCache::flushSubjects();
+
             return $loaded;
         });
     }

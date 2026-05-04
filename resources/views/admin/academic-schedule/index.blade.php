@@ -427,18 +427,34 @@
                                                         <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $itemUrinish }}-urinish</span>
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
-                                                        <input type="date" name="schedules[{{ $rowIndex }}][oski_date]"
-                                                               value="{{ $stuValueOski }}"
-                                                               title="{{ $isBlocked ? $blockedTitle : ($itemUrinish . '-urinish OSKI sanasi') }}"
-                                                               @if($isBlocked) disabled @endif
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $isBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $isBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
+                                                        @if($isBlocked)
+                                                            <input type="text" placeholder="kk.oo.yyyy" maxlength="10" readonly disabled
+                                                                   value="{{ $stuValueOski ? \Carbon\Carbon::parse($stuValueOski)->format('d.m.Y') : '' }}"
+                                                                   title="{{ $blockedTitle }}"
+                                                                   style="font-size:10px; padding:2px 4px; border:1px solid #fca5a5; border-radius:4px; max-width:135px; background:#fee2e2;color:#991b1b;cursor:not-allowed;" />
+                                                        @else
+                                                            <input type="text" id="stu_oski_{{ $rowIndex }}"
+                                                                   name="schedules[{{ $rowIndex }}][oski_date]"
+                                                                   class="exam-sc-date" autocomplete="off"
+                                                                   data-initial-value="{{ $stuValueOski }}"
+                                                                   title="{{ $itemUrinish }}-urinish OSKI sanasi"
+                                                                   style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                        @endif
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
-                                                        <input type="date" name="schedules[{{ $rowIndex }}][test_date]"
-                                                               value="{{ $stuValueTest }}"
-                                                               title="{{ $isBlocked ? $blockedTitle : ($itemUrinish . '-urinish Test sanasi') }}"
-                                                               @if($isBlocked) disabled @endif
-                                                               style="font-size:10px; padding:2px 4px; border:1px solid {{ $isBlocked ? '#fca5a5' : $stuBorderColor }}; border-radius:4px; max-width:135px;{{ $isBlocked ? ' background:#fee2e2;color:#991b1b;cursor:not-allowed;' : '' }}" />
+                                                        @if($isBlocked)
+                                                            <input type="text" placeholder="kk.oo.yyyy" maxlength="10" readonly disabled
+                                                                   value="{{ $stuValueTest ? \Carbon\Carbon::parse($stuValueTest)->format('d.m.Y') : '' }}"
+                                                                   title="{{ $blockedTitle }}"
+                                                                   style="font-size:10px; padding:2px 4px; border:1px solid #fca5a5; border-radius:4px; max-width:135px; background:#fee2e2;color:#991b1b;cursor:not-allowed;" />
+                                                        @else
+                                                            <input type="text" id="stu_test_{{ $rowIndex }}"
+                                                                   name="schedules[{{ $rowIndex }}][test_date]"
+                                                                   class="exam-sc-date" autocomplete="off"
+                                                                   data-initial-value="{{ $stuValueTest }}"
+                                                                   title="{{ $itemUrinish }}-urinish Test sanasi"
+                                                                   style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                        @endif
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">

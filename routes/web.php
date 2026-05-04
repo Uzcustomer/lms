@@ -780,6 +780,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('retake-windows')->name('retake-windows.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'store'])->name('store');
+            Route::get('/{windowId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'show'])->name('show');
             Route::post('/{windowId}/override-dates', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'overrideDates'])->name('override-dates');
             Route::delete('/{windowId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'destroy'])->name('destroy');
         });

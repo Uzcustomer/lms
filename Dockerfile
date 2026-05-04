@@ -36,6 +36,10 @@ RUN apt-get update && apt-get install -y \
     libgmp-dev \
     libicu-dev \
     sudo \
+    libreoffice-writer \
+    libreoffice-common \
+    fonts-dejavu \
+    fonts-liberation \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd pdo_mysql mbstring exif pcntl bcmath gmp intl zip \
     && apt-get autoclean -y \

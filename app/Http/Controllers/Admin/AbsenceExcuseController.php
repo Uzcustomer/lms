@@ -165,9 +165,22 @@ class AbsenceExcuseController extends Controller
             // Word shablon mavjudligini tekshirish
             $template = DocumentTemplate::getActiveByType('absence_excuse');
 
+            \Log::info('[AbsenceExcuse] approve() boshlandi', [
+                'excuse_id' => $excuse->id,
+                'template_found' => $template ? true : false,
+                'template_id' => $template?->id,
+                'template_file_path' => $template?->file_path,
+            ]);
+
             $wordTemplateSuccess = false;
 
             if ($template) {
+                $templateFilePath = \Illuminate\Support\Facades\Storage::disk('public')->path($template->file_path);
+                \Log::info('[AbsenceExcuse] shablon fayli tekshirilmoqda', [
+                    'abs_path' => $templateFilePath,
+                    'file_exists' => file_exists($templateFilePath),
+                ]);
+
                 try {
                     // Word shablon orqali PDF generatsiya
                     $service = new DocumentTemplateService();

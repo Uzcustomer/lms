@@ -178,6 +178,9 @@ class RetakeGroupController extends Controller
             'application_ids' => 'required|array|min:1',
             'application_ids.*' => 'integer',
             'action' => 'required|in:save,publish',
+            'assessment_type' => 'required|in:oske,test,oske_test,sinov_fan',
+            'oske_date' => 'nullable|date|required_if:assessment_type,oske,oske_test',
+            'test_date' => 'nullable|date|required_if:assessment_type,test,oske_test|after_or_equal:oske_date',
         ]);
 
         $publish = $data['action'] === 'publish';
@@ -237,6 +240,9 @@ class RetakeGroupController extends Controller
             'start_date' => 'sometimes|date',
             'end_date' => 'sometimes|date',
             'max_students' => 'sometimes|nullable|integer|min:1',
+            'assessment_type' => 'sometimes|in:oske,test,oske_test,sinov_fan',
+            'oske_date' => 'sometimes|nullable|date',
+            'test_date' => 'sometimes|nullable|date|after_or_equal:oske_date',
         ]);
 
         $group = RetakeGroup::findOrFail($groupId);

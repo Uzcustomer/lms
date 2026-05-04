@@ -14,6 +14,11 @@ class RetakeGroup extends Model
     public const STATUS_IN_PROGRESS = 'in_progress';
     public const STATUS_COMPLETED = 'completed';
 
+    public const ASSESSMENT_OSKE = 'oske';
+    public const ASSESSMENT_TEST = 'test';
+    public const ASSESSMENT_OSKE_TEST = 'oske_test';
+    public const ASSESSMENT_SINOV_FAN = 'sinov_fan';
+
     protected $fillable = [
         'name',
         'subject_id',
@@ -29,12 +34,17 @@ class RetakeGroup extends Model
         'status',
         'created_by_user_id',
         'created_by_name',
+        'assessment_type',
+        'oske_date',
+        'test_date',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
         'max_students' => 'integer',
+        'oske_date' => 'date',
+        'test_date' => 'date',
     ];
 
     public function teacher()

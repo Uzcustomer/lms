@@ -26,9 +26,10 @@ class FaceIdAdminController extends Controller
         $enrolledCount      = FaceIdDescriptor::count();
         $lastDaySuccess     = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
         $lastDayFailed      = FaceIdLog::where('result', '!=', 'success')->whereDate('created_at', today())->count();
+        $recentLogs         = FaceIdLog::with('student')->orderByDesc('created_at')->limit(30)->get();
 
         return view('admin.face-id.settings', compact(
-            'settings', 'totalStudents', 'enrolledCount', 'lastDaySuccess', 'lastDayFailed'
+            'settings', 'totalStudents', 'enrolledCount', 'lastDaySuccess', 'lastDayFailed', 'recentLogs'
         ));
     }
 
@@ -45,6 +46,8 @@ class FaceIdAdminController extends Controller
             'faceid_liveness_timeout'  => 'required|integer|min:10|max:120',
             'faceid_save_snapshots'    => 'boolean',
             'faceid_max_snapshot_kb'   => 'required|integer|min:10|max:500',
+            'faceid_arcface_enabled'   => 'boolean',
+            'faceid_arcface_threshold' => 'required|numeric|min:50|max:99.9',
         ]);
 
         Setting::set('faceid_global_enabled',     $request->boolean('faceid_global_enabled') ? '1' : '0');
@@ -54,6 +57,8 @@ class FaceIdAdminController extends Controller
         Setting::set('faceid_liveness_timeout',   $request->faceid_liveness_timeout);
         Setting::set('faceid_save_snapshots',     $request->boolean('faceid_save_snapshots') ? '1' : '0');
         Setting::set('faceid_max_snapshot_kb',    $request->faceid_max_snapshot_kb);
+        Setting::set('faceid_arcface_enabled',    $request->boolean('faceid_arcface_enabled') ? '1' : '0');
+        Setting::set('faceid_arcface_threshold',  $request->faceid_arcface_threshold);
 
         return redirect()->route('admin.face-id.settings')
             ->with('success', 'Face ID sozlamalari saqlandi.');

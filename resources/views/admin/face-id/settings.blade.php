@@ -76,6 +76,36 @@
             <h2 class="font-semibold text-gray-700 mb-4">🎯 Taqqoslash sozlamalari</h2>
 
             <div class="mb-4">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <div class="relative">
+                        <input type="hidden" name="faceid_arcface_enabled" value="0">
+                        <input type="checkbox" name="faceid_arcface_enabled" value="1"
+                               class="sr-only peer"
+                               {{ $settings['arcface_enabled'] ? 'checked' : '' }}>
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 transition-colors"></div>
+                        <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-5 transition-transform"></div>
+                    </div>
+                    <div>
+                        <div class="font-medium text-sm text-gray-800">ArcFace (server-side) yoqilgan</div>
+                        <div class="text-xs text-gray-500">Asosiy tekshiruv usuli sifatida ArcFace ishlatiladi</div>
+                    </div>
+                </label>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    ArcFace similarity chegarasi (%)
+                </label>
+                <input type="number" name="faceid_arcface_threshold"
+                       value="{{ $settings['arcface_threshold'] }}"
+                       min="50" max="99.9" step="0.1"
+                       class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-40">
+                <p class="text-xs text-gray-400 mt-1">
+                    Tavsiya: 82–90. Katta qiymat → qat'iyroq tekshiruv.
+                </p>
+            </div>
+
+            <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                     Euclidean distance chegarasi
                     <span class="text-gray-400 font-normal">({{ $settings['threshold'] }})</span>
@@ -180,5 +210,48 @@
             </button>
         </div>
     </form>
+
+    <div class="bg-white rounded-lg border p-5 mt-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-semibold text-gray-700">🕵️ Face ID urinishlari (so'nggi 30 ta)</h2>
+            <a href="{{ route('admin.face-id.logs') }}" class="text-sm text-blue-600 hover:text-blue-700">Barchasini ko'rish</a>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead>
+                    <tr class="text-left text-gray-500 border-b">
+                        <th class="py-2 pr-3">Vaqt</th>
+                        <th class="py-2 pr-3">Talaba</th>
+                        <th class="py-2 pr-3">Natija</th>
+                        <th class="py-2 pr-3">Ishonch</th>
+                        <th class="py-2 pr-3">Sabab</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($recentLogs as $log)
+                        <tr class="border-b last:border-0">
+                            <td class="py-2 pr-3 text-gray-600 whitespace-nowrap">{{ $log->created_at?->format('d.m.Y H:i:s') }}</td>
+                            <td class="py-2 pr-3">
+                                <div class="font-medium text-gray-800">{{ $log->student?->full_name ?? 'Nomaʼlum' }}</div>
+                                <div class="text-xs text-gray-500">{{ $log->student_id_number ?? '—' }}</div>
+                            </td>
+                            <td class="py-2 pr-3">
+                                <span class="px-2 py-0.5 rounded-full text-xs {{ $log->result === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
+                                    {{ $log->result }}
+                                </span>
+                            </td>
+                            <td class="py-2 pr-3 text-gray-700">{{ $log->confidence ? round($log->confidence * 100, 1) . '%' : '—' }}</td>
+                            <td class="py-2 pr-3 text-gray-500">{{ $log->failure_reason ?? '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="py-4 text-center text-gray-500">Hozircha urinishlar yo'q.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 @endsection

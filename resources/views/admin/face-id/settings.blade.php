@@ -233,7 +233,7 @@
                         <tr class="border-b last:border-0">
                             <td class="py-2 pr-3 text-gray-600 whitespace-nowrap">{{ $log->created_at?->format('d.m.Y H:i:s') }}</td>
                             <td class="py-2 pr-3">
-                                <div class="font-medium text-gray-800">{{ $log->student->full_name ?? 'Nomaʼlum' }}</div>
+                                <div class="font-medium text-gray-800">{{ $log->student?->full_name ?? 'Nomaʼlum' }}</div>
                                 <div class="text-xs text-gray-500">{{ $log->student_id_number ?? '—' }}</div>
                             </td>
                             <td class="py-2 pr-3">

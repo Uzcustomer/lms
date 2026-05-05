@@ -65,6 +65,8 @@ class FaceIdService
         return [
             'global_enabled'       => self::isGloballyEnabled(),
             'threshold'            => self::getThreshold(),
+            'arcface_enabled'      => self::isArcFaceEnabled(),
+            'arcface_threshold'    => self::getArcFaceThreshold(),
             'blinks_required'      => (int) Setting::get('faceid_blinks_required', 2),
             'head_turn_required'   => (bool) Setting::get('faceid_head_turn_required', true),
             'liveness_timeout'     => (int) Setting::get('faceid_liveness_timeout', 30),

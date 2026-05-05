@@ -3,6 +3,11 @@
 @section('title', 'Face ID Sozlamalari')
 
 @section('content')
+@php
+    $arcfaceEnabled = $settings['arcface_enabled'] ?? true;
+    $arcfaceThreshold = $settings['arcface_threshold'] ?? 85.0;
+    $recentLogs = $recentLogs ?? collect();
+@endphp
 <div class="container mx-auto px-4 py-6 max-w-4xl">
 
     <!-- Header -->

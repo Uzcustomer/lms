@@ -898,7 +898,7 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin']))
+        @if($hasActiveRole(['superadmin', 'admin']) && \Illuminate\Support\Facades\Route::has('admin.face-id.settings'))
         <a href="{{ route('admin.face-id.settings') }}"
            class="sidebar-link {{ request()->routeIs('admin.face-id.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

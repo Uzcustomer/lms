@@ -4,8 +4,20 @@
 
 @section('content')
 @php
-    $arcfaceEnabled = $settings['arcface_enabled'] ?? true;
-    $arcfaceThreshold = $settings['arcface_threshold'] ?? 85.0;
+    $settings = is_array($settings ?? null) ? $settings : [];
+    $settings = array_merge([
+        'global_enabled' => true,
+        'threshold' => 0.40,
+        'arcface_enabled' => true,
+        'arcface_threshold' => 85.0,
+        'blinks_required' => 2,
+        'head_turn_required' => true,
+        'liveness_timeout' => 30,
+        'save_snapshots' => true,
+        'max_snapshot_kb' => 50,
+    ], $settings);
+    $arcfaceEnabled = (bool) $settings['arcface_enabled'];
+    $arcfaceThreshold = (float) $settings['arcface_threshold'];
     $recentLogs = $recentLogs ?? collect();
 @endphp
 <div class="container mx-auto px-4 py-6 max-w-4xl">

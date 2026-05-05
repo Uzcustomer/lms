@@ -21,14 +21,44 @@ class FaceIdAdminController extends Controller
      */
     public function settings()
     {
-        $settings = FaceIdService::getSettings();
-        $totalStudents      = Student::count();
-        $enrolledCount      = FaceIdDescriptor::count();
-        $lastDaySuccess     = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
-        $lastDayFailed      = FaceIdLog::where('result', '!=', 'success')->whereDate('created_at', today())->count();
+        $loadError = null;
+
+        try {
+            $settings = FaceIdService::getSettings();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Settings yuklashda xato', ['error' => $e->getMessage()]);
+            $settings = [
+                'global_enabled' => true,
+                'threshold' => 0.40,
+                'arcface_enabled' => true,
+                'arcface_threshold' => 85.0,
+                'blinks_required' => 2,
+                'head_turn_required' => true,
+                'liveness_timeout' => 30,
+                'save_snapshots' => true,
+                'max_snapshot_kb' => 50,
+            ];
+            $loadError = 'Sozlamalarni yuklashda xatolik yuz berdi. Iltimos, loglarni tekshiring.';
+        }
+
+        try {
+            $totalStudents  = Student::count();
+            $enrolledCount  = FaceIdDescriptor::count();
+            $lastDaySuccess = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
+            $lastDayFailed  = FaceIdLog::where('result', '!=', 'success')->whereDate('created_at', today())->count();
+            $recentLogs     = FaceIdLog::with('student')->orderByDesc('created_at')->limit(30)->get();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Statistika/loglarni yuklashda xato', ['error' => $e->getMessage()]);
+            $totalStudents = 0;
+            $enrolledCount = 0;
+            $lastDaySuccess = 0;
+            $lastDayFailed = 0;
+            $recentLogs = collect();
+            $loadError = $loadError ?: 'Face ID log/statistika ma\'lumotlarini yuklashda xatolik yuz berdi.';
+        }
 
         return view('admin.face-id.settings', compact(
-            'settings', 'totalStudents', 'enrolledCount', 'lastDaySuccess', 'lastDayFailed'
+            'settings', 'totalStudents', 'enrolledCount', 'lastDaySuccess', 'lastDayFailed', 'recentLogs', 'loadError'
         ));
     }
 
@@ -45,6 +75,8 @@ class FaceIdAdminController extends Controller
             'faceid_liveness_timeout'  => 'required|integer|min:10|max:120',
             'faceid_save_snapshots'    => 'boolean',
             'faceid_max_snapshot_kb'   => 'required|integer|min:10|max:500',
+            'faceid_arcface_enabled'   => 'boolean',
+            'faceid_arcface_threshold' => 'required|numeric|min:50|max:99.9',
         ]);
 
         Setting::set('faceid_global_enabled',     $request->boolean('faceid_global_enabled') ? '1' : '0');
@@ -54,6 +86,8 @@ class FaceIdAdminController extends Controller
         Setting::set('faceid_liveness_timeout',   $request->faceid_liveness_timeout);
         Setting::set('faceid_save_snapshots',     $request->boolean('faceid_save_snapshots') ? '1' : '0');
         Setting::set('faceid_max_snapshot_kb',    $request->faceid_max_snapshot_kb);
+        Setting::set('faceid_arcface_enabled',    $request->boolean('faceid_arcface_enabled') ? '1' : '0');
+        Setting::set('faceid_arcface_threshold',  $request->faceid_arcface_threshold);
 
         return redirect()->route('admin.face-id.settings')
             ->with('success', 'Face ID sozlamalari saqlandi.');

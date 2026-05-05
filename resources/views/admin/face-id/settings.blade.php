@@ -86,7 +86,7 @@
                         <input type="hidden" name="faceid_arcface_enabled" value="0">
                         <input type="checkbox" name="faceid_arcface_enabled" value="1"
                                class="sr-only peer"
-                               {{ $arcfaceEnabled ? 'checked' : '' }}>
+                               {{ $settings['arcface_enabled'] ? 'checked' : '' }}>
                         <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 transition-colors"></div>
                         <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-5 transition-transform"></div>
                     </div>
@@ -102,7 +102,7 @@
                     ArcFace similarity chegarasi (%)
                 </label>
                 <input type="number" name="faceid_arcface_threshold"
-                       value="{{ $arcfaceThreshold }}"
+                       value="{{ $settings['arcface_threshold'] }}"
                        min="50" max="99.9" step="0.1"
                        class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-40">
                 <p class="text-xs text-gray-400 mt-1">

@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class GraduatePassportController extends Controller
 {
@@ -232,6 +234,94 @@ class GraduatePassportController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Rad etildi']);
+    }
+
+
+    public function exportExcel(Request $request)
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $query = DB::table('students as s')
+            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'd.parent_id')
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11');
+
+        if ($request->filled('faculty_id')) {
+            $query->where('s.department_id', $request->faculty_id);
+        }
+        if ($request->filled('group_id')) {
+            $query->where('s.group_id', $request->group_id);
+        }
+        if ($request->filled('status')) {
+            if ($request->status === 'filled') $query->whereNotNull('gp.id');
+            elseif ($request->status === 'empty') $query->whereNull('gp.id');
+        }
+        if ($request->filled('search')) {
+            $sv = trim($request->search);
+            $query->where(function ($q) use ($sv) {
+                $q->where('s.full_name', 'like', "%{$sv}%")
+                  ->orWhere('s.student_id_number', 'like', "%{$sv}%");
+            });
+        }
+
+        $rows = $query->select(
+            's.full_name', 's.student_id_number', 's.gender_name', 's.group_name',
+            'f.name as faculty_name', 'd.name as kafedra_name',
+            'gp.first_name', 'gp.last_name', 'gp.father_name',
+            'gp.first_name_en', 'gp.last_name_en',
+            'gp.passport_series', 'gp.passport_number', 'gp.jshshir',
+            'gp.passport_front_path', 'gp.passport_back_path', 'gp.foreign_passport_path',
+            'gp.created_at'
+        )->orderBy('s.full_name')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Bitiruvchilar');
+
+        $headers = ['#', 'Talaba F.I.SH', 'Student ID', 'Jinsi', 'Fakultet', 'Kafedra', 'Guruh', "To'ldirilgan", 'FISH (UZ)', 'FISH (EN)', 'Passport', 'JSHSHIR', 'Old passport URL', 'Orqa passport URL', 'Xorijiy passport URL', 'Yaratilgan sana'];
+        $col='A';
+        foreach($headers as $h){$sheet->setCellValue($col.'1',$h);$col++;}
+
+        $i=2; $n=1;
+        foreach($rows as $r){
+            $filled = !empty($r->passport_series) || !empty($r->passport_number) || !empty($r->jshshir) || !empty($r->passport_front_path) || !empty($r->passport_back_path) || !empty($r->foreign_passport_path);
+            $uz = trim(($r->last_name ?? '').' '.($r->first_name ?? '').' '.($r->father_name ?? ''));
+            $en = trim(($r->first_name_en ?? '').' '.($r->last_name_en ?? ''));
+            $frontUrl = !empty($r->passport_front_path) ? asset('storage/'.$r->passport_front_path) : '';
+            $backUrl = !empty($r->passport_back_path) ? asset('storage/'.$r->passport_back_path) : '';
+            $foreignUrl = !empty($r->foreign_passport_path) ? asset('storage/'.$r->foreign_passport_path) : '';
+
+            $sheet->setCellValue('A'.$i, $n++);
+            $sheet->setCellValue('B'.$i, $r->full_name ?? '');
+            $sheet->setCellValueExplicit('C'.$i, (string)($r->student_id_number ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValue('D'.$i, $r->gender_name ?? '');
+            $sheet->setCellValue('E'.$i, $r->faculty_name ?? '');
+            $sheet->setCellValue('F'.$i, $r->kafedra_name ?? '');
+            $sheet->setCellValue('G'.$i, $r->group_name ?? '');
+            $sheet->setCellValue('H'.$i, $filled ? 'Ha' : "Yo'q");
+            $sheet->setCellValue('I'.$i, $uz);
+            $sheet->setCellValue('J'.$i, $en);
+            $sheet->setCellValue('K'.$i, trim(($r->passport_series ?? '').($r->passport_number ?? '')));
+            $sheet->setCellValueExplicit('L'.$i, (string)($r->jshshir ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $sheet->setCellValue('M'.$i, $frontUrl);
+            $sheet->setCellValue('N'.$i, $backUrl);
+            $sheet->setCellValue('O'.$i, $foreignUrl);
+            $sheet->setCellValue('P'.$i, $r->created_at ? date('d.m.Y', strtotime($r->created_at)) : '');
+            $i++;
+        }
+
+        foreach (range('A','P') as $c) { $sheet->getColumnDimension($c)->setAutoSize(true); }
+
+        $fileName = 'bitiruvchilar_malumotlari_' . date('Y-m-d_H-i-s') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'grad_excel_');
+        (new Xlsx($spreadsheet))->save($temp);
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     public function downloadZip(Request $request)

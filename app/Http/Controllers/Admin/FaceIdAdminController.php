@@ -21,15 +21,44 @@ class FaceIdAdminController extends Controller
      */
     public function settings()
     {
-        $settings = FaceIdService::getSettings();
-        $totalStudents      = Student::count();
-        $enrolledCount      = FaceIdDescriptor::count();
-        $lastDaySuccess     = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
-        $lastDayFailed      = FaceIdLog::where('result', '!=', 'success')->whereDate('created_at', today())->count();
-        $recentLogs         = FaceIdLog::with('student')->orderByDesc('created_at')->limit(30)->get();
+        $loadError = null;
+
+        try {
+            $settings = FaceIdService::getSettings();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Settings yuklashda xato', ['error' => $e->getMessage()]);
+            $settings = [
+                'global_enabled' => true,
+                'threshold' => 0.40,
+                'arcface_enabled' => true,
+                'arcface_threshold' => 85.0,
+                'blinks_required' => 2,
+                'head_turn_required' => true,
+                'liveness_timeout' => 30,
+                'save_snapshots' => true,
+                'max_snapshot_kb' => 50,
+            ];
+            $loadError = 'Sozlamalarni yuklashda xatolik yuz berdi. Iltimos, loglarni tekshiring.';
+        }
+
+        try {
+            $totalStudents  = Student::count();
+            $enrolledCount  = FaceIdDescriptor::count();
+            $lastDaySuccess = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
+            $lastDayFailed  = FaceIdLog::where('result', '!=', 'success')->whereDate('created_at', today())->count();
+            $recentLogs     = FaceIdLog::with('student')->orderByDesc('created_at')->limit(30)->get();
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Statistika/loglarni yuklashda xato', ['error' => $e->getMessage()]);
+            $totalStudents = 0;
+            $enrolledCount = 0;
+            $lastDaySuccess = 0;
+            $lastDayFailed = 0;
+            $recentLogs = collect();
+            $loadError = $loadError ?: 'Face ID log/statistika ma\'lumotlarini yuklashda xatolik yuz berdi.';
+        }
 
         return view('admin.face-id.settings', compact(
-            'settings', 'totalStudents', 'enrolledCount', 'lastDaySuccess', 'lastDayFailed', 'recentLogs'
+            'settings', 'totalStudents', 'enrolledCount', 'lastDaySuccess', 'lastDayFailed', 'recentLogs', 'loadError'
         ));
     }
 

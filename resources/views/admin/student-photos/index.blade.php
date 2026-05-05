@@ -1227,10 +1227,10 @@
         .student-photos-table th:nth-child(1), .student-photos-table td:nth-child(1) { width: 40px; }
         .student-photos-table th:nth-child(2), .student-photos-table td:nth-child(2) { width: 54px; }
         .student-photos-table th:nth-child(9), .student-photos-table td:nth-child(9) { width: 74px; }
-        .student-photos-table th:nth-child(11), .student-photos-table td:nth-child(11) { width: 84px; }
-        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12) { width: 78px; }
-        .student-photos-table th:nth-child(13), .student-photos-table td:nth-child(13) { width: 108px; }
-        .student-photos-table th:nth-child(14), .student-photos-table td:nth-child(14) { width: 98px; }
+        .student-photos-table th:nth-child(11), .student-photos-table td:nth-child(11),
+        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12),
+        .student-photos-table th:nth-child(13), .student-photos-table td:nth-child(13),
+        .student-photos-table th:nth-child(14), .student-photos-table td:nth-child(14) { width: 110px; }
 
         .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
         .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }

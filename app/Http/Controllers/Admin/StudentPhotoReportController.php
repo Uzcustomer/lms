@@ -210,7 +210,9 @@ class StudentPhotoReportController extends Controller
             $needle = trim($request->search);
             $query->where(function ($q) use ($needle) {
                 $q->where('student_photos.full_name', 'like', "%{$needle}%")
-                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
+                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%")
+                  ->orWhere('students.full_name', 'like', "%{$needle}%")
+                  ->orWhere('students.student_id_number', 'like', "%{$needle}%");
             });
         }
         if ($has('department')) {
@@ -308,7 +310,9 @@ class StudentPhotoReportController extends Controller
             $needle = trim($request->search);
             $query->where(function ($q) use ($needle) {
                 $q->where('student_photos.full_name', 'like', "%{$needle}%")
-                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
+                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%")
+                  ->orWhere('students.full_name', 'like', "%{$needle}%")
+                  ->orWhere('students.student_id_number', 'like', "%{$needle}%");
             });
         }
 

@@ -37,6 +37,14 @@ class RetakeGroup extends Model
         'assessment_type',
         'oske_date',
         'test_date',
+        'is_locked',
+        'locked_at',
+        'locked_by_user_id',
+        'locked_by_name',
+        'vedomost_path',
+        'vedomost_generated_at',
+        'sent_to_test_markazi_at',
+        'sent_to_test_markazi_by',
     ];
 
     protected $casts = [
@@ -45,6 +53,10 @@ class RetakeGroup extends Model
         'max_students' => 'integer',
         'oske_date' => 'date',
         'test_date' => 'date',
+        'is_locked' => 'boolean',
+        'locked_at' => 'datetime',
+        'vedomost_generated_at' => 'datetime',
+        'sent_to_test_markazi_at' => 'datetime',
     ];
 
     public function teacher()

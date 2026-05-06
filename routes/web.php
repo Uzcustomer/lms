@@ -836,6 +836,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'index'])->name('index');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'show'])->name('show');
             Route::post('/{groupId}/save-grade', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'saveGrade'])->name('save-grade');
+            Route::post('/{groupId}/mustaqil/grade', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'gradeMustaqil'])->name('mustaqil-grade');
+            Route::get('/{groupId}/mustaqil/{submissionId}/download', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'downloadMustaqil'])->name('mustaqil-download');
+            Route::post('/{groupId}/lock', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'lock'])->name('lock');
+            Route::post('/{groupId}/unlock', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'unlock'])->name('unlock');
+            Route::get('/{groupId}/vedomost', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'vedomost'])->name('vedomost');
+            Route::post('/{groupId}/send-to-test-markazi', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'sendToTestMarkazi'])->name('send-to-test-markazi');
+        });
+
+        // Test markazi paneli — qayta o'qish OSKE/TEST natijalari
+        Route::prefix('retake-test-markazi')->name('retake-test-markazi.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'index'])->name('index');
+            Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'show'])->name('show');
+            Route::post('/{groupId}/save-score', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'saveScore'])->name('save-score');
         });
 
         // Statistika va eksport
@@ -1002,10 +1015,12 @@ Route::prefix('student')->name('student.')->group(function () {
             Route::get('/{groupId}/certificate', [\App\Http\Controllers\Student\RetakeApplicationController::class, 'downloadCertificate'])->name('download-certificate');
         });
 
-        // Talaba qayta o'qish jurnali — read-only
+        // Talaba qayta o'qish jurnali — read-only + mustaqil ta'lim upload
         Route::prefix('retake-journal')->name('retake-journal.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\RetakeJournalController::class, 'index'])->name('index');
             Route::get('/{groupId}', [\App\Http\Controllers\Student\RetakeJournalController::class, 'show'])->name('show');
+            Route::post('/{groupId}/mustaqil', [\App\Http\Controllers\Student\RetakeJournalController::class, 'uploadMustaqil'])->name('mustaqil-upload');
+            Route::get('/{groupId}/mustaqil/download', [\App\Http\Controllers\Student\RetakeJournalController::class, 'downloadMustaqil'])->name('mustaqil-download');
         });
 
         // Imtihon natijalari bo'yicha apellyatsiya

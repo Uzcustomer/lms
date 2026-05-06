@@ -23,6 +23,20 @@ use Illuminate\Support\Facades\DB;
 
 class AbsenceExcuseController extends Controller
 {
+    /**
+     * 10 kunlik limitdan o'tish faqat toggle yoqilgan VA superadmin
+     * talaba nomidan kirib turgan holatda ruxsat etiladi.
+     */
+    private function isNoDayLimitActive(): bool
+    {
+        if (Setting::get('feature_absence_excuse_no_day_limit', '0') !== '1') {
+            return false;
+        }
+
+        return session('impersonating') === true
+            && session('impersonator_active_role') === 'superadmin';
+    }
+
     public function index()
     {
         $student = Auth::guard('student')->user();
@@ -37,7 +51,7 @@ class AbsenceExcuseController extends Controller
     public function create()
     {
         $reasons = AbsenceExcuse::REASONS;
-        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+        $noDayLimit = $this->isNoDayLimitActive();
         return view('student.absence-excuses.create', compact('reasons', 'noDayLimit'));
     }
 
@@ -143,7 +157,7 @@ class AbsenceExcuseController extends Controller
 
         $reasonKeys = implode(',', array_keys(AbsenceExcuse::REASONS));
 
-        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+        $noDayLimit = $this->isNoDayLimitActive();
         $makeupDateRule = $noDayLimit ? 'nullable|date' : 'nullable|date|after_or_equal:today';
 
         $request->validate([
@@ -168,7 +182,7 @@ class AbsenceExcuseController extends Controller
                     }
                 },
                 function ($attribute, $value, $fail) {
-                    if (Setting::get('feature_absence_excuse_no_day_limit', '0') === '1') {
+                    if ($this->isNoDayLimitActive()) {
                         return;
                     }
                     if ($value) {
@@ -390,7 +404,7 @@ class AbsenceExcuseController extends Controller
         }
 
         $absentDaysCount = $this->countNonSundays($startDate, $endDate);
-        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+        $noDayLimit = $this->isNoDayLimitActive();
 
         return view('student.absence-excuses.schedule-check', compact('excuse', 'missedAssessments', 'absentDaysCount', 'noDayLimit'));
     }
@@ -408,7 +422,7 @@ class AbsenceExcuseController extends Controller
                 ->with('info', 'O\'tkazib yuborilgan nazoratlar topilmadi.');
         }
 
-        $noDayLimit = Setting::get('feature_absence_excuse_no_day_limit', '0') === '1';
+        $noDayLimit = $this->isNoDayLimitActive();
         $dateRule = $noDayLimit ? 'required|date' : 'required|date|after_or_equal:today';
 
         $rules = [];

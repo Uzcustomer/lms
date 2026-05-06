@@ -22,8 +22,8 @@ class FeatureToggleController extends Controller
             'description' => 'Jurnalda admin va superadmin MT baholarini qo\'ya olish imkoniyati',
         ],
         'absence_excuse_no_day_limit' => [
-            'label' => 'Sababli ariza kun chegarasi',
-            'description' => 'Yoqilgan bo\'lsa, talaba 10 kunlik muddat tugagandan keyin ham ariza topshira oladi (limit olib tashlanadi). O\'chirilgan bo\'lsa, standart 10 kunlik chegara amal qiladi.',
+            'label' => 'Sababli ariza kun chegarasi (faqat superadmin uchun)',
+            'description' => 'Yoqilgan bo\'lsa, faqat superadmin talaba profiliga kirib (impersonate) talaba nomidan ariza topshirayotganda 10 kunlik muddat chegarasi olib tashlanadi. Oddiy talabalar uchun har doim standart 10 kunlik chegara amal qiladi.',
         ],
     ];
 

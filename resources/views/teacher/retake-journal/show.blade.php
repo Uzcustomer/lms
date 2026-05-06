@@ -100,7 +100,7 @@
                                             $student = $app->group->student ?? null;
                                             $rowGrades = $gradesMap[$app->id] ?? [];
                                             $rowGradeValues = collect($rowGrades)->map(fn ($g) => $g->grade)->filter(fn ($v) => $v !== null);
-                                            $avg = $rowGradeValues->isNotEmpty() ? round($rowGradeValues->avg(), 1) : null;
+                                            $avg = $rowGradeValues->isNotEmpty() ? (int) round($rowGradeValues->avg()) : null;
                                             $attempt = $attemptsMap[$app->id] ?? 1;
                                         @endphp
                                         <tr class="border-b border-gray-100 hover:bg-gray-50" data-app-row="{{ $app->id }}">
@@ -362,134 +362,146 @@
 
             </div>
 
-            {{-- O'NG SIDEBAR — FILTRLAR --}}
-            <aside class="w-full lg:w-72 flex-shrink-0 order-1 lg:order-2">
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-3">
-                    <div class="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-                        <h3 class="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                            </svg>
-                            {{ __("Filtrlar") }}
-                        </h3>
-                        <div class="flex rounded overflow-hidden border border-gray-200 text-[10px]">
-                            <button type="button" @click="filterMode = 'ixcham'"
-                                    :class="filterMode === 'ixcham' ? 'bg-gray-700 text-white' : 'bg-white text-gray-600'"
-                                    class="px-2 py-0.5">{{ __("Ixcham") }}</button>
-                            <button type="button" @click="filterMode = 'batafsil'"
-                                    :class="filterMode === 'batafsil' ? 'bg-gray-700 text-white' : 'bg-white text-gray-600'"
-                                    class="px-2 py-0.5">{{ __("Batafsil") }}</button>
+            {{-- O'NG SIDEBAR — INFO --}}
+            <aside class="w-full lg:w-80 flex-shrink-0 order-1 lg:order-2">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 sticky top-3 overflow-hidden">
+
+                    {{-- Header: Group title + toggle --}}
+                    <div class="px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <div class="text-[10px] uppercase font-semibold text-blue-700 tracking-wider">{{ __("Qayta o'qish guruhi") }}</div>
+                                <div class="text-sm font-semibold text-gray-900 truncate mt-0.5">{{ $group->subject_name }}</div>
+                                <div class="text-[11px] text-gray-600 truncate">{{ $group->name }}</div>
+                            </div>
+                            <div class="inline-flex bg-white rounded-lg shadow-sm border border-gray-200 p-0.5">
+                                <button type="button" @click="filterMode = 'ixcham'"
+                                        :class="filterMode === 'ixcham' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:text-gray-900'"
+                                        class="px-2.5 py-1 text-[10px] font-semibold rounded transition">{{ __("Ixcham") }}</button>
+                                <button type="button" @click="filterMode = 'batafsil'"
+                                        :class="filterMode === 'batafsil' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 hover:text-gray-900'"
+                                        class="px-2.5 py-1 text-[10px] font-semibold rounded transition">{{ __("Batafsil") }}</button>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="p-3 space-y-2.5">
+                    {{-- Stat strip: students count + assessment type --}}
+                    <div class="grid grid-cols-2 divide-x divide-gray-100 border-b border-gray-100">
+                        <div class="px-3 py-2 text-center">
+                            <div class="text-lg font-bold text-gray-900 leading-none">{{ count($applications) }}</div>
+                            <div class="text-[9px] uppercase tracking-wider text-gray-500 mt-1">{{ __("Talabalar") }}</div>
+                        </div>
+                        <div class="px-3 py-2 text-center">
+                            @php
+                                $atypeLabels = [
+                                    'oske' => 'OSKI',
+                                    'test' => 'TEST',
+                                    'oske_test' => 'OSKI+TEST',
+                                    'sinov_fan' => __("Sinov fan"),
+                                ];
+                            @endphp
+                            <div class="text-sm font-bold text-rose-700 leading-none">{{ $atypeLabels[$group->assessment_type] ?? '—' }}</div>
+                            <div class="text-[9px] uppercase tracking-wider text-gray-500 mt-1">{{ __("Baholash") }}</div>
+                        </div>
+                    </div>
 
-                        {{-- Fakultet --}}
+                    {{-- O'qituvchi (always visible) --}}
+                    <div class="px-3 py-2.5 border-b border-gray-100">
+                        <div class="rj-teacher-block flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                                {{ strtoupper(mb_substr($group->teacher_name ?? '?', 0, 1)) }}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-[9px] uppercase font-semibold text-emerald-700 tracking-wider">{{ __("Amaliyot o'qituvchisi") }}</div>
+                                <div class="text-xs text-gray-900 font-medium truncate">{{ $group->teacher_name ?? '—' }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Compact: just Fakultet + Davr --}}
+                    <div class="px-3 py-2.5 space-y-2">
                         @if($facultyNames->isNotEmpty())
-                            <div class="rj-field">
-                                <label class="rj-field-label"><span class="rj-dot bg-emerald-500"></span>{{ __("Fakultet") }}</label>
-                                <div class="rj-field-value">
-                                    {{ $facultyNames->count() === 1 ? $facultyNames->first() : $facultyNames->count() . ' ' . __('ta turli') }}
+                            <div class="rj-row">
+                                <span class="rj-row-icon bg-emerald-100 text-emerald-700">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M3 7h18M5 21V7M19 21V7M9 21V11h6v10"/></svg>
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="rj-row-label">{{ __("Fakultet") }}</div>
+                                    <div class="rj-row-value">
+                                        {{ $facultyNames->count() === 1 ? $facultyNames->first() : $facultyNames->count() . ' ' . __('ta turli') }}
+                                    </div>
                                 </div>
                             </div>
                         @endif
 
-                        {{-- Yo'nalish --}}
-                        @if($specialtyNames->isNotEmpty())
-                            <div class="rj-field" x-show="filterMode === 'batafsil'">
-                                <label class="rj-field-label"><span class="rj-dot bg-cyan-500"></span>{{ __("Yo'nalish") }}</label>
-                                <div class="rj-field-value">
-                                    {{ $specialtyNames->count() === 1 ? $specialtyNames->first() : $specialtyNames->count() . ' ' . __('ta turli') }}
+                        <div class="rj-row">
+                            <span class="rj-row-icon bg-amber-100 text-amber-700">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <div class="rj-row-label">{{ __("Davr") }}</div>
+                                <div class="rj-row-value">
+                                    {{ $group->start_date->format('d.m.Y') }} → {{ $group->end_date->format('d.m.Y') }}
+                                    <span class="text-[10px] text-gray-500 ml-1">({{ count($dates) }} {{ __("kun") }})</span>
                                 </div>
                             </div>
-                        @endif
+                        </div>
 
-                        {{-- Kurs --}}
-                        @if($levelNames->isNotEmpty())
-                            <div class="rj-field" x-show="filterMode === 'batafsil'">
-                                <label class="rj-field-label"><span class="rj-dot bg-violet-500"></span>{{ __("Kurs") }}</label>
-                                <div class="rj-field-value">
-                                    {{ $levelNames->count() === 1 ? $levelNames->first() : $levelNames->implode(', ') }}
+                        {{-- Batafsil — qo'shimcha qatorlar --}}
+                        <div x-show="filterMode === 'batafsil'" x-cloak class="space-y-2">
+
+                            @if($specialtyNames->isNotEmpty())
+                                <div class="rj-row">
+                                    <span class="rj-row-icon bg-cyan-100 text-cyan-700">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="rj-row-label">{{ __("Yo'nalish") }}</div>
+                                        <div class="rj-row-value">
+                                            {{ $specialtyNames->count() === 1 ? $specialtyNames->first() : $specialtyNames->count() . ' ' . __('ta turli') }}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        @endif
+                            @endif
 
-                        {{-- Semestr --}}
-                        @if($semesterNames->isNotEmpty())
-                            <div class="rj-field" x-show="filterMode === 'batafsil'">
-                                <label class="rj-field-label"><span class="rj-dot bg-teal-500"></span>{{ __("Semestr") }}</label>
-                                <div class="rj-field-value">{{ $semesterNames->implode(', ') }}</div>
+                            <div class="grid grid-cols-2 gap-2">
+                                @if($levelNames->isNotEmpty())
+                                    <div class="rj-pill bg-violet-50 border-violet-200">
+                                        <div class="rj-pill-label text-violet-700">{{ __("Kurs") }}</div>
+                                        <div class="rj-pill-value">{{ $levelNames->implode(', ') }}</div>
+                                    </div>
+                                @endif
+                                @if($semesterNames->isNotEmpty())
+                                    <div class="rj-pill bg-teal-50 border-teal-200">
+                                        <div class="rj-pill-label text-teal-700">{{ __("Semestr") }}</div>
+                                        <div class="rj-pill-value">{{ $semesterNames->implode(', ') }}</div>
+                                    </div>
+                                @endif
                             </div>
-                        @endif
 
-                        {{-- Guruh --}}
-                        @if($groupNames->isNotEmpty())
-                            <div class="rj-field" x-show="filterMode === 'batafsil'">
-                                <label class="rj-field-label"><span class="rj-dot bg-indigo-500"></span>{{ __("Guruh") }}</label>
-                                <div class="rj-field-value">
-                                    {{ $groupNames->count() <= 3 ? $groupNames->implode(', ') : $groupNames->count() . ' ' . __('ta turli') }}
+                            @if($groupNames->isNotEmpty())
+                                <div class="rj-row">
+                                    <span class="rj-row-icon bg-indigo-100 text-indigo-700">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="rj-row-label">{{ __("Talabalar guruhlari") }}</div>
+                                        <div class="rj-row-value">
+                                            {{ $groupNames->count() <= 3 ? $groupNames->implode(', ') : $groupNames->count() . ' ' . __('ta turli') }}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        @endif
+                            @endif
 
-                        {{-- Fan (Subject) --}}
-                        <div class="rj-field">
-                            <label class="rj-field-label"><span class="rj-dot bg-gray-700"></span>{{ __("Fan") }}</label>
-                            <div class="rj-field-value">{{ $group->subject_name }}</div>
-                        </div>
-
-                        {{-- Qayta o'qish guruhi --}}
-                        <div class="rj-field" x-show="filterMode === 'batafsil'">
-                            <label class="rj-field-label"><span class="rj-dot bg-blue-500"></span>{{ __("Qayta o'qish guruhi") }}</label>
-                            <div class="rj-field-value">{{ $group->name }}</div>
-                        </div>
-
-                        {{-- Sanalar --}}
-                        <div class="rj-field" x-show="filterMode === 'batafsil'">
-                            <label class="rj-field-label"><span class="rj-dot bg-amber-500"></span>{{ __("Davr") }}</label>
-                            <div class="rj-field-value text-[11px]">
-                                {{ $group->start_date->format('d.m.Y') }} → {{ $group->end_date->format('d.m.Y') }}
-                                <span class="block text-gray-500">{{ count($dates) }} {{ __("kun") }}</span>
+                            <div class="flex items-center justify-between pt-1.5 border-t border-gray-100 text-[10px] text-gray-500">
+                                <span>{{ __("Guruh ID") }}: <span class="font-mono text-gray-700">#{{ $group->id }}</span></span>
+                                @if($group->is_locked)
+                                    <span class="text-amber-700 font-semibold">🔒 {{ __("Qulflangan") }}</span>
+                                @else
+                                    <span class="text-green-700 font-semibold">● {{ __("Faol") }}</span>
+                                @endif
                             </div>
                         </div>
-
-                        {{-- Baholash turi --}}
-                        <div class="rj-field" x-show="filterMode === 'batafsil'">
-                            <label class="rj-field-label"><span class="rj-dot bg-rose-500"></span>{{ __("Baholash") }}</label>
-                            <div class="rj-field-value">
-                                @php
-                                    $atypeLabels = [
-                                        'oske' => 'OSKI',
-                                        'test' => 'TEST',
-                                        'oske_test' => 'OSKI + TEST',
-                                        'sinov_fan' => __("Sinov fan"),
-                                    ];
-                                @endphp
-                                {{ $atypeLabels[$group->assessment_type] ?? '—' }}
-                            </div>
-                        </div>
-
-                        {{-- O'qituvchi --}}
-                        <div class="rj-section-label">{{ __("O'qituvchi") }}</div>
-                        <div class="rj-teacher-block">
-                            <div class="text-[10px] uppercase font-semibold text-emerald-700 tracking-wide">Amaliyot</div>
-                            <div class="text-sm text-gray-900 mt-0.5 truncate">
-                                {{ $group->teacher_name ?? '—' }}
-                            </div>
-                        </div>
-
-                        {{-- Talabalar soni --}}
-                        <div class="rj-field">
-                            <label class="rj-field-label"><span class="rj-dot bg-gray-500"></span>{{ __("Talabalar soni") }}</label>
-                            <div class="rj-field-value font-bold text-base">{{ count($applications) }}</div>
-                        </div>
-
-                        {{-- Guruh ID --}}
-                        <div class="rj-field" x-show="filterMode === 'batafsil'">
-                            <label class="rj-field-label"><span class="rj-dot bg-gray-400"></span>{{ __("Guruh ID") }}</label>
-                            <div class="rj-field-value text-[11px] font-mono">{{ $group->id }}</div>
-                        </div>
-
                     </div>
                 </div>
             </aside>
@@ -551,6 +563,58 @@
             border-radius: 6px;
             padding: 6px 9px;
         }
+
+        /* Sidebar info row */
+        .rj-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .rj-row-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .rj-row-label {
+            font-size: 9.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+        }
+        .rj-row-value {
+            font-size: 12px;
+            color: #1f2937;
+            font-weight: 500;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        /* Pill cards */
+        .rj-pill {
+            border: 1px solid;
+            border-radius: 8px;
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .rj-pill-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .rj-pill-value {
+            font-size: 13px;
+            color: #1f2937;
+            font-weight: 700;
+            margin-top: 1px;
+        }
+
+        [x-cloak] { display: none !important; }
     </style>
     @endpush
 
@@ -635,7 +699,7 @@
                             cell.classList.add('text-blue-700');
                             return;
                         }
-                        const avg = Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
+                        const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
                         cell.textContent = avg;
                         if (avg < 60) {
                             cell.classList.remove('text-blue-700');

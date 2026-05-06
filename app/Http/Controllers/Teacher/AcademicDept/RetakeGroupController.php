@@ -124,11 +124,11 @@ class RetakeGroupController extends Controller
         $this->authorize();
 
         $data = $request->validate([
-            'subject_id' => 'required|string',
-            'semester_id' => 'required|string',
+            'subject_name' => 'required|string',
+            'semester_name' => 'required|string',
         ]);
 
-        $apps = $this->groupService->applicationsForSubject($data['subject_id'], $data['semester_id']);
+        $apps = $this->groupService->applicationsForSubject($data['subject_name'], $data['semester_name']);
 
         $applications = $apps->map(function (RetakeApplication $a) {
             $student = $a->group->student ?? null;

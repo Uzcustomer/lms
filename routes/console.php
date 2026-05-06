@@ -112,3 +112,9 @@ Schedule::command('retake:auto-cancel-hemis')->dailyAt('02:30')->withoutOverlapp
 // Stale guruhlar monitoringi (cron buzilganini erta aniqlash).
 // Har kuni 12:00 da. Agar muammo bo'lsa admin chatiga Telegram xabar.
 Schedule::command('retake:monitor-stale-groups')->dailyAt('12:00');
+
+// ─── Face ID ─────────────────────────────────────────────────────────
+// public/uploads/face-temp/ papkasidagi orphan snapshot fayllarni tozalash.
+// Har yakshanba 01:30 da ishga tushadi (login paytida finally bloki ishlamagan
+// yoki uzilib qolgan fayllar).
+Schedule::command('faceid:cleanup-temp')->weeklyOn(0, '01:30')->name('faceid-cleanup-temp');

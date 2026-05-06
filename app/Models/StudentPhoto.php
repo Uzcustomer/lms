@@ -32,6 +32,11 @@ class StudentPhoto extends Model
         'quality_checked_at',
         'face_embedding',
         'embedding_extracted_at',
+        'moodle_synced_at',
+        'moodle_sync_status',
+        'moodle_sync_error',
+        'moodle_file_hash',
+        'moodle_response',
     ];
 
     protected $casts = [
@@ -45,6 +50,8 @@ class StudentPhoto extends Model
         'quality_checked_at' => 'datetime',
         'face_embedding' => 'array',
         'embedding_extracted_at' => 'datetime',
+        'moodle_synced_at' => 'datetime',
+        'moodle_response' => 'array',
     ];
 
     public function getPhotoUrlAttribute(): string

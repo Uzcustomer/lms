@@ -1528,7 +1528,7 @@ class StudentController extends Controller
         return back()->with('success', 'Ma\'lumotlar muvaffaqiyatli saqlandi');
     }
 
-    public function examSchedule()
+    public function examSchedule(\Illuminate\Http\Request $request)
     {
         $student = Auth::guard('student')->user();
 
@@ -1546,7 +1546,24 @@ class StudentController extends Controller
             ->orderBy('test_date')
             ->get();
 
-        return view('student.exam-schedule', compact('examSchedules', 'student'));
+        // Personal computer assignments for this student. Keyed as
+        // "{schedule_id}:{yn_type}" so the view can quickly look them up.
+        $assignments = \App\Models\ComputerAssignment::query()
+            ->whereIn('exam_schedule_id', $examSchedules->pluck('id'))
+            ->where('student_id_number', $student->student_id_number)
+            ->get()
+            ->keyBy(fn($a) => $a->exam_schedule_id . ':' . $a->yn_type);
+
+        // Resolve the physical computer the student is currently on
+        // (test markazi network IP → registered PC number).
+        $currentComputerNumber = \App\Models\Computer::numberByIp($request->ip());
+
+        return view('student.exam-schedule', compact(
+            'examSchedules',
+            'student',
+            'assignments',
+            'currentComputerNumber'
+        ));
     }
 
     /**

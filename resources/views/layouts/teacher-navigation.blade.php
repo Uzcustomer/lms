@@ -74,8 +74,8 @@
                                 <x-dropdown-link :href="route('admin.reports.debtors')" :active="request()->routeIs('admin.reports.debtors*')">
                                     4&#8805;qarzdorlar
                                 </x-dropdown-link>
-                                <x-dropdown-link :href="route('admin.reports.top-students')" :active="request()->routeIs('admin.reports.top-students*')">
-                                    5 ga da'vogar
+                                <x-dropdown-link :href="route('admin.contracts.index')" :active="request()->routeIs('admin.contracts.*')">
+                                    Kontraktlar
                                 </x-dropdown-link>
                             </x-slot>
                         </x-dropdown>
@@ -206,6 +206,10 @@
                                 </x-dropdown-link>
                                 <x-dropdown-link :href="route('admin.reports.sababli-check')">
                                     Sababli check
+                                </x-dropdown-link>
+                                <div class="border-t border-gray-200 my-1"></div>
+                                <x-dropdown-link :href="route('teacher.vedomost.index')" :active="request()->routeIs('teacher.vedomost.*')">
+                                    Vedomost tekshirish
                                 </x-dropdown-link>
                                 <div class="border-t border-gray-200 my-1"></div>
                                 <x-dropdown-link :href="route('admin.contracts.index')">
@@ -554,7 +558,7 @@
                 <x-responsive-nav-link :href="route('admin.absence_report.index')">74 soat dars qoldirish</x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.absence')">25% sababsiz</x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.debtors')">4&#8805;qarzdorlar</x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.reports.top-students')">5 ga da'vogar</x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.contracts.index')">Kontraktlar</x-responsive-nav-link>
                 @endif
                 @if($hasTutorGroups ?? false)
                     <x-responsive-nav-link :href="route('teacher.reports.jn')">JN o'zlashtirish</x-responsive-nav-link>
@@ -608,6 +612,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.sababli-check')">
                     Sababli check
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('teacher.vedomost.index')">
+                    Vedomost tekshirish
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.contracts.index')">
                     Kontraktlar

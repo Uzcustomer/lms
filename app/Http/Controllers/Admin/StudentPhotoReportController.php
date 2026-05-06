@@ -404,6 +404,9 @@ class StudentPhotoReportController extends Controller
         // ArcFace embedding'ni hisoblab DB ga va Python identify cache'iga qo'shish
         $this->extractAndCacheEmbedding($photo);
 
+        // Tasdiqlangan rasmni Moodle ga yuborish (asinxron, queue orqali)
+        \App\Jobs\SendStudentPhotoToMoodle::dispatch($photo->id)->afterCommit();
+
         $this->notifyTutor($photo, true);
 
         return $this->reviewResponse($request, true, 'Rasm tasdiqlandi.');

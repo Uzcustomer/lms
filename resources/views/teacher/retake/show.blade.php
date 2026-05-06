@@ -6,7 +6,7 @@
         </h2>
     </x-slot>
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-4">
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full space-y-4">
         @include('teacher.retake._group_card', ['group' => $group, 'role' => $role, 'minReasonLength' => $minReasonLength])
 
         {{-- Audit log: butun ariza guruhi bo'yicha xronologik tartibda --}}

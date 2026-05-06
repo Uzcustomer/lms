@@ -7,6 +7,7 @@ import 'config/theme.dart';
 import 'services/api_service.dart';
 import 'services/auth_service.dart';
 import 'services/student_service.dart';
+import 'services/student_data_cache.dart';
 import 'services/teacher_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/student_provider.dart';
@@ -45,6 +46,8 @@ class LmsApp extends StatelessWidget {
     final studentService = StudentService(apiService);
     final teacherService = TeacherService(apiService);
 
+    StudentDataCache().attachService(studentService);
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
@@ -78,6 +81,9 @@ class LmsApp extends StatelessWidget {
             ],
             home: Consumer<AuthProvider>(
               builder: (context, auth, _) {
+                if (auth.state == AuthState.authenticated && auth.isStudent) {
+                  StudentDataCache().ensureFresh();
+                }
                 switch (auth.state) {
                   case AuthState.initial:
                     return const SplashScreen();

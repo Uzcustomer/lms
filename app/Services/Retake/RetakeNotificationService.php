@@ -83,6 +83,110 @@ class RetakeNotificationService
         $this->sendToStudent($student, 'retake_academic_decision', $title, $body, $app->id);
     }
 
+    /**
+     * Talaba dekan + registrator tasdig'idan keyin to'lov chekini yuklashi kerak.
+     */
+    public function notifyPaymentRequired(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "To'lov chekingizni yuklang";
+        $body = "Dekan va registrator arizangizni tasdiqlashdi. Jarayonni davom ettirish uchun to'lov qog'ozini yuklang (max 5 MB).";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_required',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
+    /**
+     * To'lov yuklandi — talabaga: registrator tekshirishi kutilmoqda.
+     */
+    public function notifyPaymentSubmitted(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "To'lov chekingiz qabul qilindi";
+        $body = "Registrator ofisi to'lov chekining haqiqiyligini tekshiradi. Tasdiqlanganidan so'ng ariza o'quv bo'limiga jo'natiladi.";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_submitted',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
+    /**
+     * Registrator ofisiga: yangi to'lov cheki tekshirish uchun keldi.
+     */
+    public function notifyPaymentToVerify(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "To'lov cheki tekshirilishi kutilmoqda";
+        $body = "{$student->full_name} ({$student->level_name}) qayta o'qish uchun to'lov chekini yukladi. Haqiqiyligini tekshiring.";
+
+        $registrars = Teacher::role(\App\Enums\ProjectRole::REGISTRAR_OFFICE->value)
+            ->where('status', true)
+            ->get();
+
+        foreach ($registrars as $r) {
+            $this->sendToTeacher($r, 'retake_payment_to_verify', $title, $body, $group->id, route('admin.retake.index'));
+        }
+    }
+
+    /**
+     * Registrator to'lov chekini tasdiqladi — ariza o'quv bo'limiga jo'natildi.
+     */
+    public function notifyPaymentVerified(RetakeApplicationGroup $group): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "Arizangiz o'quv bo'limiga yuborildi";
+        $body = "To'lov chekingiz registrator tomonidan tasdiqlandi. Endi ariza o'quv bo'limi tomonidan ko'rib chiqiladi.";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_verified',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
+    /**
+     * Registrator to'lov chekini rad etdi — talabaga sabab bilan xabar.
+     */
+    public function notifyPaymentRejected(RetakeApplicationGroup $group, ?string $reason = null): void
+    {
+        $student = $group->student;
+        if (!$student) return;
+
+        $title = "To'lov chekingiz rad etildi";
+        $body = "Registrator to'lov chekingizni rad etdi. Sabab: " . ($reason ?? '—') . ". Iltimos, to'lov chekini qayta yuklang.";
+
+        $this->sendToStudent(
+            $student,
+            'retake_payment_rejected',
+            $title,
+            $body,
+            $group->id,
+            route('student.retake.index'),
+        );
+    }
+
     public function notifyAutoCancelled(RetakeApplication $app): void
     {
         $student = Student::where('hemis_id', $app->student_hemis_id)->first();
@@ -141,7 +245,7 @@ class RetakeNotificationService
             });
 
         foreach ($deans as $dean) {
-            $this->sendToTeacher($dean, 'retake_new_submission', $title, $body, $group->id, route('teacher.retake.index'));
+            $this->sendToTeacher($dean, 'retake_new_submission', $title, $body, $group->id, route('admin.retake.index'));
         }
 
         // Registrator ofisi (universitet bo'yicha hammaga)
@@ -150,7 +254,7 @@ class RetakeNotificationService
             ->get();
 
         foreach ($registrars as $r) {
-            $this->sendToTeacher($r, 'retake_new_submission', $title, $body, $group->id, route('teacher.retake.index'));
+            $this->sendToTeacher($r, 'retake_new_submission', $title, $body, $group->id, route('admin.retake.index'));
         }
     }
 
@@ -171,7 +275,7 @@ class RetakeNotificationService
         ])->where('status', true)->get();
 
         foreach ($academicStaff as $t) {
-            $this->sendToTeacher($t, 'retake_academic_ready', $title, $body, $app->id, route('teacher.retake-groups.index'));
+            $this->sendToTeacher($t, 'retake_academic_ready', $title, $body, $app->id, route('admin.retake-groups.index'));
         }
     }
 
@@ -214,17 +318,38 @@ class RetakeNotificationService
         ?int $refId = null,
         ?string $url = null,
     ): void {
+        $link = $url ?? route('admin.retake.index');
+
         try {
             TeacherNotification::create([
                 'teacher_id' => $teacher->id,
                 'type' => $type,
                 'title' => $title,
                 'message' => $message,
-                'link' => $url ?? route('teacher.retake.index'),
+                'link' => $link,
                 'data' => $refId ? ['retake_ref_id' => $refId] : null,
             ]);
         } catch (\Throwable $e) {
             Log::warning("[RetakeNotification] TeacherNotification: " . $e->getMessage());
+        }
+
+        // Yuqori bell ikonasidagi xabarlar paneli `Notification` modelidan o'qiydi —
+        // shuning uchun retake bildirishnomalari u yerda ham ko'rinishi uchun yozamiz.
+        try {
+            \App\Models\Notification::create([
+                'recipient_id' => $teacher->id,
+                'recipient_type' => Teacher::class,
+                'subject' => $title,
+                'body' => $message,
+                'type' => $type,
+                'url' => $link,
+                'data' => $refId ? ['retake_ref_id' => $refId] : null,
+                'is_read' => false,
+                'is_draft' => false,
+                'sent_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("[RetakeNotification] Notification: " . $e->getMessage());
         }
 
         if (!empty($teacher->telegram_chat_id)) {

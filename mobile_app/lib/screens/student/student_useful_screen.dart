@@ -14,6 +14,7 @@ import 'gpa_calculator_screen.dart';
 import 'student_rating_screen.dart';
 import 'chat_contacts_screen.dart';
 import 'library_webview_screen.dart';
+import 'ai_chat_screen.dart';
 import 'student_home_screen.dart';
 
 class StudentUsefulScreen extends StatelessWidget {
@@ -29,6 +30,13 @@ class StudentUsefulScreen extends StatelessWidget {
     final statusBarH = MediaQuery.of(context).padding.top;
 
     final services = [
+      _ServiceCard(
+        icon: Icons.auto_awesome,
+        title: 'AI Yordamchi',
+        subtitle: 'Gemini AI bilan savol-javob',
+        color: const Color(0xFF9C27B0),
+        screen: const AiChatScreen(),
+      ),
       _ServiceCard(
         icon: Icons.calculate_outlined,
         title: 'GPA Kalkulyator',
@@ -75,33 +83,7 @@ class StudentUsefulScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: auroraBase(aurora, isDark),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-1.0, -1.0),
-                  radius: 1.4,
-                  colors: auroraGradient(aurora, isDark),
-                  stops: const [0.0, 0.35, 0.65, 1.0],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 180,
-            right: -80,
-            child: _Blob(color: auroraBlobA(aurora, isDark)),
-          ),
-          Positioned(
-            top: 480,
-            left: -80,
-            child: _Blob(color: auroraBlobB(aurora, isDark)),
-          ),
-
-          // Content
-          SingleChildScrollView(
+      body: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 100),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,8 +156,6 @@ class StudentUsefulScreen extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
     );
   }
 }

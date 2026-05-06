@@ -4804,13 +4804,26 @@ class ReportController extends Controller
             // 2-QADAM: Curriculum subjects olish (barcha talabalarning curriculum_id lari uchun)
             $curriculumIds = $students->pluck('curriculum_id')->unique()->filter()->values()->toArray();
 
-            $currSubjects = DB::table('curriculum_subjects')
-                ->whereIn('curricula_hemis_id', $curriculumIds)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('curricula_hemis_id', 'semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
-                ->distinct()
-                ->get();
+            // Jurnal getSubjects() bilan bir xil mantiq:
+            // curriculum_subjects → curricula → semesters bo'yicha join qilib,
+            // baho qo'yilmaydigan fan namunalarini chiqarib tashlaymiz.
+            // is_active va subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->whereIn('cs.curricula_hemis_id', $curriculumIds)
+                ->select('cs.curricula_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
+                ->distinct();
+
+            $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+            foreach ($excludedPatterns as $pattern) {
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+
+            $currSubjects = $currSubjectsQuery->get();
 
             // 3-QADAM: Academic records olish — faqat mavjudligini tekshirish uchun
             $arExistsLookup = [];
@@ -5178,16 +5191,27 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
-            // Curriculum subjects — shu semestrga tegishli barcha fanlar
-            $currSubjects = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $student->curriculum_id)
-                ->where('semester_code', $semesterCode)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('subject_id', 'subject_name', 'semester_name', 'credit', 'total_acload')
+            // Curriculum subjects — shu semestrga tegishli barcha fanlar.
+            // Jurnal getSubjects() bilan bir xil mantiq: curricula+semesters JOIN +
+            // baho qo'yilmaydigan fan namunalari chiqarib tashlanadi. is_active va
+            // subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->where('cs.semester_code', $semesterCode)
+                ->select('cs.subject_id', 'cs.subject_name', 'cs.semester_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
-                ->orderBy('subject_name')
-                ->get();
+                ->orderBy('cs.subject_name');
+
+            foreach (config('app.excluded_rating_subject_patterns', []) as $pattern) {
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+
+            $currSubjects = $currSubjectsQuery->get();
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
@@ -5247,14 +5271,25 @@ class ReportController extends Controller
             // Talabaning joriy semester kodi
             $studentSemesterCode = $student->semester_code ? (string) $student->semester_code : null;
 
-            $records = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $student->curriculum_id)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('semester_code', 'semester_name', 'subject_name')
+            $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+
+            // Jurnal getSubjects() bilan bir xil mantiq:
+            // curricula → semesters join, baho qo'yilmaydigan fan namunalari chiqarib tashlanadi.
+            // is_active va subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            $semesterListQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_name')
                 ->distinct()
-                ->orderBy('semester_code')
-                ->get();
+                ->orderBy('cs.semester_code');
+            foreach ($excludedPatterns as $pattern) {
+                $semesterListQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+            $records = $semesterListQuery->get();
 
             // Guruh suffiksi bo'yicha filtr
             $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
@@ -5277,15 +5312,21 @@ class ReportController extends Controller
                     ];
                 })->values();
 
-            $currSubjects = DB::table('curriculum_subjects')
-                ->where('curricula_hemis_id', $student->curriculum_id)
-                ->where('is_active', true)
-                ->where('subject_code', 'not like', '%/%')
-                ->select('semester_code', 'semester_name', 'subject_id', 'subject_name', 'credit', 'total_acload')
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
+                ->join('semesters as sem', function ($join) {
+                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
+                        ->on('sem.code', '=', 'cs.semester_code');
+                })
+                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
-                ->orderBy('semester_code')
-                ->orderBy('subject_name')
-                ->get();
+                ->orderBy('cs.semester_code')
+                ->orderBy('cs.subject_name');
+            foreach ($excludedPatterns as $pattern) {
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+            $currSubjects = $currSubjectsQuery->get();
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
@@ -6102,6 +6143,9 @@ class ReportController extends Controller
      */
     public function topStudents(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
         $dekanFacultyId = get_dekan_faculty_id();
 
         $facultyQuery = Department::where('structure_type_code', 11)
@@ -6179,6 +6223,9 @@ class ReportController extends Controller
      */
     public function topStudentsData(Request $request)
     {
+        if (is_active_nazoratchi()) {
+            abort(403, 'Bu hisobotga ruxsatingiz yo\'q.');
+        }
         $dekanFacultyId = get_dekan_faculty_id();
         if ($dekanFacultyId && !$request->filled('faculty')) {
             $request->merge(['faculty' => $dekanFacultyId]);
@@ -6239,15 +6286,6 @@ class ReportController extends Controller
                 if (!empty($deptSubjectIds)) {
                     $scheduleQuery->whereIn('sch.subject_id', $deptSubjectIds);
                 }
-            }
-
-            // Nazoratchi: faqat biriktirilgan guruhlar
-            if (is_active_nazoratchi()) {
-                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
-                if (empty($nazoratchiHemisIds)) {
-                    return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
-                }
-                $scheduleQuery->whereIn('sch.group_id', $nazoratchiHemisIds);
             }
 
             $scheduleCombos = $scheduleQuery->get();
@@ -6839,6 +6877,8 @@ class ReportController extends Controller
         }
 
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test", "Klinik mashg'ulot", "Klinik mashgulot"];
+        // Ma'ruza = training_type_code 11 — DB'dagi apostrof varianti farq qilsa ham ushlaymiz
+        $gradeExcludedCodes = [11, 17, 99, 100, 101, 102, 103];
 
         // 1-QADAM: Asosiy jadval so'rovi (filtrlar bilan)
         $scheduleQuery = DB::table('schedules as sch')
@@ -6848,6 +6888,11 @@ class ReportController extends Controller
                     ->on('sem.curriculum_hemis_id', '=', 'g.curriculum_hemis_id');
             })
             ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
+            ->whereNotIn('sch.training_type_code', $gradeExcludedCodes)
+            // REGEXP orqali "ma...ruza" pattern'ini har qanday apostrof varianti
+            // (ASCII ', U+2018, U+2019, U+02BB, U+02BC, backtick) yoki apostrofsiz
+            // (Maruza) holatda ushlaymiz. .{0,3} - "ma" va "ruza" o'rtasida 0..3 ta belgi.
+            ->whereRaw("LOWER(IFNULL(sch.training_type_name, '')) NOT REGEXP 'ma.{0,3}ruza'")
             ->where('sch.education_year_current', true)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at')

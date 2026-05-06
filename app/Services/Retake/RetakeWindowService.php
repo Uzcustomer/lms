@@ -12,6 +12,8 @@ class RetakeWindowService
 {
     /**
      * Talabaning yo'nalish va kursi uchun joriy faol oyna.
+     * Faqat ochiq sessiyadagi oynalar e'tiborga olinadi — yopilgan
+     * sessiyadagi oyna ko'rinmaydi.
      */
     public function activeWindowForStudent(Student $student): ?RetakeApplicationWindow
     {
@@ -22,6 +24,7 @@ class RetakeWindowService
         return RetakeApplicationWindow::query()
             ->forStudent((int) $student->specialty_id, $student->level_code)
             ->active()
+            ->whereHas('session', fn ($q) => $q->where('is_closed', false))
             ->orderByDesc('end_date')
             ->first();
     }
@@ -45,12 +48,22 @@ class RetakeWindowService
 
     /**
      * Yangi qabul oynasini ochish (O'quv bo'limi).
+     * `session_id` majburiy — har oyna albatta sessiyaga bog'langan bo'lishi kerak.
+     * Bir xil yo'nalish/kurs/semestr kombinatsiyasi har sessiyada bittadan bo'lishi mumkin
+     * (boshqa sessiyada — alohida oyna).
      */
     public function createWindow(array $data, Teacher $createdBy): RetakeApplicationWindow
     {
         $this->validateDateRange($data['start_date'], $data['end_date']);
 
+        if (empty($data['session_id'])) {
+            throw ValidationException::withMessages([
+                'session_id' => 'Sessiyani tanlash majburiy',
+            ]);
+        }
+
         $exists = RetakeApplicationWindow::query()
+            ->where('session_id', $data['session_id'])
             ->where('specialty_id', $data['specialty_id'])
             ->where('level_code', $data['level_code'])
             ->where('semester_code', $data['semester_code'])
@@ -58,7 +71,7 @@ class RetakeWindowService
 
         if ($exists) {
             throw ValidationException::withMessages([
-                'specialty_id' => 'Bu yo\'nalish, kurs va semestr uchun oyna allaqachon mavjud',
+                'specialty_id' => 'Joriy sessiyada bu yo\'nalish, kurs va semestr uchun oyna allaqachon mavjud',
             ]);
         }
 

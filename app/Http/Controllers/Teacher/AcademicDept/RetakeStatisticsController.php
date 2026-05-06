@@ -20,11 +20,7 @@ class RetakeStatisticsController extends Controller
     {
         $this->authorize();
 
-        $filters = $request->only([
-            'final_status', 'date_from', 'date_to',
-            'subject_id', 'semester_id',
-            'department_id', 'specialty_id', 'level_code',
-        ]);
+        $filters = $this->extractFilters($request);
 
         $base = $this->buildBaseQuery($filters);
 
@@ -66,22 +62,15 @@ class RetakeStatisticsController extends Controller
             ->orderByDesc('total')
             ->get();
 
-        // Form filterlari uchun manbalar
-        $departments = Department::orderBy('name')->get(['department_hemis_id', 'name']);
-        $specialties = Specialty::orderBy('name')->get(['specialty_hemis_id', 'name']);
-        $levels = [
-            ['code' => '11', 'name' => '1-kurs'],
-            ['code' => '12', 'name' => '2-kurs'],
-            ['code' => '13', 'name' => '3-kurs'],
-            ['code' => '14', 'name' => '4-kurs'],
-            ['code' => '15', 'name' => '5-kurs'],
-            ['code' => '16', 'name' => '6-kurs'],
-        ];
+        // Cascade filtrlar uchun manbalar (keshlangan)
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
+        $subjects = \App\Services\Retake\RetakeFilterCache::subjects();
 
         $totalApplications = (clone $base)->count();
-        $totalAmount = (clone $base)
-            ->join('retake_application_groups', 'retake_application_groups.id', '=', 'retake_applications.group_id')
-            ->sum('retake_application_groups.receipt_amount');
+        $groupIds = (clone $base)->distinct()->pluck('group_id');
+        $totalAmount = $groupIds->isEmpty()
+            ? 0
+            : \App\Models\RetakeApplicationGroup::whereIn('id', $groupIds)->sum('receipt_amount');
 
         return view('teacher.academic-dept.retake-statistics.index', [
             'filters' => $filters,
@@ -89,9 +78,8 @@ class RetakeStatisticsController extends Controller
             'stageStats' => $stageStats,
             'topSubjects' => $topSubjects,
             'departmentStats' => $departmentStats,
-            'departments' => $departments,
-            'specialties' => $specialties,
-            'levels' => $levels,
+            'educationTypes' => $educationTypes,
+            'subjects' => $subjects,
             'totalApplications' => $totalApplications,
             'totalAmount' => (float) $totalAmount,
         ]);
@@ -101,18 +89,43 @@ class RetakeStatisticsController extends Controller
     {
         $this->authorize();
 
-        $filters = $request->only([
-            'final_status', 'date_from', 'date_to',
-            'subject_id', 'semester_id',
-            'department_id', 'specialty_id', 'level_code',
-        ]);
+        $filters = $this->extractFilters($request);
 
-        $hasStudentFilter = !empty($filters['department_id']) || !empty($filters['specialty_id']) || !empty($filters['level_code']);
+        $hasStudentFilter = !empty($filters['education_type'])
+            || !empty($filters['department'])
+            || !empty($filters['specialty'])
+            || !empty($filters['level_code'])
+            || !empty($filters['semester_code'])
+            || !empty($filters['group']);
         $filters['student_filter'] = $hasStudentFilter;
+
+        // Eskidan kelayotgan keylarni Export legacy nomlariga o'tkazamiz
+        $filters['department_id'] = $filters['department'] ?? null;
+        $filters['specialty_id'] = $filters['specialty'] ?? null;
 
         $fileName = 'retake_arizalar_' . now()->format('Y_m_d_His') . '.xlsx';
 
         return Excel::download(new RetakeApplicationsExport($filters), $fileName);
+    }
+
+    /**
+     * `_retake_filters` partial yuboradigan key'larni qabul qiladi.
+     * Backward compat uchun eski key'larni ham (department_id/specialty_id) tushunadi.
+     */
+    private function extractFilters(Request $request): array
+    {
+        return [
+            'final_status' => $request->input('final_status'),
+            'date_from' => $request->input('date_from'),
+            'date_to' => $request->input('date_to'),
+            'subject' => $request->input('subject') ?: $request->input('subject_id'),
+            'semester_code' => $request->input('semester_code') ?: $request->input('semester_id'),
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department') ?: $request->input('department_id'),
+            'specialty' => $request->input('specialty') ?: $request->input('specialty_id'),
+            'level_code' => $request->input('level_code'),
+            'group' => $request->input('group'),
+        ];
     }
 
     private function buildBaseQuery(array $filters)
@@ -128,20 +141,38 @@ class RetakeStatisticsController extends Controller
         if (!empty($filters['date_to'])) {
             $q->whereDate('created_at', '<=', $filters['date_to']);
         }
-        if (!empty($filters['subject_id'])) {
-            $q->where('subject_id', $filters['subject_id']);
+        if (!empty($filters['subject'])) {
+            $q->where('subject_id', $filters['subject']);
         }
-        if (!empty($filters['semester_id'])) {
-            $q->where('semester_id', $filters['semester_id']);
+        if (!empty($filters['semester_code'])) {
+            $q->where('semester_id', $filters['semester_code']);
         }
 
-        $hasStudentFilter = !empty($filters['department_id']) || !empty($filters['specialty_id']) || !empty($filters['level_code']);
+        $hasStudentFilter = !empty($filters['education_type'])
+            || !empty($filters['department'])
+            || !empty($filters['specialty'])
+            || !empty($filters['level_code'])
+            || !empty($filters['group']);
+
         if ($hasStudentFilter) {
-            $studentIds = Student::query();
-            if (!empty($filters['department_id'])) $studentIds->where('department_id', $filters['department_id']);
-            if (!empty($filters['specialty_id']))  $studentIds->where('specialty_id', $filters['specialty_id']);
-            if (!empty($filters['level_code']))    $studentIds->where('level_code', $filters['level_code']);
-            $q->whereIn('student_hemis_id', $studentIds->pluck('hemis_id'));
+            $studentQuery = Student::query();
+            if (!empty($filters['education_type'])) {
+                $studentQuery->where('education_type_code', $filters['education_type']);
+            }
+            if (!empty($filters['department'])) {
+                $studentQuery->where('department_id', $filters['department']);
+            }
+            if (!empty($filters['specialty'])) {
+                $studentQuery->where('specialty_id', $filters['specialty']);
+            }
+            if (!empty($filters['level_code'])) {
+                $studentQuery->where('level_code', $filters['level_code']);
+            }
+            if (!empty($filters['group'])) {
+                $studentQuery->where('group_id', $filters['group']);
+            }
+
+            $q->whereIn('student_hemis_id', $studentQuery->select('hemis_id'));
         }
 
         return $q;

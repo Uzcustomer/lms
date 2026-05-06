@@ -654,7 +654,7 @@ class InternationalStudentController extends Controller
             $c1->addText('Hurmatli S.Eshqobilov', ['italic' => true, 'size' => 11]);
             $c1->addText('qonuniy xal qiling', ['italic' => true, 'size' => 11]);
             $c2 = $table->addCell(4500);
-            $c2->addText('Termiz Shahar IIB M va FRB', ['size' => 11], ['alignment' => Jc::END]);
+            $c2->addText('Termiz Shahar IIB M va PB', ['size' => 11], ['alignment' => Jc::END]);
             $c2->addText("boshlig'i podpolkovnik", ['size' => 11], ['alignment' => Jc::END]);
             $c2->addText('S. S. Kabilovga', ['size' => 11], ['alignment' => Jc::END]);
 

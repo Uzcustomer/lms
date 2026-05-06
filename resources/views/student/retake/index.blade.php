@@ -7,16 +7,27 @@
 
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 pb-10"
          x-data="retakeApplicationPage({
-             debts: @js($debts->map(fn($d) => [
-                 'subject_id' => $d->subject_id,
-                 'subject_name' => $d->subject_name,
-                 'semester_id' => $d->semester_id,
-                 'semester_name' => $d->semester_name,
-                 'credit' => (float) $d->credit,
-                 'active_status' => optional($activeApplications->get($d->subject_id . '|' . $d->semester_id))->studentDisplayStatus(),
-                 'is_active' => $activeApplications->has($d->subject_id . '|' . $d->semester_id),
-                 'final_status' => optional($activeApplications->get($d->subject_id . '|' . $d->semester_id))->final_status,
-             ])),
+             debts: @js($debts->map(function($d) use ($activeApplications) {
+                 $key = $d->subject_id . '|' . $d->semester_id;
+                 $app = $activeApplications->get($key);
+                 $rg = $app?->retakeGroup;
+                 return [
+                     'subject_id' => $d->subject_id,
+                     'subject_name' => $d->subject_name,
+                     'semester_id' => $d->semester_id,
+                     'semester_name' => $d->semester_name,
+                     'credit' => (float) $d->credit,
+                     'active_status' => optional($app)->studentDisplayStatus(),
+                     'is_active' => $activeApplications->has($key),
+                     'final_status' => optional($app)->final_status,
+                     'retake_group' => $rg ? [
+                         'name' => $rg->name,
+                         'teacher_name' => $rg->teacher_name ?? ($rg->teacher?->full_name ?? null),
+                         'start_date' => optional($rg->start_date)->format('Y-m-d'),
+                         'end_date' => optional($rg->end_date)->format('Y-m-d'),
+                     ] : null,
+                 ];
+             })),
              remainingSlots: {{ $remainingSlots }},
              maxPerApplication: {{ $maxSubjectsPerApplication }},
              creditPrice: {{ $creditPrice }},
@@ -27,6 +38,19 @@
         <div class="bg-white rounded-xl shadow-sm p-5 mb-4 border border-gray-100">
             <h1 class="text-lg font-bold text-gray-900 mb-1">{{ __("Qayta o'qish arizasi") }}</h1>
             <p class="text-xs text-gray-500">{{ __("Akkreditatsiya bahosi mavjud bo'lmagan fanlar uchun ariza yuboring") }}</p>
+        </div>
+
+        {{-- Cheklov haqida ogohlantirish --}}
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 flex items-start gap-3">
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="text-xs text-amber-900 leading-relaxed">
+                <span class="font-semibold">{{ __("Hurmatli talaba!") }}</span>
+                {{ __("Siz bitta arizada eng ko'pi") }}
+                <span class="font-bold">{{ $maxSubjectsPerApplication }} ta</span>
+                {{ __("fanga ariza yubora olasiz. Aktiv (kutilayotgan + tasdiqlangan) arizalaringiz bilan birga jami 3 dan oshmasligi kerak. Rad etilgan arizalar bu hisobga kirmaydi va qaytadan yuborish mumkin.") }}
+            </div>
         </div>
 
         {{-- Oyna holati --}}
@@ -81,6 +105,89 @@
             </div>
         @endif
 
+        {{-- To'lov yuklash kerak bo'lgan arizalar --}}
+        @foreach(($groupsAwaitingPayment ?? []) as $awaitingGroup)
+            <div class="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 mb-4"
+                 x-data="{ paymentFile: null }">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-semibold text-amber-900">
+                            @if($awaitingGroup->payment_verification_status === 'rejected')
+                                {{ __("To'lov chekingiz rad etildi — qaytadan yuklang") }}
+                            @else
+                                {{ __("To'lov chekingizni yuklang") }}
+                            @endif
+                        </h3>
+                        <p class="text-xs text-amber-800 mt-1">
+                            @if($awaitingGroup->payment_verification_status === 'rejected')
+                                {{ __("Sabab") }}:
+                                <span class="font-medium">{{ $awaitingGroup->payment_rejection_reason ?? '—' }}</span>
+                            @else
+                                {{ __("Dekan va registrator arizangizni tasdiqlashdi. Jarayonni davom ettirish uchun to'lov qog'ozini yuklang.") }}
+                            @endif
+                        </p>
+                        <p class="text-[11px] text-amber-700 mt-1">
+                            {{ __("Ariza") }} #{{ $awaitingGroup->id }} ·
+                            {{ __("Summa") }}: <span class="font-semibold">{{ number_format($awaitingGroup->receipt_amount, 0, '.', ' ') }} UZS</span> ·
+                            {{ $awaitingGroup->applications->where('dean_status','approved')->where('registrar_status','approved')->count() }} {{ __("ta fan") }}
+                        </p>
+
+                        <form method="POST"
+                              action="{{ route('student.retake.upload-payment', $awaitingGroup->id) }}"
+                              enctype="multipart/form-data"
+                              class="mt-3 flex flex-wrap items-center gap-2">
+                            @csrf
+                            <input type="file"
+                                   name="payment"
+                                   accept=".pdf,.jpg,.jpeg,.png"
+                                   required
+                                   @change="paymentFile = $event.target.files[0]"
+                                   class="block text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200">
+                            <button type="submit"
+                                    :disabled="!paymentFile"
+                                    :class="paymentFile ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+                                    class="px-4 py-1.5 text-xs font-medium rounded-md">
+                                {{ __("Yuborish") }}
+                            </button>
+                            <span class="text-[11px] text-amber-700">
+                                PDF, JPG, PNG · max {{ $paymentMaxMb ?? 5 }} MB
+                            </span>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endforeach
+
+        {{-- To'lov tasdiqi kutilmoqda --}}
+        @foreach(($groupsPaymentVerifying ?? []) as $verifyingGroup)
+            <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-4">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-sm font-semibold text-blue-900">
+                            {{ __("To'lov chekingiz tekshirilmoqda") }}
+                        </h3>
+                        <p class="text-xs text-blue-800 mt-1">
+                            {{ __("Registrator ofisi to'lov chekingizning haqiqiyligini tekshirmoqda. Tasdiqlanganidan so'ng ariza o'quv bo'limiga jo'natiladi.") }}
+                        </p>
+                        <p class="text-[11px] text-blue-700 mt-1">
+                            {{ __("Ariza") }} #{{ $verifyingGroup->id }} ·
+                            {{ __("Yuklangan") }}: {{ $verifyingGroup->payment_uploaded_at->format('Y-m-d H:i') }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        @endforeach
+
         {{-- Qarzdor fanlar --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
             <div class="px-5 py-4 border-b border-gray-100">
@@ -122,6 +229,27 @@
                                 <td class="px-3 py-2.5 text-xs text-gray-700" x-text="d.semester_name"></td>
                                 <td class="px-3 py-2.5">
                                     <span class="text-sm text-gray-900" x-text="d.subject_name"></span>
+                                    <template x-if="d.is_active && d.final_status === 'approved' && d.retake_group">
+                                        <div class="mt-1 text-[11px] text-gray-600 leading-relaxed">
+                                            <div>
+                                                <span class="text-gray-500">{{ __("O'qituvchi") }}:</span>
+                                                <span class="font-medium text-gray-800" x-text="d.retake_group.teacher_name || '—'"></span>
+                                            </div>
+                                            <div x-show="d.retake_group.start_date">
+                                                <span class="text-gray-500">{{ __("Sanalar") }}:</span>
+                                                <span class="text-gray-800" x-text="d.retake_group.start_date + ' → ' + d.retake_group.end_date"></span>
+                                            </div>
+                                            <div x-show="d.retake_group.name">
+                                                <span class="text-gray-500">{{ __("Guruh") }}:</span>
+                                                <span class="text-gray-800" x-text="d.retake_group.name"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template x-if="d.is_active && d.final_status === 'approved' && !d.retake_group">
+                                        <div class="mt-1 text-[11px] text-amber-700">
+                                            {{ __("Guruh hali shakllantirilmagan — tez orada o'qituvchi va sanalar tayinlanadi") }}
+                                        </div>
+                                    </template>
                                 </td>
                                 <td class="px-3 py-2.5 text-right text-sm text-gray-700" x-text="d.credit.toFixed(1)"></td>
                                 <td class="px-3 py-2.5">
@@ -189,15 +317,22 @@
                                         {{ $g->applications->count() }} {{ __("ta fan") }} ·
                                         {{ number_format($g->receipt_amount, 0, '.', ' ') }} UZS
                                     </p>
+                                    @if($g->window?->session?->name)
+                                        <p class="text-[11px] text-gray-500 mt-0.5">
+                                            {{ __("Sessiya") }}: <span class="font-medium">{{ $g->window->session->name }}</span>
+                                        </p>
+                                    @endif
                                 </div>
-                                <div class="flex gap-2">
+                                <div class="flex flex-wrap gap-2">
                                     @if($g->docx_path)
                                         <a href="{{ route('student.retake.download-docx', $g->id) }}"
                                            class="text-xs text-blue-600 hover:underline">DOCX</a>
                                     @endif
                                     @if($g->pdf_certificate_path)
-                                        <a href="{{ route('student.retake.download-certificate', $g->id) }}"
-                                           class="text-xs text-blue-600 hover:underline">{{ __("Tasdiqnoma PDF") }}</a>
+                                        <a href="{{ route('student.retake.download-certificate', $g->id) }}?lang=uz"
+                                           class="text-xs text-blue-600 hover:underline">{{ __("Ruxsatnoma PDF") }} (UZ)</a>
+                                        <a href="{{ route('student.retake.download-certificate', $g->id) }}?lang=en"
+                                           class="text-xs text-blue-600 hover:underline">{{ __("Permit PDF") }} (EN)</a>
                                     @endif
                                 </div>
                             </div>
@@ -229,6 +364,29 @@
                                     @if($a->final_status === 'rejected' && $a->rejectionReason())
                                         <div class="text-[11px] text-red-600 ml-2">
                                             {{ __("Sabab") }}: {{ $a->rejectionReason() }}
+                                        </div>
+                                    @endif
+
+                                    {{-- Registrator tasdiqlagan bo'lsa: oldingi baholar va OSKE/TEST eslatmasi --}}
+                                    @if($a->registrar_status === 'approved' && $a->previous_joriy_grade !== null)
+                                        <div class="text-[11px] text-gray-700 ml-2 mt-1">
+                                            <span class="text-gray-500">{{ __("Oldingi baholar") }}:</span>
+                                            {{ __("Joriy") }} <span class="font-medium">{{ rtrim(rtrim(number_format($a->previous_joriy_grade, 2, '.', ''), '0'), '.') }}</span>,
+                                            {{ __("Mustaqil") }} <span class="font-medium">{{ rtrim(rtrim(number_format($a->previous_mustaqil_grade, 2, '.', ''), '0'), '.') }}</span>
+                                        </div>
+                                    @endif
+                                    @if($a->has_oske || $a->has_test || $a->has_sinov)
+                                        @php
+                                            $reminderTags = [];
+                                            if ($a->has_oske) $reminderTags[] = 'OSKE';
+                                            if ($a->has_test) $reminderTags[] = 'TEST';
+                                            if ($a->has_sinov) $reminderTags[] = __('Sinov fan');
+                                        @endphp
+                                        <div class="text-[11px] ml-2 mt-1 text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                            <span class="font-medium">{{ __("Eslatma") }}:</span>
+                                            {{ __("Qayta o'qish davomida") }}
+                                            <span class="font-semibold">{{ implode(', ', $reminderTags) }}</span>
+                                            {{ __("qaytadan topshirilishi kerak.") }}
                                         </div>
                                     @endif
                                 @endforeach

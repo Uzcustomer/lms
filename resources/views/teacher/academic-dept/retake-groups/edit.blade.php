@@ -6,7 +6,9 @@
         </h2>
     </x-slot>
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
+    @include('partials._retake_tom_select')
+
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
         @if(session('success'))
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>
@@ -55,7 +57,7 @@
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("O'qituvchi") }}</label>
                     <select name="teacher_id" {{ $editable ? '' : 'disabled' }}
-                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                            class="tom-select w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
                         @foreach($teachers as $t)
                             <option value="{{ $t->id }}" {{ $group->teacher_id == $t->id ? 'selected' : '' }}>
                                 {{ $t->full_name }}{{ $t->department ? ' — ' . $t->department : '' }}
@@ -98,13 +100,13 @@
                         @endif
                     </div>
                 @else
-                    <p class="text-xs text-orange-600">⚠️ {{ __("Boshlangan/tugagan guruhni faqat super-admin tahrirlay oladi") }}</p>
+                    <p class="text-xs text-gray-500">⚠️ {{ __("Tahrirlash imkoniyati mavjud emas") }}</p>
                 @endif
             </form>
 
             @if($canOverride)
                 <div class="mt-6 pt-4 border-t border-gray-100">
-                    <p class="text-xs text-gray-500 mb-2">{{ __("Super-admin: holatni override qilish") }}</p>
+                    <p class="text-xs text-gray-500 mb-2">{{ __("Holatni o'zgartirish") }}</p>
                     <form method="POST" action="{{ route('admin.retake-groups.override-status', $group->id) }}" class="flex gap-2">
                         @csrf
                         <select name="status" class="px-3 py-1.5 text-xs border border-gray-300 rounded">

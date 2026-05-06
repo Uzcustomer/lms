@@ -230,6 +230,12 @@
                                                                 @method('DELETE')
                                                                 <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
                                                             </form>
+                                                            @if($exc->status === 'approved')
+                                                            <form method="POST" action="{{ route('admin.absence-excuses.reset-to-pending', $exc->id) }}" onsubmit="return confirm('Ariza pending holatiga qaytariladi va PDF o\'chiriladi. Davom etilsinmi?')">
+                                                                @csrf
+                                                                <button type="submit" class="text-amber-600 hover:text-amber-800 font-medium">Qaytarish</button>
+                                                            </form>
+                                                            @endif
                                                             @endif
                                                         </div>
                                                     </td>
@@ -334,6 +340,15 @@
                         <a href="{{ route('admin.absence-excuses.index') }}" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-md hover:bg-gray-300 transition whitespace-nowrap">
                             Tozalash
                         </a>
+                        @if(in_array(request('status'), ['pending', 'approved', 'rejected'], true))
+                            <a href="{{ route('admin.absence-excuses.export-status', request('status')) }}"
+                               class="px-3 py-1.5 bg-emerald-600 text-white text-xs rounded-md hover:bg-emerald-700 transition whitespace-nowrap inline-flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                                </svg>
+                                Excel yuklash
+                            </a>
+                        @endif
                     </div>
                 </form>
             </div>
@@ -435,6 +450,12 @@
                                                     @method('DELETE')
                                                     <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
                                                 </form>
+                                                @if($excuse->status === 'approved')
+                                                <form method="POST" action="{{ route('admin.absence-excuses.reset-to-pending', $excuse->id) }}" onsubmit="return confirm('Ariza pending holatiga qaytariladi va PDF o\'chiriladi. Davom etilsinmi?')">
+                                                    @csrf
+                                                    <button type="submit" class="text-amber-600 hover:text-amber-800 font-medium">Qaytarish</button>
+                                                </form>
+                                                @endif
                                                 @endif
                                             </div>
                                         </td>

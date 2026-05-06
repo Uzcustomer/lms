@@ -5,7 +5,9 @@
         </h2>
     </x-slot>
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto"
+    @include('partials._retake_tom_select')
+
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full"
          x-data="{ showCreate: false, overrideId: null, overrideStart: '', overrideEnd: '' }">
 
         @if(session('success'))
@@ -22,15 +24,96 @@
             </div>
         @endif
 
-        <div class="flex justify-between items-center mb-4">
+        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
             <p class="text-sm text-gray-500">
-                {{ __("Har yo'nalish + kurs + semestr uchun alohida oyna ochiladi") }}
+                {{ __("Barcha sessiyalardagi oynalar — yangi oyna ochish uchun sessiyaga kiring") }}
             </p>
-            <button type="button"
-                    @click="showCreate = true"
-                    class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                + {{ __("Yangi oyna ochish") }}
-            </button>
+            <a href="{{ route('admin.retake-sessions.index') }}"
+               class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                {{ __("Sessiyalarga o'tish") }}
+            </a>
+        </div>
+
+        {{-- Hozir ochiq oynalar — yuqorida ko'zga tashlanadigan tarzda --}}
+        @if(($activeWindows ?? collect())->isNotEmpty())
+            <div class="bg-green-50 border-2 border-green-300 rounded-xl p-4 mb-4">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-green-500 text-white">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                    </span>
+                    <h3 class="text-sm font-semibold text-green-900">
+                        {{ __("Hozir ochiq qayta o'qish oynalari") }}
+                        <span class="text-green-700 font-medium">({{ $activeWindows->count() }})</span>
+                    </h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    @foreach($activeWindows as $aw)
+                        <a href="{{ route('admin.retake-windows.show', $aw->id) }}"
+                           class="block bg-white rounded-lg border border-green-200 p-3 hover:border-green-400 hover:shadow-sm transition">
+                            <p class="text-xs text-gray-500 mb-1">
+                                @if($aw->session)
+                                    <span class="font-medium text-gray-700">{{ $aw->session->name }}</span> ·
+                                @endif
+                                {{ $specialtyToFaculty[$aw->specialty_id] ?? '—' }}
+                            </p>
+                            <p class="text-sm font-semibold text-gray-900">
+                                {{ $aw->specialty_name ?? $aw->specialty_id }}
+                            </p>
+                            <p class="text-xs text-gray-700 mt-0.5">
+                                {{ $aw->level_name ?? $aw->level_code }}
+                                @if($aw->semester_name)· {{ $aw->semester_name }}@endif
+                            </p>
+                            <div class="flex items-center justify-between mt-2 text-[11px]">
+                                <span class="text-gray-500">
+                                    {{ $aw->start_date->format('Y-m-d') }} → {{ $aw->end_date->format('Y-m-d') }}
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 font-medium">
+                                    {{ $aw->applications_count }} {{ __("ariza") }}
+                                </span>
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        @else
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 text-center">
+                <p class="text-sm text-gray-500">
+                    {{ __("Hozircha ochiq oyna yo'q") }}
+                </p>
+            </div>
+        @endif
+
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr) --}}
+        @include('partials._retake_filters', [
+            'formAction' => route('admin.retake-windows.index'),
+            'educationTypes' => $educationTypes ?? collect(),
+            'hiddenFilters' => ['group', 'full_name', 'subject'],
+            'extraQueryFields' => array_filter([
+                'status' => $statusFilter !== 'all' ? $statusFilter : null,
+            ]),
+        ])
+
+        {{-- Holat filtri (qo'shimcha) --}}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4">
+            <form method="GET" action="{{ route('admin.retake-windows.index') }}" class="flex items-end gap-2 flex-wrap">
+                @foreach(['education_type','department','specialty','level_code','semester_code','per_page'] as $kept)
+                    @if(request($kept))
+                        <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
+                    @endif
+                @endforeach
+                <div class="min-w-[180px]">
+                    <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
+                    <select name="status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
+                        <option value="all" {{ ($statusFilter ?? 'all') === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
+                        <option value="upcoming" {{ ($statusFilter ?? '') === 'upcoming' ? 'selected' : '' }}>{{ __("Kelmoqda") }}</option>
+                        <option value="active" {{ ($statusFilter ?? '') === 'active' ? 'selected' : '' }}>{{ __("Faol") }}</option>
+                        <option value="closed" {{ ($statusFilter ?? '') === 'closed' ? 'selected' : '' }}>{{ __("Yopilgan") }}</option>
+                    </select>
+                </div>
+                <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Qo'llash") }}</button>
+            </form>
         </div>
 
         {{-- Mavjud oynalar jadvali --}}
@@ -44,6 +127,7 @@
                     <table class="min-w-full divide-y divide-gray-100">
                         <thead class="bg-gray-50">
                         <tr>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fakultet") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Yo'nalish") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Kurs") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
@@ -56,6 +140,7 @@
                         <tbody class="bg-white divide-y divide-gray-100">
                         @foreach($windows as $w)
                             <tr>
+                                <td class="px-3 py-2.5 text-sm text-gray-700">{{ $specialtyToFaculty[$w->specialty_id] ?? '—' }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-900">{{ $w->specialty_name ?? $w->specialty_id }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->level_name ?? $w->level_code }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->semester_name }}</td>
@@ -80,7 +165,9 @@
                                     </span>
                                 </td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700 text-right">{{ $w->applications_count }}</td>
-                                <td class="px-3 py-2.5 text-right">
+                                <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                    <a href="{{ route('admin.retake-windows.show', $w->id) }}"
+                                       class="text-xs text-blue-600 hover:underline mr-2">{{ __("Ko'rish") }}</a>
                                     @if($canOverride)
                                         <button type="button"
                                                 @click="overrideId = {{ $w->id }}; overrideStart = '{{ $w->start_date->format('Y-m-d') }}'; overrideEnd = '{{ $w->end_date->format('Y-m-d') }}'"
@@ -115,29 +202,38 @@
                     <h3 class="text-base font-bold text-gray-900 mb-4">{{ __("Yangi qabul oynasi") }}</h3>
                     <form method="POST"
                           action="{{ route('admin.retake-windows.store') }}"
-                          x-data="{
-                              specialtyId: '',
-                              specialtyName: '',
-                              levelCode: '',
-                              levelName: '',
-                              semesterCode: '',
-                              semesterName: '',
-                          }"
+                          x-data="windowForm({
+                              specialties: @js($specialties->map(fn($s) => ['id' => (string)$s->specialty_hemis_id, 'name' => $s->name, 'department_hemis_id' => (string)($s->department_hemis_id ?? '')])->values()->all()),
+                          })"
                           class="space-y-3">
                         @csrf
 
-                        {{-- Yo'nalish --}}
+                        {{-- Fakultet --}}
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Fakultet") }} <span class="text-red-500">*</span></label>
+                            <select x-model="departmentId"
+                                    required
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <option value="">— {{ __("Tanlang") }} —</option>
+                                @foreach($departments as $d)
+                                    <option value="{{ $d->department_hemis_id }}">{{ $d->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        {{-- Yo'nalish (fakultet bo'yicha filtrlanadi) --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
                             <select name="specialty_id"
                                     x-model="specialtyId"
-                                    @change="specialtyName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
+                                    @change="onSpecialtyChange($event)"
                                     required
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <option value="">— {{ __("Tanlang") }} —</option>
-                                @foreach($specialties as $sp)
-                                    <option value="{{ $sp->specialty_hemis_id }}" data-name="{{ $sp->name }}">{{ $sp->name }}</option>
-                                @endforeach
+                                    :disabled="!departmentId"
+                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                                <option value="">— {{ __("Avval fakultetni tanlang") }} —</option>
+                                <template x-for="sp in filteredSpecialties" :key="sp.id">
+                                    <option :value="sp.id" :data-name="sp.name" x-text="sp.name"></option>
+                                </template>
                             </select>
                             <input type="hidden" name="specialty_name" :value="specialtyName">
                         </div>
@@ -158,7 +254,7 @@
                             <input type="hidden" name="level_name" :value="levelName">
                         </div>
 
-                        {{-- Semestr --}}
+                        {{-- Semestr (12 ta unikal) --}}
                         <div>
                             <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Semestr") }} <span class="text-red-500">*</span></label>
                             <select name="semester_code"
@@ -168,9 +264,7 @@
                                     class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                                 <option value="">— {{ __("Tanlang") }} —</option>
                                 @foreach($semesters as $s)
-                                    <option value="{{ $s->code }}" data-name="{{ $s->education_year }} - {{ $s->name }}">
-                                        {{ $s->education_year }} - {{ $s->name }}
-                                    </option>
+                                    <option value="{{ $s['code'] }}" data-name="{{ $s['name'] }}">{{ $s['name'] }}</option>
                                 @endforeach
                             </select>
                             <input type="hidden" name="semester_name" :value="semesterName">
@@ -189,7 +283,7 @@
                         </div>
 
                         <p class="text-[11px] text-gray-500">
-                            ⚠️ {{ __("Yaratilgandan keyin sanalarni faqat super-admin o'zgartira oladi") }}
+                            ⚠️ {{ __("Yaratilgandan keyin sanalarni o'zgartirish imkoniyati mavjud emas") }}
                         </p>
 
                         <div class="flex gap-2 pt-3">
@@ -236,4 +330,32 @@
             </div>
         @endif
     </div>
+
+    @push('scripts')
+        <script>
+            function windowForm({ specialties }) {
+                return {
+                    allSpecialties: specialties || [],
+                    departmentId: '',
+                    specialtyId: '',
+                    specialtyName: '',
+                    levelCode: '',
+                    levelName: '',
+                    semesterCode: '',
+                    semesterName: '',
+
+                    get filteredSpecialties() {
+                        if (!this.departmentId) return [];
+                        return this.allSpecialties.filter(sp =>
+                            String(sp.department_hemis_id) === String(this.departmentId)
+                        );
+                    },
+
+                    onSpecialtyChange(e) {
+                        this.specialtyName = e.target.options[e.target.selectedIndex]?.dataset.name || '';
+                    },
+                };
+            }
+        </script>
+    @endpush
 </x-teacher-app-layout>

@@ -162,8 +162,15 @@ class DocumentTemplateService
 
         // LibreOffice orqali PDF generatsiya (yagona sifatli usul)
         // HOME muhit o'zgaruvchisi kerak (www-data uchun)
+        $sofficePath = $this->findSoffice();
+        if (!$sofficePath) {
+            @unlink($tempDocx);
+            throw new \RuntimeException('LibreOffice (soffice) serverda topilmadi. PDF generatsiya uchun LibreOffice o\'rnatilishi kerak.');
+        }
+
         $command = sprintf(
-            'HOME=/tmp /usr/bin/soffice --headless --norestore --convert-to pdf --outdir %s %s 2>&1',
+            'HOME=/tmp %s --headless --norestore --convert-to pdf --outdir %s %s 2>&1',
+            escapeshellarg($sofficePath),
             escapeshellarg($tempDir),
             escapeshellarg($tempDocx)
         );
@@ -474,7 +481,14 @@ class DocumentTemplateService
     private function findSoffice(): ?string
     {
         // To'liq yo'llarni bevosita tekshirish (which PHP muhitida ishlamasligi mumkin)
-        $absolutePaths = ['/usr/bin/soffice', '/usr/local/bin/soffice', '/usr/bin/libreoffice', '/usr/lib/libreoffice/program/soffice'];
+        // /usr/lib/libreoffice/program/soffice — oosplash orqali emas, to'g'ridan ishga tushadigan launcher
+        $absolutePaths = [
+            '/usr/lib/libreoffice/program/soffice',
+            '/usr/lib/libreoffice/program/soffice.bin',
+            '/usr/bin/soffice',
+            '/usr/local/bin/soffice',
+            '/usr/bin/libreoffice',
+        ];
 
         foreach ($absolutePaths as $path) {
             if (file_exists($path) && is_executable($path)) {

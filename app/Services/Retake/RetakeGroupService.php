@@ -8,7 +8,8 @@ use App\Models\RetakeApplicationLog;
 use App\Models\RetakeGroup;
 use App\Models\RetakeSetting;
 use App\Models\Teacher;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -31,6 +32,10 @@ class RetakeGroupService
             ->where('academic_dept_status', 'pending')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
+            ->whereHas('group', function ($q) {
+                $q->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'approved');
+            })
             ->with('group.student')
             ->orderBy('subject_name')
             ->get();
@@ -64,6 +69,10 @@ class RetakeGroupService
             ->where('academic_dept_status', 'pending')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
+            ->whereHas('group', function ($q) {
+                $q->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'approved');
+            })
             ->with('group.student')
             ->get();
     }
@@ -112,6 +121,8 @@ class RetakeGroupService
             ]);
         }
 
+        $this->validateAssessment($data);
+
         return DB::transaction(function () use ($data, $apps, $teacher, $actor, $publish) {
             $group = RetakeGroup::create([
                 'name' => $data['name'],
@@ -126,6 +137,9 @@ class RetakeGroupService
                 'end_date' => $data['end_date'],
                 'max_students' => $data['max_students'] ?? null,
                 'status' => $publish ? RetakeGroup::STATUS_SCHEDULED : RetakeGroup::STATUS_FORMING,
+                'assessment_type' => $data['assessment_type'] ?? null,
+                'oske_date' => $data['oske_date'] ?? null,
+                'test_date' => $data['test_date'] ?? null,
                 'created_by_user_id' => $actor->id,
                 'created_by_name' => $actor->full_name,
             ]);
@@ -196,7 +210,7 @@ class RetakeGroupService
         $this->validateData($data, partial: true);
 
         $update = [];
-        foreach (['name', 'start_date', 'end_date', 'max_students'] as $field) {
+        foreach (['name', 'start_date', 'end_date', 'max_students', 'assessment_type', 'oske_date', 'test_date'] as $field) {
             if (array_key_exists($field, $data)) {
                 $update[$field] = $data[$field];
             }
@@ -209,6 +223,16 @@ class RetakeGroupService
             }
             $update['teacher_id'] = $teacher->id;
             $update['teacher_name'] = $teacher->full_name;
+        }
+
+        // Baholash turini tekshirish (faqat o'zgartirilayotgan bo'lsa)
+        if (array_key_exists('assessment_type', $data)) {
+            $merged = array_merge([
+                'assessment_type' => $group->assessment_type,
+                'oske_date' => optional($group->oske_date)->format('Y-m-d'),
+                'test_date' => optional($group->test_date)->format('Y-m-d'),
+            ], $update);
+            $this->validateAssessment($merged);
         }
 
         if (!empty($update)) {
@@ -247,9 +271,9 @@ class RetakeGroupService
      * Monitoring: scheduled bo'lib turgan guruhda boshlanish sanasi 1 kundan
      * ortiq o'tib ketganlar (cron buzilgan bo'lishi mumkin).
      *
-     * @return Collection<RetakeGroup>
+     * @return EloquentCollection<RetakeGroup>
      */
-    public function staleScheduledGroups(): Collection
+    public function staleScheduledGroups(): EloquentCollection
     {
         return RetakeGroup::query()
             ->where('status', RetakeGroup::STATUS_SCHEDULED)
@@ -273,6 +297,60 @@ class RetakeGroupService
                     'end_date' => 'Tugash sanasi boshlanish sanasidan keyin bo\'lishi kerak',
                 ]);
             }
+        }
+    }
+
+    /**
+     * Baholash turi va sanalar tekshirish:
+     *  - oske       → oske_date majburiy
+     *  - test       → test_date majburiy
+     *  - oske_test  → ikkala sana ham majburiy + test_date >= oske_date
+     *  - sinov_fan  → qo'shimcha sana talab qilmaydi
+     */
+    private function validateAssessment(array $data): void
+    {
+        $type = $data['assessment_type'] ?? null;
+        if (!$type) {
+            throw ValidationException::withMessages([
+                'assessment_type' => 'Baholash turini tanlang (OSKE, TEST, OSKE+TEST yoki Sinov fan)',
+            ]);
+        }
+
+        $allowed = [
+            RetakeGroup::ASSESSMENT_OSKE,
+            RetakeGroup::ASSESSMENT_TEST,
+            RetakeGroup::ASSESSMENT_OSKE_TEST,
+            RetakeGroup::ASSESSMENT_SINOV_FAN,
+        ];
+        if (!in_array($type, $allowed, true)) {
+            throw ValidationException::withMessages([
+                'assessment_type' => 'Noto\'g\'ri baholash turi',
+            ]);
+        }
+
+        $needsOske = in_array($type, [RetakeGroup::ASSESSMENT_OSKE, RetakeGroup::ASSESSMENT_OSKE_TEST], true);
+        $needsTest = in_array($type, [RetakeGroup::ASSESSMENT_TEST, RetakeGroup::ASSESSMENT_OSKE_TEST], true);
+
+        if ($needsOske && empty($data['oske_date'])) {
+            throw ValidationException::withMessages([
+                'oske_date' => 'OSKE sanasini belgilang',
+            ]);
+        }
+
+        if ($needsTest && empty($data['test_date'])) {
+            throw ValidationException::withMessages([
+                'test_date' => 'TEST sanasini belgilang',
+            ]);
+        }
+
+        // OSKE+TEST holatida TEST sanasi OSKE sanasidan oldin bo'lishi mumkin emas
+        if ($type === RetakeGroup::ASSESSMENT_OSKE_TEST
+            && !empty($data['oske_date']) && !empty($data['test_date'])
+            && strtotime($data['test_date']) < strtotime($data['oske_date'])
+        ) {
+            throw ValidationException::withMessages([
+                'test_date' => 'TEST sanasi OSKE sanasidan oldin bo\'lishi mumkin emas (avval OSKE topshiriladi, keyin TEST)',
+            ]);
         }
     }
 }

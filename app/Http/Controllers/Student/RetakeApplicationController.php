@@ -49,14 +49,25 @@ class RetakeApplicationController extends Controller
         // Tarix (eski + joriy oynalar bo'yicha guruhlar)
         $history = RetakeApplicationGroup::query()
             ->where('student_hemis_id', $student->hemis_id)
-            ->with(['applications.retakeGroup.teacher', 'window'])
+            ->with(['applications.retakeGroup.teacher', 'window.session'])
             ->orderByDesc('created_at')
             ->limit(50)
             ->get();
 
-        $remainingSlots = $this->applicationService->remainingSlots((int) $student->hemis_id);
+        $remainingSlots = $this->applicationService->remainingSlots((int) $student->hemis_id, $window?->id);
         $creditPrice = RetakeSetting::creditPrice();
         $receiptMaxMb = RetakeSetting::receiptMaxMb();
+
+        // To'lov yuklash kerak bo'lgan guruhlar (dekan + registrator tasdiqlagan,
+        // hali to'lov yuklanmagan yoki rejected bo'lib qayta yuklash kerak).
+        $groupsAwaitingPayment = $history->filter(function (RetakeApplicationGroup $g) {
+            return $g->requires_payment;
+        })->values();
+
+        // To'lov yuklangan, ammo registrator tasdiqi kutilmoqda.
+        $groupsPaymentVerifying = $history->filter(function (RetakeApplicationGroup $g) {
+            return $g->payment_awaiting_verification;
+        })->values();
 
         return view('student.retake.index', [
             'student' => $student,
@@ -68,7 +79,44 @@ class RetakeApplicationController extends Controller
             'creditPrice' => $creditPrice,
             'receiptMaxMb' => $receiptMaxMb,
             'maxSubjectsPerApplication' => RetakeApplicationService::MAX_SUBJECTS_PER_APPLICATION,
+            'groupsAwaitingPayment' => $groupsAwaitingPayment,
+            'groupsPaymentVerifying' => $groupsPaymentVerifying,
+            'paymentMaxMb' => RetakeApplicationService::PAYMENT_RECEIPT_MAX_MB,
         ]);
+    }
+
+    /**
+     * Talaba to'lov chekini yuklaydi (dekan + registrator tasdiqidan keyin).
+     */
+    public function uploadPayment(Request $request, int $groupId)
+    {
+        /** @var Student $student */
+        $student = Auth::guard('student')->user();
+
+        $maxMb = RetakeApplicationService::PAYMENT_RECEIPT_MAX_MB;
+
+        $request->validate([
+            'payment' => "required|file|mimes:pdf,jpg,jpeg,png|max:" . ($maxMb * 1024),
+        ]);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+
+        if ((int) $group->student_hemis_id !== (int) $student->hemis_id) {
+            abort(403);
+        }
+
+        try {
+            $this->applicationService->uploadPayment(
+                $student,
+                $group,
+                $request->file('payment'),
+            );
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        return redirect()->route('student.retake.index')
+            ->with('success', "Arizangiz o'quv bo'limiga yuborildi");
     }
 
     public function store(Request $request)
@@ -126,9 +174,9 @@ class RetakeApplicationController extends Controller
     }
 
     /**
-     * Tasdiqnoma PDF faylini yuklab olish.
+     * Ruxsatnoma PDF faylini yuklab olish (uzbek yoki english versiyasi).
      */
-    public function downloadCertificate(int $groupId): Response
+    public function downloadCertificate(int $groupId, Request $request): Response
     {
         /** @var Student $student */
         $student = Auth::guard('student')->user();
@@ -139,13 +187,37 @@ class RetakeApplicationController extends Controller
             abort(403);
         }
 
-        if (!$group->pdf_certificate_path || !Storage::disk('public')->exists($group->pdf_certificate_path)) {
-            abort(404, 'Tasdiqnoma hali generatsiya qilinmagan');
+        $lang = $request->input('lang', app()->getLocale() === 'en' ? 'en' : 'uz');
+        if (!in_array($lang, ['uz', 'en'], true)) {
+            $lang = 'uz';
         }
 
+        // Uzbekcha versiya — generatsiya qilingan fayldan beriladi (mavjud bo'lsa).
+        if ($lang === 'uz') {
+            if (!$group->pdf_certificate_path || !Storage::disk('public')->exists($group->pdf_certificate_path)) {
+                abort(404, 'Ruxsatnoma hali generatsiya qilinmagan');
+            }
+            return Storage::disk('public')->download(
+                $group->pdf_certificate_path,
+                "ruxsatnoma_{$group->id}.pdf"
+            );
+        }
+
+        // Inglizcha versiya — talab paytida generatsiya qilinadi.
+        $approved = $group->applications()
+            ->with('retakeGroup.teacher')
+            ->where('final_status', 'approved')
+            ->get();
+        if ($approved->isEmpty()) {
+            abort(404, 'Tasdiqlangan fanlar yo\'q');
+        }
+
+        $relPath = app(\App\Services\Retake\RetakeDocumentService::class)
+            ->generatePdfCertificate($group->load('student'), $approved, 'en');
+
         return Storage::disk('public')->download(
-            $group->pdf_certificate_path,
-            "tasdiqnoma_{$group->id}.pdf"
+            $relPath,
+            "permit_{$group->id}.pdf"
         );
     }
 }

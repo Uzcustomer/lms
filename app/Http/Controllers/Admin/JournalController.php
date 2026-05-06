@@ -1295,10 +1295,47 @@ class JournalController extends Controller
             ->get()
             ->keyBy('student_hemis_id');
 
+        // YN submission'lar (asosiy / 12a / 12b) — agar attempt ustuni bo'lsa
+        $hasYnSubAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
         $ynSubmission = YnSubmission::where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('group_hemis_id', $group->group_hemis_id)
+            ->when($hasYnSubAttemptCol, fn($q) => $q->where(function ($qq) {
+                $qq->where('attempt', 1)->orWhereNull('attempt');
+            }))
             ->first();
+        $ynSubmission12a = $hasYnSubAttemptCol ? YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->where('attempt', 2)
+            ->first() : null;
+        $ynSubmission12b = $hasYnSubAttemptCol ? YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $group->group_hemis_id)
+            ->where('attempt', 3)
+            ->first() : null;
+
+        // OSKI/Test uchun sababli ariza ochilgan talabalar (assessment_type bo'yicha)
+        $sababliOskiStudents = [];
+        $sababliTestStudents = [];
+        try {
+            $hasAssessmentTypeCol = \Illuminate\Support\Facades\Schema::hasColumn('excuse_grade_openings', 'assessment_type');
+            if ($hasAssessmentTypeCol) {
+                $studentHemisIdsList = $students->pluck('hemis_id')->toArray();
+                $openings = ExcuseGradeOpening::where('subject_id', $subjectId)
+                    ->whereIn('assessment_type', ['oski', 'test'])
+                    ->where('status', 'active')
+                    ->where('deadline', '>', now())
+                    ->whereIn('student_hemis_id', $studentHemisIdsList)
+                    ->get(['student_hemis_id', 'assessment_type']);
+                foreach ($openings as $op) {
+                    if ($op->assessment_type === 'oski') $sababliOskiStudents[] = $op->student_hemis_id;
+                    if ($op->assessment_type === 'test') $sababliTestStudents[] = $op->student_hemis_id;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Sababli OSKI/Test openings query failed: ' . $e->getMessage());
+        }
 
         // exam_schedules dan OSKI/Test sanalarini olish
         $examSchedule = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
@@ -1389,6 +1426,187 @@ class JournalController extends Controller
             }
         }
 
+        // Har talaba uchun joriy bosqichni hisoblash (badge ko'rsatish uchun) —
+        // 12a/12b OSKI/Test (attempt=2/3) yozuvlari ham inobatga olinadi.
+        $studentStages = [];
+        // Per-attempt OSKI/Test xaritalari — jurnal jadvalida 2/3-urinish ustunlari uchun
+        $oskiAttempt2Map = [];
+        $testAttempt2Map = [];
+        $oskiAttempt3Map = [];
+        $testAttempt3Map = [];
+        try {
+            $hasOskiForWeights = !($examSchedule && $examSchedule->oski_na);
+            $hasTestForWeights = !($examSchedule && $examSchedule->test_na);
+            if ($hasOskiForWeights && $hasTestForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
+            } elseif ($hasOskiForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
+            } elseif ($hasTestForWeights) {
+                $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
+            } else {
+                $defaultWeights = ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+            }
+
+            $stageLevelCode = (string) ($semester?->level_code ?? '');
+            $hasAttemptColForStage = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+            // 12a (attempt=2) va 12b (attempt=3) OSKI/Test baholari (sababsiz va sababli alohida)
+            $fetchAttemptOskiTest = function (int $attempt, bool $excludeSababli) use ($studentHemisIds, $subjectId, $semesterCode, $hasAttemptColForStage) {
+                if (!$hasAttemptColForStage) return [101 => [], 102 => []];
+                $rows = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('attempt', $attempt)
+                    ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason')
+                    ->get();
+                $byType = [101 => [], 102 => []];
+                foreach ($rows as $r) {
+                    $val = null;
+                    if ($r->status === 'pending' && $r->reason === 'low_grade' && $r->grade !== null) $val = $r->grade;
+                    elseif ($r->status === 'pending') $val = null;
+                    elseif ($r->reason === 'absent' && $r->grade === null) {
+                        $val = (!$excludeSababli || empty($r->retake_was_sababli)) ? $r->retake_grade : null;
+                    }
+                    elseif ($r->status === 'recorded' || $r->status === 'closed') $val = $r->grade;
+                    elseif ($r->retake_grade !== null && (!$excludeSababli || empty($r->retake_was_sababli))) $val = $r->retake_grade;
+                    if ($val === null) continue;
+                    $byType[$r->training_type_code][$r->student_hemis_id][] = (float) $val;
+                }
+                $avg = [101 => [], 102 => []];
+                foreach ([101, 102] as $tc) {
+                    foreach ($byType[$tc] as $sid => $vals) {
+                        if (count($vals) > 0) $avg[$tc][$sid] = array_sum($vals) / count($vals);
+                    }
+                }
+                return $avg;
+            };
+
+            $av1 = $fetchAttemptOskiTest(2, true);  // 12a sababsiz
+            $av2 = $fetchAttemptOskiTest(2, false); // 12a sababli bilan
+            $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
+            $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
+
+            // Bladega ham uzatamiz: 2-urinish va 3-urinish OSKI/Test ustunlari uchun
+            $oskiAttempt2Map = $av2[101] ?? [];
+            $testAttempt2Map = $av2[102] ?? [];
+            $oskiAttempt3Map = $bv2[101] ?? [];
+            $testAttempt3Map = $bv2[102] ?? [];
+
+            foreach ($students as $stu) {
+                $h = $stu->hemis_id;
+
+                // JN/MT o'rtacha (joriy holat — sababli retake bilan)
+                $jnSum = 0; $jnDays = 0;
+                foreach ($jbLessonDates as $date) {
+                    $dayGrades = $jbGrades[$h][$date] ?? [];
+                    if (empty($dayGrades)) continue;
+                    $pairs = $jbPairsPerDay[$date] ?? 1;
+                    $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
+                    $jnSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
+                    $jnDays++;
+                }
+                $jn = $jnDays > 0 ? (int) round($jnSum / $jnDays, 0, PHP_ROUND_HALF_UP) : 0;
+
+                $mtSum = 0; $mtDays = 0;
+                foreach ($mtLessonDates as $date) {
+                    $dayGrades = $mtGrades[$h][$date] ?? [];
+                    if (empty($dayGrades)) continue;
+                    $pairs = $mtPairsPerDay[$date] ?? 1;
+                    $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
+                    $mtSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
+                    $mtDays++;
+                }
+                $mt = $mtDays > 0 ? (int) round($mtSum / $mtDays, 0, PHP_ROUND_HALF_UP) : 0;
+
+                if (isset($manualMtGrades[$h])) {
+                    // $manualMtGrades qiymati bevosita float (object emas, 999-qatordagi map natijasi)
+                    $manualVal = is_object($manualMtGrades[$h]) ? ($manualMtGrades[$h]->grade ?? 0) : $manualMtGrades[$h];
+                    $mt = (int) round((float) $manualVal, 0, PHP_ROUND_HALF_UP);
+                }
+
+                $other = $otherGrades[$h] ?? ['on' => null, 'oski' => null, 'test' => null];
+                $davomat = (float) ($attendanceData[$h] ?? 0);
+                $auditH = (float) ($auditoriumHours ?? 0);
+                $davomatPct = $auditH > 0 ? round(($davomat / $auditH) * 100, 2) : 0.0;
+
+                // Asosiy stsenariy (sababli retake bilan = qoshimcha holati, ya'ni current jb/mt jami)
+                $svc = \App\Services\YnAttemptStatusService::class;
+                $main = $svc::buildScenario($jn, $mt, $other['on'] ?? null, $other['oski'] ?? null, $other['test'] ?? null, $davomatPct,
+                    $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
+
+                $hasSababli = false;
+                foreach (($jbGrades[$h] ?? []) as $dg) foreach ($dg as $g) if (!empty($g['retake_was_sababli'])) { $hasSababli = true; break 2; }
+                if (!$hasSababli) foreach (($mtGrades[$h] ?? []) as $dg) foreach ($dg as $g) if (!empty($g['retake_was_sababli'])) { $hasSababli = true; break 2; }
+                if (!$hasSababli && (!empty($other['on_sababli']) || !empty($other['oski_sababli']) || !empty($other['test_sababli']))) $hasSababli = true;
+
+                // Asosiy va qo'shimcha — agar sababli bo'lmasa qo'shimcha = main, aks holda asosiy ham main (chunki bizda V1 alohida ajratilmagan).
+                // Asosiy logika: stage detection mainni qo'shimcha holatida ko'radi. Sababli flag bo'lsa
+                // determineStage qo'shimcha_passed deb qaytaradi.
+                $qoshimcha = $hasSababli ? $main : null;
+
+                // 12a stsenariy — JN/MT bir xil, OSKI/Test attempt=2 dan
+                $a = null;
+                if (!empty($av1[101]) && isset($av1[101][$h]) || !empty($av1[102]) && isset($av1[102][$h])) {
+                    $a = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $av1[101][$h] ?? null, $av1[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
+                }
+                $aQoshimcha = null;
+                if (isset($av2[101][$h]) || isset($av2[102][$h])) {
+                    $aQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $av2[101][$h] ?? null, $av2[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
+                }
+
+                $b = null;
+                if (isset($bv1[101][$h]) || isset($bv1[102][$h])) {
+                    $b = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $bv1[101][$h] ?? null, $bv1[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
+                }
+                $bQoshimcha = null;
+                if (isset($bv2[101][$h]) || isset($bv2[102][$h])) {
+                    $bQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
+                        $bv2[101][$h] ?? null, $bv2[102][$h] ?? null, $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
+                }
+
+                $stageInfo = $svc::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha);
+                $stageKey = $stageInfo['stage'];
+
+                // 1-urinish OSKI/Test imtihonlari hali bo'lmaganida (sanalar
+                // o'tib ketmagan) talabani 2-urinish/Pullik deb belgilamaslik.
+                // Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
+                $today = now()->format('Y-m-d');
+                $oskiDone = $hasOskiForWeights
+                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') <= $today)
+                    : true;
+                $testDone = $hasTestForWeights
+                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') <= $today)
+                    : true;
+                $oneUrinishEnded = $oskiDone && $testDone;
+                $isDavomatFail = ($main['v'] ?? null) === -3;
+                $isInPostMainStage = !in_array($stageKey, [
+                    $svc::STAGE_ASOSIY_PASSED,
+                    $svc::STAGE_QOSHIMCHA_PASSED,
+                ], true);
+                if (!$oneUrinishEnded && !$isDavomatFail && $isInPostMainStage) {
+                    $stageKey = $svc::STAGE_IN_PROGRESS;
+                }
+
+                $studentStages[$h] = array_merge(
+                    $svc::stageLabel($stageKey),
+                    ['stage' => $stageKey, 'v' => $main['v']]
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Student stage computation failed: ' . $e->getMessage());
+            $studentStages = [];
+        }
+
         $absFlat = collect($jbAbsences)->flatten(2);
         $retakeGraderIds = $absFlat->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
         $retakeGraderNames = [];
@@ -1466,7 +1684,16 @@ class JournalController extends Controller
             'levelDeadline',
             'approvedExcuses',
             'excuseGradeSnapshots',
-            'excuseOpenedDatesPerStudent'
+            'excuseOpenedDatesPerStudent',
+            'studentStages',
+            'ynSubmission12a',
+            'ynSubmission12b',
+            'sababliOskiStudents',
+            'sababliTestStudents',
+            'oskiAttempt2Map',
+            'testAttempt2Map',
+            'oskiAttempt3Map',
+            'testAttempt3Map'
         ));
     }
 
@@ -5139,19 +5366,359 @@ class JournalController extends Controller
     }
 
     /**
+     * 12a ga (1-urinish) yoki 12b ga (2-urinish) o'tkazish.
+     * Kerakli kategoriya: yiqilgan talabalar uchun yangi yn_submission(attempt=2|3)
+     * yaratiladi va 12a/12b OSKI/Test sanalari belgilanadi.
+     */
+    public function transferToNextAttempt(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'attempt' => 'required|integer|min:2|max:3',
+            'oski_date' => 'nullable|date',
+            'oski_time' => 'nullable',
+            'test_date' => 'nullable|date',
+            'test_time' => 'nullable',
+        ]);
+
+        $subjectId = $request->subject_id;
+        $semesterCode = $request->semester_code;
+        $groupHemisId = $request->group_hemis_id;
+        $attempt = (int) $request->attempt;
+
+        if (!$request->oski_date && !$request->test_date) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kamida OSKI yoki Test sanasi belgilanishi kerak.',
+            ], 422);
+        }
+
+        // Asosiy YN yuborilgan bo'lishi shart
+        $mainSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->when(\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt'),
+                fn($q) => $q->where(function ($qq) {
+                    $qq->where('attempt', 1)->orWhereNull('attempt');
+                }))
+            ->first();
+        if (!$mainSubmission) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Avval asosiy YN ga yuborish kerak.',
+            ], 422);
+        }
+
+        // 12b ga o'tish uchun avval 12a bo'lgan bo'lishi kerak
+        if ($attempt === 3) {
+            $aSubmission = YnSubmission::where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('group_hemis_id', $groupHemisId)
+                ->where('attempt', 2)
+                ->first();
+            if (!$aSubmission) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '12b ga o\'tkazish uchun avval 12a yaratilishi kerak.',
+                ], 422);
+            }
+        }
+
+        // Bu attempt uchun submission allaqachon bormi?
+        $existing = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('attempt', $attempt)
+            ->first();
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => ($attempt === 2 ? '12a' : '12b') . ' ga avval o\'tkazilgan.',
+            ], 409);
+        }
+
+        $submittedByUserId = auth()->guard('web')->id() ?? auth()->guard('teacher')->id();
+        $submittedByGuard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
+
+        DB::beginTransaction();
+        try {
+            $submissionData = [
+                'subject_id' => $subjectId,
+                'semester_code' => $semesterCode,
+                'group_hemis_id' => $groupHemisId,
+                'attempt' => $attempt,
+                'status' => 'draft',
+                'submitted_by' => $submittedByUserId,
+                'submitted_by_guard' => $submittedByGuard,
+                'submitted_at' => now(),
+            ];
+            $submission = YnSubmission::create($submissionData);
+
+            // exam_schedules ni 12a/12b sanalari bilan yangilash
+            $examSchedule = ExamSchedule::firstOrNew([
+                'group_hemis_id' => $groupHemisId,
+                'subject_id' => $subjectId,
+                'semester_code' => $semesterCode,
+            ]);
+            if ($attempt === 2) {
+                if ($request->oski_date) {
+                    $examSchedule->oski_resit_date = $request->oski_date;
+                    $examSchedule->oski_resit_time = $request->oski_time;
+                }
+                if ($request->test_date) {
+                    $examSchedule->test_resit_date = $request->test_date;
+                    $examSchedule->test_resit_time = $request->test_time;
+                }
+            } else {
+                if ($request->oski_date) {
+                    $examSchedule->oski_resit2_date = $request->oski_date;
+                    $examSchedule->oski_resit2_time = $request->oski_time;
+                }
+                if ($request->test_date) {
+                    $examSchedule->test_resit2_date = $request->test_date;
+                    $examSchedule->test_resit2_time = $request->test_time;
+                }
+            }
+            $examSchedule->save();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => ($attempt === 2 ? '12a' : '12b') . ' shakl yaratildi. Talabalar OSKI/Test ga ruxsat oldi.',
+                'submission_id' => $submission->id,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('transferToNextAttempt error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Yakuniylashga ogohlantirish ma'lumotlari — oxirgi N kunda
+     * dars/imtihonga kelmagan talabalar ro'yxati. Modal'da ko'rsatish uchun.
+     */
+    public function finalizationWarningData(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin', 'registrator_ofisi'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        $windowDays = (int) \App\Models\Setting::get('spravka_deadline_days', 10);
+
+        $absentees = \App\Services\YnAttemptStatusService::findRecentAbsenteesForFinalizationWarning(
+            $request->subject_id,
+            $request->semester_code,
+            $request->group_hemis_id,
+            $windowDays
+        );
+
+        return response()->json([
+            'success' => true,
+            'window_days' => $windowDays,
+            'absentees' => $absentees,
+            'count' => count($absentees),
+        ]);
+    }
+
+    /**
+     * yn_submission'ni yakuniylash. status='final' qilinadi va finalized_at/by yoziladi.
+     * Yakuniy bo'lgandan keyin sababli arizalar "tuzatish dalolatnomasi" ga aylanadi.
+     */
+    public function finalizeAttempt(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin', 'registrator_ofisi'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'attempt' => 'required|integer|min:1|max:3',
+            'override_warning' => 'nullable|boolean',
+        ]);
+
+        $hasStatusCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'status');
+        if (!$hasStatusCol) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Yakuniy rejim uchun migratsiya kerak.',
+            ], 422);
+        }
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
+
+        $subQuery = YnSubmission::where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('group_hemis_id', $request->group_hemis_id);
+        if ($hasAttemptCol) {
+            if ((int) $request->attempt === 1) {
+                $subQuery->where(fn($q) => $q->where('attempt', 1)->orWhereNull('attempt'));
+            } else {
+                $subQuery->where('attempt', (int) $request->attempt);
+            }
+        }
+        $submission = $subQuery->first();
+
+        if (!$submission) {
+            return response()->json([
+                'success' => false,
+                'message' => ((int)$request->attempt === 1 ? 'Asosiy YN' : ($request->attempt === 2 ? '12a' : '12b')) . ' yuborilmagan.',
+            ], 404);
+        }
+
+        if (($submission->status ?? null) === 'final') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu shakl allaqachon yakuniy qilingan.',
+            ], 409);
+        }
+
+        $userId = auth()->guard('web')->id() ?? auth()->guard('teacher')->id();
+        $userGuard = auth()->guard('teacher')->check() ? 'teacher' : 'web';
+        $userName = auth()->user()?->name ?? auth()->user()?->full_name ?? '';
+
+        DB::beginTransaction();
+        try {
+            $submission->update([
+                'status' => 'final',
+                'finalized_at' => now(),
+                'finalized_by_id' => $userId,
+                'finalized_by_guard' => $userGuard,
+            ]);
+
+            // Audit yozuv
+            if (\Illuminate\Support\Facades\Schema::hasTable('yn_form_corrections')) {
+                DB::table('yn_form_corrections')->insert([
+                    'subject_id' => $request->subject_id,
+                    'semester_code' => $request->semester_code,
+                    'group_hemis_id' => $request->group_hemis_id,
+                    'student_hemis_id' => '',
+                    'attempt' => (int) $request->attempt,
+                    'correction_type' => 'finalized',
+                    'from_form' => null,
+                    'to_form' => $this->formNameForAttempt((int) $request->attempt),
+                    'reason' => $request->override_warning
+                        ? 'Spravka muddati tugamagan holda yakuniylashtirildi'
+                        : 'Yakuniylashtirish',
+                    'performed_at' => now(),
+                    'performed_by_id' => $userId,
+                    'performed_by_guard' => $userGuard,
+                    'performed_by_name' => $userName,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => $this->formNameForAttempt((int) $request->attempt) . ' yakuniylashtirildi.',
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('finalizeAttempt error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Yakuniylashtirilgan submissionni Loyiha holatiga qaytarish (faqat superadmin).
+     */
+    public function unfinalizeAttempt(Request $request)
+    {
+        if (!auth()->user()?->hasRole('superadmin')) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin'], 403);
+        }
+        $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+            'attempt' => 'required|integer|min:1|max:3',
+        ]);
+
+        if (!\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'status')) {
+            return response()->json(['success' => false, 'message' => 'Migratsiya yo\'q'], 422);
+        }
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt');
+        $subQuery = YnSubmission::where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('group_hemis_id', $request->group_hemis_id);
+        if ($hasAttemptCol) {
+            if ((int) $request->attempt === 1) {
+                $subQuery->where(fn($q) => $q->where('attempt', 1)->orWhereNull('attempt'));
+            } else {
+                $subQuery->where('attempt', (int) $request->attempt);
+            }
+        }
+        $submission = $subQuery->first();
+
+        if (!$submission) {
+            return response()->json(['success' => false, 'message' => 'Topilmadi'], 404);
+        }
+
+        $submission->update([
+            'status' => 'draft',
+            'finalized_at' => null,
+            'finalized_by_id' => null,
+            'finalized_by_guard' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $this->formNameForAttempt((int) $request->attempt) . ' loyiha holatiga qaytarildi.',
+        ]);
+    }
+
+    private function formNameForAttempt(int $attempt): string
+    {
+        return match ($attempt) {
+            2 => '12a-shakl',
+            3 => '12b-shakl',
+            default => '12-shakl',
+        };
+    }
+
+    /**
      * Admin/Superadmin: OSKI (101) va Test (102) baholarini kiritish yoki yangilash.
      * YN yuborilgan bo'lsa ham ruxsat beriladi — faqat admin va superadmin uchun.
      */
     public function saveExamGrade(Request $request)
     {
-        return response()->json(['success' => false, 'message' => 'OSKI/Test baholarini qo\'yish vaqtinchalik yopilgan.'], 403);
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            return response()->json(['success' => false, 'message' => 'Ruxsat yo\'q'], 403);
+        }
 
         $request->validate([
             'student_hemis_id' => 'required|string',
             'subject_id' => 'required',
             'semester_code' => 'required',
+            'group_hemis_id' => 'nullable|string',
             'training_type_code' => 'required|in:101,102',
             'grade' => 'required|numeric|min:0|max:100',
+            'attempt' => 'nullable|integer|min:1|max:3',
+            'is_sababli' => 'nullable|boolean',
         ]);
 
         $studentHemisId = $request->student_hemis_id;
@@ -5159,40 +5726,111 @@ class JournalController extends Controller
         $semesterCode = $request->semester_code;
         $typeCode = (int) $request->training_type_code;
         $grade = round($request->grade, 2);
+        $attempt = (int) ($request->attempt ?? 1);
+        $isSababli = filter_var($request->input('is_sababli', false), FILTER_VALIDATE_BOOLEAN);
+
+        // Asosiy urinish (attempt=1) faqat sababli ariza orqali kelishi mumkin
+        if ($attempt === 1) {
+            if (!$isSababli) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Asosiy urinish OSKI/Test baholari faqat sababli ariza orqali kiritiladi.',
+                ], 403);
+            }
+            // Tegishli sababli ochilish mavjud bo'lishi shart
+            $assessmentType = $typeCode === 101 ? 'oski' : 'test';
+            if (!\App\Models\ExcuseGradeOpening::isAssessmentTypeOpenForStudent($studentHemisId, $subjectId, $assessmentType)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bu talaba uchun ' . ($typeCode === 101 ? 'OSKI' : 'Test') . ' sababli ariza ochilmagan yoki muddati tugagan.',
+                ], 403);
+            }
+        }
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
 
         $typeNames = [101 => 'OSKI', 102 => 'Test'];
+        $formName = $attempt === 2 ? '12a-shakl' : '12b-shakl';
 
         try {
-            $existing = DB::table('student_grades')
+            // 12a/12b uchun yn_submission mavjud bo'lishi shart
+            if ($attempt >= 2 && \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
+                $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
+                $groupHemisId = $request->group_hemis_id ?? ($student->group_id ?? null);
+                if (!$groupHemisId) {
+                    return response()->json(['success' => false, 'message' => 'Guruh aniqlanmadi.'], 422);
+                }
+                $sub = YnSubmission::where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->where('group_hemis_id', $groupHemisId)
+                    ->where('attempt', $attempt)
+                    ->first();
+                if (!$sub) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $formName . ' yaratilmagan. Avval "12a/12b ga o\'tkazish" tugmasini bosing.',
+                    ], 422);
+                }
+            }
+
+            // Mavjud yozuvni topish: shu attempt uchun
+            $existingQuery = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->where('student_hemis_id', $studentHemisId)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
-                ->where('training_type_code', $typeCode)
-                ->first();
+                ->where('training_type_code', $typeCode);
+            if ($hasAttemptCol) {
+                $existingQuery->where('attempt', $attempt);
+            }
+            $existing = $existingQuery->first();
+
+            $hasSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
 
             if ($existing) {
-                DB::table('student_grades')->where('id', $existing->id)->update([
+                $updateData = [
                     'grade' => $grade,
                     'updated_at' => now(),
-                ]);
+                ];
+                if ($attempt === 1 && $isSababli && $hasSababliCol) {
+                    $updateData['retake_was_sababli'] = true;
+                }
+                DB::table('student_grades')->where('id', $existing->id)->update($updateData);
             } else {
                 $student = DB::table('students')->where('hemis_id', $studentHemisId)->first();
                 if (!$student) {
                     return response()->json(['success' => false, 'message' => 'Talaba topilmadi'], 404);
                 }
 
-                // Fan ma'lumotlarini olish
                 $subject = DB::table('curriculum_subjects')
                     ->where('subject_id', $subjectId)
                     ->where('semester_code', $semesterCode)
                     ->first();
 
-                // Joriy o'quv yili
                 $semester = DB::table('semesters')->where('code', $semesterCode)->first();
 
-                DB::table('student_grades')->insert([
-                    'hemis_id' => 0, // Manual kiritilgan baholar uchun marker
+                // 12a/12b uchun lesson_date ni exam_schedules dan olish
+                $lessonDate = now()->toDateString();
+                if ($attempt >= 2) {
+                    $es = DB::table('exam_schedules')
+                        ->where('group_hemis_id', $student->group_id)
+                        ->where('subject_id', $subjectId)
+                        ->where('semester_code', $semesterCode)
+                        ->first();
+                    if ($es) {
+                        if ($attempt === 2) {
+                            $resitDate = $typeCode === 101 ? ($es->oski_resit_date ?? null) : ($es->test_resit_date ?? null);
+                        } else {
+                            $resitDate = $typeCode === 101 ? ($es->oski_resit2_date ?? null) : ($es->test_resit2_date ?? null);
+                        }
+                        if ($resitDate) {
+                            $lessonDate = $resitDate;
+                        }
+                    }
+                }
+
+                $insertData = [
+                    'hemis_id' => 0,
                     'student_id' => $student->id,
                     'student_hemis_id' => $studentHemisId,
                     'semester_code' => $semesterCode,
@@ -5206,24 +5844,32 @@ class JournalController extends Controller
                     'training_type_code' => $typeCode,
                     'training_type_name' => $typeNames[$typeCode] ?? 'Manual',
                     'employee_id' => 0,
-                    'employee_name' => 'Manual Entry',
+                    'employee_name' => 'Manual Entry (' . $formName . ')',
                     'lesson_pair_code' => '1',
                     'lesson_pair_name' => 'Manual',
                     'lesson_pair_start_time' => '00:00',
                     'lesson_pair_end_time' => '00:00',
                     'grade' => $grade,
-                    'lesson_date' => now()->toDateString(),
+                    'lesson_date' => $lessonDate,
                     'created_at_api' => now(),
                     'status' => 'recorded',
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]);
+                ];
+                if ($hasAttemptCol) {
+                    $insertData['attempt'] = $attempt;
+                }
+                if ($attempt === 1 && $isSababli && $hasSababliCol) {
+                    $insertData['retake_was_sababli'] = true;
+                }
+                DB::table('student_grades')->insert($insertData);
             }
 
             return response()->json([
                 'success' => true,
-                'message' => ($typeNames[$typeCode] ?? 'Baho') . ' saqlandi: ' . $grade,
+                'message' => $formName . ' ' . ($typeNames[$typeCode] ?? 'baho') . ' saqlandi: ' . $grade,
                 'grade' => $grade,
+                'attempt' => $attempt,
             ]);
         } catch (\Exception $e) {
             \Log::error('saveExamGrade xatolik: ' . $e->getMessage(), [
@@ -5233,6 +5879,7 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
         }
     }
+
 
     /**
      * Sababli talabaning bahosini saqlash (retake_grade sifatida)
@@ -6300,7 +6947,9 @@ class JournalController extends Controller
             ->merge($mtColumns->pluck('date'))
             ->min();
 
-        // Baholarni olish (show metodi bilan bir xil logika)
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+        // Baholarni olish — faqat asosiy urinish (attempt=1) yoki migratsiya yo'q bo'lsa hammasi
         $allGradesRaw = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -6308,6 +6957,9 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->whereNotIn('training_type_code', [100, 101, 102, 103])
             ->whereNotNull('lesson_date')
+            ->when($hasAttemptCol, fn($q) => $q->where(function ($qq) {
+                $qq->where('attempt', 1)->orWhereNull('attempt');
+            }))
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhere(function ($q3) use ($minScheduleDate) {
@@ -6440,31 +7092,46 @@ class JournalController extends Controller
         [$calculatedJnGradesV1, $calculatedMtGradesV1] = $computeJnMt($jbGradesV1, $mtGradesMapV1);
         [$calculatedJnGradesV2, $calculatedMtGradesV2] = $computeJnMt($jbGradesV2, $mtGradesMapV2);
 
-        // ON (100), OSKI (101), Test (102), Quiz (103) baholarni olish
-        // Show metodi bilan bir xil logika: getEffectiveGrade + o'rtacha
-        $otherGradesRaw = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->whereIn('training_type_code', [100, 101, 102, 103])
-            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
-                $q2->where('education_year_code', $educationYearCode)
-                    ->orWhere(function ($q3) use ($minScheduleDate) {
-                        $q3->whereNull('education_year_code')
-                            ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
-                    });
-            }))
-            ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-            ->select(array_merge(
-                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id'],
-                $hasSababliCol ? ['retake_was_sababli'] : []
-            ))
-            ->get();
+        // ON (100), OSKI (101), Test (102), Quiz (103) baholarni urinish bo'yicha olish
+        // attempt=1 → asosiy YN, attempt=2 → 12a (1-urinish), attempt=3 → 12b (2-urinish)
+        $fetchOtherGradesByAttempt = function (?int $attempt) use ($studentHemisIds, $subjectId, $semesterCode, $educationYearCode, $minScheduleDate, $hasSababliCol, $hasAttemptCol) {
+            return DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereIn('training_type_code', [100, 101, 102, 103])
+                ->when($hasAttemptCol && $attempt !== null, function ($q) use ($attempt) {
+                    if ($attempt === 1) {
+                        $q->where(function ($qq) {
+                            $qq->where('attempt', 1)->orWhereNull('attempt');
+                        });
+                    } else {
+                        $q->where('attempt', $attempt);
+                    }
+                })
+                ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $educationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                        });
+                }))
+                ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+                ->select(array_merge(
+                    ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id'],
+                    $hasSababliCol ? ['retake_was_sababli'] : []
+                ))
+                ->get();
+        };
 
-        $buildOtherGrades = function (bool $includeSababli) use ($otherGradesRaw, $getEffectiveGrade) {
+        $otherGradesAttempt1 = $fetchOtherGradesByAttempt(1);
+        $otherGradesAttempt2 = $hasAttemptCol ? $fetchOtherGradesByAttempt(2) : collect();
+        $otherGradesAttempt3 = $hasAttemptCol ? $fetchOtherGradesByAttempt(3) : collect();
+
+        $buildOtherGrades = function ($rows, bool $includeSababli) use ($getEffectiveGrade) {
             $grouped = [];
-            foreach ($otherGradesRaw as $g) {
+            foreach ($rows as $g) {
                 $effectiveGrade = $getEffectiveGrade($g, $includeSababli);
                 if ($effectiveGrade === null) continue;
                 $typeCode = $g->training_type_code;
@@ -6491,8 +7158,17 @@ class JournalController extends Controller
             return $byType;
         };
 
-        $gradesByTypeV1 = $buildOtherGrades(false);
-        $gradesByTypeV2 = $buildOtherGrades(true);
+        // Asosiy urinish (attempt=1)
+        $gradesByTypeV1 = $buildOtherGrades($otherGradesAttempt1, false);
+        $gradesByTypeV2 = $buildOtherGrades($otherGradesAttempt1, true);
+
+        // 12a (attempt=2). Agar attempt=2 yozuvi yo'q bo'lsa, talaba uchun bu massivda yozuv bo'lmaydi.
+        $gradesByTypeAv1 = $buildOtherGrades($otherGradesAttempt2, false);
+        $gradesByTypeAv2 = $buildOtherGrades($otherGradesAttempt2, true);
+
+        // 12b (attempt=3)
+        $gradesByTypeBv1 = $buildOtherGrades($otherGradesAttempt3, false);
+        $gradesByTypeBv2 = $buildOtherGrades($otherGradesAttempt3, true);
 
         // O'qituvchilar (jadvaldan tur bo'yicha ajratilgan)
         $teacherData = $this->getTeachersByType($groupHemisId, $subjectId, $semesterCode);
@@ -6645,24 +7321,159 @@ class JournalController extends Controller
                 : 0.0;
         }
 
-        // Sababli retake bo'yicha farq qilgan talabalarni aniqlash
-        // (V1 va V2 baholari bir xil bo'lmasa — demak sababli retake ta'sir qilgan)
-        $sababliHemisIds = [];
+        // 12a/12b OSKI/Test ko'rsatkichlari uchun fallback chain:
+        // - 12a-shakl: attempt=2 yozuvi bo'lsa o'shani; bo'lmasa (qo'shimcha) attempt=1 V2 ni ishlatadi
+        // - 12b-shakl: attempt=3 → attempt=2 → attempt=1 V2
+        $mergeOskiTest = function (array $primary, array $fallback) use ($studentHemisIds) {
+            $result = [100 => [], 101 => [], 102 => []];
+            foreach ($studentHemisIds as $hid) {
+                foreach ([100, 101, 102] as $tc) {
+                    $val = $primary[$tc][$hid] ?? $fallback[$tc][$hid] ?? null;
+                    if ($val !== null) {
+                        $result[$tc][$hid] = $val;
+                    }
+                }
+            }
+            return $result;
+        };
+
+        $gradesByType12aMain = $mergeOskiTest($gradesByTypeAv1, $gradesByTypeV2);
+        $gradesByType12aQosh = $mergeOskiTest($gradesByTypeAv2, $gradesByTypeV2);
+        $gradesByType12bMain = $mergeOskiTest($gradesByTypeBv1, $gradesByType12aMain);
+        $gradesByType12bQosh = $mergeOskiTest($gradesByTypeBv2, $gradesByType12aQosh);
+
+        $levelCodeForRounding = (string) ($semester?->level_code ?? '');
+
+        // Bitta talaba uchun V (yakuniy ko'rsatkich) hisoblash — sheet ichidagi
+        // mantiqning takrori, lekin stage aniqlash uchun ham kerak.
+        $computeV = function (
+            int $jnVal, int $mtVal, ?float $onRaw, ?float $oskiRaw, ?float $testRaw, float $davomatPct
+        ) use ($weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $levelCodeForRounding) {
+            $onVal = $onRaw !== null ? (int) round((float) $onRaw) : 0;
+            $oskiVal = $oskiRaw !== null ? (int) round((float) $oskiRaw) : 0;
+            $testVal = $testRaw !== null ? (int) round((float) $testRaw) : 0;
+            $davomatFailed = $davomatPct >= 25;
+            $roundJnMtToInt = in_array($levelCodeForRounding, ['14', '15'], true);
+
+            if ($roundJnMtToInt) {
+                $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
+                $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
+                $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
+            } else {
+                $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
+                $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
+                $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
+            }
+            if ($weightOski > 0 && $weightTest > 0) {
+                $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
+                $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
+            } elseif ($weightOski > 0) {
+                $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
+                $tBall = 0;
+            } elseif ($weightTest > 0) {
+                $qBall = 0;
+                $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
+            } else {
+                $qBall = 0; $tBall = 0;
+            }
+
+            $maxJbMtOn = $weightJn + $weightMt + $weightOn;
+            $mSum = (($jnVal < 60) || ($mtVal < 60)) ? 0 : round($eBall + $hBall + $kBall, 1);
+            $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
+
+            if ($jnVal === 0 && $mtVal === 0) {
+                $v = '';
+            } elseif ($davomatFailed) {
+                $v = -3;
+            } elseif ($nPct < 0.6) {
+                $v = -2;
+            } elseif (($weightOski > 0 && $oskiVal == 0) || ($weightTest > 0 && $testVal == 0)) {
+                $v = -1;
+            } elseif (($weightJn > 0 && $jnVal < 60) || ($weightMt > 0 && $mtVal < 60)
+                || ($weightOn > 0 && $onVal < 60)
+                || ($weightOski > 0 && $oskiVal < 60) || ($weightTest > 0 && $testVal < 60)) {
+                $v = 0;
+            } else {
+                $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $examSum = round($qBall + $tBall, 1);
+                } elseif ($weightOski > 0) {
+                    $examSum = round($qBall, 1);
+                } elseif ($weightTest > 0) {
+                    $examSum = round($tBall, 1);
+                } else {
+                    $examSum = 0;
+                }
+                $v = $jbMtOnSum + $examSum;
+            }
+            if (is_numeric($v) && $v > 0) {
+                $v = (int) floor((float) $v + 0.5);
+            }
+            return $v;
+        };
+
+        // Har talaba uchun har 6 ta variant uchun V hisoblab, stage aniqlaymiz
+        $stages = [];
+        $studentScenarios = [];
         foreach ($students as $stu) {
             $h = $stu->hemis_id;
-            $differs = (($calculatedJnGradesV1[$h] ?? 0) !== ($calculatedJnGradesV2[$h] ?? 0))
-                || (($calculatedMtGradesV1[$h] ?? 0) !== ($calculatedMtGradesV2[$h] ?? 0))
-                || (($gradesByTypeV1[100][$h] ?? null) !== ($gradesByTypeV2[100][$h] ?? null))
-                || (($gradesByTypeV1[101][$h] ?? null) !== ($gradesByTypeV2[101][$h] ?? null))
-                || (($gradesByTypeV1[102][$h] ?? null) !== ($gradesByTypeV2[102][$h] ?? null));
-            if ($differs) {
-                $sababliHemisIds[] = $h;
-            }
-        }
-        $sababliStudents = $students->filter(fn($s) => in_array($s->hemis_id, $sababliHemisIds, true))->values();
-        $hasSababli = $sababliStudents->isNotEmpty();
+            $davomatPct = (float) ($davomatByStudent[$h] ?? 0);
 
-        // Shablon yuklash
+            $build = function (int $jn, int $mt, array $other) use ($h, $computeV, $davomatPct) {
+                $on = $other[100][$h] ?? null;
+                $oski = $other[101][$h] ?? null;
+                $test = $other[102][$h] ?? null;
+                return [
+                    'v' => $computeV($jn, $mt, $on, $oski, $test, $davomatPct),
+                    'jn' => $jn, 'mt' => $mt,
+                    'oski' => $oski !== null ? (int) round((float) $oski) : null,
+                    'test' => $test !== null ? (int) round((float) $test) : null,
+                ];
+            };
+
+            $jn1 = (int) ($calculatedJnGradesV1[$h] ?? 0);
+            $mt1 = (int) ($calculatedMtGradesV1[$h] ?? 0);
+            $jn2 = (int) ($calculatedJnGradesV2[$h] ?? 0);
+            $mt2 = (int) ($calculatedMtGradesV2[$h] ?? 0);
+
+            $main       = $build($jn1, $mt1, $gradesByTypeV1);
+            $qoshimcha  = $build($jn2, $mt2, $gradesByTypeV2);
+            // 12a/12b ham JN/MT uchun qo'shimcha (V2) ni ishlatadi — JN/MT qayta ko'rilmaydi
+            $aHas       = isset($gradesByTypeAv1[100][$h]) || isset($gradesByTypeAv1[101][$h]) || isset($gradesByTypeAv1[102][$h]);
+            $aQHas      = isset($gradesByTypeAv2[100][$h]) || isset($gradesByTypeAv2[101][$h]) || isset($gradesByTypeAv2[102][$h]);
+            $bHas       = isset($gradesByTypeBv1[100][$h]) || isset($gradesByTypeBv1[101][$h]) || isset($gradesByTypeBv1[102][$h]);
+            $bQHas      = isset($gradesByTypeBv2[100][$h]) || isset($gradesByTypeBv2[101][$h]) || isset($gradesByTypeBv2[102][$h]);
+
+            $a          = $aHas ? $build($jn2, $mt2, $gradesByType12aMain) : null;
+            $aQoshimcha = $aQHas ? $build($jn2, $mt2, $gradesByType12aQosh) : null;
+            $b          = $bHas ? $build($jn2, $mt2, $gradesByType12bMain) : null;
+            $bQoshimcha = $bQHas ? $build($jn2, $mt2, $gradesByType12bQosh) : null;
+
+            $stage = \App\Services\YnAttemptStatusService::determineStage(
+                $main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha
+            );
+
+            $stages[$h] = $stage['stage'];
+            $studentScenarios[$h] = compact('main', 'qoshimcha', 'a', 'aQoshimcha', 'b', 'bQoshimcha');
+        }
+
+        $activeForms = \App\Services\YnAttemptStatusService::activeFormsInGroup(
+            array_map(fn($s) => ['stage' => $s], $stages)
+        );
+
+        // Har shaklga kirishi kerak bo'lgan talabalar va o'sha shakl uchun grade map
+        // tanlash. fillSheet bir xil signature bilan ishlaydi.
+        $studentsForForm = function (string $form) use ($students, $stages) {
+            return $students->filter(function ($s) use ($form, $stages) {
+                $stage = $stages[$s->hemis_id] ?? null;
+                if (!$stage) return false;
+                return in_array($form, \App\Services\YnAttemptStatusService::formsForStage($stage), true);
+            })->values();
+        };
+
+        $svc = \App\Services\YnAttemptStatusService::class;
+
+        // Shablon yuklash — har shakl uchun alohida sheet
         $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
         if (!file_exists($templatePath)) {
             return back()->with('error', 'Shablon fayli topilmadi');
@@ -6671,12 +7482,29 @@ class JournalController extends Controller
         $spreadsheet = SpreadsheetIOFactory::load($templatePath);
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Agar sababli retakelar bor bo'lsa — 2-sheet uchun shablonni qayta yuklab,
-        // asosiy spreadsheet'ga qo'shamiz (barcha stillar saqlanadi)
-        $sheet2 = null;
-        if ($hasSababli) {
-            $tpl2 = SpreadsheetIOFactory::load($templatePath);
-            $sheet2 = $spreadsheet->addExternalSheet($tpl2->getActiveSheet());
+        $sheetMap = [
+            $svc::FORM_12 => $sheet,
+        ];
+        // Har keyingi shakl uchun shablonni qayta yuklab qo'shamiz
+        $orderedForms = [
+            $svc::FORM_12_QOSHIMCHA,
+            $svc::FORM_12A,
+            $svc::FORM_12A_QOSHIMCHA,
+            $svc::FORM_12B,
+            $svc::FORM_12B_QOSHIMCHA,
+        ];
+        foreach ($orderedForms as $form) {
+            if (!empty($activeForms[$form])) {
+                $tplExtra = SpreadsheetIOFactory::load($templatePath);
+                $extSheet = $tplExtra->getActiveSheet();
+                // Asosiy spreadsheet'da bir xil nomli sheet bo'lmasligi uchun
+                // qo'shishdan oldin vaqtinchalik unikal nom beramiz
+                // (keyinroq fillSheet to'g'ri title bilan o'zgartiradi)
+                try {
+                    $extSheet->setTitle(mb_substr('tmp_' . str_replace('-', '', $form) . '_' . uniqid(), 0, 31));
+                } catch (\Throwable $e) {}
+                $sheetMap[$form] = $spreadsheet->addExternalSheet($extSheet);
+            }
         }
 
         $levelCodeForRounding = (string) ($semester?->level_code ?? '');
@@ -6877,16 +7705,142 @@ class JournalController extends Controller
         };
 
         $cleanGroupName = str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Sheet');
-        $mainSheetTitle = mb_substr($cleanGroupName, 0, 31);
-        $suppSheetTitle = mb_substr($cleanGroupName . ' (qo\'sh)', 0, 31);
-        $suppShaklLabel = $shaklName . ' qo\'shimchasi';
+        $sheetTitleFor = function (string $form) use ($cleanGroupName) {
+            $suffixMap = [
+                \App\Services\YnAttemptStatusService::FORM_12             => '',
+                \App\Services\YnAttemptStatusService::FORM_12_QOSHIMCHA   => ' (qo\'sh)',
+                \App\Services\YnAttemptStatusService::FORM_12A            => ' 12a',
+                \App\Services\YnAttemptStatusService::FORM_12A_QOSHIMCHA  => ' 12a-qo\'sh',
+                \App\Services\YnAttemptStatusService::FORM_12B            => ' 12b',
+                \App\Services\YnAttemptStatusService::FORM_12B_QOSHIMCHA  => ' 12b-qo\'sh',
+            ];
+            return mb_substr($cleanGroupName . ($suffixMap[$form] ?? ''), 0, 31);
+        };
 
-        // 12-shakl — barcha talabalar, asl holatdagi baholar (sababli retakesiz)
-        $fillSheet($sheet, $students, $calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1, $mainSheetTitle, $shaklName);
+        $shaklLabelFor = function (string $form) use ($shaklName) {
+            return [
+                \App\Services\YnAttemptStatusService::FORM_12             => $shaklName,
+                \App\Services\YnAttemptStatusService::FORM_12_QOSHIMCHA   => $shaklName . ' qo\'shimchasi',
+                \App\Services\YnAttemptStatusService::FORM_12A            => '12a-shakl',
+                \App\Services\YnAttemptStatusService::FORM_12A_QOSHIMCHA  => '12a-shakl qo\'shimchasi',
+                \App\Services\YnAttemptStatusService::FORM_12B            => '12b-shakl',
+                \App\Services\YnAttemptStatusService::FORM_12B_QOSHIMCHA  => '12b-shakl qo\'shimchasi',
+            ][$form] ?? $shaklName;
+        };
 
-        // 12-qo'shimcha shakl — faqat sababli retake qilgan talabalar, yangilangan baholar
-        if ($sheet2 !== null) {
-            $fillSheet($sheet2, $sababliStudents, $calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByTypeV2, $suppSheetTitle, $suppShaklLabel);
+        // Har shakl uchun mos baho map'lari
+        $gradeMapsFor = function (string $form) use (
+            $calculatedJnGradesV1, $calculatedJnGradesV2,
+            $calculatedMtGradesV1, $calculatedMtGradesV2,
+            $gradesByTypeV1, $gradesByTypeV2,
+            $gradesByType12aMain, $gradesByType12aQosh,
+            $gradesByType12bMain, $gradesByType12bQosh
+        ) {
+            switch ($form) {
+                case \App\Services\YnAttemptStatusService::FORM_12:
+                    return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
+                case \App\Services\YnAttemptStatusService::FORM_12_QOSHIMCHA:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByTypeV2];
+                case \App\Services\YnAttemptStatusService::FORM_12A:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12aMain];
+                case \App\Services\YnAttemptStatusService::FORM_12A_QOSHIMCHA:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12aQosh];
+                case \App\Services\YnAttemptStatusService::FORM_12B:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12bMain];
+                case \App\Services\YnAttemptStatusService::FORM_12B_QOSHIMCHA:
+                    return [$calculatedJnGradesV2, $calculatedMtGradesV2, $gradesByType12bQosh];
+            }
+            return [$calculatedJnGradesV1, $calculatedMtGradesV1, $gradesByTypeV1];
+        };
+
+        // Har shakl uchun sheet to'ldirish
+        foreach ($sheetMap as $form => $targetSheet) {
+            $studentsList = $form === \App\Services\YnAttemptStatusService::FORM_12
+                ? $students  // 12-shakl har doim hammasini ko'rsatadi
+                : $studentsForForm($form);
+            if ($form !== \App\Services\YnAttemptStatusService::FORM_12 && $studentsList->isEmpty()) {
+                // Bo'sh sheet'larni qo'shmaymiz (template default holida qoladi — keyin tozalanadi)
+                continue;
+            }
+
+            [$jnMap, $mtMap, $otherMap] = $gradeMapsFor($form);
+            $fillSheet(
+                $targetSheet,
+                $studentsList,
+                $jnMap,
+                $mtMap,
+                $otherMap,
+                $sheetTitleFor($form),
+                $shaklLabelFor($form)
+            );
+        }
+
+        // 7-sheet: O'zgarishlar tarixi (yn_form_corrections audit log)
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('yn_form_corrections')) {
+                $corrections = DB::table('yn_form_corrections as c')
+                    ->leftJoin('students as s', 's.hemis_id', '=', 'c.student_hemis_id')
+                    ->leftJoin('absence_excuses as ae', 'ae.id', '=', 'c.absence_excuse_id')
+                    ->where('c.subject_id', $subjectId)
+                    ->where('c.semester_code', $semesterCode)
+                    ->where('c.group_hemis_id', $groupHemisId)
+                    ->orderBy('c.performed_at')
+                    ->select([
+                        'c.performed_at', 'c.correction_type', 'c.attempt',
+                        'c.student_hemis_id', 's.full_name as student_name',
+                        'c.from_form', 'c.to_form', 'c.reason',
+                        'c.performed_by_name', 'ae.doc_number as excuse_doc',
+                    ])
+                    ->get();
+
+                if ($corrections->isNotEmpty()) {
+                    $historySheet = $spreadsheet->createSheet();
+                    $historySheet->setTitle(mb_substr('Tarix ' . $cleanGroupName, 0, 31));
+                    $historySheet->setCellValue('A1', 'O\'zgarishlar tarixi — ' . ($subject->subject_name ?? '') . ' / ' . ($group->name ?? ''));
+                    $historySheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+                    $historySheet->mergeCells('A1:I1');
+
+                    $headers = ['#', 'Sana', 'Tur', 'Urinish', 'Talaba', 'Qayerdan', 'Qayerga', 'Sabab / Ariza', 'Kim'];
+                    foreach ($headers as $i => $h) {
+                        $col = chr(ord('A') + $i);
+                        $historySheet->setCellValue($col . '3', $h);
+                        $historySheet->getStyle($col . '3')->getFont()->setBold(true);
+                        $historySheet->getStyle($col . '3')->getFill()
+                            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                            ->getStartColor()->setARGB('FFE5E7EB');
+                    }
+                    $typeLabels = [
+                        'late_sababli' => 'Kechikkan sababli',
+                        'finalized' => 'Yakuniylash',
+                        'moved_to_qoshimcha' => 'Qo\'shimchaga',
+                        'removed_from_12a' => '12a dan chiqdi',
+                        'removed_from_12b' => '12b dan chiqdi',
+                    ];
+                    $row = 4;
+                    foreach ($corrections as $i => $c) {
+                        $attemptLabel = match ((int)($c->attempt ?? 1)) { 2 => '12a', 3 => '12b', default => 'Asosiy' };
+                        $reasonText = $c->reason ?: '';
+                        if ($c->excuse_doc) $reasonText .= ' (Ariza: ' . $c->excuse_doc . ')';
+                        $historySheet->setCellValue('A' . $row, $i + 1);
+                        $historySheet->setCellValue('B' . $row, $c->performed_at ? \Carbon\Carbon::parse($c->performed_at)->format('d.m.Y H:i') : '-');
+                        $historySheet->setCellValue('C' . $row, $typeLabels[$c->correction_type] ?? $c->correction_type);
+                        $historySheet->setCellValue('D' . $row, $attemptLabel);
+                        $historySheet->setCellValue('E' . $row, $c->student_name ?: ($c->student_hemis_id ?: '—'));
+                        $historySheet->setCellValue('F' . $row, $c->from_form ?: '—');
+                        $historySheet->setCellValue('G' . $row, $c->to_form ?: '—');
+                        $historySheet->setCellValue('H' . $row, $reasonText);
+                        $historySheet->setCellValue('I' . $row, $c->performed_by_name ?: '—');
+                        $row++;
+                    }
+                    foreach (range('A', 'I') as $col) {
+                        $historySheet->getColumnDimension($col)->setAutoSize(true);
+                    }
+                    $historySheet->getStyle('A3:I' . ($row - 1))->getBorders()->getAllBorders()
+                        ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Tarix sheet generatsiyada xatolik: ' . $e->getMessage());
         }
 
         $tempDir = storage_path('app/public/yn_qaydnoma_excel');

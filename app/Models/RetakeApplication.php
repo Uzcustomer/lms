@@ -17,6 +17,7 @@ class RetakeApplication extends Model
     public const REJECTED_BY_REGISTRAR = 'registrar';
     public const REJECTED_BY_ACADEMIC_DEPT = 'academic_dept';
     public const REJECTED_BY_SYSTEM_HEMIS = 'system_hemis';
+    public const REJECTED_BY_WINDOW_CLOSED = 'window_closed';
 
     protected $fillable = [
         'group_id',
@@ -26,6 +27,16 @@ class RetakeApplication extends Model
         'semester_id',
         'semester_name',
         'credit',
+
+        'previous_joriy_grade',
+        'previous_mustaqil_grade',
+        'has_oske',
+        'has_test',
+        'has_sinov',
+        'oske_score',
+        'test_score',
+        'final_grade_value',
+        'final_grade_set_at',
 
         'dean_status', 'dean_user_id', 'dean_user_name', 'dean_decision_at', 'dean_reason',
         'registrar_status', 'registrar_user_id', 'registrar_user_name', 'registrar_decision_at', 'registrar_reason',
@@ -38,6 +49,15 @@ class RetakeApplication extends Model
 
     protected $casts = [
         'credit' => 'decimal:2',
+        'previous_joriy_grade' => 'decimal:2',
+        'previous_mustaqil_grade' => 'decimal:2',
+        'has_oske' => 'boolean',
+        'has_test' => 'boolean',
+        'has_sinov' => 'boolean',
+        'oske_score' => 'decimal:2',
+        'test_score' => 'decimal:2',
+        'final_grade_value' => 'decimal:2',
+        'final_grade_set_at' => 'datetime',
         'dean_decision_at' => 'datetime',
         'registrar_decision_at' => 'datetime',
         'academic_dept_decision_at' => 'datetime',
@@ -88,6 +108,7 @@ class RetakeApplication extends Model
                 self::REJECTED_BY_REGISTRAR => 'Registrator',
                 self::REJECTED_BY_ACADEMIC_DEPT => 'O\'quv bo\'limi',
                 self::REJECTED_BY_SYSTEM_HEMIS => 'Tizim (HEMIS)',
+                self::REJECTED_BY_WINDOW_CLOSED => "Oyna yopildi (muddat o'tdi)",
                 default => 'Tizim',
             };
             return "Rad etilgan: {$whoLabel}";

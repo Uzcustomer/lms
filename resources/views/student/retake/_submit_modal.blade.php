@@ -52,11 +52,14 @@
                     </div>
                 </div>
 
-                {{-- Kvitansiya --}}
+                {{-- Tushuntirish xati --}}
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1">
-                        {{ __("Kvitansiya") }} <span class="text-red-500">*</span>
+                        {{ __("Dekanat tasdig'idagi tushuntirish xati") }} <span class="text-red-500">*</span>
                     </label>
+                    <p class="text-[11px] text-gray-600 mb-2">
+                        {{ __("Dekanat tomonidan tasdiqlangan tushuntirish xati yuklansin.") }}
+                    </p>
                     <input type="file"
                            name="receipt"
                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
@@ -64,6 +67,10 @@
                            class="block w-full text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                     <p class="text-[11px] text-gray-500 mt-1">
                         PDF, DOC, JPG, PNG · max {{ $receiptMaxMb }} MB
+                    </p>
+                    <p class="text-[11px] text-amber-700 mt-1">
+                        <span class="font-medium">{{ __("Izoh") }}:</span>
+                        {{ __("Uning haqiqiyligi dekan tomonidan tekshiriladi.") }}
                     </p>
                 </div>
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/student_data_cache.dart';
 
 enum AuthState { initial, loading, authenticated, profileIncomplete, unauthenticated, requires2fa, error }
 
@@ -283,6 +284,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     await _authService.logout();
+    await StudentDataCache().clear();
     _user = null;
     _guard = null;
     _pendingLogin = null;

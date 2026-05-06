@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Exports\AbsenceExcuseStatusExport;
 use App\Exports\AbsenceExcuseTemplate;
 use App\Http\Controllers\Controller;
 use App\Imports\AbsenceExcuseImport;
@@ -87,6 +88,16 @@ class AbsenceExcuseController extends Controller
         return view('admin.absence-excuses.index', compact('excuses', 'stats', 'reasons', 'reviewerStats', 'reviewerExcuses'));
     }
 
+    public function exportByStatus(string $status)
+    {
+        if (!in_array($status, ['pending', 'approved', 'rejected'], true)) {
+            abort(404);
+        }
+
+        $fileName = 'sababli-arizalar-' . $status . '-' . now()->format('Y-m-d_H-i') . '.xlsx';
+        return Excel::download(new AbsenceExcuseStatusExport($status), $fileName);
+    }
+
     public function show($id)
     {
         $excuse = AbsenceExcuse::with(['student', 'makeups' => function ($q) {
@@ -154,9 +165,22 @@ class AbsenceExcuseController extends Controller
             // Word shablon mavjudligini tekshirish
             $template = DocumentTemplate::getActiveByType('absence_excuse');
 
+            \Log::info('[AbsenceExcuse] approve() boshlandi', [
+                'excuse_id' => $excuse->id,
+                'template_found' => $template ? true : false,
+                'template_id' => $template?->id,
+                'template_file_path' => $template?->file_path,
+            ]);
+
             $wordTemplateSuccess = false;
 
             if ($template) {
+                $templateFilePath = \Illuminate\Support\Facades\Storage::disk('public')->path($template->file_path);
+                \Log::info('[AbsenceExcuse] shablon fayli tekshirilmoqda', [
+                    'abs_path' => $templateFilePath,
+                    'file_exists' => file_exists($templateFilePath),
+                ]);
+
                 try {
                     // Word shablon orqali PDF generatsiya
                     $service = new DocumentTemplateService();
@@ -251,24 +275,27 @@ class AbsenceExcuseController extends Controller
                 $jnOpeningDays = max((int) Setting::get('lesson_opening_days', 3), 1);
                 $deadline = now()->addDays($jnOpeningDays)->endOfDay();
 
-                // Har bir fan uchun faqat bitta opening yaratish (dublikat oldini olish)
-                $processedSubjects = [];
+                // Har bir fan uchun har xil assessment_type uchun alohida opening
+                $processedKeys = [];
 
                 foreach ($excuse->makeups as $makeup) {
                     if (!$makeup->subject_id) {
                         continue;
                     }
-                    // Bitta fan uchun bir marta ochish
-                    if (in_array($makeup->subject_id, $processedSubjects)) {
+                    // (subject + assessment_type) juftligi uchun bir marta ochish
+                    $key = $makeup->subject_id . '_' . ($makeup->assessment_type ?? 'all');
+                    if (in_array($key, $processedKeys, true)) {
                         continue;
                     }
-                    $processedSubjects[] = $makeup->subject_id;
+                    $processedKeys[] = $key;
 
                     ExcuseGradeOpening::create([
                         'absence_excuse_id' => $excuse->id,
                         'absence_excuse_makeup_id' => $makeup->id,
                         'student_hemis_id' => $excuse->student_hemis_id,
                         'subject_id' => $makeup->subject_id,
+                        'attempt' => 1, // sababli asosiy urinish doirasida
+                        'assessment_type' => $makeup->assessment_type ?? null,
                         'date_from' => $dateFrom,
                         'date_to' => $dateTo,
                         'deadline' => $deadline,
@@ -280,9 +307,67 @@ class AbsenceExcuseController extends Controller
                 \Log::warning('ExcuseGradeOpening yaratishda xatolik: ' . $e->getMessage());
             }
 
+            // Yakuniylashtirilgan shaklga tegishli sababli kelgan bo'lsa
+            // (kechikkan ma'lumotnoma) — yn_form_corrections ga audit yozuv
+            $lateCorrections = 0;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('yn_form_corrections')
+                    && \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'status')) {
+                    $student = DB::table('students')->where('hemis_id', $excuse->student_hemis_id)->first();
+                    $groupHemisId = $student->group_id ?? null;
+                    if ($groupHemisId) {
+                        foreach ($excuse->makeups as $makeup) {
+                            if (!$makeup->subject_id) continue;
+                            // Talaba semestrlari — bittasini tanlaymiz (joriy)
+                            $semCode = DB::table('curriculum_subjects')
+                                ->where('subject_id', $makeup->subject_id)
+                                ->where('curricula_hemis_id', $student->curriculum_hemis_id ?? null)
+                                ->value('semester_code');
+                            if (!$semCode) continue;
+
+                            $finalSubmissions = DB::table('yn_submissions')
+                                ->where('subject_id', $makeup->subject_id)
+                                ->where('semester_code', $semCode)
+                                ->where('group_hemis_id', $groupHemisId)
+                                ->where('status', 'final')
+                                ->get(['id', 'attempt']);
+
+                            foreach ($finalSubmissions as $finSub) {
+                                $attempt = (int) ($finSub->attempt ?? 1);
+                                $formName = match ($attempt) { 2 => '12a-shakl', 3 => '12b-shakl', default => '12-shakl' };
+                                DB::table('yn_form_corrections')->insert([
+                                    'subject_id' => $makeup->subject_id,
+                                    'semester_code' => $semCode,
+                                    'group_hemis_id' => $groupHemisId,
+                                    'student_hemis_id' => $excuse->student_hemis_id,
+                                    'attempt' => $attempt,
+                                    'correction_type' => 'late_sababli',
+                                    'from_form' => $formName,
+                                    'to_form' => $formName . '-tuzatish',
+                                    'absence_excuse_id' => $excuse->id,
+                                    'reason' => 'Yakuniy qilingandan keyin sababli ariza keldi',
+                                    'performed_at' => now(),
+                                    'performed_by_id' => $user->id,
+                                    'performed_by_guard' => 'web',
+                                    'performed_by_name' => $reviewerName,
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]);
+                                $lateCorrections++;
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Late sababli correction logging failed: ' . $e->getMessage());
+            }
+
             $successMsg = 'Ariza muvaffaqiyatli tasdiqlandi. PDF hujjat yaratildi.';
             if ($openingsCreated > 0) {
                 $successMsg .= " {$openingsCreated} ta fan uchun baho ochildi.";
+            }
+            if ($lateCorrections > 0) {
+                $successMsg .= " ⚠ {$lateCorrections} ta tuzatish dalolatnomasi yaratildi (yakuniy qilingan shakllar uchun).";
             }
             if (!$wordTemplateSuccess && isset($templateError)) {
                 $successMsg .= ' (Shablon xatosi: ' . $templateError . ' — Blade shablon ishlatildi)';
@@ -445,6 +530,29 @@ class AbsenceExcuseController extends Controller
         }
 
         return back()->with('success', $message);
+    }
+
+    public function resetToPending($id)
+    {
+        $excuse = AbsenceExcuse::findOrFail($id);
+
+        if (!$excuse->isApproved()) {
+            return back()->with('error', 'Faqat tasdiqlangan arizani qaytarish mumkin.');
+        }
+
+        if ($excuse->approved_pdf_path && Storage::disk('public')->exists($excuse->approved_pdf_path)) {
+            Storage::disk('public')->delete($excuse->approved_pdf_path);
+        }
+
+        $excuse->update([
+            'status' => 'pending',
+            'approved_pdf_path' => null,
+            'reviewed_by' => null,
+            'reviewed_by_name' => null,
+            'reviewed_at' => null,
+        ]);
+
+        return back()->with('success', 'Ariza pending holatiga qaytarildi. Endi qayta tasdiqlashingiz mumkin.');
     }
 
     public function downloadPdf($id)

@@ -13,6 +13,8 @@ use App\Services\Retake\RetakeApplicationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -35,6 +37,26 @@ class RetakeApprovalController extends Controller
         $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
+        $filter = $request->input('filter', 'all');
+        $search = trim((string) $request->input('search', ''));
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        // Talaba ma'lumotlari bo'yicha cascading filtrlar
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
+
         // Ariza-guruhlari joiniga ariza-bog'liq filtr
         $query = RetakeApplicationGroup::query()
             ->with([
@@ -49,8 +71,8 @@ class RetakeApprovalController extends Controller
             ->orderByDesc('created_at');
 
         // Dekan — faqat o'z fakulteti talabalari
-        if ($role === 'dean') {
-            $facultyIds = $user->deanFacultyIds; // department_hemis_id ro'yxati
+        if ($role === 'dean' && $user instanceof Teacher) {
+            $facultyIds = array_map('intval', $user->deanFacultyIds);
             if (empty($facultyIds)) {
                 $query->whereRaw('1=0');
             } else {
@@ -62,30 +84,92 @@ class RetakeApprovalController extends Controller
             }
         }
 
-        // Filtrlar
-        if ($filter = $request->input('filter', 'pending_mine')) {
-            $this->applyFilter($query, $filter, $role);
-        }
+        // Holat filtri
+        $this->applyFilter($query, $filter, $role);
 
-        if ($search = $request->input('search')) {
-            $query->whereHas('student', function ($q) use ($search) {
-                $q->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('hemis_id', 'like', "%{$search}%");
+        // F.I.SH yoki HEMIS ID bo'yicha qidirish
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('student', function ($sq) use ($search) {
+                    $sq->where('full_name', 'like', "%{$search}%");
+                });
+
+                // Faqat raqamli qidiruv → HEMIS ID bo'yicha
+                if (ctype_digit($search)) {
+                    $q->orWhere('student_hemis_id', $search);
+                }
             });
         }
 
-        $groups = $query->paginate(20)->withQueryString();
+        // Sana oralig'i (yuborilgan sana bo'yicha)
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
 
-        // Statistika
+        // Talaba ma'lumotlari bo'yicha qo'shimcha cascading filtrlar
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+        if ($hasStudentFilter) {
+            $query->whereIn('student_hemis_id', function ($sub) use ($studentFilters) {
+                $sub->select('hemis_id')->from('students');
+                if (!empty($studentFilters['education_type'])) {
+                    $sub->where('education_type_code', $studentFilters['education_type']);
+                }
+                if (!empty($studentFilters['department'])) {
+                    $sub->where('department_id', $studentFilters['department']);
+                }
+                if (!empty($studentFilters['specialty'])) {
+                    $sub->where('specialty_id', $studentFilters['specialty']);
+                }
+                if (!empty($studentFilters['level_code'])) {
+                    $sub->where('level_code', $studentFilters['level_code']);
+                }
+                if (!empty($studentFilters['semester_code'])) {
+                    $sub->where('semester_code', $studentFilters['semester_code']);
+                }
+                if (!empty($studentFilters['group'])) {
+                    $sub->where('group_id', $studentFilters['group']);
+                }
+            });
+        }
+
+        // Fan bo'yicha filtr — guruhda hech bo'lmaganda bitta arizа shu fanga tegishli
+        if ($subjectFilter) {
+            $query->whereHas('applications', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+
+        $groups = $query->paginate($perPage)->withQueryString();
+
+        // Statistika (faqat rolga tegishli arizalar bo'yicha)
         $stats = $this->calculateStats($role, $user);
+
+        // Registrator uchun: to'lov cheki tekshirilishi kutilayotganlar soni
+        $paymentToVerifyCount = 0;
+        if ($role === 'registrar') {
+            $paymentToVerifyCount = RetakeApplicationGroup::query()
+                ->whereNotNull('payment_uploaded_at')
+                ->where('payment_verification_status', 'pending')
+                ->count();
+        }
+
+        // Filtr bo'yicha ma'lumotlar (keshlangan)
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
+        $subjects = \App\Services\Retake\RetakeFilterCache::subjects();
 
         return view('teacher.retake.index', [
             'groups' => $groups,
             'role' => $role,
             'filter' => $filter,
             'search' => $search,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
             'stats' => $stats,
+            'paymentToVerifyCount' => $paymentToVerifyCount,
             'minReasonLength' => \App\Models\RetakeSetting::rejectReasonMinLength(),
+            'educationTypes' => $educationTypes,
+            'subjects' => $subjects,
         ]);
     }
 
@@ -118,16 +202,28 @@ class RetakeApprovalController extends Controller
 
     /**
      * Ariza bo'yicha qaror (tasdiqlash yoki rad etish).
+     * Registrator tasdiqlasa — joriy/mustaqil ta'lim baholari va OSKE/TEST flaglari
+     * majburiy.
      */
     public function decide(Request $request, int $applicationId): RedirectResponse
     {
         $user = RetakeAccess::currentStaff();
         $role = $this->detectRole($user);
 
-        $data = $request->validate([
+        $rules = [
             'decision' => 'required|in:approved,rejected',
             'reason' => 'nullable|string|min:' . \App\Models\RetakeSetting::rejectReasonMinLength() . '|max:1000',
-        ]);
+        ];
+
+        if ($role === 'registrar' && $request->input('decision') === 'approved') {
+            $rules['previous_joriy_grade'] = 'required|numeric|min:0|max:100';
+            $rules['previous_mustaqil_grade'] = 'required|numeric|min:0|max:100';
+            $rules['has_oske'] = 'sometimes|boolean';
+            $rules['has_test'] = 'sometimes|boolean';
+            $rules['has_sinov'] = 'sometimes|boolean';
+        }
+
+        $data = $request->validate($rules);
 
         $app = RetakeApplication::findOrFail($applicationId);
 
@@ -147,6 +243,13 @@ class RetakeApprovalController extends Controller
                     $user,
                     $data['decision'],
                     $data['reason'] ?? null,
+                    [
+                        'previous_joriy_grade' => $data['previous_joriy_grade'] ?? null,
+                        'previous_mustaqil_grade' => $data['previous_mustaqil_grade'] ?? null,
+                        'has_oske' => (bool) ($data['has_oske'] ?? false),
+                        'has_test' => (bool) ($data['has_test'] ?? false),
+                        'has_sinov' => (bool) ($data['has_sinov'] ?? false),
+                    ],
                 );
             }
         } catch (ValidationException $e) {
@@ -154,6 +257,268 @@ class RetakeApprovalController extends Controller
         }
 
         return redirect()->back()->with('success', 'Qaror muvaffaqiyatli yozildi');
+    }
+
+    /**
+     * Tanlangan arizalarni bir vaqtda tasdiqlash yoki rad etish.
+     * - Dekan: tasdiqlash va rad etish ikkalasi ham bulk amalga oshiriladi
+     * - Registrator: faqat bulk rad etish (tasdiqlash uchun har ariza uchun
+     *   alohida baho/flaglar kiritilishi kerak — bulk emas)
+     */
+    public function bulkDecide(Request $request): RedirectResponse
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $minReason = \App\Models\RetakeSetting::rejectReasonMinLength();
+
+        $data = $request->validate([
+            'application_ids' => 'required|array|min:1',
+            'application_ids.*' => 'integer',
+            'decision' => 'required|in:approved,rejected',
+            'reason' => 'nullable|string|min:' . $minReason . '|max:1000',
+        ]);
+
+        // Registrator bulk tasdiqlash mumkin emas — har biriga baho kerak
+        if ($role === 'registrar' && $data['decision'] === 'approved') {
+            return redirect()->back()->withErrors([
+                'bulk' => 'Registrator tasdiqlash har bir ariza uchun alohida bajariladi (oldingi baholar majburiy).',
+            ]);
+        }
+
+        if ($data['decision'] === 'rejected' && empty($data['reason'])) {
+            return redirect()->back()->withErrors([
+                'reason' => 'Rad etish uchun sababni yozing (eng kamida ' . $minReason . ' belgi)',
+            ]);
+        }
+
+        $applications = RetakeApplication::whereIn('id', $data['application_ids'])->get();
+
+        $done = 0;
+        $skipped = 0;
+
+        foreach ($applications as $app) {
+            // Ruxsat tekshiruvi
+            try {
+                $this->authorizeApplicationDecision($user, $role, $app);
+            } catch (\Throwable $e) {
+                $skipped++;
+                continue;
+            }
+
+            // Allaqachon shu rol qaror chiqargan bo'lsa — o'tkazib yuboramiz
+            $myStatus = $role === 'dean' ? $app->dean_status : $app->registrar_status;
+            if ($myStatus !== RetakeApplication::STATUS_PENDING) {
+                $skipped++;
+                continue;
+            }
+
+            try {
+                if ($role === 'dean') {
+                    $this->applicationService->deanDecide(
+                        $app,
+                        $user,
+                        $data['decision'],
+                        $data['reason'] ?? null,
+                    );
+                } else {
+                    // Registrator bu yerda faqat rad etadi
+                    $this->applicationService->registrarDecide(
+                        $app,
+                        $user,
+                        $data['decision'],
+                        $data['reason'] ?? null,
+                        [],
+                    );
+                }
+                $done++;
+            } catch (\Throwable $e) {
+                $skipped++;
+            }
+        }
+
+        $action = $data['decision'] === 'approved' ? 'tasdiqlandi' : 'rad etildi';
+        $msg = "{$done} ta ariza {$action}";
+        if ($skipped > 0) {
+            $msg .= ", {$skipped} ta o'tkazib yuborildi";
+        }
+
+        return redirect()->back()->with('success', $msg);
+    }
+
+    /**
+     * Registrator ofisi to'lov chekini tasdiqlaydi yoki rad etadi.
+     */
+    public function verifyPayment(Request $request, int $groupId): RedirectResponse
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        if ($role !== 'registrar') {
+            abort(403, 'Faqat registrator ofisi to\'lov chekini tekshira oladi');
+        }
+
+        $data = $request->validate([
+            'decision' => 'required|in:approved,rejected',
+            'reason' => 'nullable|string|min:' . \App\Models\RetakeSetting::rejectReasonMinLength() . '|max:1000',
+        ]);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+
+        try {
+            $this->applicationService->verifyPayment(
+                $group,
+                $user,
+                $data['decision'],
+                $data['reason'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        $msg = $data['decision'] === 'approved'
+            ? 'To\'lov cheki tasdiqlandi va ariza o\'quv bo\'limiga jo\'natildi'
+            : 'To\'lov cheki rad etildi, talaba xabardor qilindi';
+
+        return redirect()->back()->with('success', $msg);
+    }
+
+    /**
+     * To'lov chekini ko'rib chiqish (registrator tekshiradi).
+     */
+    public function paymentReceipt(int $groupId)
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+        $this->authorizeGroupView($user, $role, $group);
+
+        if (!$group->payment_receipt_path) {
+            abort(404, 'To\'lov cheki yo\'q');
+        }
+
+        $absPath = \Illuminate\Support\Facades\Storage::disk('public')->path($group->payment_receipt_path);
+        if (!file_exists($absPath)) {
+            abort(404, 'To\'lov cheki fayli topilmadi');
+        }
+
+        $mime = mime_content_type($absPath) ?: 'application/octet-stream';
+        return response()->file($absPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="tolov_cheki_' . $group->id . '"',
+        ]);
+    }
+
+    /**
+     * Tanlangan ariza-guruhlarini ommaviy o'chirish.
+     * Faqat registrator ofisi (va super-admin) — dekan o'chira olmaydi.
+     * `retake_applications.group_id` va `retake_application_logs.application_id`
+     * cascade qilingani uchun, ariza va loglar avtomatik o'chadi.
+     * Kvitansiya/DOCX/PDF fayllarini storage'dan qo'lda o'chiramiz.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        if ($role !== 'registrar') {
+            abort(403, 'Bu amalga ruxsat yo\'q');
+        }
+
+        $data = $request->validate([
+            'group_ids' => 'required|array|min:1',
+            'group_ids.*' => 'integer',
+        ]);
+
+        $groups = RetakeApplicationGroup::whereIn('id', $data['group_ids'])->get();
+
+        if ($groups->isEmpty()) {
+            return redirect()->back()->with('error', 'O\'chirish uchun ariza topilmadi');
+        }
+
+        $deleted = 0;
+
+        DB::transaction(function () use ($groups, &$deleted) {
+            foreach ($groups as $group) {
+                foreach (['receipt_path', 'docx_path', 'pdf_certificate_path'] as $col) {
+                    $path = $group->{$col};
+                    if ($path && Storage::disk('public')->exists($path)) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+
+                $group->delete();
+                $deleted++;
+            }
+        });
+
+        return redirect()->back()->with('success', $deleted . ' ta ariza o\'chirildi');
+    }
+
+    /**
+     * Super-admin: tanlangan retake arizalarini va ularga bog'liq barcha ma'lumotlarni
+     * (RetakeApplication, fayllar) butunlay o'chirish — tarixda qolmaydi.
+     */
+    public function bulkForceDestroy(Request $request): RedirectResponse
+    {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
+            abort(403, 'Faqat super-admin uchun');
+        }
+
+        $data = $request->validate([
+            'group_ids' => 'required|array|min:1',
+            'group_ids.*' => 'integer',
+        ]);
+
+        $groups = RetakeApplicationGroup::whereIn('id', $data['group_ids'])->get();
+        $deleted = 0;
+
+        DB::transaction(function () use ($groups, &$deleted) {
+            foreach ($groups as $group) {
+                foreach (['receipt_path', 'docx_path', 'pdf_certificate_path', 'payment_receipt_path'] as $col) {
+                    $path = $group->{$col} ?? null;
+                    if ($path && Storage::disk('public')->exists($path)) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+
+                \App\Models\RetakeApplication::where('group_id', $group->id)->delete();
+                $group->forceDelete();
+                $deleted++;
+            }
+        });
+
+        return redirect()->back()->with('success', "{$deleted} ta ariza butunlay o'chirildi");
+    }
+
+    /**
+     * Kvitansiyani ko'rib chiqish (faqat ruxsati bo'lganlar).
+     * Nginx /storage/* ni static qilib serve qilmagani uchun Laravel orqali
+     * uzatamiz, shu bilan birga ruxsat tekshiruvi ham bajariladi.
+     */
+    public function receipt(int $groupId)
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $group = RetakeApplicationGroup::findOrFail($groupId);
+        $this->authorizeGroupView($user, $role, $group);
+
+        if (!$group->receipt_path) {
+            abort(404, 'Kvitansiya fayli yo\'q');
+        }
+
+        $absPath = \Illuminate\Support\Facades\Storage::disk('public')->path($group->receipt_path);
+        if (!file_exists($absPath)) {
+            abort(404, 'Kvitansiya fayli topilmadi');
+        }
+
+        $mime = mime_content_type($absPath) ?: 'application/octet-stream';
+        return response()->file($absPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="kvitansiya_' . $group->id . '"',
+        ]);
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -204,15 +569,34 @@ class RetakeApprovalController extends Controller
 
     private function applyFilter($query, string $filter, string $role): void
     {
-        match ($filter) {
-            'pending_mine' => $role === 'dean'
-                ? $query->whereHas('applications', fn ($q) => $q->where('dean_status', 'pending'))
-                : $query->whereHas('applications', fn ($q) => $q->where('registrar_status', 'pending')),
-            'approved' => $query->whereHas('applications', fn ($q) => $q->where('final_status', 'approved')),
-            'rejected' => $query->whereHas('applications', fn ($q) => $q->where('final_status', 'rejected')),
-            'all' => null,
-            default => null,
-        };
+        $myStatusColumn = $role === 'dean' ? 'dean_status' : 'registrar_status';
+
+        // Registrator uchun: to'lov cheki tekshirish kutilayotganlar
+        if ($filter === 'payment_to_verify' && $role === 'registrar') {
+            $query->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'pending');
+            return;
+        }
+
+        if ($filter === 'pending_mine') {
+            $query->whereHas('applications', function ($q) use ($myStatusColumn) {
+                $q->where($myStatusColumn, 'pending')
+                  ->where('final_status', 'pending');
+            });
+            return;
+        }
+
+        if ($filter === 'approved') {
+            $query->whereHas('applications', fn ($q) => $q->where($myStatusColumn, 'approved'));
+            return;
+        }
+
+        if ($filter === 'rejected') {
+            $query->whereHas('applications', fn ($q) => $q->where($myStatusColumn, 'rejected'));
+            return;
+        }
+
+        // 'all' yoki noma'lum filtr — barcha arizalarni ko'rsatamiz
     }
 
     private function calculateStats(string $role, \Illuminate\Database\Eloquent\Model $user): array

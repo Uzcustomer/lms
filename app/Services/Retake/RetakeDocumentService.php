@@ -43,37 +43,29 @@ class RetakeDocumentService
             return $group;
         }
 
-        $resolved = $group->applications->every(fn (RetakeApplication $a) => $a->final_status !== 'pending');
-        if (!$resolved) {
-            return $group; // hali yakunlanmagan
-        }
-
-        $approved = $group->applications->where('final_status', 'approved');
-        if ($approved->isEmpty()) {
-            return $group; // tasdiqnomaga loyiq emas
-        }
-
-        // 1. DOCX (ariza shabloni — barcha yuborilgan fanlar bilan)
+        // 1. DOCX (ariza shabloni) — qarorlarga bog'liq emas, har doim mavjud bo'lsin
         if (!$group->docx_path) {
             $group->docx_path = $this->generateDocx($group);
         }
 
-        // 2. Verification token + DocumentVerification yozuvi
-        if (!$group->verification_token) {
-            $verification = $this->createVerification($group, $approved, $generator);
-            $group->verification_token = $verification->token;
-        }
+        // 2. PDF tasdiqnoma — kamida bitta tasdiqlangan ariza bo'lsa generatsiya
+        //    qilinadi. Har safar qayta generatsiya qilinadi, chunki har bir yangi
+        //    tasdiqlangan fan PDF tarkibiga qo'shilishi kerak (signature kesh
+        //    ishlatishni biz hozir yodda saqlamaymiz — PDF yaratish arzon).
+        $approved = $group->applications->where('final_status', 'approved');
+        if ($approved->isNotEmpty()) {
+            $verification = null;
+            if (!$group->verification_token) {
+                $verification = $this->createVerification($group, $approved, $generator);
+                $group->verification_token = $verification->token;
+            } else {
+                $verification = DocumentVerification::where('token', $group->verification_token)->first();
+            }
 
-        // 3. PDF tasdiqnoma (faqat tasdiqlangan fanlar bilan, QR kod ichida)
-        if (!$group->pdf_certificate_path) {
             $group->pdf_certificate_path = $this->generatePdfCertificate($group, $approved);
 
-            // DocumentVerification.document_path ham yangilanadi (inline ko'rish uchun)
-            if (isset($verification)) {
+            if ($verification) {
                 $verification->update(['document_path' => $group->pdf_certificate_path]);
-            } elseif ($group->verification_token) {
-                DocumentVerification::where('token', $group->verification_token)
-                    ->update(['document_path' => $group->pdf_certificate_path]);
             }
         }
 
@@ -91,18 +83,22 @@ class RetakeDocumentService
         $student = $group->student;
         $applications = $group->applications->sortBy('semester_id')->values();
 
-        // Dekan ismini birinchi tasdiqlangan arizadan olish (ko'pchilikda dekan bitta bo'ladi)
+        // Dekan F.I.Sh. ni topish: avval ariza ustidan (allaqachon qaror qilingan
+        // bo'lsa), aks holda — talaba fakultetiga biriktirilgan dekan teacher.
         $deanName = $applications
             ->pluck('dean_user_name')
             ->filter()
-            ->first() ?? '';
+            ->first();
+        if (!$deanName) {
+            $deanName = $this->lookupFacultyDeanName($student) ?? '';
+        }
 
-        $facultyName = $student->department_name ?? '';
+        $facultyBase = $this->stripFacultetiSuffix($student->department_name ?? '');
         $groupName = $student->group_name ?? '';
         $studentFullName = $student->full_name ?? '';
         $submissionDate = $group->created_at->format('Y-m-d');
 
-        // {{subjects_list}}: "1-semestr Anatomiya (6.0 kr), 2-semestr Patanatomiya (5.0 kr)"
+        // "1-semestr Anatomiya (6.0 kr), 2-semestr Patanatomiya (5.0 kr)"
         $subjectsList = $applications
             ->map(fn (RetakeApplication $a) => sprintf(
                 '%s %s (%.1f kr)',
@@ -120,56 +116,65 @@ class RetakeDocumentService
             'marginTop' => 1134,    // ~2 sm
             'marginBottom' => 1134,
             'marginLeft' => 1700,   // ~3 sm
-            'marginRight' => 1134,
+            'marginRight' => 1134,  // ~2 sm
         ]);
 
-        // Yuqori o'ng — tepa yozuv (manzil)
-        $headerStyle = ['alignment' => Jc::END, 'spaceAfter' => 0, 'lineHeight' => 1.15];
-        $section->addText("Toshkent davlat tibbiyot universiteti Termiz filiali", null, $headerStyle);
-        $section->addText("{$facultyName} fakulteti dekani", null, $headerStyle);
-        $section->addText("{$deanName}ga", null, $headerStyle);
-        $section->addText("{$facultyName} fakulteti", null, $headerStyle);
-        $section->addText("{$groupName} guruh talabasi", null, $headerStyle);
-        $section->addText($studentFullName, null, $headerStyle);
-        $section->addText("(F.I.SH) tomonidan", null, $headerStyle);
+        $deanDisplay = $deanName !== '' ? $deanName : '_______________________';
+
+        // ─── Yuqori o'ng — manzil bloki ───
+        // Jadval YO'Q — oddiy paragraflar, chap indent ~8 sm. Matn sahifaning
+        // o'ng yarmida joylashadi, hech qanday border/grid ko'rinmaydi.
+        $addrPara = [
+            'alignment' => Jc::BOTH,
+            'spaceAfter' => 120,
+            'indentation' => ['left' => 4500], // ~8 sm chapdan
+        ];
+
+        // 1-paragraf
+        $p1 = $section->addTextRun($addrPara);
+        $p1->addText("Toshkent davlat tibbiyot universiteti Termiz filiali {$facultyBase} fakulteti dekani ");
+        $p1->addText($deanDisplay . 'ga', ['bold' => true]);
+
+        // 2-paragraf
+        $p2 = $section->addTextRun($addrPara);
+        $p2->addText("{$facultyBase} fakulteti {$groupName} guruh talabasi ");
+        $p2->addText($studentFullName, ['bold' => true]);
+        $p2->addText(' (F.I.Sh.) tomonidan');
 
         $section->addTextBreak(2);
 
-        // ARIZA (markaz, qalin)
-        $section->addText('ARIZA', ['bold' => true, 'size' => 13], ['alignment' => Jc::CENTER]);
+        // ─── ARIZA sarlavhasi ───
+        $section->addText('ARIZA', ['bold' => true, 'size' => 14], [
+            'alignment' => Jc::CENTER,
+            'spaceAfter' => 240,
+        ]);
 
-        $section->addTextBreak(1);
-
-        // Asosiy matn — Variant A: semester_number olib tashlangan, har fan
-        // o'z semestri bilan subjects_list ichida.
-        $bodyStyle = ['alignment' => Jc::BOTH, 'indentation' => ['firstLine' => 720], 'lineHeight' => 1.5];
+        // ─── Asosiy matn ───
+        $bodyPara = [
+            'alignment' => Jc::BOTH,
+            'indentation' => ['firstLine' => 720],
+            'spaceAfter' => 120,
+        ];
 
         $section->addText(
-            "Men, {$facultyName} fakulteti {$groupName} guruh talabasi {$studentFullName} (F.I.Sh.), "
+            "Men, {$facultyBase} fakulteti {$groupName} guruh talabasi {$studentFullName} (F.I.Sh.), "
             . "ushbu ariza orqali shuni ma'lum qilamanki, akademik qarzdorligim mavjud bo'lgan "
             . "{$subjectsList} fan(i/lar)ini o'z hisobimdan qayta o'qish uchun ruxsat berishingizni so'rayman.",
             null,
-            $bodyStyle
+            $bodyPara
         );
 
-        $section->addTextBreak(1);
-
-        $section->addText(
-            "Mazkur qayta o'qish uchun to'lov xabarnomasi (qayta o'qish) ilova qilinadi.",
-            null,
-            $bodyStyle
-        );
+        $body2 = $section->addTextRun($bodyPara);
+        $body2->addText('Mazkur qayta o\'qish uchun to\'lov xabarnomasi (');
+        $body2->addText('qayta o\'qish', ['italic' => true]);
+        $body2->addText(') ilova qilinadi.');
 
         $section->addTextBreak(4);
 
-        // Talaba imzo qatori
-        $signatureRow = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
-        $signatureRow->addRow();
-        $cellStyle = ['valign' => 'center'];
-        $left = $signatureRow->addCell(7000, $cellStyle);
-        $left->addText("Talaba:  {$studentFullName} F.I.SH", null, ['alignment' => Jc::START]);
-        $right = $signatureRow->addCell(3000, $cellStyle);
-        $right->addText($submissionDate, null, ['alignment' => Jc::END]);
+        // ─── Imzo bloki ───
+        $signPara = ['alignment' => Jc::START, 'spaceAfter' => 60];
+        $section->addText('Talaba:  ' . $studentFullName . ' F.I.Sh.', null, $signPara);
+        $section->addText($submissionDate, null, $signPara);
 
         // Saqlash
         $fileName = sprintf('ariza_%d_%s.docx', $group->id, Str::slug($studentFullName ?: 'talaba'));
@@ -185,45 +190,127 @@ class RetakeDocumentService
     }
 
     /**
+     * Talaba fakultetiga biriktirilgan dekanning F.I.Sh.ni topadi (dean_faculties).
+     */
+    private function lookupFacultyDeanName(?Student $student): ?string
+    {
+        if (!$student || !$student->department_id) {
+            return null;
+        }
+
+        $dean = Teacher::query()
+            ->where('status', true)
+            ->whereHas('roles', fn ($q) => $q->where('name', \App\Enums\ProjectRole::DEAN->value))
+            ->whereHas('deanFaculties', fn ($q) => $q->where('departments.department_hemis_id', $student->department_id))
+            ->first();
+
+        return $dean?->full_name;
+    }
+
+    /**
+     * "Xalqaro talim fakulteti" → "Xalqaro talim". Boshqa joyda " fakulteti" qo'shilsa,
+     * takrorlanmasligi uchun nomdan oxirgi " fakulteti" so'zi olib tashlanadi.
+     */
+    private function stripFacultetiSuffix(string $name): string
+    {
+        return trim(preg_replace('/\s*fakulteti\s*$/iu', '', $name));
+    }
+
+    /**
      * Tasdiqnoma PDF generatsiyasi (QR kod bilan, faqat tasdiqlangan fanlar).
      */
-    public function generatePdfCertificate(RetakeApplicationGroup $group, $approvedApps): string
+    public function generatePdfCertificate(RetakeApplicationGroup $group, $approvedApps, string $locale = 'uz'): string
     {
         $student = $group->student;
         $verifyUrl = route('document.verify', $group->verification_token);
 
-        // QR kod SVG sifatida (PDF ichiga to'g'ridan-to'g'ri quyiladi)
+        // QR kodni SVG fayl sifatida saqlab, dompdf'ga absolyut yo'l beramiz —
+        // dompdf SVG'ni inline emas, <img src="abs/path"> orqali ishonchli ko'rsatadi.
         $qrSvg = QrCode::format('svg')
-            ->size(150)
+            ->size(220)
             ->margin(1)
-            ->errorCorrection('M')
+            ->errorCorrection('H')
             ->generate($verifyUrl);
 
-        // QR'ni base64 PNG sifatida ham saqlaymiz (PDF tashqarisidan ham foydalanish uchun)
         $qrFileName = sprintf('qr_%d.svg', $group->id);
-        $qrPath = self::QR_DIR . '/' . $qrFileName;
-        Storage::disk(self::STORAGE_DISK)->put($qrPath, $qrSvg);
+        $qrRelPath = self::QR_DIR . '/' . $qrFileName;
+        Storage::disk(self::STORAGE_DISK)->put($qrRelPath, $qrSvg);
+        $qrAbsPath = Storage::disk(self::STORAGE_DISK)->path($qrRelPath);
 
-        $pdf = Pdf::loadView('pdf.retake-certificate', [
-            'group' => $group,
-            'student' => $student,
-            'approvedApps' => $approvedApps,
-            'verifyUrl' => $verifyUrl,
-            'qrSvg' => $qrSvg,
-            'verificationToken' => $group->verification_token,
-            'totalCredits' => $approvedApps->sum(fn ($a) => (float) $a->credit),
-            'totalAmount' => (float) $group->receipt_amount,
-        ])->setPaper('A4');
+        $signers = $this->collectSigners($approvedApps);
+        $logoAbsPath = $this->resolveLogoPath();
 
-        $fileName = sprintf('tasdiqnoma_%d_%s.pdf', $group->id, Str::slug($student->full_name ?: 'talaba'));
-        $relPath = self::PDF_DIR . '/' . $fileName;
-        $absPath = Storage::disk(self::STORAGE_DISK)->path($relPath);
+        // Lokal'ni vaqtincha o'rnatamiz, render tugagach qaytaramiz.
+        $previousLocale = app()->getLocale();
+        app()->setLocale($locale);
 
-        $this->ensureDirectoryExists(dirname($absPath));
+        try {
+            $pdf = Pdf::loadView('pdf.retake-certificate', [
+                'group' => $group,
+                'student' => $student,
+                'approvedApps' => $approvedApps,
+                'verifyUrl' => $verifyUrl,
+                'qrAbsPath' => $qrAbsPath,
+                'logoAbsPath' => $logoAbsPath,
+                'signers' => $signers,
+                'verificationToken' => $group->verification_token,
+                'totalCredits' => $approvedApps->sum(fn ($a) => (float) $a->credit),
+                'totalAmount' => (float) $group->receipt_amount,
+                'locale' => $locale,
+            ])->setPaper('A4');
 
-        $pdf->save($absPath);
+            $suffix = $locale === 'uz' ? '' : '_' . $locale;
+            $fileName = sprintf('ruxsatnoma_%d_%s%s.pdf', $group->id, Str::slug($student->full_name ?: 'talaba'), $suffix);
+            $relPath = self::PDF_DIR . '/' . $fileName;
+            $absPath = Storage::disk(self::STORAGE_DISK)->path($relPath);
 
-        return $relPath;
+            $this->ensureDirectoryExists(dirname($absPath));
+            $pdf->save($absPath);
+
+            return $relPath;
+        } finally {
+            app()->setLocale($previousLocale);
+        }
+    }
+
+    /**
+     * Dekan / Registrator / O'quv bo'limi imzolari uchun F.I.Sh. va sanani yig'adi.
+     */
+    private function collectSigners($approvedApps): array
+    {
+        $first = $approvedApps->first();
+        if (!$first) {
+            return ['dean' => null, 'registrar' => null, 'academic' => null];
+        }
+
+        return [
+            'dean' => [
+                'name' => $first->dean_user_name,
+                'date' => optional($first->dean_decision_at)->format('Y-m-d'),
+            ],
+            'registrar' => [
+                'name' => $first->registrar_user_name,
+                'date' => optional($first->registrar_decision_at)->format('Y-m-d'),
+            ],
+            'academic' => [
+                'name' => $first->academic_dept_user_name,
+                'date' => optional($first->academic_dept_decision_at)->format('Y-m-d'),
+            ],
+        ];
+    }
+
+    /**
+     * Universitet logotipini topish — public/logo.png yoki public/images/logo.png.
+     */
+    private function resolveLogoPath(): ?string
+    {
+        foreach (['logo.png', 'images/logo.png', 'logo.svg'] as $rel) {
+            $abs = public_path($rel);
+            if (is_file($abs)) {
+                return $abs;
+            }
+        }
+        return null;
     }
 
     /**

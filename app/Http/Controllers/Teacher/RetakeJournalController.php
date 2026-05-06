@@ -112,6 +112,7 @@ class RetakeJournalController extends Controller
         $applications = $this->service->applications($group);
         $dates = $this->service->lessonDates($group);
         $gradesMap = $this->service->gradesMap($group);
+        $mustaqilMap = $this->service->mustaqilMap($group);
 
         $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
         $canEdit = $isAdmin
@@ -122,9 +123,86 @@ class RetakeJournalController extends Controller
             'applications' => $applications,
             'dates' => $dates,
             'gradesMap' => $gradesMap,
+            'mustaqilMap' => $mustaqilMap,
             'canEdit' => $canEdit,
             'isEditable' => $this->service->isEditable($group),
         ]);
+    }
+
+    /**
+     * Mustaqil ta'limni baholash (o'qituvchi/admin).
+     */
+    public function gradeMustaqil(Request $request, int $groupId): JsonResponse
+    {
+        $actor = RetakeAccess::currentStaff();
+        if (!$actor) {
+            return response()->json(['success' => false, 'message' => 'Avtorizatsiya talab qilinadi'], 403);
+        }
+
+        $data = $request->validate([
+            'application_id' => 'required|integer',
+            'grade' => 'nullable|numeric|min:0|max:100',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        $group = RetakeGroup::findOrFail($groupId);
+        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+
+        if (!$isAdmin) {
+            if (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor)) {
+                return response()->json(['success' => false, 'message' => 'Siz bu guruhga biriktirilmagansiz'], 403);
+            }
+        }
+
+        try {
+            $submission = $this->service->gradeMustaqil(
+                $group,
+                (int) $data['application_id'],
+                $data['grade'] !== null && $data['grade'] !== '' ? (float) $data['grade'] : null,
+                $data['comment'] ?? null,
+                $actor instanceof Teacher ? $actor : new Teacher(['id' => $actor->id, 'full_name' => $actor->name ?? 'admin']),
+                $isAdmin,
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'grade' => $submission->grade,
+            'comment' => $submission->teacher_comment,
+            'graded_by_name' => $submission->graded_by_name,
+            'graded_at' => optional($submission->graded_at)->format('Y-m-d H:i'),
+        ]);
+    }
+
+    /**
+     * Mustaqil ta'lim faylini yuklab olish.
+     */
+    public function downloadMustaqil(int $groupId, int $submissionId)
+    {
+        $actor = RetakeAccess::currentStaff();
+        if (!$actor) abort(403);
+
+        $group = RetakeGroup::findOrFail($groupId);
+        $this->authorizeView($actor, $group);
+
+        $submission = \App\Models\RetakeMustaqilSubmission::query()
+            ->where('id', $submissionId)
+            ->where('retake_group_id', $group->id)
+            ->firstOrFail();
+
+        if (!$submission->file_path || !\Illuminate\Support\Facades\Storage::disk('public')->exists($submission->file_path)) {
+            abort(404, 'Fayl topilmadi');
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->download(
+            $submission->file_path,
+            $submission->original_filename ?: basename($submission->file_path)
+        );
     }
 
     /**

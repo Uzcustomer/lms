@@ -457,6 +457,42 @@ class RetakeApprovalController extends Controller
     }
 
     /**
+     * Super-admin: tanlangan retake arizalarini va ularga bog'liq barcha ma'lumotlarni
+     * (RetakeApplication, fayllar) butunlay o'chirish — tarixda qolmaydi.
+     */
+    public function bulkForceDestroy(Request $request): RedirectResponse
+    {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
+            abort(403, 'Faqat super-admin uchun');
+        }
+
+        $data = $request->validate([
+            'group_ids' => 'required|array|min:1',
+            'group_ids.*' => 'integer',
+        ]);
+
+        $groups = RetakeApplicationGroup::whereIn('id', $data['group_ids'])->get();
+        $deleted = 0;
+
+        DB::transaction(function () use ($groups, &$deleted) {
+            foreach ($groups as $group) {
+                foreach (['receipt_path', 'docx_path', 'pdf_certificate_path', 'payment_receipt_path'] as $col) {
+                    $path = $group->{$col} ?? null;
+                    if ($path && Storage::disk('public')->exists($path)) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+
+                \App\Models\RetakeApplication::where('group_id', $group->id)->delete();
+                $group->forceDelete();
+                $deleted++;
+            }
+        });
+
+        return redirect()->back()->with('success', "{$deleted} ta ariza butunlay o'chirildi");
+    }
+
+    /**
      * Kvitansiyani ko'rib chiqish (faqat ruxsati bo'lganlar).
      * Nginx /storage/* ni static qilib serve qilmagani uchun Laravel orqali
      * uzatamiz, shu bilan birga ruxsat tekshiruvi ham bajariladi.

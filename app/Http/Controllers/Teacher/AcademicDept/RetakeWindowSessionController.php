@@ -223,6 +223,38 @@ class RetakeWindowSessionController extends Controller
             ->with('success', __('Sessiya butunlay o\'chirildi'));
     }
 
+    /**
+     * Tanlangan sessiyalarni butunlay o'chirish (faqat super-admin).
+     * Tarixda qolmaydi.
+     */
+    public function bulkForceDestroy(Request $request): RedirectResponse
+    {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'session_ids' => 'required|array|min:1',
+            'session_ids.*' => 'integer',
+        ]);
+
+        $deleted = 0;
+        \Illuminate\Support\Facades\DB::transaction(function () use ($data, &$deleted) {
+            $sessions = RetakeWindowSession::withTrashed()
+                ->whereIn('id', $data['session_ids'])
+                ->get();
+            foreach ($sessions as $session) {
+                \App\Models\RetakeApplicationWindow::withTrashed()
+                    ->where('session_id', $session->id)
+                    ->each(fn ($w) => $w->forceDelete());
+                $session->forceDelete();
+                $deleted++;
+            }
+        });
+
+        return redirect()->back()->with('success', "{$deleted} ta sessiya butunlay o'chirildi");
+    }
+
     private function sessionHasApplications(RetakeWindowSession $session): bool
     {
         $windowIds = $session->windows->pluck('id');

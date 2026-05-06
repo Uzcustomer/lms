@@ -153,19 +153,39 @@
                             (<span x-text="bulkSelected.length"></span> {{ __("ta tanlangan") }})
                         </span>
                     </label>
-                    <form method="POST" action="{{ route('admin.retake-groups.bulk-delete') }}" @submit="bulkConfirmDelete($event)">
-                        @csrf
-                        <template x-for="id in bulkSelected" :key="id">
-                            <input type="hidden" name="group_ids[]" :value="id">
-                        </template>
-                        <button type="submit"
-                                :disabled="bulkSelected.length === 0"
-                                :class="bulkSelected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'"
-                                class="px-3 py-1.5 text-xs font-medium rounded">
-                            {{ __("Tanlanganlarni arxivga") }}
-                            <span x-show="bulkSelected.length > 0">(<span x-text="bulkSelected.length"></span>)</span>
-                        </button>
-                    </form>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <form method="POST" action="{{ route('admin.retake-groups.bulk-delete') }}" @submit="bulkConfirmDelete($event)">
+                            @csrf
+                            <template x-for="id in bulkSelected" :key="id">
+                                <input type="hidden" name="group_ids[]" :value="id">
+                            </template>
+                            <button type="submit"
+                                    :disabled="bulkSelected.length === 0"
+                                    :class="bulkSelected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'"
+                                    class="px-3 py-1.5 text-xs font-medium rounded">
+                                {{ __("Tanlanganlarni arxivga") }}
+                                <span x-show="bulkSelected.length > 0">(<span x-text="bulkSelected.length"></span>)</span>
+                            </button>
+                        </form>
+
+                        @if(auth()->user()?->hasAnyRole(['superadmin']))
+                            <form method="POST"
+                                  action="{{ route('admin.retake-groups.bulk-force-delete') }}"
+                                  onsubmit="return confirm('{{ __("Tanlangan guruhlarni butunlay o'chirishni tasdiqlaysizmi? Tarixda qolmaydi.") }}')">
+                                @csrf
+                                <template x-for="id in bulkSelected" :key="id">
+                                    <input type="hidden" name="group_ids[]" :value="id">
+                                </template>
+                                <button type="submit"
+                                        :disabled="bulkSelected.length === 0"
+                                        :class="bulkSelected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-rose-700 text-white hover:bg-rose-800 ring-2 ring-rose-200'"
+                                        class="px-3 py-1.5 text-xs font-bold rounded">
+                                    💀 {{ __("Butunlay o'chirish") }}
+                                    <span x-show="bulkSelected.length > 0">(<span x-text="bulkSelected.length"></span>)</span>
+                                </button>
+                            </form>
+                        @endif
+                    </div>
                 </div>
             @endif
 

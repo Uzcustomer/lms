@@ -1178,7 +1178,12 @@
                 numberDebounce = setTimeout(function() { $form.trigger('submit'); }, 600);
             });
 
-            // Matn qidiruv — Enter bosilganda submit bo'ladi (default brauzer xatti-harakati)
+            // Matn qidiruv — debounce bilan auto-submit (Enter ham ishlaydi)
+            var searchDebounce;
+            $form.find('input[name=search]').on('input', function() {
+                clearTimeout(searchDebounce);
+                searchDebounce = setTimeout(function() { $form.trigger('submit'); }, 500);
+            });
         });
     </script>
 

@@ -46,9 +46,18 @@
             @else
                 <div class="divide-y divide-gray-100">
                     @foreach($aggregations as $agg)
+                        @php $variantsCount = count($agg['subject_id_variants'] ?? []); @endphp
                         <div class="px-5 py-3 flex items-center justify-between">
                             <div>
-                                <p class="text-sm font-medium text-gray-900">{{ $agg['subject_name'] }}</p>
+                                <p class="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                    {{ $agg['subject_name'] }}
+                                    @if($variantsCount > 1)
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold"
+                                              title="{{ __('Turli yo\'nalish/curriculum talabalari bir nomli fan bo\'yicha ariza bergan — birlashtirilgan') }}">
+                                            ⛓ {{ $variantsCount }} {{ __('curriculum') }}
+                                        </span>
+                                    @endif
+                                </p>
                                 <p class="text-xs text-gray-500 mt-0.5">{{ $agg['semester_name'] }}</p>
                             </div>
                             <div class="flex items-center gap-3">
@@ -467,7 +476,7 @@
                         this.testDate = '';
                         this.showFormation = true;
 
-                        const url = `${this.lookupUrl}?subject_id=${encodeURIComponent(data.subject_id)}&semester_id=${encodeURIComponent(data.semester_id)}`;
+                        const url = `${this.lookupUrl}?subject_name=${encodeURIComponent(data.subject_name)}&semester_name=${encodeURIComponent(data.semester_name)}`;
                         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
                         const json = await res.json();
                         this.applications = json.applications || [];

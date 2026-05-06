@@ -40,14 +40,24 @@ class RetakeGroupService
             ->orderBy('subject_name')
             ->get();
 
-        return $apps->groupBy(fn (RetakeApplication $a) => $a->subject_id . '|' . $a->semester_id)
+        // Normalize qilingan kalit: subject_name + semester_name (kichik harf, trim)
+        // Shu orqali bir xil nomli ammo turli curriculumdagi (subject_id farqli)
+        // fanlar bitta agregatsiyaga tushadi.
+        $normalize = fn (?string $s) => mb_strtolower(trim((string) $s));
+
+        return $apps->groupBy(fn (RetakeApplication $a) => $normalize($a->subject_name) . '|' . $normalize($a->semester_name))
             ->map(function ($group) {
+                // Majority subject_id/semester_id — guruh yaratilganda asos sifatida ishlatiladi
+                $majSubjectId = $group->pluck('subject_id')->countBy()->sortDesc()->keys()->first();
+                $majSemesterId = $group->pluck('semester_id')->countBy()->sortDesc()->keys()->first();
                 $first = $group->first();
+                $variants = $group->pluck('subject_id')->unique()->values()->all();
                 return [
-                    'key' => $first->subject_id . '|' . $first->semester_id,
-                    'subject_id' => $first->subject_id,
+                    'key' => mb_strtolower(trim($first->subject_name)) . '|' . mb_strtolower(trim($first->semester_name)),
+                    'subject_id' => $majSubjectId,
                     'subject_name' => $first->subject_name,
-                    'semester_id' => $first->semester_id,
+                    'subject_id_variants' => $variants,
+                    'semester_id' => $majSemesterId,
                     'semester_name' => $first->semester_name,
                     'count' => $group->count(),
                     'applications' => $group->values(),
@@ -58,12 +68,17 @@ class RetakeGroupService
 
     /**
      * Berilgan fan + semestr uchun arizalar (modal'da ko'rsatish uchun).
+     * subject_name + semester_name bo'yicha qidiradi — turli subject_id'lar
+     * (turli curriculum) bo'lsa ham birlashadi.
      */
-    public function applicationsForSubject(string $subjectId, string $semesterId): Collection
+    public function applicationsForSubject(string $subjectName, string $semesterName): Collection
     {
+        $normSubject = mb_strtolower(trim($subjectName));
+        $normSemester = mb_strtolower(trim($semesterName));
+
         return RetakeApplication::query()
-            ->where('subject_id', $subjectId)
-            ->where('semester_id', $semesterId)
+            ->whereRaw('LOWER(TRIM(subject_name)) = ?', [$normSubject])
+            ->whereRaw('LOWER(TRIM(semester_name)) = ?', [$normSemester])
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
             ->where('academic_dept_status', 'pending')
@@ -97,10 +112,13 @@ class RetakeGroupService
             ]);
         }
 
-        // Tanlangan arizalarni yuklash va validatsiya
+        // Tanlangan arizalarni yuklash va validatsiya — subject_name+semester_name match
+        $normSubject = mb_strtolower(trim((string) ($data['subject_name'] ?? '')));
+        $normSemester = mb_strtolower(trim((string) ($data['semester_name'] ?? '')));
+
         $apps = RetakeApplication::whereIn('id', $applicationIds)
-            ->where('subject_id', $data['subject_id'])
-            ->where('semester_id', $data['semester_id'])
+            ->whereRaw('LOWER(TRIM(subject_name)) = ?', [$normSubject])
+            ->whereRaw('LOWER(TRIM(semester_name)) = ?', [$normSemester])
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
             ->where('academic_dept_status', 'pending')
@@ -110,9 +128,13 @@ class RetakeGroupService
 
         if ($apps->count() !== count($applicationIds)) {
             throw ValidationException::withMessages([
-                'applications' => 'Ba\'zi arizalar guruhga qo\'shilishga yaroqsiz holatda',
+                'applications' => "Ba'zi arizalar guruhga qo'shilishga yaroqsiz holatda yoki fan/semestr nomi mos emas",
             ]);
         }
+
+        // Majority subject_id/semester_id (turli curriculum'dan kelgan arizalar bo'lsa)
+        $data['subject_id'] = $apps->pluck('subject_id')->countBy()->sortDesc()->keys()->first() ?: ($data['subject_id'] ?? null);
+        $data['semester_id'] = $apps->pluck('semester_id')->countBy()->sortDesc()->keys()->first() ?: ($data['semester_id'] ?? null);
 
         $teacher = Teacher::find($data['teacher_id']);
         if (!$teacher) {

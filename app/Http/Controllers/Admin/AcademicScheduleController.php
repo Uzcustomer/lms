@@ -1335,6 +1335,33 @@ class AcademicScheduleController extends Controller
         $userId = auth()->id();
         $today = \Carbon\Carbon::today();
 
+        // Form payload kichraytirilgan: department/specialty/curriculum/subject_name lar
+        // hidden input qilib jo'natilmaydi — bu yerda guruh va fan bo'yicha topiladi
+        // (max_input_vars limitiga tushib qolmaslik uchun).
+        $groupIdsAll = collect($validSchedules)->pluck('group_hemis_id')->filter()->unique()->values();
+        $groupMetaMap = $groupIdsAll->isNotEmpty()
+            ? Group::whereIn('group_hemis_id', $groupIdsAll)
+                ->get(['group_hemis_id', 'department_hemis_id', 'specialty_hemis_id', 'curriculum_hemis_id'])
+                ->keyBy('group_hemis_id')
+            : collect();
+
+        $subjectKeys = collect($validSchedules)
+            ->map(fn($s) => ($s['subject_id'] ?? '') . '|' . ($s['semester_code'] ?? ''))
+            ->filter()->unique()->values();
+        $subjectNameMap = [];
+        if ($subjectKeys->isNotEmpty()) {
+            $sids = collect($validSchedules)->pluck('subject_id')->filter()->unique()->values();
+            $semCodes = collect($validSchedules)->pluck('semester_code')->filter()->unique()->values();
+            $subjRows = DB::table('curriculum_subjects')
+                ->whereIn('subject_id', $sids)
+                ->whereIn('semester_code', $semCodes)
+                ->select('subject_id', 'semester_code', 'subject_name')
+                ->get();
+            foreach ($subjRows as $r) {
+                $subjectNameMap[$r->subject_id . '|' . $r->semester_code] = $r->subject_name;
+            }
+        }
+
         // Mavjud yozuvlarni oldindan yuklash (allaqachon saqlangan sanalarni validatsiyadan o'tkazib yuborish uchun)
         $existingForValidation = ExamSchedule::where(function ($q) use ($validSchedules) {
             foreach ($validSchedules as $s) {
@@ -1612,11 +1639,13 @@ class AcademicScheduleController extends Controller
                     }
                 }
 
+                $groupMeta = $groupMetaMap[$schedule['group_hemis_id']] ?? null;
+                $subjNameKey = ($schedule['subject_id'] ?? '') . '|' . ($schedule['semester_code'] ?? '');
                 $fillData = [
-                    'department_hemis_id' => $schedule['department_hemis_id'] ?? '',
-                    'specialty_hemis_id' => $schedule['specialty_hemis_id'] ?? '',
-                    'curriculum_hemis_id' => $schedule['curriculum_hemis_id'] ?? '',
-                    'subject_name' => $schedule['subject_name'] ?? '',
+                    'department_hemis_id' => $schedule['department_hemis_id'] ?? ($groupMeta->department_hemis_id ?? ''),
+                    'specialty_hemis_id' => $schedule['specialty_hemis_id'] ?? ($groupMeta->specialty_hemis_id ?? ''),
+                    'curriculum_hemis_id' => $schedule['curriculum_hemis_id'] ?? ($groupMeta->curriculum_hemis_id ?? ''),
+                    'subject_name' => $schedule['subject_name'] ?? ($subjectNameMap[$subjNameKey] ?? ''),
                     'education_year' => $educationYear,
                     'updated_by' => $userId,
                 ];

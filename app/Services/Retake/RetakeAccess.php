@@ -86,6 +86,15 @@ class RetakeAccess
     }
 
     /**
+     * O'qituvchi-fan-talabalar statistikasi.
+     * Faqat o'quv bo'limi (akademik dept) + super-admin. Registrator/dekan yo'q.
+     */
+    public static function canViewTeacherSubjectStats(?Model $actor): bool
+    {
+        return self::canManageAcademicDept($actor);
+    }
+
+    /**
      * Super-admin override (oyna/guruh sanalarini majburan o'zgartirish).
      */
     public static function canOverride(?Model $actor): bool

@@ -855,6 +855,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'exportExcel'])->name('export');
         });
 
+        // O'qituvchi-fan kesimida talabalar statistikasi (faqat o'quv bo'limi)
+        Route::prefix('retake-teacher-subjects')->name('retake-teacher-subjects.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeTeacherSubjectStatsController::class, 'index'])->name('index');
+        });
+
         // Sozlamalar (kredit narxi va h.k.)
         Route::prefix('retake-settings')->name('retake-settings.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeSettingsController::class, 'index'])->name('index');

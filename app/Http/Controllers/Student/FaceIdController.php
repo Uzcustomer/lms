@@ -93,10 +93,18 @@ class FaceIdController extends Controller
             abort(404, 'Rasm yuklab bo\'lmadi');
         }
 
-        return response($photo['content'])
+        $resp = response($photo['content'])
             ->header('Content-Type', $photo['mime'])
-            ->header('Cache-Control', 'private, max-age=3600')
-            ->header('Access-Control-Allow-Origin', '*');
+            ->header('Cache-Control', 'private, max-age=3600');
+
+        $allowedOrigins = config('services.face_id.photo_allowed_origins', []);
+        $origin = (string) request()->headers->get('Origin', '');
+        if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
+            $resp->header('Access-Control-Allow-Origin', $origin)
+                ->header('Vary', 'Origin');
+        }
+
+        return $resp;
     }
 
     /**

@@ -109,4 +109,10 @@ return [
         'timeout' => (int) env('FACE_COMPARE_TIMEOUT', 60),
     ],
 
+    'face_id' => [
+        // CORS allowlist for student face photo proxy endpoint.
+        // Comma separated, e.g.: https://mark.tashmedunitf.uz,https://student.tashmedunitf.uz
+        'photo_allowed_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('FACEID_PHOTO_ALLOWED_ORIGINS', ''))))),
+    ],
+
 ];

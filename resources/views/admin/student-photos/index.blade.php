@@ -465,8 +465,8 @@
 
                 <div class="p-6 pt-3">
                     {{-- Jadval --}}
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                    <div class="student-photos-table-wrap">
+                        <table class="student-photos-table w-full divide-y divide-gray-200 text-sm table-fixed">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">
@@ -1216,6 +1216,22 @@
         .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .student-photos-table-wrap { overflow-x: hidden; }
+        .student-photos-table th,
+        .student-photos-table td {
+            white-space: normal;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            vertical-align: top;
+        }
+        .student-photos-table th:nth-child(1), .student-photos-table td:nth-child(1) { width: 40px; }
+        .student-photos-table th:nth-child(2), .student-photos-table td:nth-child(2) { width: 54px; }
+        .student-photos-table th:nth-child(9), .student-photos-table td:nth-child(9) { width: 74px; }
+        .student-photos-table th:nth-child(11), .student-photos-table td:nth-child(11) { width: 84px; }
+        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12) { width: 78px; }
+        .student-photos-table th:nth-child(13), .student-photos-table td:nth-child(13) { width: 108px; }
+        .student-photos-table th:nth-child(14), .student-photos-table td:nth-child(14) { width: 98px; }
+
         .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
         .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }
         .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }

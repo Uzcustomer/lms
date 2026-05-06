@@ -123,21 +123,16 @@ class RetakeWindowController extends Controller
 
         $data = $request->validate([
             'session_id' => 'required|integer|exists:retake_window_sessions,id',
-            'specialty_id' => 'required|integer',
-            'specialty_name' => 'required|string|max:255',
-            'level_code' => 'required|string|max:10',
-            'level_name' => 'nullable|string|max:100',
-            'semester_code' => 'nullable|string|max:50',
-            'semester_name' => 'nullable|string|max:255',
+            'specialty_ids' => 'required|array|min:1',
+            'specialty_ids.*' => 'integer',
+            'level_codes' => 'required|array|min:1',
+            'level_codes.*' => 'string|max:10',
+            'semester_codes' => 'nullable|array',
+            'semester_codes.*' => 'string|max:50',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
-        // Semestr tanlanmagan bo'lsa (Xalqaro talim emas), bo'sh qator sifatida saqlaymiz
-        $data['semester_code'] = $data['semester_code'] ?? '';
-        $data['semester_name'] = $data['semester_name'] ?? '';
-
-        // Yopilgan sessiyaga oyna qo'shish mumkin emas
         $session = \App\Models\RetakeWindowSession::findOrFail($data['session_id']);
         if ($session->is_closed) {
             return redirect()->back()->withErrors([
@@ -145,16 +140,89 @@ class RetakeWindowController extends Controller
             ])->withInput();
         }
 
-        try {
-            /** @var Teacher $user */
-            $user = RetakeAccess::currentStaff();
-            $this->windowService->createWindow($data, $user);
-        } catch (ValidationException $e) {
-            return redirect()->back()->withErrors($e->errors())->withInput();
+        // Tanlangan yo'nalishlar va kurslarni nomlari bilan birga olish
+        $specialties = Specialty::whereIn('specialty_hemis_id', $data['specialty_ids'])
+            ->get(['specialty_hemis_id', 'name', 'department_hemis_id'])
+            ->keyBy('specialty_hemis_id');
+
+        $allLevels = config('app.retake_levels')
+            ?? collect(Semester::query()
+                ->whereNotNull('level_code')
+                ->select('level_code', 'level_name')
+                ->distinct()
+                ->get())
+                ->map(fn ($s) => ['code' => $s->level_code, 'name' => $s->level_name])
+                ->all();
+
+        $levelMap = collect($allLevels)->keyBy(fn ($lv) => is_array($lv) ? $lv['code'] : $lv->code)
+            ->map(fn ($lv) => is_array($lv) ? $lv['name'] : $lv->name);
+
+        // Xalqaro fakultet bormi — semester majburligini tekshirish
+        $depHemisIds = $specialties->pluck('department_hemis_id')->unique()->toArray();
+        $departments = Department::whereIn('department_hemis_id', $depHemisIds)
+            ->pluck('name', 'department_hemis_id');
+
+        $hasXalqaro = $departments->contains(fn ($n) => preg_match('/xalqaro/i', (string) $n));
+        if ($hasXalqaro && empty($data['semester_codes'])) {
+            return redirect()->back()->withErrors([
+                'semester_codes' => "Xalqaro talim fakulteti uchun kamida bitta semestr tanlang",
+            ])->withInput();
+        }
+
+        $semesterMap = collect();
+        if (!empty($data['semester_codes'])) {
+            $semesterMap = Semester::whereIn('code', $data['semester_codes'])
+                ->pluck('name', 'code');
+        }
+        // Agar xalqaro yo'q bo'lsa, bitta bo'sh semester combo bilan iteratsiya qilamiz
+        $semesterCombos = $hasXalqaro
+            ? collect($data['semester_codes'])->map(fn ($c) => ['code' => $c, 'name' => $semesterMap->get($c) ?? $c])->all()
+            : [['code' => '', 'name' => '']];
+
+        /** @var Teacher $user */
+        $user = RetakeAccess::currentStaff();
+        $created = 0;
+        $skipped = 0;
+        $firstError = null;
+
+        DB::transaction(function () use ($data, $specialties, $levelMap, $departments, $semesterCombos, $user, &$created, &$skipped, &$firstError, $hasXalqaro) {
+            foreach ($specialties as $sp) {
+                $depName = (string) ($departments[$sp->department_hemis_id] ?? '');
+                $isSpecXalqaro = preg_match('/xalqaro/i', $depName) === 1;
+                // Xalqaro bo'lmagan yo'nalishlar uchun semester='' qo'llanadi
+                $combos = ($hasXalqaro && $isSpecXalqaro) ? $semesterCombos : [['code' => '', 'name' => '']];
+
+                foreach ($data['level_codes'] as $lvCode) {
+                    foreach ($combos as $sem) {
+                        try {
+                            $this->windowService->createWindow([
+                                'session_id' => $data['session_id'],
+                                'specialty_id' => (int) $sp->specialty_hemis_id,
+                                'specialty_name' => $sp->name,
+                                'level_code' => $lvCode,
+                                'level_name' => $levelMap->get($lvCode) ?? $lvCode,
+                                'semester_code' => $sem['code'],
+                                'semester_name' => $sem['name'],
+                                'start_date' => $data['start_date'],
+                                'end_date' => $data['end_date'],
+                            ], $user);
+                            $created++;
+                        } catch (ValidationException $e) {
+                            $skipped++;
+                            $firstError = $firstError ?? collect($e->errors())->flatten()->first();
+                        }
+                    }
+                }
+            }
+        });
+
+        $msg = "{$created} ta qabul oynasi yaratildi";
+        if ($skipped > 0) {
+            $msg .= ", {$skipped} ta o'tkazib yuborildi (allaqachon mavjud)";
         }
 
         return redirect()->route('admin.retake-sessions.show', $data['session_id'])
-            ->with('success', __('Qabul oynasi muvaffaqiyatli yaratildi'));
+            ->with('success', $msg);
     }
 
     /**

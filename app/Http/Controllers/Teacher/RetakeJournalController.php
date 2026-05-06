@@ -252,7 +252,7 @@ class RetakeJournalController extends Controller
     /**
      * Vedomost PDF generatsiya qilish va yuklab olish.
      */
-    public function vedomost(int $groupId)
+    public function vedomost(Request $request, int $groupId)
     {
         $actor = RetakeAccess::currentStaff();
         if (!$actor) abort(403);
@@ -260,10 +260,30 @@ class RetakeJournalController extends Controller
         $group = RetakeGroup::with('teacher')->findOrFail($groupId);
         $this->authorizeView($actor, $group);
 
+        $request->validate([
+            'weight_jn'   => 'required|integer|min:0|max:100',
+            'weight_mt'   => 'required|integer|min:0|max:100',
+            'weight_on'   => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+        ]);
+
+        $weights = [
+            'jn'   => (int) $request->input('weight_jn'),
+            'mt'   => (int) $request->input('weight_mt'),
+            'on'   => (int) ($request->input('weight_on') ?? 0),
+            'oski' => (int) ($request->input('weight_oski') ?? 0),
+            'test' => (int) ($request->input('weight_test') ?? 0),
+        ];
+
+        if (array_sum($weights) !== 100) {
+            return response()->json(['error' => "Vaznlar jami 100 bo'lishi kerak"], 422);
+        }
+
         try {
-            $built = $this->service->buildVedomostExcel($group);
+            $built = $this->service->buildVedomostExcel($group, $weights);
         } catch (ValidationException $e) {
-            return redirect()->back()->withErrors($e->errors());
+            return response()->json(['error' => collect($e->errors())->flatten()->first()], 422);
         }
 
         if ($group->vedomost_path !== $built['relPath']) {

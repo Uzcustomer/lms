@@ -127,25 +127,33 @@
                     <table class="min-w-full divide-y divide-gray-100">
                         <thead class="bg-gray-50">
                         <tr>
+                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:48px;">{{ __("T/R") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fakultet") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Yo'nalish") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Kurs") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Sanalar") }}</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Ochilgan vaqti") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Holat") }}</th>
                             <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Arizalar") }}</th>
                             <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase"></th>
                         </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-100">
-                        @foreach($windows as $w)
+                        @foreach($windows as $i => $w)
                             <tr>
-                                <td class="px-3 py-2.5 text-sm text-gray-700">{{ $specialtyToFaculty[$w->specialty_id] ?? '—' }}</td>
-                                <td class="px-3 py-2.5 text-sm text-gray-900">{{ $w->specialty_name ?? $w->specialty_id }}</td>
+                                <td class="px-3 py-2.5 text-center text-sm font-bold text-blue-700">
+                                    {{ ($windows->currentPage() - 1) * $windows->perPage() + $i + 1 }}
+                                </td>
+                                <td class="px-3 py-2.5 text-sm font-semibold text-gray-900">{{ $specialtyToFaculty[$w->specialty_id] ?? '—' }}</td>
+                                <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->specialty_name ?? $w->specialty_id }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->level_name ?? $w->level_code }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->semester_name }}</td>
                                 <td class="px-3 py-2.5 text-xs text-gray-700">
                                     {{ $w->start_date->format('Y-m-d') }} → {{ $w->end_date->format('Y-m-d') }}
+                                </td>
+                                <td class="px-3 py-2.5 text-xs text-gray-500" title="{{ $w->created_at->format('Y-m-d H:i:s') }}">
+                                    {{ $w->created_at->format('d.m.Y H:i') }}
                                 </td>
                                 <td class="px-3 py-2.5">
                                     @php

@@ -293,8 +293,8 @@ class RetakeWindowSessionController extends Controller
         if ($statusFilter !== 'all') {
             $today = now()->toDateString();
             match ($statusFilter) {
-                'upcoming' => $windowsQuery->whereDate('start_date', '>', $today),
-                'active' => $windowsQuery->whereDate('start_date', '<=', $today)
+                'active' => $windowsQuery->whereDate('start_date', '>', $today),
+                'study' => $windowsQuery->whereDate('start_date', '<=', $today)
                     ->whereDate('end_date', '>=', $today),
                 'closed' => $windowsQuery->whereDate('end_date', '<', $today),
                 default => null,

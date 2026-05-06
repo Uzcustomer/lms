@@ -97,13 +97,29 @@ class RetakeGroupService
      */
     public function createGroup(array $data, array $applicationIds, Teacher $actor, bool $publish): RetakeGroup
     {
-        $this->validateData($data);
-
         if (count($applicationIds) < 1) {
             throw ValidationException::withMessages([
                 'applications' => 'Eng kamida 1 ta talaba tanlanishi kerak',
             ]);
         }
+
+        // Sanalar bo'sh kelsa — tanlangan arizalardagi qabul oynalaridan
+        // (RetakeApplicationWindow) ko'pchilik bo'yicha auto-fill qilamiz.
+        if (empty($data['start_date']) || empty($data['end_date'])) {
+            $appGroupIds = RetakeApplication::whereIn('id', $applicationIds)->pluck('group_id');
+            $windowIds = \App\Models\RetakeApplicationGroup::whereIn('id', $appGroupIds)->pluck('window_id')->filter()->unique();
+            if ($windowIds->isNotEmpty()) {
+                $win = \App\Models\RetakeApplicationWindow::whereIn('id', $windowIds)
+                    ->orderByDesc('start_date')
+                    ->first();
+                if ($win) {
+                    $data['start_date'] = $data['start_date'] ?: $win->start_date->format('Y-m-d');
+                    $data['end_date'] = $data['end_date'] ?: $win->end_date->format('Y-m-d');
+                }
+            }
+        }
+
+        $this->validateData($data);
 
         $minSize = RetakeSetting::minGroupSize();
         if (count($applicationIds) < $minSize) {

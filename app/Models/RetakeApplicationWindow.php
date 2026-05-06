@@ -44,17 +44,23 @@ class RetakeApplicationWindow extends Model
         return $this->hasMany(RetakeApplicationGroup::class, 'window_id');
     }
 
+    /**
+     * Window holatlari:
+     *  - active : today < start_date — ariza qabul ochiq (talabalar ariza yuborishi mumkin)
+     *  - study  : start_date <= today <= end_date — o'qish davri (ariza yopildi, jurnal ishlaydi)
+     *  - closed : today > end_date — tugagan
+     */
     public function getStatusAttribute(): string
     {
         $today = Carbon::today();
 
         if ($this->start_date->gt($today)) {
-            return 'upcoming';
+            return 'active';
         }
         if ($this->end_date->lt($today)) {
             return 'closed';
         }
-        return 'active';
+        return 'study';
     }
 
     public function getRemainingDaysAttribute(): int
@@ -77,10 +83,14 @@ class RetakeApplicationWindow extends Model
             ->where('level_code', $levelCode);
     }
 
+    /**
+     * "Ariza qabul davri" faol oyna — bugungi sana boshlanish sanasidan oldin (qattiq kichik).
+     * Ya'ni start_date kunining boshlanishidan boshlab oyna ariza qabul qilmaydi
+     * (start_date — qayta o'qish "o'qish davrining" boshlanish kuni).
+     */
     public function scopeActive($query)
     {
         $today = Carbon::today();
-        return $query->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today);
+        return $query->whereDate('start_date', '>', $today);
     }
 }

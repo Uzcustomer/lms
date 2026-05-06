@@ -332,29 +332,17 @@
                             </div>
                         </div>
 
-                        {{-- Baholash turi --}}
+                        {{-- Baholash turi — registrator belgilagan flaglardan auto-derive --}}
                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
                             <label class="block text-xs font-medium text-amber-900 mb-2">
-                                {{ __("Baholash turi") }} <span class="text-red-500">*</span>
+                                {{ __("Baholash turi") }}
+                                <span class="text-[10px] font-normal text-amber-700">({{ __("registrator belgilagan, avtomatik aniqlandi") }})</span>
                             </label>
-                            <div class="grid grid-cols-2 gap-2 text-xs">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="assessment_type" value="oske" x-model="assessmentType" required>
-                                    <span class="font-medium">OSKE</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="assessment_type" value="test" x-model="assessmentType">
-                                    <span class="font-medium">TEST</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="assessment_type" value="oske_test" x-model="assessmentType">
-                                    <span class="font-medium">OSKE + TEST</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" name="assessment_type" value="sinov_fan" x-model="assessmentType">
-                                    <span class="font-medium">{{ __("Sinov fan") }}</span>
-                                </label>
+                            <div class="bg-white border border-amber-300 rounded p-2 text-sm font-semibold text-amber-900 flex items-center justify-between gap-2">
+                                <span x-text="assessmentTypeLabel"></span>
+                                <span class="text-[10px] font-normal text-gray-500" x-text="assessmentBreakdown"></span>
                             </div>
+                            <input type="hidden" name="assessment_type" :value="assessmentType">
 
                             {{-- OSKE va TEST sanalari (turiga qarab ko'rinadi) --}}
                             <div class="grid grid-cols-2 gap-3 mt-3" x-show="assessmentType === 'oske' || assessmentType === 'test' || assessmentType === 'oske_test'">
@@ -452,12 +440,56 @@
                     applications: [],
                     teachers: [],
                     selected: [],
-                    assessmentType: '',
                     oskeDate: '',
                     testDate: '',
 
                     get selectedCount() { return this.selected.length; },
                     get allSelected() { return this.applications.length > 0 && this.selected.length === this.applications.length; },
+
+                    get assessmentType() {
+                        // Tanlangan arizalardagi flaglardan ko'pchilik bo'yicha aniqlanadi
+                        const sel = this.applications.filter(a => this.selected.includes(a.id));
+                        if (sel.length === 0) return '';
+                        let sinov = 0, oskeTest = 0, oskeOnly = 0, testOnly = 0;
+                        for (const a of sel) {
+                            if (a.has_sinov) sinov++;
+                            else if (a.has_oske && a.has_test) oskeTest++;
+                            else if (a.has_oske) oskeOnly++;
+                            else if (a.has_test) testOnly++;
+                        }
+                        const map = { oske_test: oskeTest, oske: oskeOnly, test: testOnly, sinov_fan: sinov };
+                        let best = '', bestN = 0;
+                        for (const [k, v] of Object.entries(map)) {
+                            if (v > bestN) { best = k; bestN = v; }
+                        }
+                        return best || 'sinov_fan';
+                    },
+                    get assessmentTypeLabel() {
+                        return ({
+                            oske: 'OSKE',
+                            test: 'TEST',
+                            oske_test: 'OSKE + TEST',
+                            sinov_fan: 'Sinov fan',
+                            '': '— talaba tanlanmagan —',
+                        })[this.assessmentType] || '—';
+                    },
+                    get assessmentBreakdown() {
+                        const sel = this.applications.filter(a => this.selected.includes(a.id));
+                        if (sel.length === 0) return '';
+                        let sinov = 0, oskeTest = 0, oskeOnly = 0, testOnly = 0;
+                        for (const a of sel) {
+                            if (a.has_sinov) sinov++;
+                            else if (a.has_oske && a.has_test) oskeTest++;
+                            else if (a.has_oske) oskeOnly++;
+                            else if (a.has_test) testOnly++;
+                        }
+                        const parts = [];
+                        if (oskeTest) parts.push(`OSKE+TEST: ${oskeTest}`);
+                        if (oskeOnly) parts.push(`OSKE: ${oskeOnly}`);
+                        if (testOnly) parts.push(`TEST: ${testOnly}`);
+                        if (sinov) parts.push(`Sinov: ${sinov}`);
+                        return parts.join(' · ');
+                    },
 
                     async openFormation(data) {
                         this.formData = {
@@ -471,7 +503,6 @@
                         this.applications = [];
                         this.teachers = [];
                         this.selected = [];
-                        this.assessmentType = '';
                         this.oskeDate = '';
                         this.testDate = '';
                         this.showFormation = true;

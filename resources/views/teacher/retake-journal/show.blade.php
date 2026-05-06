@@ -240,6 +240,16 @@
                                 </div>
 
                                 <div class="flex items-center gap-2 flex-wrap">
+                                    @if($canEdit && !$group->sent_to_test_markazi_at)
+                                        <form method="POST" action="{{ route('admin.retake-journal.fetch-results', $group->id) }}"
+                                              onsubmit="return confirm('{{ __("HEMIS'dan OSKE va Test natijalarini tortishni tasdiqlaysizmi?") }}')">
+                                            @csrf
+                                            <button type="submit"
+                                                    class="inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold text-white bg-violet-600 rounded-lg hover:bg-violet-700">
+                                                📥 {{ __("Natijalarni tortish") }}
+                                            </button>
+                                        </form>
+                                    @endif
                                     @if($group->is_locked)
                                         <button type="button"
                                                 @click="weightsModalOpen = true"

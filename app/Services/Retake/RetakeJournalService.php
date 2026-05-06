@@ -715,4 +715,97 @@ class RetakeJournalService
 
         return ['path' => $absPath, 'filename' => $fileName, 'relPath' => $relPath];
     }
+
+    /**
+     * HEMIS dan kelgan OSKE (training_type_code=101) va Test (102) baholarini
+     * student_grades jadvalidan o'qib, retake_applications.oske_score/test_score
+     * ga yozish. Mavjud admin/journal logikasiga moslashtirilgan.
+     *
+     * Filtrlar:
+     *  - subject_id retake group bilan mos
+     *  - student_hemis_id retake guruhdagi har bir talaba
+     *  - lesson_date >= group->oske_date / test_date (qayta o'qish davridagi natija)
+     *
+     * @return array{fetched_oske:int, fetched_test:int, missing:int}
+     */
+    public function fetchOskeTestResults(RetakeGroup $group): array
+    {
+        $applications = $this->applications($group);
+        if ($applications->isEmpty()) {
+            return ['fetched_oske' => 0, 'fetched_test' => 0, 'missing' => 0];
+        }
+
+        $hemisIds = $applications->pluck('student_hemis_id')->filter()->unique()->values();
+
+        $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
+        $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+
+        $oskeMap = collect();
+        $testMap = collect();
+
+        if ($needsOske) {
+            $oskeQuery = \Illuminate\Support\Facades\DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $hemisIds)
+                ->where('subject_id', $group->subject_id)
+                ->where('training_type_code', 101);
+            if ($group->oske_date) {
+                $oskeQuery->where('lesson_date', '>=', $group->oske_date->format('Y-m-d'));
+            }
+            $oskeMap = $oskeQuery
+                ->select('student_hemis_id', \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'))
+                ->groupBy('student_hemis_id')
+                ->pluck('avg_grade', 'student_hemis_id');
+        }
+
+        if ($needsTest) {
+            $testQuery = \Illuminate\Support\Facades\DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $hemisIds)
+                ->where('subject_id', $group->subject_id)
+                ->where('training_type_code', 102);
+            if ($group->test_date) {
+                $testQuery->where('lesson_date', '>=', $group->test_date->format('Y-m-d'));
+            }
+            $testMap = $testQuery
+                ->select('student_hemis_id', \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'))
+                ->groupBy('student_hemis_id')
+                ->pluck('avg_grade', 'student_hemis_id');
+        }
+
+        $fetchedOske = 0;
+        $fetchedTest = 0;
+        $missing = 0;
+
+        foreach ($applications as $app) {
+            $update = [];
+            if ($needsOske) {
+                $score = $oskeMap->get($app->student_hemis_id);
+                if ($score !== null) {
+                    $update['oske_score'] = $score;
+                    $fetchedOske++;
+                } elseif ($app->oske_score === null) {
+                    $missing++;
+                }
+            }
+            if ($needsTest) {
+                $score = $testMap->get($app->student_hemis_id);
+                if ($score !== null) {
+                    $update['test_score'] = $score;
+                    $fetchedTest++;
+                } elseif ($app->test_score === null) {
+                    $missing++;
+                }
+            }
+            if (!empty($update)) {
+                $app->update($update);
+            }
+        }
+
+        return [
+            'fetched_oske' => $fetchedOske,
+            'fetched_test' => $fetchedTest,
+            'missing' => $missing,
+        ];
+    }
 }

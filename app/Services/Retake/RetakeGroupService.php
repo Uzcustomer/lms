@@ -136,6 +136,10 @@ class RetakeGroupService
         $data['subject_id'] = $apps->pluck('subject_id')->countBy()->sortDesc()->keys()->first() ?: ($data['subject_id'] ?? null);
         $data['semester_id'] = $apps->pluck('semester_id')->countBy()->sortDesc()->keys()->first() ?: ($data['semester_id'] ?? null);
 
+        // Assessment turi — registrator belgilagan flaglar (has_oske/has_test/has_sinov) asosida
+        // ko'pchilik bo'yicha avtomatik aniqlanadi. O'quv bo'limi qo'lda tanlamaydi.
+        $data['assessment_type'] = $this->deriveAssessmentType($apps);
+
         $teacher = Teacher::find($data['teacher_id']);
         if (!$teacher) {
             throw ValidationException::withMessages([
@@ -329,6 +333,34 @@ class RetakeGroupService
      *  - oske_test  → ikkala sana ham majburiy + test_date >= oske_date
      *  - sinov_fan  → qo'shimcha sana talab qilmaydi
      */
+    /**
+     * Tanlangan arizalardagi has_oske/has_test/has_sinov flaglardan
+     * (registrator belgilagan) ko'pchilik bo'yicha guruhning baholash turini aniqlash.
+     */
+    private function deriveAssessmentType(\Illuminate\Support\Collection $apps): string
+    {
+        // Har bir ariza uchun flaglar tasnifi
+        $sinov = $apps->filter(fn ($a) => (bool) $a->has_sinov)->count();
+        $bothOskeTest = $apps->filter(fn ($a) => (bool) $a->has_oske && (bool) $a->has_test)->count();
+        $oskeOnly = $apps->filter(fn ($a) => (bool) $a->has_oske && !(bool) $a->has_test)->count();
+        $testOnly = $apps->filter(fn ($a) => (bool) $a->has_test && !(bool) $a->has_oske)->count();
+
+        // Eng ko'p uchragan tipni tanlaymiz
+        $counts = [
+            RetakeGroup::ASSESSMENT_OSKE_TEST => $bothOskeTest,
+            RetakeGroup::ASSESSMENT_OSKE => $oskeOnly,
+            RetakeGroup::ASSESSMENT_TEST => $testOnly,
+            RetakeGroup::ASSESSMENT_SINOV_FAN => $sinov,
+        ];
+        arsort($counts);
+        $type = array_key_first($counts);
+        if (!$type || $counts[$type] === 0) {
+            // Hech qaysi flag yoqilmagan bo'lsa default sinov fan
+            return RetakeGroup::ASSESSMENT_SINOV_FAN;
+        }
+        return $type;
+    }
+
     private function validateAssessment(array $data): void
     {
         $type = $data['assessment_type'] ?? null;

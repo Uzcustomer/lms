@@ -298,6 +298,41 @@ class RetakeJournalController extends Controller
     }
 
     /**
+     * HEMIS'dan OSKE va Test natijalarini tortish (student_grades 101/102).
+     * Mavjud Admin/JournalController::fetchYnResults logikasiga moslashtirilgan.
+     */
+    public function fetchResults(int $groupId): RedirectResponse
+    {
+        $actor = RetakeAccess::currentStaff();
+        if (!$actor) abort(403);
+
+        $group = RetakeGroup::findOrFail($groupId);
+        $this->authorizeView($actor, $group);
+
+        if (!in_array($group->assessment_type, ['oske', 'test', 'oske_test'], true)) {
+            return redirect()->back()->withErrors([
+                'assessment_type' => "Bu guruh uchun OSKE/Test natijalari kerak emas",
+            ]);
+        }
+
+        $result = $this->service->fetchOskeTestResults($group);
+
+        $parts = [];
+        if ($result['fetched_oske'] > 0) $parts[] = "OSKE: {$result['fetched_oske']}";
+        if ($result['fetched_test'] > 0) $parts[] = "Test: {$result['fetched_test']}";
+
+        if (empty($parts)) {
+            return redirect()->back()->with('error', "HEMIS'da hali natijalar yo'q. Keyinroq urinib ko'ring.");
+        }
+
+        $msg = "Natijalar tortildi — " . implode(', ', $parts) . " ta yangilandi";
+        if ($result['missing'] > 0) {
+            $msg .= ", {$result['missing']} ta talaba uchun natija topilmadi";
+        }
+        return redirect()->back()->with('success', $msg);
+    }
+
+    /**
      * Test markaziga yuborish (yopilgan guruhlar uchun, vedomost saqlangan).
      */
     public function sendToTestMarkazi(int $groupId): RedirectResponse

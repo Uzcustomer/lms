@@ -236,7 +236,7 @@
                                     @if($group->is_locked)
                                         <a href="{{ route('admin.retake-journal.vedomost', $group->id) }}"
                                            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700">
-                                            📄 {{ __("YN qaydnoma yaratish") }}
+                                            📊 {{ __("YN qaydnoma (Excel)") }}
                                         </a>
                                     @endif
                                     @if($canEdit && $group->is_locked && !$group->sent_to_test_markazi_at)
@@ -268,7 +268,7 @@
                             <p class="text-sm text-gray-700">{{ __("Sinov fan — vedomost tayyor") }}</p>
                             <a href="{{ route('admin.retake-journal.vedomost', $group->id) }}"
                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700">
-                                📄 {{ __("YN qaydnoma yaratish") }}
+                                📊 {{ __("YN qaydnoma (Excel)") }}
                             </a>
                         </div>
                     @endif

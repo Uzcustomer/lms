@@ -69,11 +69,80 @@ class RetakeJournalController extends Controller
             ->get()
             ->keyBy(fn ($g) => $g->lesson_date->format('Y-m-d'));
 
+        // Mustaqil ta'lim submission
+        $mustaqil = \App\Models\RetakeMustaqilSubmission::query()
+            ->where('retake_group_id', $group->id)
+            ->where('application_id', $myApp->id)
+            ->first();
+
         return view('student.retake-journal.show', [
             'group' => $group,
             'application' => $myApp,
             'dates' => $dates,
             'grades' => $myGrades,
+            'mustaqil' => $mustaqil,
+            'isEditable' => $this->service->isEditable($group),
         ]);
+    }
+
+    /**
+     * Mustaqil ta'lim faylini yuklash.
+     */
+    public function uploadMustaqil(Request $request, int $groupId)
+    {
+        /** @var Student $student */
+        $student = Auth::guard('student')->user();
+
+        $request->validate([
+            'file' => 'required|file|max:' . (\App\Models\RetakeMustaqilSubmission::MAX_FILE_MB * 1024) . '|mimes:pdf,doc,docx,jpg,jpeg,png,zip,rar',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        $group = RetakeGroup::findOrFail($groupId);
+
+        try {
+            $this->service->submitMustaqil(
+                $group,
+                $student,
+                $request->file('file'),
+                $request->input('comment'),
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        return redirect()->route('student.retake-journal.show', $groupId)
+            ->with('success', __('Mustaqil ta\'lim fayli yuklandi'));
+    }
+
+    /**
+     * O'z faylni yuklab olish.
+     */
+    public function downloadMustaqil(int $groupId)
+    {
+        /** @var Student $student */
+        $student = Auth::guard('student')->user();
+
+        $group = RetakeGroup::findOrFail($groupId);
+
+        $myApp = RetakeApplication::query()
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('retake_group_id', $group->id)
+            ->first();
+        if (!$myApp) abort(403);
+
+        $submission = \App\Models\RetakeMustaqilSubmission::query()
+            ->where('retake_group_id', $group->id)
+            ->where('application_id', $myApp->id)
+            ->firstOrFail();
+
+        if (!$submission->file_path || !\Illuminate\Support\Facades\Storage::disk('public')->exists($submission->file_path)) {
+            abort(404);
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk('public')->download(
+            $submission->file_path,
+            $submission->original_filename ?: 'mustaqil.pdf'
+        );
     }
 }

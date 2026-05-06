@@ -78,6 +78,24 @@ class RetakeWindowController extends Controller
             ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
             ->pluck('faculty_name', 'sp_hemis_id');
 
+        // Bulk batch'dagi qo'shni fakultetlar
+        $batchIds = $windows->pluck('creation_batch_id')->filter()->unique()->values();
+        $batchFaculties = collect();
+        if ($batchIds->isNotEmpty()) {
+            $batchSiblings = RetakeApplicationWindow::query()
+                ->whereIn('creation_batch_id', $batchIds)
+                ->get(['id', 'creation_batch_id', 'specialty_id']);
+            $batchFaculties = $batchSiblings->groupBy('creation_batch_id')
+                ->map(function ($siblings) use ($specialtyToFaculty) {
+                    return $siblings->pluck('specialty_id')
+                        ->map(fn ($spId) => $specialtyToFaculty[$spId] ?? null)
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+                });
+        }
+
         // Form uchun ma'lumotlar — faqat fakultetlar (structure_type_code = 11)
         $departments = Department::where('structure_type_code', 11)
             ->orderBy('name')
@@ -105,6 +123,7 @@ class RetakeWindowController extends Controller
             'windows' => $windows,
             'activeWindows' => $activeWindows,
             'specialtyToFaculty' => $specialtyToFaculty,
+            'batchFaculties' => $batchFaculties,
             'departments' => $departments,
             'specialties' => $specialties,
             'levels' => $levels,
@@ -185,7 +204,11 @@ class RetakeWindowController extends Controller
         $skipped = 0;
         $firstError = null;
 
-        DB::transaction(function () use ($data, $specialties, $levelMap, $departments, $semesterCombos, $user, &$created, &$skipped, &$firstError, $hasXalqaro) {
+        // Bulk operatsiya uchun bitta umumiy batch ID — natija jadvalida shu
+        // batch ostidagi barcha fakultetlarni ko'rsatish uchun ishlatiladi.
+        $batchId = (string) \Illuminate\Support\Str::uuid();
+
+        DB::transaction(function () use ($data, $specialties, $levelMap, $departments, $semesterCombos, $user, &$created, &$skipped, &$firstError, $hasXalqaro, $batchId) {
             foreach ($specialties as $sp) {
                 $depName = (string) ($departments[$sp->department_hemis_id] ?? '');
                 $isSpecXalqaro = preg_match('/xalqaro/i', $depName) === 1;
@@ -205,6 +228,7 @@ class RetakeWindowController extends Controller
                                 'semester_name' => $sem['name'],
                                 'start_date' => $data['start_date'],
                                 'end_date' => $data['end_date'],
+                                'creation_batch_id' => $batchId,
                             ], $user);
                             $created++;
                         } catch (ValidationException $e) {

@@ -22,6 +22,7 @@ class RetakeApplicationWindow extends Model
         'end_date',
         'created_by_user_id',
         'created_by_name',
+        'creation_batch_id',
     ];
 
     protected $casts = [

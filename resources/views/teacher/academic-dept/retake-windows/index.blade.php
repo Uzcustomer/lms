@@ -145,7 +145,19 @@
                                 <td class="px-3 py-2.5 text-center text-sm font-bold text-blue-700">
                                     {{ ($windows->currentPage() - 1) * $windows->perPage() + $i + 1 }}
                                 </td>
-                                <td class="px-3 py-2.5 text-sm font-semibold text-gray-900">{{ $specialtyToFaculty[$w->specialty_id] ?? '—' }}</td>
+                                <td class="px-3 py-2.5 text-sm font-semibold text-gray-900">
+                                    {{ $specialtyToFaculty[$w->specialty_id] ?? '—' }}
+                                    @php
+                                        $siblings = $w->creation_batch_id ? (($batchFaculties ?? collect())[$w->creation_batch_id] ?? []) : [];
+                                        $others = collect($siblings)->reject(fn ($f) => $f === ($specialtyToFaculty[$w->specialty_id] ?? null))->values();
+                                    @endphp
+                                    @if(count($others) > 0)
+                                        <div class="text-[10px] text-gray-500 font-normal mt-0.5"
+                                             title="{{ __('Bu oyna birgalikda yaratilgan fakultetlar') }}">
+                                            ⛓ {{ __("birgalikda") }}: {{ implode(', ', $others->all()) }}
+                                        </div>
+                                    @endif
+                                </td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->specialty_name ?? $w->specialty_id }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->level_name ?? $w->level_code }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $w->semester_name }}</td>

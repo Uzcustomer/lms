@@ -328,6 +328,25 @@ class RetakeWindowSessionController extends Controller
             ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
             ->pluck('faculty_name', 'sp_hemis_id');
 
+        // Batch'dagi qo'shimcha fakultetlar — har bir oynaning creation_batch_id bo'yicha
+        // shu batchda yaratilgan boshqa oynalar va ularning fakultetlari nomi
+        $batchIds = $windows->pluck('creation_batch_id')->filter()->unique()->values();
+        $batchFaculties = collect();
+        if ($batchIds->isNotEmpty()) {
+            $batchSiblings = \App\Models\RetakeApplicationWindow::query()
+                ->whereIn('creation_batch_id', $batchIds)
+                ->get(['id', 'creation_batch_id', 'specialty_id']);
+            $batchFaculties = $batchSiblings->groupBy('creation_batch_id')
+                ->map(function ($siblings) use ($specialtyToFaculty) {
+                    return $siblings->pluck('specialty_id')
+                        ->map(fn ($spId) => $specialtyToFaculty[$spId] ?? null)
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+                });
+        }
+
         $departments = Department::where('structure_type_code', 11)
             ->orderBy('name')
             ->get(['department_hemis_id', 'name']);
@@ -338,6 +357,7 @@ class RetakeWindowSessionController extends Controller
             'session' => $session,
             'windows' => $windows,
             'specialtyToFaculty' => $specialtyToFaculty,
+            'batchFaculties' => $batchFaculties,
             'departments' => $departments,
             'specialties' => $specialties,
             'levels' => $this->levels(),

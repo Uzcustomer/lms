@@ -114,6 +114,32 @@ class RetakeJournalController extends Controller
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
 
+        // URINISH ("nechinchi marta") — har talaba uchun shu fan bo'yicha tasdiqlangan
+        // arizalar tartibi. Joriy ariza nechinchi navbatdaligini hisoblaymiz.
+        $attemptsMap = [];
+        foreach ($applications as $app) {
+            $allIds = \App\Models\RetakeApplication::query()
+                ->where('student_hemis_id', $app->student_hemis_id)
+                ->where('subject_id', $app->subject_id)
+                ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
+                ->orderBy('created_at')
+                ->pluck('id')
+                ->toArray();
+            $idx = array_search($app->id, $allIds);
+            $attemptsMap[$app->id] = $idx !== false ? $idx + 1 : 1;
+        }
+
+        // Filtr panel uchun fakultet/yo'nalish/guruh ko'rsatkichlari (talabalar bo'yicha unikal)
+        $studentInfo = $applications
+            ->map(fn ($a) => $a->group->student ?? null)
+            ->filter();
+
+        $facultyNames = $studentInfo->pluck('department_name')->filter()->unique()->values();
+        $specialtyNames = $studentInfo->pluck('specialty_name')->filter()->unique()->values();
+        $levelNames = $studentInfo->pluck('level_name')->filter()->unique()->values();
+        $semesterNames = $studentInfo->pluck('semester_name')->filter()->unique()->values();
+        $groupNames = $studentInfo->pluck('group_name')->filter()->unique()->values();
+
         $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
         $canEdit = $isAdmin
             || ($actor instanceof Teacher && $this->service->isAssignedTeacher($group, $actor) && $this->service->isEditable($group));
@@ -124,6 +150,12 @@ class RetakeJournalController extends Controller
             'dates' => $dates,
             'gradesMap' => $gradesMap,
             'mustaqilMap' => $mustaqilMap,
+            'attemptsMap' => $attemptsMap,
+            'facultyNames' => $facultyNames,
+            'specialtyNames' => $specialtyNames,
+            'levelNames' => $levelNames,
+            'semesterNames' => $semesterNames,
+            'groupNames' => $groupNames,
             'canEdit' => $canEdit,
             'isEditable' => $this->service->isEditable($group),
         ]);

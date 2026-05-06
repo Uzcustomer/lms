@@ -9,14 +9,21 @@
         </div>
     </x-slot>
 
+    @php
+        $defaultWeights = app(\App\Services\Retake\RetakeJournalService::class)->defaultWeights($group);
+    @endphp
     <div class="py-4 px-3 sm:px-4 lg:px-6 w-full"
          x-data="retakeJournal({
              saveUrl: '{{ route('admin.retake-journal.save-grade', $group->id) }}',
              gradeMustaqilUrl: '{{ route('admin.retake-journal.mustaqil-grade', $group->id) }}',
+             vedomostUrl: '{{ route('admin.retake-journal.vedomost', $group->id) }}',
              csrf: '{{ csrf_token() }}',
              canEdit: @js($canEdit),
              tab: 'amaliyot',
              filterMode: 'batafsil',
+             weightsModalOpen: false,
+             weights: @js($defaultWeights),
+             generating: false,
          })">
 
         @if(session('success'))
@@ -234,10 +241,12 @@
 
                                 <div class="flex items-center gap-2 flex-wrap">
                                     @if($group->is_locked)
-                                        <a href="{{ route('admin.retake-journal.vedomost', $group->id) }}"
-                                           class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700">
-                                            📊 {{ __("YN qaydnoma (Excel)") }}
-                                        </a>
+                                        <button type="button"
+                                                @click="weightsModalOpen = true"
+                                                :disabled="generating"
+                                                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-60">
+                                            📊 <span x-text="generating ? '{{ __("Yaratilmoqda...") }}' : '{{ __("YN qaydnoma yaratish") }}'"></span>
+                                        </button>
                                     @endif
                                     @if($canEdit && $group->is_locked && !$group->sent_to_test_markazi_at)
                                         <form method="POST" action="{{ route('admin.retake-journal.send-to-test-markazi', $group->id) }}"
@@ -266,10 +275,12 @@
                         {{-- Sinov fan uchun ham vedomost yaratiladi --}}
                         <div class="bg-white rounded-xl shadow-sm border border-gray-100 mt-3 p-4 flex items-center justify-between flex-wrap gap-3">
                             <p class="text-sm text-gray-700">{{ __("Sinov fan — vedomost tayyor") }}</p>
-                            <a href="{{ route('admin.retake-journal.vedomost', $group->id) }}"
-                               class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700">
-                                📊 {{ __("YN qaydnoma (Excel)") }}
-                            </a>
+                            <button type="button"
+                                    @click="weightsModalOpen = true"
+                                    :disabled="generating"
+                                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-60">
+                                📊 <span x-text="generating ? '{{ __("Yaratilmoqda...") }}' : '{{ __("YN qaydnoma yaratish") }}'"></span>
+                            </button>
                         </div>
                     @endif
                 </div>
@@ -508,6 +519,68 @@
 
         </div>
 
+        {{-- YN qaydnoma vazn taqsimlash modali --}}
+        <div x-show="weightsModalOpen" x-cloak class="fixed inset-0 z-50">
+            <div class="fixed inset-0 bg-black/50" @click="weightsModalOpen = false"></div>
+            <div class="fixed inset-0 flex items-center justify-center p-4">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md relative" @click.stop>
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-800">{{ __("Vaznlarni taqsimlang") }}</h3>
+                        <p class="text-sm text-gray-500 mt-1">{{ __("Jami 100 bo'lishi kerak") }}</p>
+                    </div>
+                    <div class="px-6 py-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-semibold text-gray-700 w-20">JN</label>
+                            <input type="number" min="0" max="100" x-model.number="weights.jn"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-semibold text-gray-700 w-20">MT</label>
+                            <input type="number" min="0" max="100" x-model.number="weights.mt"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-semibold text-gray-700 w-20">ON</label>
+                            <input type="number" min="0" max="100" x-model.number="weights.on"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-semibold text-gray-700 w-20">OSKI</label>
+                            <input type="number" min="0" max="100" x-model.number="weights.oski"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-semibold text-gray-700 w-20">Test</label>
+                            <input type="number" min="0" max="100" x-model.number="weights.test"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-gray-200">
+                            <span class="text-sm font-bold text-gray-800">{{ __("Jami") }}:</span>
+                            <span class="text-lg font-bold"
+                                  :class="(weights.jn + weights.mt + weights.on + weights.oski + weights.test) === 100 ? 'text-green-600' : 'text-red-600'"
+                                  x-text="(weights.jn || 0) + (weights.mt || 0) + (weights.on || 0) + (weights.oski || 0) + (weights.test || 0)"></span>
+                        </div>
+                        <p class="text-xs text-red-600"
+                           x-show="(weights.jn + weights.mt + weights.on + weights.oski + weights.test) !== 100">
+                            {{ __("Jami 100 bo'lishi kerak!") }}
+                        </p>
+                    </div>
+                    <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button type="button" @click="weightsModalOpen = false"
+                                class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                            {{ __("Bekor qilish") }}
+                        </button>
+                        <button type="button"
+                                @click="generateVedomost()"
+                                :disabled="generating || (weights.jn + weights.mt + weights.on + weights.oski + weights.test) !== 100"
+                                class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm disabled:opacity-60">
+                            <span x-text="generating ? '{{ __("Yaratilmoqda...") }}' : '{{ __("Yaratish") }}'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     @push('styles')
@@ -620,10 +693,65 @@
 
     @push('scripts')
         <script>
-            function retakeJournal({ saveUrl, gradeMustaqilUrl, csrf, canEdit, tab, filterMode }) {
+            function retakeJournal({ saveUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode, weightsModalOpen, weights, generating }) {
                 return {
-                    saveUrl, gradeMustaqilUrl, csrf, canEdit, tab, filterMode,
+                    saveUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode,
+                    weightsModalOpen, weights, generating,
                     saving: {},
+
+                    async generateVedomost() {
+                        const total = (this.weights.jn || 0) + (this.weights.mt || 0)
+                                    + (this.weights.on || 0) + (this.weights.oski || 0) + (this.weights.test || 0);
+                        if (total !== 100) {
+                            alert("Vaznlar jami 100 bo'lishi kerak!");
+                            return;
+                        }
+                        if (this.generating) return;
+                        this.generating = true;
+                        try {
+                            const res = await fetch(this.vedomostUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': this.csrf,
+                                    'Accept': 'application/octet-stream',
+                                },
+                                body: JSON.stringify({
+                                    weight_jn: this.weights.jn,
+                                    weight_mt: this.weights.mt,
+                                    weight_on: this.weights.on,
+                                    weight_oski: this.weights.oski,
+                                    weight_test: this.weights.test,
+                                }),
+                            });
+                            if (!res.ok) {
+                                let msg = 'Server xatosi';
+                                try {
+                                    const j = await res.json();
+                                    msg = j.error || j.message || msg;
+                                } catch (_) {}
+                                throw new Error(msg);
+                            }
+                            const cd = res.headers.get('Content-Disposition') || '';
+                            let fileName = 'YN_qaydnoma.xlsx';
+                            const m = cd.match(/filename="?([^";\n]+)"?/);
+                            if (m && m[1]) fileName = m[1];
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = fileName;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            window.URL.revokeObjectURL(url);
+                            this.weightsModalOpen = false;
+                        } catch (err) {
+                            alert('Xatolik: ' + err.message);
+                        } finally {
+                            this.generating = false;
+                        }
+                    },
 
                     async saveCell(e, appId, date) {
                         if (!this.canEdit) return;

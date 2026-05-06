@@ -453,7 +453,28 @@ class RetakeJournalService
      *
      * @return array{path: string, filename: string, relPath: string}
      */
-    public function buildVedomostExcel(RetakeGroup $group): array
+    /**
+     * Standart (default) vaznlarni assessment_type bo'yicha qaytaradi.
+     */
+    public function defaultWeights(RetakeGroup $group): array
+    {
+        switch ($group->assessment_type) {
+            case 'oske':
+                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 60, 'test' => 0];
+            case 'test':
+                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 0,  'test' => 60];
+            case 'oske_test':
+                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 30, 'test' => 30];
+            case 'sinov_fan':
+            default:
+                return ['jn' => 70, 'mt' => 30, 'on' => 0, 'oski' => 0,  'test' => 0];
+        }
+    }
+
+    /**
+     * @param  array{jn:int,mt:int,on:int,oski:int,test:int}|null  $weights
+     */
+    public function buildVedomostExcel(RetakeGroup $group, ?array $weights = null): array
     {
         $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
         if (!file_exists($templatePath)) {
@@ -466,22 +487,13 @@ class RetakeJournalService
         $gradesMap = $this->gradesMap($group);
         $mustaqilMap = $this->mustaqilMap($group);
 
-        // Vaznlar — assessment_type bo'yicha
-        switch ($group->assessment_type) {
-            case 'oske':
-                $weightJn = 30; $weightMt = 10; $weightOn = 0; $weightOski = 60; $weightTest = 0;
-                break;
-            case 'test':
-                $weightJn = 30; $weightMt = 10; $weightOn = 0; $weightOski = 0;  $weightTest = 60;
-                break;
-            case 'oske_test':
-                $weightJn = 30; $weightMt = 10; $weightOn = 0; $weightOski = 30; $weightTest = 30;
-                break;
-            case 'sinov_fan':
-            default:
-                $weightJn = 70; $weightMt = 30; $weightOn = 0; $weightOski = 0;  $weightTest = 0;
-                break;
-        }
+        // Vaznlar
+        $w = $weights ?? $this->defaultWeights($group);
+        $weightJn   = (int) ($w['jn']   ?? 0);
+        $weightMt   = (int) ($w['mt']   ?? 0);
+        $weightOn   = (int) ($w['on']   ?? 0);
+        $weightOski = (int) ($w['oski'] ?? 0);
+        $weightTest = (int) ($w['test'] ?? 0);
 
         $abbreviateName = function ($fullName) {
             $parts = preg_split('/\s+/', trim((string) $fullName));
@@ -507,7 +519,8 @@ class RetakeJournalService
             return (string) ($names->sortDesc()->keys()->first() ?? '');
         };
 
-        $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $pickMostCommon($studentInfo, 'department_name'));
+        $facultyFullName = $pickMostCommon($studentInfo, 'department_name');
+        $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $facultyFullName);
         $specialtyName = $pickMostCommon($studentInfo, 'specialty_name');
         $levelName = $pickMostCommon($studentInfo, 'level_name');
         $semesterName = $pickMostCommon($studentInfo, 'semester_name');
@@ -515,6 +528,66 @@ class RetakeJournalService
         $semesterInYear = preg_match('/(\d+)/', $semesterName, $m) ? (int) $m[1] : '';
 
         $teacherNameAbbr = $group->teacher_name ? $abbreviateName($group->teacher_name) : '';
+
+        // Dekan: ko'pchilik fakultet hemis_id'dan dekanni qidiramiz
+        $abbrFio = function (string $fullName): string {
+            $parts = preg_split('/\s+/', trim($fullName));
+            if (count($parts) < 2) return $fullName;
+            $surname = mb_strtoupper(mb_substr($parts[0], 0, 1)) . mb_strtolower(mb_substr($parts[0], 1));
+            $initials = '';
+            for ($i = 1; $i < count($parts); $i++) {
+                $initials .= mb_strtoupper(mb_substr($parts[$i], 0, 1)) . '.';
+            }
+            return $initials . $surname;
+        };
+
+        $studentDeptIds = $studentInfo->pluck('department_id')->filter()->countBy()->sortDesc();
+        $majorDeptId = $studentDeptIds->keys()->first();
+
+        $dekanExcelName = '';
+        if ($majorDeptId) {
+            try {
+                $faculty = \App\Models\Department::where('department_hemis_id', $majorDeptId)->first();
+                if ($faculty) {
+                    $dekan = \App\Models\Teacher::query()
+                        ->whereHas('deanFaculties', fn ($q) => $q->where('dean_faculties.department_hemis_id', $faculty->department_hemis_id))
+                        ->whereHas('roles', fn ($q) => $q->where('name', \App\Enums\ProjectRole::DEAN->value))
+                        ->where('is_active', true)
+                        ->orderByRaw("CASE WHEN lavozim = 'Dekan' THEN 0 ELSE 1 END")
+                        ->first();
+                    if ($dekan) {
+                        $dekanExcelName = $abbrFio($dekan->full_name);
+                    }
+                }
+            } catch (\Throwable $e) {
+                $dekanExcelName = '';
+            }
+        }
+
+        // Kafedra mudiri: o'qituvchi orqali (group->teacher kafedrasidan)
+        $kafedraMudiriName = '';
+        $teacher = $group->teacher;
+        if ($teacher && $teacher->department_hemis_id) {
+            try {
+                $mudiri = \App\Models\Teacher::query()
+                    ->whereHas('roles', fn ($q) => $q->where('name', 'kafedra_mudiri'))
+                    ->where('department_hemis_id', $teacher->department_hemis_id)
+                    ->where('is_active', true)
+                    ->first();
+                if (!$mudiri) {
+                    $mudiri = \App\Models\Teacher::query()
+                        ->where('staff_position', 'LIKE', '%mudiri%')
+                        ->where('department_hemis_id', $teacher->department_hemis_id)
+                        ->where('is_active', true)
+                        ->first();
+                }
+                if ($mudiri) {
+                    $kafedraMudiriName = $abbrFio($mudiri->full_name);
+                }
+            } catch (\Throwable $e) {
+                $kafedraMudiriName = '';
+            }
+        }
 
         $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($templatePath);
         $sheet = $spreadsheet->getActiveSheet();
@@ -532,6 +605,8 @@ class RetakeJournalService
         $sheet->setCellValue('U10', $teacherNameAbbr);
         $sheet->setCellValue('A11', "Ma'ruzachi:");
         $sheet->setCellValue('C11', '         ' . $teacherNameAbbr);
+        $sheet->setCellValue('E60', $dekanExcelName);
+        $sheet->setCellValue('U60', $kafedraMudiriName);
 
         // Vaznlar
         $sheet->setCellValue('V18', 'Yakuniy ball');

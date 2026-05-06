@@ -430,6 +430,30 @@ class RetakeGroupController extends Controller
             ->with('success', __('Guruh butunlay o\'chirildi'));
     }
 
+    /**
+     * Tanlangan guruhlarni butunlay o'chirish (faqat super-admin).
+     * Tarixda qolmaydi. Aktiv yoki arxivlangan bo'lishidan qat'iy nazar ishlaydi.
+     */
+    public function bulkForceDestroy(Request $request): RedirectResponse
+    {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'group_ids' => 'required|array|min:1',
+            'group_ids.*' => 'integer',
+        ]);
+
+        $deleted = RetakeGroup::withTrashed()
+            ->whereIn('id', $data['group_ids'])
+            ->get()
+            ->each(fn ($g) => $g->forceDelete())
+            ->count();
+
+        return redirect()->back()->with('success', "{$deleted} ta guruh butunlay o'chirildi");
+    }
+
     private function authorize(): void
     {
         if (!RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff())) {

@@ -782,6 +782,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('retake')->name('retake.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'index'])->name('index');
             Route::post('/bulk-delete', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'bulkDestroy'])->name('bulk-delete');
+            Route::post('/bulk-force-delete', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'bulkForceDestroy'])->name('bulk-force-delete');
             Route::get('/{groupId}/receipt', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'receipt'])->name('receipt');
             Route::get('/{groupId}/payment-receipt', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'paymentReceipt'])->name('payment-receipt');
             Route::post('/{groupId}/verify-payment', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'verifyPayment'])->name('verify-payment');
@@ -796,6 +797,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'store'])->name('store');
             Route::get('/trashed', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'trashed'])->name('trashed');
             Route::post('/bulk-delete', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'bulkDestroy'])->name('bulk-delete');
+            Route::post('/bulk-force-delete', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'bulkForceDestroy'])->name('bulk-force-delete');
             Route::get('/{sessionId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'show'])->name('show');
             Route::post('/{sessionId}/close', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'close'])->name('close');
             Route::delete('/{sessionId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'destroy'])->name('destroy');
@@ -819,6 +821,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/lookup', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'lookup'])->name('lookup');
             Route::post('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'store'])->name('store');
             Route::post('/bulk-delete', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'bulkDestroy'])->name('bulk-delete');
+            Route::post('/bulk-force-delete', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'bulkForceDestroy'])->name('bulk-force-delete');
             Route::get('/{groupId}/edit', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'edit'])->name('edit');
             Route::put('/{groupId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'update'])->name('update');
             Route::post('/{groupId}/publish', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'publish'])->name('publish');

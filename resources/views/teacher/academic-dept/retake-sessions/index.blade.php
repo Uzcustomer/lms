@@ -193,38 +193,98 @@
         {{-- Create modal --}}
         <div x-show="showCreate"
              x-cloak
-             class="fixed inset-0 z-50 flex items-center justify-center p-4"
+             class="fixed inset-0 z-50 overflow-y-auto"
+             x-transition:enter="ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
              @keydown.escape.window="showCreate = false">
-            <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
-            <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-5 z-10">
-                <h3 class="text-base font-bold text-gray-900 mb-4">
-                    {{ __("Yangi sessiya yaratish") }}
-                </h3>
-                <form method="POST" action="{{ route('admin.retake-sessions.store') }}" class="space-y-3">
-                    @csrf
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 mb-1">
-                            {{ __("Sessiya nomi") }} <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text"
-                               name="name"
-                               required
-                               maxlength="255"
-                               placeholder="{{ __("Masalan: 2026-2027 Bahor semestri") }}"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div class="flex gap-2 pt-2">
+            <div class="flex min-h-screen items-center justify-center p-4">
+                {{-- Backdrop --}}
+                <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" @click="showCreate = false"></div>
+
+                {{-- Dialog --}}
+                <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden z-10"
+                     x-transition:enter="ease-out duration-200"
+                     x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+                     x-transition:enter-end="opacity-100 scale-100 translate-y-0">
+
+                    {{-- Header --}}
+                    <div class="px-6 pt-6 pb-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-base font-semibold text-gray-900 leading-tight">
+                                    {{ __("Yangi sessiya yaratish") }}
+                                </h3>
+                                <p class="text-xs text-gray-500 mt-0.5">
+                                    {{ __("Bir o'quv yili / muddat uchun konteyner") }}
+                                </p>
+                            </div>
+                        </div>
                         <button type="button"
                                 @click="showCreate = false"
-                                class="flex-1 px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                            {{ __("Bekor qilish") }}
-                        </button>
-                        <button type="submit"
-                                class="flex-1 px-3 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                            {{ __("Yaratish") }}
+                                class="text-gray-400 hover:text-gray-600 transition p-1 rounded-lg hover:bg-gray-100">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
                         </button>
                     </div>
-                </form>
+
+                    <form method="POST" action="{{ route('admin.retake-sessions.store') }}">
+                        @csrf
+
+                        {{-- Body --}}
+                        <div class="px-6 py-5 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-800 mb-1.5">
+                                    {{ __("Sessiya nomi") }} <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text"
+                                       name="name"
+                                       required
+                                       maxlength="255"
+                                       autofocus
+                                       placeholder="{{ __("Masalan: 2026-2027 Bahor semestri") }}"
+                                       class="w-full px-3.5 py-2.5 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition placeholder:text-gray-400">
+                                <p class="text-[11px] text-gray-500 mt-1.5">
+                                    {{ __("Sessiyani keyingi o'quv yilida farqlash uchun aniq nom yozing") }}
+                                </p>
+                            </div>
+
+                            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 flex gap-2.5">
+                                <svg class="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <p class="text-[11px] text-blue-900 leading-relaxed">
+                                    {{ __("Sessiya yaratilgandan so'ng ichiga fakultet/kurs/yo'nalish kesimida bosqichma-bosqich oynalar ochishingiz mumkin.") }}
+                                </p>
+                            </div>
+                        </div>
+
+                        {{-- Footer --}}
+                        <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2">
+                            <button type="button"
+                                    @click="showCreate = false"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                                {{ __("Bekor qilish") }}
+                            </button>
+                            <button type="submit"
+                                    class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                {{ __("Yaratish") }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

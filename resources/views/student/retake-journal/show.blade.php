@@ -11,48 +11,87 @@
         </div>
     </x-slot>
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
+    <div class="py-4 sm:py-6 px-3 sm:px-6 lg:px-8 max-w-5xl mx-auto">
         @if(session('success'))
-            <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-3 text-sm text-green-800">
                 {{ session('success') }}
             </div>
         @endif
         @if($errors->any())
-            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-800">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-3 text-sm text-red-800">
                 <ul class="list-disc list-inside">@foreach($errors->all() as $err)<li>{{ $err }}</li>@endforeach</ul>
             </div>
         @endif
 
-        {{-- Guruh ma'lumotlari --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        {{-- Guruh ma'lumotlari (mobile uchun ixcham) --}}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 mb-3">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm">
                 <div>
-                    <p class="text-xs text-gray-500 uppercase">{{ __("Guruh") }}</p>
-                    <p class="font-medium text-gray-900 mt-0.5">{{ $group->name }}</p>
+                    <p class="text-[10px] sm:text-xs text-gray-500 uppercase">{{ __("Guruh") }}</p>
+                    <p class="font-medium text-gray-900 mt-0.5 text-xs sm:text-sm">{{ $group->name }}</p>
                 </div>
                 <div>
-                    <p class="text-xs text-gray-500 uppercase">{{ __("O'qituvchi") }}</p>
-                    <p class="font-medium text-gray-900 mt-0.5">{{ $group->teacher_name ?? '—' }}</p>
+                    <p class="text-[10px] sm:text-xs text-gray-500 uppercase">{{ __("O'qituvchi") }}</p>
+                    <p class="font-medium text-gray-900 mt-0.5 text-xs sm:text-sm truncate">{{ $group->teacher_name ?? '—' }}</p>
                 </div>
                 <div>
-                    <p class="text-xs text-gray-500 uppercase">{{ __("Sanalar") }}</p>
-                    <p class="font-medium text-gray-900 mt-0.5 text-xs">
-                        {{ $group->start_date->format('Y-m-d') }} → {{ $group->end_date->format('Y-m-d') }}
+                    <p class="text-[10px] sm:text-xs text-gray-500 uppercase">{{ __("Sanalar") }}</p>
+                    <p class="font-medium text-gray-900 mt-0.5 text-[11px]">
+                        {{ $group->start_date->format('Y-m-d') }}<br class="sm:hidden">→ {{ $group->end_date->format('Y-m-d') }}
                     </p>
                 </div>
                 <div>
-                    <p class="text-xs text-gray-500 uppercase">{{ __("Davr") }}</p>
-                    <p class="font-medium text-gray-900 mt-0.5">{{ count($dates) }} {{ __("kun") }}</p>
+                    <p class="text-[10px] sm:text-xs text-gray-500 uppercase">{{ __("Davr") }}</p>
+                    <p class="font-medium text-gray-900 mt-0.5 text-xs sm:text-sm">{{ count($dates) }} {{ __("kun") }}</p>
                 </div>
             </div>
         </div>
 
-        {{-- Baholar jadvali --}}
+        {{-- Baholar jadvali — mobilda ixcham --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="px-5 py-3 border-b border-gray-100">
+            <div class="px-3 sm:px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h3 class="text-sm font-semibold text-gray-900">{{ __("Mening baholarim") }}</h3>
+                @php
+                    $values = $grades->map(fn ($g) => $g->grade)->filter(fn ($v) => $v !== null);
+                    $avg = $values->isNotEmpty() ? round($values->avg(), 1) : null;
+                @endphp
+                @if($avg !== null)
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-medium">
+                        {{ __("O'rtacha") }}: {{ $avg }}
+                    </span>
+                @endif
             </div>
-            <div class="overflow-x-auto">
+
+            {{-- Mobile: kartalar --}}
+            <div class="sm:hidden divide-y divide-gray-100">
+                @foreach($dates as $d)
+                    @php $g = $grades->get($d); @endphp
+                    <div class="px-3 py-2.5 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-gray-900">{{ \Carbon\Carbon::parse($d)->format('d M, D') }}</p>
+                            @if($g?->comment)
+                                <p class="text-[11px] text-gray-500 truncate">{{ $g->comment }}</p>
+                            @endif
+                        </div>
+                        <div class="flex-shrink-0">
+                            @if($g && $g->grade !== null)
+                                @php
+                                    $v = (float) $g->grade;
+                                    $bg = $v >= 75 ? 'bg-green-100 text-green-800' : ($v >= 60 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800');
+                                @endphp
+                                <span class="inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-sm {{ $bg }}">
+                                    {{ rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') }}
+                                </span>
+                            @else
+                                <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-400 text-lg">—</span>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+
+            {{-- Desktop: jadval --}}
+            <div class="hidden sm:block overflow-x-auto">
                 <table class="min-w-full text-xs">
                     <thead class="bg-gray-50">
                         <tr>
@@ -63,10 +102,6 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
-                        @php
-                            $values = $grades->map(fn ($g) => $g->grade)->filter(fn ($v) => $v !== null);
-                            $avg = $values->isNotEmpty() ? round($values->avg(), 1) : null;
-                        @endphp
                         @foreach($dates as $d)
                             @php $g = $grades->get($d); @endphp
                             <tr class="hover:bg-gray-50">

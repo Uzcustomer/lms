@@ -92,11 +92,21 @@ class RetakeJournalController extends Controller
     {
         /** @var Student $student */
         $student = Auth::guard('student')->user();
+        if (!$student) {
+            return redirect()->route('student.login')->withErrors(['auth' => 'Avtorizatsiya talab qilinadi']);
+        }
+        if (!$student->hemis_id) {
+            return redirect()->back()->withErrors(['student' => 'Talaba ma\'lumotlari to\'liq emas (HEMIS ID yo\'q)']);
+        }
 
-        $request->validate([
-            'file' => 'required|file|max:' . (\App\Models\RetakeMustaqilSubmission::MAX_FILE_MB * 1024) . '|mimes:pdf,doc,docx,jpg,jpeg,png,zip,rar',
-            'comment' => 'nullable|string|max:1000',
-        ]);
+        try {
+            $request->validate([
+                'file' => 'required|file|max:' . (\App\Models\RetakeMustaqilSubmission::MAX_FILE_MB * 1024) . '|mimes:pdf,doc,docx,jpg,jpeg,png,zip,rar',
+                'comment' => 'nullable|string|max:1000',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors())->withInput();
+        }
 
         $group = RetakeGroup::findOrFail($groupId);
 
@@ -109,6 +119,16 @@ class RetakeJournalController extends Controller
             );
         } catch (\Illuminate\Validation\ValidationException $e) {
             return redirect()->back()->withErrors($e->errors());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('[RetakeJournal] Mustaqil upload failed', [
+                'group_id' => $groupId,
+                'student_hemis_id' => $student->hemis_id,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ]);
+            return redirect()->back()->withErrors([
+                'upload' => 'Yuklashda kutilmagan xato: ' . $e->getMessage(),
+            ]);
         }
 
         return redirect()->route('student.retake-journal.show', $groupId)

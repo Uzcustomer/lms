@@ -65,6 +65,79 @@
             </div>
         </div>
 
+        {{-- Lock / Vedomost / Test markazi paneli --}}
+        @if(session('success'))
+            <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>
+        @endif
+        @if($errors->any())
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-800">
+                <ul class="list-disc list-inside">@foreach($errors->all() as $err)<li>{{ $err }}</li>@endforeach</ul>
+            </div>
+        @endif
+
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
+            <div>
+                <p class="text-sm font-semibold text-gray-900">
+                    @if($group->is_locked)
+                        🔒 {{ __("Guruh yopilgan — yakuniy baholar shakllangan") }}
+                    @else
+                        📝 {{ __("Guruh ochiq — baholarni tahrirlash mumkin") }}
+                    @endif
+                </p>
+                @if($group->is_locked)
+                    <p class="text-xs text-gray-600 mt-0.5">
+                        {{ __("Yopilgan") }}: {{ $group->locked_by_name }} · {{ $group->locked_at?->format('Y-m-d H:i') }}
+                    </p>
+                @endif
+                @if($group->sent_to_test_markazi_at)
+                    <p class="text-xs text-blue-700 mt-0.5">
+                        ✓ {{ __("Test markaziga yuborilgan") }}: {{ $group->sent_to_test_markazi_at->format('Y-m-d H:i') }}
+                    </p>
+                @endif
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+                @if($canEdit && !$group->is_locked)
+                    <form method="POST" action="{{ route('admin.retake-journal.lock', $group->id) }}"
+                          onsubmit="return confirm('{{ __("Guruhni yopish va yakuniy baholarni shakllantirishni tasdiqlaysizmi? Keyin tahrirlay olmaysiz.") }}')">
+                        @csrf
+                        <button type="submit"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-600 text-white rounded hover:bg-amber-700">
+                            🔒 {{ __("Yakuniy yuborish (yopish)") }}
+                        </button>
+                    </form>
+                @endif
+
+                @if($group->is_locked)
+                    <a href="{{ route('admin.retake-journal.vedomost', $group->id) }}"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700">
+                        📊 {{ __("Vedomost (PDF)") }}
+                    </a>
+                @endif
+
+                @if($canEdit && $group->is_locked && !$group->sent_to_test_markazi_at && in_array($group->assessment_type, ['oske', 'test', 'oske_test'], true))
+                    <form method="POST" action="{{ route('admin.retake-journal.send-to-test-markazi', $group->id) }}"
+                          onsubmit="return confirm('{{ __("Test markaziga yuborishni tasdiqlaysizmi?") }}')">
+                        @csrf
+                        <button type="submit"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700">
+                            ✉️ {{ __("Test markaziga yuborish") }}
+                        </button>
+                    </form>
+                @endif
+
+                @if($group->is_locked && auth()->user()?->hasAnyRole(['superadmin', 'admin']))
+                    <form method="POST" action="{{ route('admin.retake-journal.unlock', $group->id) }}"
+                          onsubmit="return confirm('{{ __("Lock'ni bekor qilishni tasdiqlaysizmi?") }}')">
+                        @csrf
+                        <button type="submit"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                            🔓 {{ __("Ochish") }}
+                        </button>
+                    </form>
+                @endif
+            </div>
+        </div>
+
         {{-- Tabs --}}
         <div class="flex gap-1 mb-4 border-b border-gray-200">
             <button type="button"

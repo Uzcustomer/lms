@@ -147,7 +147,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
             padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
             height: statusBarH + 64,
             decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
+              color: Color(0xFF1E3A8A),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(18),
                 bottomRight: Radius.circular(18),

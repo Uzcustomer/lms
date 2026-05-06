@@ -136,7 +136,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
           Container(
             padding: EdgeInsets.only(top: statusBarH),
             decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
+              color: Color(0xFF1E3A8A),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(18),
                 bottomRight: Radius.circular(18),

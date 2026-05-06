@@ -86,11 +86,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF0A1A3A),
+            color: const Color(0xFF1E3A8A),
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0A1A3A).withAlpha(50),
+                color: const Color(0xFF1E3A8A).withAlpha(50),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

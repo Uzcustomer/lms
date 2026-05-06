@@ -39,7 +39,7 @@ class RetakeWindowController extends Controller
         $windowsQuery = RetakeApplicationWindow::query()
             ->with('session')
             ->withCount('applicationGroups as applications_count')
-            ->orderByDesc('start_date');
+            ->orderBy('created_at'); // ochilish vaqti tartibida (eng oldin ochilgan birinchi)
 
         if ($statusFilter !== 'all') {
             $today = now()->toDateString();

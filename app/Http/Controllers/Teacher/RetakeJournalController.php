@@ -260,31 +260,21 @@ class RetakeJournalController extends Controller
         $group = RetakeGroup::with('teacher')->findOrFail($groupId);
         $this->authorizeView($actor, $group);
 
-        $applications = $this->service->applications($group);
-        $gradesMap = $this->service->gradesMap($group);
-        $mustaqilMap = $this->service->mustaqilMap($group);
+        try {
+            $built = $this->service->buildVedomostExcel($group);
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.retake-vedomost', [
-            'group' => $group,
-            'applications' => $applications,
-            'gradesMap' => $gradesMap,
-            'mustaqilMap' => $mustaqilMap,
-        ])->setPaper('A4');
-
-        $fileName = sprintf('vedomost_%d_%s.pdf', $group->id, \Illuminate\Support\Str::slug($group->subject_name ?: 'fan'));
-
-        // PDF'ni saqlab qo'yamiz (test markaziga yuborish uchun)
-        $relPath = "retake/vedomosts/{$fileName}";
-        \Illuminate\Support\Facades\Storage::disk('public')->put($relPath, $pdf->output());
-
-        if ($group->vedomost_path !== $relPath) {
+        if ($group->vedomost_path !== $built['relPath']) {
             $group->update([
-                'vedomost_path' => $relPath,
+                'vedomost_path' => $built['relPath'],
                 'vedomost_generated_at' => now(),
             ]);
         }
 
-        return $pdf->download($fileName);
+        return response()->download($built['path'], $built['filename'])
+            ->deleteFileAfterSend(false);
     }
 
     /**

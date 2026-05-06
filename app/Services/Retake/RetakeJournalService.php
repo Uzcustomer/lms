@@ -446,4 +446,198 @@ class RetakeJournalService
 
         return $submission->refresh();
     }
+
+    /**
+     * Yakuniy qaydnomani Excel formatida (mavjud yn_qaydnoma shabloni asosida) yaratadi.
+     * Existing Admin\JournalController::exportYnQaydnoma logikasiga moslashtirilgan.
+     *
+     * @return array{path: string, filename: string, relPath: string}
+     */
+    public function buildVedomostExcel(RetakeGroup $group): array
+    {
+        $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
+        if (!file_exists($templatePath)) {
+            throw ValidationException::withMessages([
+                'template' => 'Vedomost shabloni topilmadi: templates/yn_qaydnoma (1).xlsx',
+            ]);
+        }
+
+        $applications = $this->applications($group);
+        $gradesMap = $this->gradesMap($group);
+        $mustaqilMap = $this->mustaqilMap($group);
+
+        // Vaznlar — assessment_type bo'yicha
+        switch ($group->assessment_type) {
+            case 'oske':
+                $weightJn = 30; $weightMt = 10; $weightOn = 0; $weightOski = 60; $weightTest = 0;
+                break;
+            case 'test':
+                $weightJn = 30; $weightMt = 10; $weightOn = 0; $weightOski = 0;  $weightTest = 60;
+                break;
+            case 'oske_test':
+                $weightJn = 30; $weightMt = 10; $weightOn = 0; $weightOski = 30; $weightTest = 30;
+                break;
+            case 'sinov_fan':
+            default:
+                $weightJn = 70; $weightMt = 30; $weightOn = 0; $weightOski = 0;  $weightTest = 0;
+                break;
+        }
+
+        $abbreviateName = function ($fullName) {
+            $parts = preg_split('/\s+/', trim((string) $fullName));
+            if (count($parts) <= 1) return $fullName;
+            $surname = $parts[0];
+            $initials = '';
+            for ($i = 1; $i < count($parts); $i++) {
+                $word = $parts[$i];
+                $up2 = mb_strtoupper(mb_substr($word, 0, 2));
+                if ($up2 === 'SH' || $up2 === 'CH') {
+                    $initials .= mb_substr($word, 0, 1) . mb_strtolower(mb_substr($word, 1, 1)) . '.';
+                } else {
+                    $initials .= mb_strtoupper(mb_substr($word, 0, 1)) . '.';
+                }
+            }
+            return $surname . ' ' . $initials;
+        };
+
+        // Ko'pchilik faculty / specialty / kurs / semestr
+        $studentInfo = $applications->map(fn ($a) => $a->group->student ?? null)->filter();
+        $pickMostCommon = function (Collection $values, string $field): string {
+            $names = $values->pluck($field)->filter()->countBy();
+            return (string) ($names->sortDesc()->keys()->first() ?? '');
+        };
+
+        $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $pickMostCommon($studentInfo, 'department_name'));
+        $specialtyName = $pickMostCommon($studentInfo, 'specialty_name');
+        $levelName = $pickMostCommon($studentInfo, 'level_name');
+        $semesterName = $pickMostCommon($studentInfo, 'semester_name');
+        $kurs = preg_match('/(\d+)/', $levelName, $m) ? $m[1] : '';
+        $semesterInYear = preg_match('/(\d+)/', $semesterName, $m) ? (int) $m[1] : '';
+
+        $teacherNameAbbr = $group->teacher_name ? $abbreviateName($group->teacher_name) : '';
+
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($templatePath);
+        $sheet = $spreadsheet->getActiveSheet();
+        $cleanGroupName = str_replace(['/', '\\', '*', '?', ':', '[', ']'], '_', $group->name ?? 'Vedomost');
+        $sheet->setTitle(mb_substr($cleanGroupName, 0, 31));
+
+        // Header
+        $sheet->setCellValue('A4', $facultyName ? $facultyName . ' FAKULTETI' : '');
+        $sheet->setCellValue('C8', '         ' . $specialtyName);
+        $sheet->setCellValue('N8', $kurs);
+        $sheet->setCellValue('Q8', $semesterInYear);
+        $sheet->setCellValue('W8', $group->name ?? '');
+        $sheet->setCellValue('Y1', "Qayta o'qish vedomosti");
+        $sheet->setCellValue('C10', '  ' . ($group->subject_name ?? ''));
+        $sheet->setCellValue('U10', $teacherNameAbbr);
+        $sheet->setCellValue('A11', "Ma'ruzachi:");
+        $sheet->setCellValue('C11', '         ' . $teacherNameAbbr);
+
+        // Vaznlar
+        $sheet->setCellValue('V18', 'Yakuniy ball');
+        $sheet->setCellValue('D19', $weightJn);
+        $sheet->setCellValue('G19', $weightMt);
+        $sheet->setCellValue('J19', $weightOn);
+        $sheet->setCellValue('P19', $weightOski);
+        $sheet->setCellValue('S19', $weightTest);
+
+        $startRow = 20;
+        $maxRow = 49;
+
+        foreach ($applications as $idx => $app) {
+            $row = $startRow + $idx;
+            if ($row > $maxRow) break;
+
+            $student = $app->group->student ?? null;
+            $hemisId = $app->student_hemis_id;
+
+            // Joriy = kunlik baholar o'rtachasi
+            $rowGrades = collect($gradesMap[$app->id] ?? [])
+                ->map(fn ($g) => $g->grade)
+                ->filter(fn ($v) => $v !== null);
+            $jnVal = $rowGrades->isNotEmpty() ? (int) round($rowGrades->avg()) : 0;
+
+            // Mustaqil ta'lim
+            $sub = $mustaqilMap[$app->id] ?? null;
+            $mtVal = $sub && $sub->grade !== null ? (int) round((float) $sub->grade) : 0;
+
+            // OSKI / TEST
+            $oskiVal = $app->oske_score !== null ? (int) round((float) $app->oske_score) : 0;
+            $testVal = $app->test_score !== null ? (int) round((float) $app->test_score) : 0;
+            $onVal = 0;
+
+            $sheet->setCellValue('B' . $row, $student?->full_name ?? '—');
+            $sheet->setCellValueExplicit('C' . $row, (string) ($student?->student_id_number ?? $hemisId), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+            $sheet->setCellValue('D' . $row, $jnVal);
+            $sheet->setCellValue('G' . $row, $mtVal);
+            if ($weightOski > 0) $sheet->setCellValue('P' . $row, $oskiVal);
+            if ($weightTest > 0) $sheet->setCellValue('S' . $row, $testVal);
+
+            // Komponent ballari
+            $eBall = $jnVal   >= 60 ? round($jnVal   * $weightJn   / 100, 1) : 0;
+            $hBall = $mtVal   >= 60 ? round($mtVal   * $weightMt   / 100, 1) : 0;
+            $kBall = $onVal   >= 60 ? round($onVal   * $weightOn   / 100, 1) : 0;
+            $qBall = ($weightOski > 0 && $oskiVal >= 60) ? round($oskiVal * $weightOski / 100, 1) : 0;
+            $tBall = ($weightTest > 0 && $testVal >= 60) ? round($testVal * $weightTest / 100, 1) : 0;
+
+            // Yakuniy ball
+            if ($jnVal === 0 && $mtVal === 0) {
+                $v = '';
+            } elseif (($weightJn > 0 && $jnVal < 60)
+                   || ($weightMt > 0 && $mtVal < 60)
+                   || ($weightOski > 0 && $oskiVal < 60)
+                   || ($weightTest > 0 && $testVal < 60)) {
+                $v = 0;
+            } else {
+                $v = round($eBall + $hBall + $kBall + $qBall + $tBall, 1);
+                if ($v > 0) $v = (int) floor($v + 0.5);
+            }
+
+            $w = '';
+            $y = '';
+            if (is_numeric($v)) {
+                if ($v >= 90)      { $w = 'A';  $y = "a\u{02BC}lo"; }
+                elseif ($v >= 85)  { $w = 'B+'; $y = 'yaxshi'; }
+                elseif ($v >= 70)  { $w = 'B';  $y = 'yaxshi'; }
+                elseif ($v >= 60)  { $w = 'C';  $y = "o\u{02BB}rta"; }
+                elseif ($v > 0)    { $w = 'F';  $y = 'qon-siz'; }
+                elseif ($v === 0)  { $w = 'F';  $y = 'qon-siz'; }
+            }
+
+            $sheet->setCellValue('E' . $row, $eBall);
+            $sheet->getStyle('E' . $row)->getNumberFormat()->setFormatCode('0.0');
+            $sheet->setCellValue('H' . $row, $hBall);
+            $sheet->getStyle('H' . $row)->getNumberFormat()->setFormatCode('0.0');
+            if ($weightOski > 0) {
+                $sheet->setCellValue('Q' . $row, $qBall);
+                $sheet->getStyle('Q' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
+            if ($weightTest > 0) {
+                $sheet->setCellValue('T' . $row, $tBall);
+                $sheet->getStyle('T' . $row)->getNumberFormat()->setFormatCode('0.0');
+            }
+            $sheet->setCellValue('V' . $row, $v);
+            $sheet->setCellValue('W' . $row, $w);
+            $sheet->setCellValue('Y' . $row, $y);
+        }
+
+        // Saqlash
+        $tempDir = storage_path('app/public/retake/vedomosts');
+        if (!is_dir($tempDir)) {
+            @mkdir($tempDir, 0755, true);
+        }
+
+        $cleanSubject = str_replace(['/', '\\', ' '], '_', $group->subject_name ?: 'fan');
+        $cleanGroup = str_replace(['/', '\\', ' '], '_', $group->name ?: 'guruh');
+        $fileName = sprintf('YN_qaydnoma_%s_%s.xlsx', $cleanGroup, $cleanSubject);
+        $relPath = "retake/vedomosts/{$fileName}";
+        $absPath = $tempDir . '/' . $fileName;
+
+        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx');
+        $writer->save($absPath);
+        $spreadsheet->disconnectWorksheets();
+
+        return ['path' => $absPath, 'filename' => $fileName, 'relPath' => $relPath];
+    }
 }

@@ -44,7 +44,7 @@
         <div class="flex gap-2">
             <a href="{{ route('admin.retake.receipt', $group->id) }}"
                target="_blank"
-               class="text-xs text-blue-600 hover:underline">{{ __('Kvitansiya') }}</a>
+               class="text-xs text-blue-600 hover:underline">{{ __("Tushuntirish xati") }}</a>
         </div>
     </div>
 

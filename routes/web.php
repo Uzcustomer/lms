@@ -842,6 +842,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{groupId}/lock', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'lock'])->name('lock');
             Route::post('/{groupId}/unlock', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'unlock'])->name('unlock');
             Route::post('/{groupId}/vedomost', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'vedomost'])->name('vedomost');
+            Route::post('/{groupId}/fetch-results', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'fetchResults'])->name('fetch-results');
             Route::post('/{groupId}/send-to-test-markazi', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'sendToTestMarkazi'])->name('send-to-test-markazi');
         });
 

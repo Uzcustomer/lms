@@ -39,9 +39,6 @@
                     <x-nav-link :href="route('student.retake.index')" :active="request()->routeIs('student.retake.*')">
                         {{ __("Qayta o'qish arizasi") }}
                     </x-nav-link>
-                    <x-nav-link :href="route('student.retake-journal.index')" :active="request()->routeIs('student.retake-journal.*')">
-                        {{ __("Qayta o'qish jurnali") }}
-                    </x-nav-link>
                     @if(Auth::guard('student')->user()->is_graduate)
                     <x-nav-link :href="route('student.contracts.index')" :active="request()->routeIs('student.contracts.*')">
                         {{ __('Ishga joylashish') }}

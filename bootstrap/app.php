@@ -74,9 +74,11 @@ return Application::configure(basePath: dirname(__DIR__))
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
 
-        // Qayta o'qish: muddati o'tgan oynalardagi pending arizalarni har kuni
-        // ertalab 02:00 da avtomatik rad etish.
-        $schedule->command('retake:close-expired-windows')->dailyAt('02:00')->withoutOverlapping(30);
+        // Qayta o'qish: muddati o'tgan oynalardagi pending arizalar avtomatik
+        // rad ETILMAYDI. Dekan/Registrator/O'quv bo'limi qo'lda tasdiqlaydi
+        // yoki rad etadi. Avtomatik rad qilish o'chirildi (foydalanuvchi talabiga ko'ra) —
+        // kerak bo'lsa qo'lda: `php artisan retake:close-expired-windows` ishga tushirish mumkin.
+        // $schedule->command('retake:close-expired-windows')->dailyAt('02:00')->withoutOverlapping(30);
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {

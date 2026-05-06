@@ -70,9 +70,9 @@
                     <label class="block text-xs text-gray-600 mb-1">{{ __("Holat") }}</label>
                     <select name="status" class="w-full px-3 py-1.5 text-xs border border-gray-300 rounded">
                         <option value="all" {{ ($statusFilter ?? 'all') === 'all' ? 'selected' : '' }}>{{ __("Barchasi") }}</option>
-                        <option value="upcoming" {{ ($statusFilter ?? '') === 'upcoming' ? 'selected' : '' }}>{{ __("Kelmoqda") }}</option>
-                        <option value="active" {{ ($statusFilter ?? '') === 'active' ? 'selected' : '' }}>{{ __("Faol") }}</option>
-                        <option value="closed" {{ ($statusFilter ?? '') === 'closed' ? 'selected' : '' }}>{{ __("Yopilgan") }}</option>
+                        <option value="active" {{ ($statusFilter ?? '') === 'active' ? 'selected' : '' }}>{{ __("Ariza qabul ochiq") }}</option>
+                        <option value="study" {{ ($statusFilter ?? '') === 'study' ? 'selected' : '' }}>{{ __("O'qish davri") }}</option>
+                        <option value="closed" {{ ($statusFilter ?? '') === 'closed' ? 'selected' : '' }}>{{ __("Tugagan") }}</option>
                     </select>
                 </div>
                 <button type="submit" class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">{{ __("Qo'llash") }}</button>
@@ -113,14 +113,14 @@
                                 <td class="px-3 py-2.5">
                                     @php
                                         $statusColors = [
-                                            'upcoming' => 'bg-yellow-100 text-yellow-800',
                                             'active' => 'bg-green-100 text-green-800',
+                                            'study' => 'bg-blue-100 text-blue-800',
                                             'closed' => 'bg-gray-100 text-gray-700',
                                         ];
                                         $statusLabels = [
-                                            'upcoming' => __("Kelmoqda"),
-                                            'active' => __("Faol"),
-                                            'closed' => __("Yopilgan"),
+                                            'active' => __("Ariza qabul ochiq"),
+                                            'study' => __("O'qish davri"),
+                                            'closed' => __("Tugagan"),
                                         ];
                                     @endphp
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium {{ $statusColors[$w->status] }}">

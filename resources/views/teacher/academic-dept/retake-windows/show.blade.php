@@ -15,8 +15,8 @@
                 {{ $window->specialty_name }} · {{ $window->level_name ?? $window->level_code }} · {{ $window->semester_name }}
             </h2>
             @php
-                $statusLabels = ['upcoming' => __("Kelmoqda"), 'active' => __("Faol"), 'closed' => __("Yopilgan")];
-                $statusColors = ['upcoming' => 'bg-yellow-100 text-yellow-800', 'active' => 'bg-green-100 text-green-800', 'closed' => 'bg-gray-200 text-gray-700'];
+                $statusLabels = ['active' => __("Ariza qabul ochiq"), 'study' => __("O'qish davri"), 'closed' => __("Tugagan")];
+                $statusColors = ['active' => 'bg-green-100 text-green-800', 'study' => 'bg-blue-100 text-blue-800', 'closed' => 'bg-gray-200 text-gray-700'];
             @endphp
             <span class="px-2 py-0.5 text-[11px] font-medium rounded-full {{ $statusColors[$window->status] }}">
                 {{ $statusLabels[$window->status] }}

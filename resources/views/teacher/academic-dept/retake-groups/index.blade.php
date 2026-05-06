@@ -322,13 +322,15 @@
                             </div>
 
                             <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Boshlanish") }} <span class="text-red-500">*</span></label>
-                                <input type="date" name="start_date" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Boshlanish") }}</label>
+                                <input type="date" name="start_date" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <p class="text-[10px] text-gray-500 mt-0.5">{{ __("Bo'sh qoldirilsa qabul oynasidan olinadi") }}</p>
                             </div>
 
                             <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Tugash") }} <span class="text-red-500">*</span></label>
-                                <input type="date" name="end_date" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Tugash") }}</label>
+                                <input type="date" name="end_date" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <p class="text-[10px] text-gray-500 mt-0.5">{{ __("Bo'sh qoldirilsa qabul oynasidan olinadi") }}</p>
                             </div>
                         </div>
 

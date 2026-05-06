@@ -7,6 +7,7 @@ use App\Models\RetakeApplication;
 use App\Models\RetakeGroup;
 use App\Models\Student;
 use App\Services\Retake\RetakeJournalService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class RetakeJournalController extends Controller

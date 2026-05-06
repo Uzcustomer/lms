@@ -164,69 +164,106 @@
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
                 <div class="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 z-10">
                     <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Yangi qabul oynasi") }}</h3>
-                    <p class="text-xs text-gray-500 mb-4">{{ __("Sessiya") }}: {{ $session->name }}</p>
+                    <p class="text-xs text-gray-500 mb-4">{{ __("Sessiya") }}: {{ $session->name }} · {{ __("Bir necha fakultet/yo'nalish/kurs tanlasangiz, har bir kombinatsiya uchun alohida oyna yaratiladi.") }}</p>
                     <form method="POST"
                           action="{{ route('admin.retake-windows.store') }}"
                           x-data="windowForm({
+                              departments: @js($departments->map(fn($d) => ['id' => (string)$d->department_hemis_id, 'name' => $d->name])->values()->all()),
                               specialties: @js($specialties->map(fn($s) => ['id' => (string)$s->specialty_hemis_id, 'name' => $s->name, 'department_hemis_id' => (string)($s->department_hemis_id ?? '')])->values()->all()),
+                              levels: @js(collect($levels)->map(fn($lv) => ['code' => $lv['code'], 'name' => $lv['name']])->all()),
+                              semesters: @js(collect($semesters)->map(fn($s) => ['code' => $s['code'], 'name' => $s['name']])->all()),
                           })"
+                          @submit="prepareSubmit($event)"
                           class="space-y-3">
                         @csrf
                         <input type="hidden" name="session_id" value="{{ $session->id }}">
 
+                        {{-- Fakultet — multi-select --}}
                         <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Fakultet") }} <span class="text-red-500">*</span></label>
-                            <select x-model="departmentId"
-                                    @change="departmentName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
-                                    required
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <option value="">— {{ __("Tanlang") }} —</option>
-                                @foreach($departments as $d)
-                                    <option value="{{ $d->department_hemis_id }}" data-name="{{ $d->name }}">{{ $d->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
-                            <select name="specialty_id" x-model="specialtyId" @change="onSpecialtyChange($event)" required
-                                    :disabled="!departmentId"
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
-                                <option value="">— {{ __("Avval fakultetni tanlang") }} —</option>
-                                <template x-for="sp in filteredSpecialties" :key="sp.id">
-                                    <option :value="sp.id" :data-name="sp.name" x-text="sp.name"></option>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-medium text-gray-700">{{ __("Fakultet") }} <span class="text-red-500">*</span></label>
+                                <button type="button" class="text-[10px] text-blue-600 hover:underline"
+                                        @click="toggleAllDepartments()"
+                                        x-text="departmentIds.length === allDepartments.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                            </div>
+                            <div class="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 space-y-1 bg-white">
+                                <template x-for="d in allDepartments" :key="d.id">
+                                    <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-gray-50 px-1 py-0.5 rounded cursor-pointer">
+                                        <input type="checkbox" :value="d.id" x-model="departmentIds" class="rounded">
+                                        <span x-text="d.name"></span>
+                                    </label>
                                 </template>
-                            </select>
-                            <input type="hidden" name="specialty_name" :value="specialtyName">
+                            </div>
+                            <p class="text-[10px] text-gray-500 mt-1" x-text="departmentIds.length + ' {{ __("ta tanlangan") }}'"></p>
                         </div>
 
+                        {{-- Yo'nalish — multi-select (filtered by faculties) --}}
                         <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
-                            <select name="level_code" x-model="levelCode"
-                                    @change="levelName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
-                                    required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <option value="">— {{ __("Tanlang") }} —</option>
-                                @foreach($levels as $lv)
-                                    <option value="{{ $lv['code'] }}" data-name="{{ $lv['name'] }}">{{ $lv['name'] }}</option>
-                                @endforeach
-                            </select>
-                            <input type="hidden" name="level_name" :value="levelName">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-medium text-gray-700">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
+                                <button type="button" class="text-[10px] text-blue-600 hover:underline"
+                                        @click="toggleAllSpecialties()"
+                                        x-show="filteredSpecialties.length > 0"
+                                        x-text="specialtyIds.length === filteredSpecialties.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                            </div>
+                            <div class="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 space-y-1 bg-white">
+                                <p x-show="departmentIds.length === 0" class="text-xs text-gray-400 px-1 py-2">— {{ __("Avval fakultet tanlang") }} —</p>
+                                <template x-for="sp in filteredSpecialties" :key="sp.id">
+                                    <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-gray-50 px-1 py-0.5 rounded cursor-pointer">
+                                        <input type="checkbox" :value="sp.id" x-model="specialtyIds" class="rounded">
+                                        <span x-text="sp.name"></span>
+                                    </label>
+                                </template>
+                            </div>
+                            <p class="text-[10px] text-gray-500 mt-1" x-text="specialtyIds.length + ' {{ __("ta tanlangan") }}'"></p>
                         </div>
 
-                        {{-- Semestr — faqat Xalqaro talim fakulteti uchun --}}
-                        <div x-show="isXalqaro" x-cloak>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Semestr") }} <span class="text-red-500">*</span></label>
-                            <select name="semester_code" x-model="semesterCode"
-                                    @change="semesterName = $event.target.options[$event.target.selectedIndex].dataset.name || ''"
-                                    :required="isXalqaro"
-                                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <option value="">— {{ __("Tanlang") }} —</option>
-                                @foreach($semesters as $s)
-                                    <option value="{{ $s['code'] }}" data-name="{{ $s['name'] }}">{{ $s['name'] }}</option>
-                                @endforeach
-                            </select>
-                            <input type="hidden" name="semester_name" :value="semesterName">
+                        {{-- Kurs — multi-select --}}
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-medium text-gray-700">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
+                                <button type="button" class="text-[10px] text-blue-600 hover:underline"
+                                        @click="toggleAllLevels()"
+                                        x-text="levelCodes.length === allLevels.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                            </div>
+                            <div class="grid grid-cols-3 gap-1.5">
+                                <template x-for="lv in allLevels" :key="lv.code">
+                                    <label class="flex items-center gap-1.5 text-xs text-gray-700 border border-gray-200 hover:bg-gray-50 px-2 py-1 rounded cursor-pointer">
+                                        <input type="checkbox" :value="lv.code" x-model="levelCodes" class="rounded">
+                                        <span x-text="lv.name"></span>
+                                    </label>
+                                </template>
+                            </div>
                         </div>
+
+                        {{-- Semestr — faqat Xalqaro talim fakulteti tanlanganda --}}
+                        <div x-show="hasXalqaroSelected" x-cloak>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-xs font-medium text-gray-700">{{ __("Semestr") }} <span class="text-red-500">*</span></label>
+                                <button type="button" class="text-[10px] text-blue-600 hover:underline"
+                                        @click="toggleAllSemesters()"
+                                        x-text="semesterCodes.length === allSemesters.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                            </div>
+                            <div class="grid grid-cols-3 gap-1.5">
+                                <template x-for="s in allSemesters" :key="s.code">
+                                    <label class="flex items-center gap-1.5 text-xs text-gray-700 border border-gray-200 hover:bg-gray-50 px-2 py-1 rounded cursor-pointer">
+                                        <input type="checkbox" :value="s.code" x-model="semesterCodes" class="rounded">
+                                        <span x-text="s.name"></span>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+
+                        {{-- Hidden inputs (form submit) --}}
+                        <template x-for="id in specialtyIds" :key="'sp-'+id">
+                            <input type="hidden" name="specialty_ids[]" :value="id">
+                        </template>
+                        <template x-for="code in levelCodes" :key="'lv-'+code">
+                            <input type="hidden" name="level_codes[]" :value="code">
+                        </template>
+                        <template x-for="code in semesterCodes" :key="'sm-'+code">
+                            <input type="hidden" name="semester_codes[]" :value="code">
+                        </template>
 
                         <div class="grid grid-cols-2 gap-3">
                             <div>
@@ -242,6 +279,9 @@
                         <p class="text-[11px] text-gray-500">
                             ⚠️ {{ __("Yaratilgandan keyin sanalarni o'zgartirish imkoniyati mavjud emas") }}
                         </p>
+                        <p class="text-[11px] text-blue-700" x-show="combinationCount > 0">
+                            ℹ️ <span x-text="combinationCount"></span> {{ __("ta oyna yaratiladi") }}
+                        </p>
 
                         <div class="flex gap-2 pt-3">
                             <button type="button" @click="showCreate = false"
@@ -249,7 +289,9 @@
                                 {{ __("Bekor qilish") }}
                             </button>
                             <button type="submit"
-                                    class="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                    :disabled="combinationCount === 0"
+                                    :class="combinationCount === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+                                    class="flex-1 px-3 py-2 text-sm text-white rounded-lg">
                                 {{ __("Yaratish va ochish") }}
                             </button>
                         </div>
@@ -291,32 +333,69 @@
 
     @push('scripts')
         <script>
-            function windowForm({ specialties }) {
+            function windowForm({ departments, specialties, levels, semesters }) {
                 return {
+                    allDepartments: departments || [],
                     allSpecialties: specialties || [],
-                    departmentId: '',
-                    departmentName: '',
-                    specialtyId: '',
-                    specialtyName: '',
-                    levelCode: '',
-                    levelName: '',
-                    semesterCode: '',
-                    semesterName: '',
-
-                    // Semestr maydoni faqat Xalqaro talim fakultetida ko'rinadi
-                    get isXalqaro() {
-                        return /xalqaro/i.test(this.departmentName || '');
-                    },
+                    allLevels: levels || [],
+                    allSemesters: semesters || [],
+                    departmentIds: [],
+                    specialtyIds: [],
+                    levelCodes: [],
+                    semesterCodes: [],
 
                     get filteredSpecialties() {
-                        if (!this.departmentId) return [];
-                        return this.allSpecialties.filter(sp =>
-                            String(sp.department_hemis_id) === String(this.departmentId)
-                        );
+                        if (this.departmentIds.length === 0) return [];
+                        const ids = this.departmentIds.map(String);
+                        return this.allSpecialties.filter(sp => ids.includes(String(sp.department_hemis_id)));
                     },
 
-                    onSpecialtyChange(e) {
-                        this.specialtyName = e.target.options[e.target.selectedIndex]?.dataset.name || '';
+                    get hasXalqaroSelected() {
+                        return this.allDepartments
+                            .filter(d => this.departmentIds.includes(d.id))
+                            .some(d => /xalqaro/i.test(d.name || ''));
+                    },
+
+                    get combinationCount() {
+                        const sp = this.specialtyIds.length;
+                        const lv = this.levelCodes.length;
+                        const sm = this.hasXalqaroSelected ? Math.max(this.semesterCodes.length, 0) : 1;
+                        if (sp === 0 || lv === 0) return 0;
+                        if (this.hasXalqaroSelected && this.semesterCodes.length === 0) return 0;
+                        return sp * lv * sm;
+                    },
+
+                    toggleAllDepartments() {
+                        if (this.departmentIds.length === this.allDepartments.length) {
+                            this.departmentIds = [];
+                            this.specialtyIds = [];
+                        } else {
+                            this.departmentIds = this.allDepartments.map(d => d.id);
+                        }
+                    },
+                    toggleAllSpecialties() {
+                        const all = this.filteredSpecialties.map(sp => sp.id);
+                        this.specialtyIds = this.specialtyIds.length === all.length ? [] : all;
+                    },
+                    toggleAllLevels() {
+                        this.levelCodes = this.levelCodes.length === this.allLevels.length
+                            ? [] : this.allLevels.map(lv => lv.code);
+                    },
+                    toggleAllSemesters() {
+                        this.semesterCodes = this.semesterCodes.length === this.allSemesters.length
+                            ? [] : this.allSemesters.map(s => s.code);
+                    },
+
+                    prepareSubmit(e) {
+                        // Yo'nalishlardan faqat tanlangan fakultetlar ostidagilarni qoldirish
+                        const allowed = this.filteredSpecialties.map(sp => String(sp.id));
+                        this.specialtyIds = this.specialtyIds.filter(id => allowed.includes(String(id)));
+
+                        if (this.specialtyIds.length === 0 || this.levelCodes.length === 0 ||
+                            (this.hasXalqaroSelected && this.semesterCodes.length === 0)) {
+                            e.preventDefault();
+                            alert("{{ __("Iltimos, kamida bittadan yo'nalish va kurs tanlang") }}");
+                        }
                     },
                 };
             }

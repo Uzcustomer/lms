@@ -311,10 +311,10 @@
                 @php
                     $w = $template['width_mm'];
                     $h = $template['height_mm'];
-                    $qrSize = max(20, min($w, $h) * 0.55);
+                    $qrSize = max(15, min($w, $h) * 0.7);
                     $logoSize = $qrSize * 0.22;
                 @endphp
-                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:2mm; box-sizing:border-box; display:flex; flex-direction:row; align-items:center; gap:2mm; font-family:Arial,sans-serif; background:white; overflow:hidden;">
+                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:1.2mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.8mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
                     {{-- QR kod with logo --}}
                     <div style="flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;">
                         <div style="width:{{ $qrSize }}mm; height:{{ $qrSize }}mm; display:flex; align-items:center; justify-content:center;">
@@ -328,25 +328,15 @@
                         </div>
                         @endif
                     </div>
-                    {{-- Ma'lumotlar --}}
-                    <div style="flex:1 1 auto; min-width:0; text-align:left; line-height:1.2;">
-                        @if($template['title'])
-                        <div style="font-size:2.4mm; color:#0f766e; font-weight:700; margin-bottom:0.6mm;">{{ $template['title'] }}</div>
-                        @endif
-                        @if($template['institution'])
-                        <div style="font-size:2.4mm; color:#1e3a8a; font-weight:700; margin-bottom:0.4mm;">{{ $template['institution'] }}</div>
-                        @endif
-                        @if($template['branch'])
-                        <div style="font-size:2.2mm; color:#1e3a8a; margin-bottom:0.8mm;">{{ $template['branch'] }}</div>
-                        @endif
-                        @if($template['position_label'])
-                        <div style="font-size:2mm; color:#6b7280; margin-bottom:0.3mm;">{{ $template['position_label'] }}</div>
-                        @endif
-                        <div style="font-size:2.6mm; color:#111827; font-weight:700;">{{ $teacher->full_name }}</div>
-                        @if($template['description'])
-                        <div style="font-size:1.9mm; color:#6b7280; margin-top:0.6mm;">{{ $template['description'] }}</div>
-                        @endif
+                    {{-- Pastki yozuv --}}
+                    @php
+                        $bottomText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
+                    @endphp
+                    @if($bottomText !== '')
+                    <div style="font-size:1.8mm; color:#1e3a8a; font-weight:600; line-height:1.15;">
+                        {{ $bottomText }}
                     </div>
+                    @endif
                 </div>
                 {{-- Yuklab olish tugmasi --}}
                 <div class="border-t px-4 py-3 text-center bg-gray-50">

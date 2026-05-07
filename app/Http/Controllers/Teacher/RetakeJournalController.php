@@ -36,7 +36,16 @@ class RetakeJournalController extends Controller
         if (!$actor) abort(403);
 
         $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
-        $isTeacher = $actor instanceof Teacher;
+        // Staff rollari (o'quv bo'limi / registrator / dekan / test markazi) — hamma guruhlarni ko'radi
+        $isStaffViewer = $actor->hasAnyRole([
+            ProjectRole::ACADEMIC_DEPARTMENT->value,
+            ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+            ProjectRole::REGISTRAR_OFFICE->value,
+            ProjectRole::DEAN->value,
+            ProjectRole::TEST_CENTER->value,
+        ]);
+        // Faqat oddiy o'qituvchi bo'lsa (staff emas) — o'z guruhlari
+        $isOnlyTeacher = $actor instanceof Teacher && !$isAdmin && !$isStaffViewer;
 
         // Cascade filtrlar (talaba ma'lumotlari + fan)
         $studentFilters = [
@@ -58,8 +67,9 @@ class RetakeJournalController extends Controller
             ->withCount('applications as students_count')
             ->orderByDesc('start_date');
 
-        // O'qituvchi faqat o'zining guruhlarini ko'radi (admin emas)
-        if ($isTeacher && !$isAdmin) {
+        // Faqat oddiy o'qituvchi (staff emas) o'zining guruhlarini ko'radi.
+        // O'quv bo'limi / registrator / dekan / test markazi — barcha guruhlarni ko'radi.
+        if ($isOnlyTeacher) {
             $query->where('teacher_id', $actor->id);
         }
 

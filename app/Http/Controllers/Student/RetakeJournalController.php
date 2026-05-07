@@ -61,14 +61,6 @@ class RetakeJournalController extends Controller
             abort(403, 'Siz bu guruhga biriktirilmagansiz');
         }
 
-        $dates = $this->service->lessonDates($group);
-        // Faqat o'zining baholari
-        $myGrades = \App\Models\RetakeGrade::query()
-            ->where('retake_group_id', $group->id)
-            ->where('application_id', $myApp->id)
-            ->get()
-            ->keyBy(fn ($g) => $g->lesson_date->format('Y-m-d'));
-
         // Mustaqil ta'lim submission
         $mustaqil = \App\Models\RetakeMustaqilSubmission::query()
             ->where('retake_group_id', $group->id)
@@ -78,8 +70,6 @@ class RetakeJournalController extends Controller
         return view('student.retake-journal.show', [
             'group' => $group,
             'application' => $myApp,
-            'dates' => $dates,
-            'grades' => $myGrades,
             'mustaqil' => $mustaqil,
             'isEditable' => $this->service->isEditable($group),
         ]);

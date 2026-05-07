@@ -65,13 +65,19 @@ class RetakeWindowService
         // Bir xil sessiya, fakultet, yo'nalish, kurs va semestr kombinatsiyasi
         // bittadan ortiq oyna sifatida yaratilmasin (turli fakultetlarda
         // alohida oyna ochish ruxsat etiladi).
+        $hasDeptCol = \Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', 'department_hemis_id');
+
         $existsQuery = RetakeApplicationWindow::query()
             ->where('session_id', $data['session_id'])
             ->where('specialty_id', $data['specialty_id'])
             ->where('level_code', $data['level_code'])
             ->where('semester_code', $data['semester_code']);
 
-        if (!empty($data['department_hemis_id'])) {
+        // department_hemis_id ustuni mavjud bo'lsa va data'da bo'lsa filtrlaymiz —
+        // shunda bir xil yo'nalish turli fakultetlarda alohida oyna sifatida
+        // saqlanadi. Aks holda eski mantiq ishlaydi (turli fakultet baribir bir
+        // oynaga to'g'ri keladi — bu eski xatti-harakat saqlanadi).
+        if ($hasDeptCol && !empty($data['department_hemis_id'])) {
             $existsQuery->where('department_hemis_id', $data['department_hemis_id']);
         }
 

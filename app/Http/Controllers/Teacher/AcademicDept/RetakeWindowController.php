@@ -338,7 +338,7 @@ class RetakeWindowController extends Controller
         return redirect()->back()->with('success', __('Sanalar override qilindi'));
     }
 
-    public function destroy(int $windowId): RedirectResponse
+    public function destroy(Request $request, int $windowId): RedirectResponse
     {
         if (!$this->canOverride()) {
             abort(403, 'Faqat super-admin oynani o\'chira oladi');
@@ -346,17 +346,32 @@ class RetakeWindowController extends Controller
 
         $window = RetakeApplicationWindow::findOrFail($windowId);
 
-        // Arizalar yuborilgan bo'lsa, o'chirib bo'lmaydi
-        if ($window->applicationGroups()->exists()) {
+        $force = $request->boolean('force');
+
+        // Arizalar yuborilgan bo'lsa, force=1 bo'lmasa o'chirib bo'lmaydi
+        if ($window->applicationGroups()->exists() && !$force) {
             return redirect()->back()->withErrors([
-                'window' => 'Bu oynaga arizalar yuborilgan, o\'chirib bo\'lmaydi',
+                'window' => 'Bu oynaga arizalar yuborilgan, o\'chirib bo\'lmaydi (force=1 bilan majburiy o\'chirish mumkin)',
             ]);
         }
 
-        $window->delete();
+        if ($force && $window->applicationGroups()->exists()) {
+            DB::transaction(function () use ($window) {
+                // Cascading delete: oyna → application_groups → applications → har bir bog'liq qator
+                foreach ($window->applicationGroups()->with('applications')->get() as $group) {
+                    foreach ($group->applications as $app) {
+                        $app->delete();
+                    }
+                    $group->delete();
+                }
+                $window->delete();
+            });
+        } else {
+            $window->delete();
+        }
 
         return redirect()->route('admin.retake-windows.index')
-            ->with('success', __('Oyna o\'chirildi'));
+            ->with('success', __('Oyna o\'chirildi') . ($force ? ' (' . __("majburiy") . ')' : ''));
     }
 
     /**

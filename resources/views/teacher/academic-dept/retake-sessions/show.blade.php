@@ -163,6 +163,16 @@
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="text-xs text-red-600 hover:underline">{{ __("O'chirish") }}</button>
                                             </form>
+                                        @else
+                                            {{-- Superadmin uchun force delete: oyna + barcha arizalar cascade o'chiriladi --}}
+                                            <form method="POST" action="{{ route('admin.retake-windows.destroy', $w->id) }}" class="inline"
+                                                  onsubmit="return confirm('{{ __('DIQQAT! Bu oynaga') }} {{ $w->applications_count }} {{ __('ta ariza yuborilgan. Hammasi cascade o\'chiriladi. Aniq davom etamizmi?') }}')">
+                                                @csrf @method('DELETE')
+                                                <input type="hidden" name="force" value="1">
+                                                <button type="submit" class="text-xs text-red-700 hover:underline font-semibold" title="{{ __('Majburiy o\'chirish — barcha arizalar bilan birga') }}">
+                                                    ⚠ {{ __("Majburiy o'chirish") }}
+                                                </button>
+                                            </form>
                                         @endif
                                     @endif
                                 </td>
@@ -183,14 +193,17 @@
         <div x-show="showCreate" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showCreate = false">
             <div class="flex items-center justify-center min-h-screen p-3">
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
-                <div class="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full p-5 z-10 max-h-[92vh] overflow-y-auto">
-                    <div class="flex items-start justify-between mb-3">
-                        <div>
-                            <h3 class="text-base font-bold text-gray-900">{{ __("Yangi qabul oynasi") }}</h3>
-                            <p class="text-[11px] text-gray-500">{{ $session->name }} · {{ __("Har fakultet uchun alohida yo'nalish va kurs tanlanadi") }}</p>
+                <div class="relative bg-white rounded-xl shadow-xl w-full z-10 max-h-[92vh] overflow-y-auto" style="max-width:1100px;">
+                    {{-- LMS-style header --}}
+                    <div class="px-5 py-3 border-b border-gray-100" style="background:linear-gradient(135deg,#1a3268,#2b5ea7);">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-base font-bold text-white">{{ __("Yangi qabul oynasi") }}</h3>
+                                <p class="text-[11px] text-blue-100 mt-0.5">{{ $session->name }} · {{ __("Har fakultet uchun alohida yo'nalish va kurs tanlanadi") }}</p>
+                            </div>
+                            <button type="button" @click="showCreate = false"
+                                    class="text-blue-100 hover:text-white text-2xl leading-none px-1">×</button>
                         </div>
-                        <button type="button" @click="showCreate = false"
-                                class="text-gray-400 hover:text-gray-700 text-lg leading-none px-1">×</button>
                     </div>
 
                     <form method="POST"
@@ -202,90 +215,96 @@
                               semesters: @js(collect($semesters)->map(fn($s) => ['code' => $s['code'], 'name' => $s['name']])->all()),
                           })"
                           @submit="prepareSubmit($event)"
-                          class="space-y-3">
+                          class="p-5 space-y-4">
                         @csrf
                         <input type="hidden" name="session_id" value="{{ $session->id }}">
 
-                        {{-- Sanalar (umumiy) --}}
-                        <div class="grid grid-cols-2 gap-2">
+                        {{-- Sanalar (umumiy) — input ustiga bosganda calendar ochiladi --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-[11px] font-medium text-gray-600 mb-1">{{ __("Boshlanish") }} <span class="text-red-500">*</span></label>
-                                <input type="date" name="start_date" required class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg">
+                                <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> {{ __("Boshlanish") }} <span class="text-red-500">*</span></label>
+                                <input type="date" name="start_date" required
+                                       onclick="try{this.showPicker()}catch(e){}"
+                                       class="filter-input">
                             </div>
                             <div>
-                                <label class="block text-[11px] font-medium text-gray-600 mb-1">{{ __("Tugash") }} <span class="text-red-500">*</span></label>
-                                <input type="date" name="end_date" required class="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> {{ __("Tugash") }} <span class="text-red-500">*</span></label>
+                                <input type="date" name="end_date" required
+                                       onclick="try{this.showPicker()}catch(e){}"
+                                       class="filter-input">
                             </div>
                         </div>
 
-                        {{-- Fakultet kartochkalari --}}
-                        <div class="space-y-2">
+                        {{-- Fakultet kartochkalari — bitta qatorda 2 ta --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <template x-for="card in cards" :key="card.fid">
-                                <div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <span class="text-xs font-semibold text-gray-800" x-text="card.name"></span>
+                                <div class="rounded-lg p-3" style="background:linear-gradient(135deg,#f0f4f8,#e8edf5);border:1px solid #dbe4ef;">
+                                    <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-200">
+                                        <div class="flex items-center gap-2">
+                                            <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#1a3268,#2b5ea7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">
+                                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg>
+                                            </div>
+                                            <span class="text-xs font-bold text-gray-800" x-text="card.name"></span>
+                                        </div>
                                         <button type="button" @click="removeCard(card.fid)"
-                                                class="text-[10px] text-red-600 hover:underline">{{ __("Olib tashlash") }}</button>
+                                                class="text-[10px] text-red-600 hover:text-red-700 font-medium hover:underline">× {{ __("Olib tashlash") }}</button>
                                     </div>
 
-                                    {{-- Yo'nalish va Kurs yonma-yon --}}
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                        {{-- Yo'nalish --}}
-                                        <div>
-                                            <div class="flex items-center justify-between mb-1">
-                                                <label class="text-[10px] font-medium text-gray-600">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
-                                                <button type="button" class="text-[10px] text-blue-600 hover:underline"
-                                                        @click="toggleAllSpecialties(card)"
-                                                        x-show="specialtiesFor(card.fid).length > 0"
-                                                        x-text="card.specialtyPks.length === specialtiesFor(card.fid).length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
-                                            </div>
-                                            <div class="max-h-28 overflow-y-auto border border-gray-300 rounded p-1.5 space-y-0.5 bg-white">
-                                                <p x-show="specialtiesFor(card.fid).length === 0" class="text-[10px] text-gray-400 px-1 py-1">— {{ __("Yo'nalishlar yo'q") }} —</p>
-                                                <template x-for="sp in specialtiesFor(card.fid)" :key="sp.pk">
-                                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-700 hover:bg-gray-50 px-1 py-0.5 rounded cursor-pointer">
-                                                        <input type="checkbox" :value="sp.pk" x-model="card.specialtyPks" class="rounded">
-                                                        <span x-text="sp.name"></span>
-                                                    </label>
-                                                </template>
-                                            </div>
+                                    {{-- Yo'nalish --}}
+                                    <div class="mb-2">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
+                                            <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                                    @click="toggleAllSpecialties(card)"
+                                                    x-show="specialtiesFor(card.fid).length > 0"
+                                                    x-text="card.specialtyPks.length === specialtiesFor(card.fid).length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
                                         </div>
+                                        <div class="max-h-32 overflow-y-auto rounded-lg p-1.5 space-y-0.5 bg-white border border-gray-200">
+                                            <p x-show="specialtiesFor(card.fid).length === 0" class="text-[10px] text-gray-400 px-1 py-1">— {{ __("Yo'nalishlar yo'q") }} —</p>
+                                            <template x-for="sp in specialtiesFor(card.fid)" :key="sp.pk">
+                                                <label class="flex items-center gap-1.5 text-[11px] text-gray-700 hover:bg-blue-50 px-1.5 py-1 rounded cursor-pointer transition">
+                                                    <input type="checkbox" :value="sp.pk" x-model="card.specialtyPks" class="rounded text-blue-600 focus:ring-blue-500">
+                                                    <span x-text="sp.name"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                    </div>
 
-                                        {{-- Kurs --}}
-                                        <div>
-                                            <div class="flex items-center justify-between mb-1">
-                                                <label class="text-[10px] font-medium text-gray-600">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
-                                                <button type="button" class="text-[10px] text-blue-600 hover:underline"
-                                                        @click="toggleAllLevels(card)"
-                                                        x-text="card.levelCodes.length === allLevels.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
-                                            </div>
-                                            <div class="grid grid-cols-3 gap-1">
-                                                <template x-for="lv in allLevels" :key="lv.code">
-                                                    <label class="flex items-center justify-center gap-1 text-[11px] text-gray-700 border border-gray-300 hover:bg-white px-1.5 py-1 rounded cursor-pointer bg-white"
-                                                           :class="card.levelCodes.includes(lv.code) ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50' : ''">
-                                                        <input type="checkbox" class="sr-only" :value="lv.code" x-model="card.levelCodes">
-                                                        <span x-text="lv.name"></span>
-                                                    </label>
-                                                </template>
-                                            </div>
+                                    {{-- Kurs (checkbox) --}}
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
+                                            <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                                    @click="toggleAllLevels(card)"
+                                                    x-text="card.levelCodes.length === allLevels.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-1">
+                                            <template x-for="lv in allLevels" :key="lv.code">
+                                                <label class="flex items-center justify-center gap-1 text-[11px] font-medium text-gray-700 border border-gray-300 hover:bg-white px-1.5 py-1.5 rounded cursor-pointer bg-white transition"
+                                                       :class="card.levelCodes.includes(lv.code) ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50 text-blue-700' : ''">
+                                                    <input type="checkbox" class="sr-only" :value="lv.code" x-model="card.levelCodes">
+                                                    <span x-text="lv.name"></span>
+                                                </label>
+                                            </template>
                                         </div>
                                     </div>
                                 </div>
                             </template>
 
-                            {{-- Fakultet qo'shish --}}
-                            <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                            {{-- Fakultet qo'shish (bitta col oladi) --}}
+                            <div class="relative" :class="cards.length % 2 === 0 ? 'md:col-span-2' : ''" x-data="{ open: false }" @click.outside="open = false">
                                 <button type="button" @click="open = !open"
                                         :disabled="availableDepartments.length === 0"
-                                        :class="availableDepartments.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50'"
-                                        class="w-full px-3 py-2 text-xs bg-white text-blue-700 border-2 border-dashed border-blue-300 rounded-lg flex items-center justify-center gap-1">
-                                    <span>+</span>
+                                        :class="availableDepartments.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-500 hover:bg-blue-50'"
+                                        class="w-full px-3 py-3 text-xs font-semibold bg-white text-blue-700 border-2 border-dashed border-blue-300 rounded-lg flex items-center justify-center gap-2 transition">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                                     <span x-text="cards.length === 0 ? '{{ __('Fakultet tanlash') }}' : '{{ __('Yana fakultet qo\'shish') }}'"></span>
                                 </button>
                                 <div x-show="open" x-cloak class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                                     <template x-for="d in availableDepartments" :key="d.id">
                                         <button type="button"
                                                 @click="addCard(d); open = false"
-                                                class="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-b-0">
+                                                class="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition">
                                             <span x-text="d.name"></span>
                                         </button>
                                     </template>
@@ -293,22 +312,19 @@
                             </div>
                         </div>
 
-                        {{-- Semestr — faqat Xalqaro talim fakulteti tanlanganda (umumiy) --}}
-                        <div x-show="hasXalqaroSelected" x-cloak class="border border-amber-200 bg-amber-50 rounded-lg p-2.5">
-                            <div class="flex items-center justify-between mb-1">
-                                <label class="text-[11px] font-medium text-amber-800">{{ __("Semestr (Xalqaro fakulteti uchun)") }} <span class="text-red-500">*</span></label>
-                                <button type="button" class="text-[10px] text-amber-700 hover:underline"
-                                        @click="toggleAllSemesters()"
-                                        x-text="semesterCodes.length === allSemesters.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
-                            </div>
-                            <div class="grid grid-cols-4 sm:grid-cols-6 gap-1">
-                                <template x-for="s in allSemesters" :key="s.code">
-                                    <label class="flex items-center justify-center text-[11px] text-amber-900 border border-amber-300 hover:bg-white px-1 py-1 rounded cursor-pointer bg-white"
-                                           :class="semesterCodes.includes(s.code) ? 'ring-2 ring-amber-500 border-amber-500 bg-amber-100' : ''">
-                                        <input type="checkbox" class="sr-only" :value="s.code" x-model="semesterCodes">
-                                        <span x-text="s.name"></span>
-                                    </label>
-                                </template>
+                        {{-- Semestr — Xalqaro talim fakulteti tanlanganda (multi-select) --}}
+                        <div x-show="hasXalqaroSelected" x-cloak class="rounded-lg p-3" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a;">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                                <div>
+                                    <label class="filter-label"><span class="fl-dot" style="background:#d97706;"></span> {{ __("Semestr (Xalqaro fakulteti uchun)") }} <span class="text-red-500">*</span></label>
+                                    <p class="text-[10px] text-amber-700 mt-1">{{ __("Bir nechtasini tanlash uchun Ctrl/Cmd bilan bosing") }}</p>
+                                </div>
+                                <select x-model="semesterCodes" multiple size="6"
+                                        class="w-full px-2.5 py-2 text-xs border border-amber-300 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                                    <template x-for="s in allSemesters" :key="s.code">
+                                        <option :value="s.code" x-text="s.name"></option>
+                                    </template>
+                                </select>
                             </div>
                         </div>
 
@@ -321,21 +337,22 @@
                         </template>
 
                         {{-- Status / submit --}}
-                        <div class="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
-                            <p class="text-[11px]" :class="combinationCount > 0 ? 'text-blue-700' : 'text-gray-400'">
+                        <div class="flex items-center justify-between gap-2 pt-3 border-t border-gray-100">
+                            <p class="text-xs" :class="combinationCount > 0 ? 'text-blue-700 font-semibold' : 'text-gray-400'">
                                 <span x-show="combinationCount > 0">ℹ️ <span x-text="combinationCount"></span> {{ __("ta oyna yaratiladi") }}</span>
                                 <span x-show="combinationCount === 0">{{ __("Fakultet, yo'nalish va kursni tanlang") }}</span>
                             </p>
                             <div class="flex gap-2">
                                 <button type="button" @click="showCreate = false"
-                                        class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                                        class="px-4 py-2 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
                                     {{ __("Bekor qilish") }}
                                 </button>
                                 <button type="submit"
                                         :disabled="combinationCount === 0"
-                                        :class="combinationCount === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
-                                        class="px-4 py-1.5 text-xs text-white rounded-lg font-medium">
-                                    {{ __("Yaratish") }}
+                                        :class="combinationCount === 0 ? 'bg-gray-300 cursor-not-allowed' : 'hover:shadow-lg'"
+                                        style="background:linear-gradient(135deg,#1a3268,#2b5ea7);"
+                                        class="px-5 py-2 text-xs text-white rounded-lg font-bold transition shadow-sm">
+                                    ✓ {{ __("Yaratish") }}
                                 </button>
                             </div>
                         </div>
@@ -374,6 +391,18 @@
             </div>
         @endif
     </div>
+
+    @push('styles')
+        <style>
+            .filter-label { display:flex;align-items:center;gap:5px;margin-bottom:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#475569; }
+            .fl-dot { width:7px;height:7px;border-radius:50%;display:inline-block; }
+            .filter-input { height:38px;padding:0 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:13px;color:#1e293b;width:100%;transition:all .15s;cursor:pointer; }
+            .filter-input:hover { border-color:#94a3b8; }
+            .filter-input:focus { outline:none;border-color:#2b5ea7;box-shadow:0 0 0 3px rgba(43,94,167,0.15); }
+            input[type="date"].filter-input::-webkit-calendar-picker-indicator { cursor:pointer;opacity:0.6; }
+            input[type="date"].filter-input::-webkit-calendar-picker-indicator:hover { opacity:1; }
+        </style>
+    @endpush
 
     @push('scripts')
         <script>

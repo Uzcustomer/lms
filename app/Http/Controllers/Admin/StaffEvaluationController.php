@@ -47,6 +47,8 @@ class StaffEvaluationController extends Controller
             'title'          => 'nullable|string|max:255',
             'description'    => 'nullable|string|max:1000',
             'show_logo'      => 'nullable|boolean',
+            'width_mm'       => 'nullable|numeric|min:20|max:300',
+            'height_mm'      => 'nullable|numeric|min:20|max:300',
         ]);
 
         Setting::set('staff_eval_tpl_institution', $data['institution'] ?? '');
@@ -55,6 +57,8 @@ class StaffEvaluationController extends Controller
         Setting::set('staff_eval_tpl_title', $data['title'] ?? '');
         Setting::set('staff_eval_tpl_description', $data['description'] ?? '');
         Setting::set('staff_eval_tpl_show_logo', $request->boolean('show_logo') ? '1' : '0');
+        Setting::set('staff_eval_tpl_width_mm', (string)($data['width_mm'] ?? 60));
+        Setting::set('staff_eval_tpl_height_mm', (string)($data['height_mm'] ?? 40));
 
         return redirect()->route('admin.staff-evaluation.index', ['tab' => 'shablon'])
             ->with('success', "Shablon muvaffaqiyatli saqlandi.");
@@ -69,6 +73,8 @@ class StaffEvaluationController extends Controller
             'title'          => Setting::get('staff_eval_tpl_title', ''),
             'description'    => Setting::get('staff_eval_tpl_description', ''),
             'show_logo'      => Setting::get('staff_eval_tpl_show_logo', '1') === '1',
+            'width_mm'       => (float) Setting::get('staff_eval_tpl_width_mm', '60'),
+            'height_mm'      => (float) Setting::get('staff_eval_tpl_height_mm', '40'),
         ];
     }
 

@@ -226,7 +226,7 @@
                                 <button type="button" class="text-[10px] text-blue-600 hover:underline"
                                         @click="toggleAllSpecialties()"
                                         x-show="filteredSpecialties.length > 0"
-                                        x-text="specialtyIds.length === filteredSpecialties.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                                        x-text="specialtyPks.length === filteredSpecialties.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
                             </div>
                             <div class="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 space-y-1 bg-white">
                                 <p x-show="departmentIds.length === 0" class="text-xs text-gray-400 px-1 py-2">— {{ __("Avval fakultet tanlang") }} —</p>

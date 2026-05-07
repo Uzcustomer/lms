@@ -312,11 +312,13 @@
                     $w = $template['width_mm'];
                     $h = $template['height_mm'];
                     $bottomText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
-                    $captionSpace = $bottomText !== '' ? 3.5 : 0;
-                    $qrSize = max(15, min($w - 2, $h - $captionSpace - 1.5));
+                    $padY = 2.2;
+                    $captionSpace = $bottomText !== '' ? 3.0 : 0;
+                    $gap = $bottomText !== '' ? 1.2 : 0;
+                    $qrSize = max(15, min($w - 4, $h - $captionSpace - $gap - $padY * 2));
                     $logoSize = $qrSize * 0.18;
                 @endphp
-                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:0.8mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.6mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
+                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:{{ $padY }}mm 1.5mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:{{ $gap }}mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
                     {{-- QR kod with logo --}}
                     <div style="flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;">
                         <div style="width:{{ $qrSize }}mm; height:{{ $qrSize }}mm; display:flex; align-items:center; justify-content:center;">

@@ -282,21 +282,20 @@
                                             </div>
                                         </div>
 
-                                        {{-- Kurs (multi-select checkbox dropdown) --}}
+                                        {{-- Kurs (bitta tanlash — single select dropdown) --}}
                                         <div x-data="{ levelOpen: false }" @click.outside="levelOpen = false" class="relative mb-2">
                                             <div class="flex items-center justify-between mb-1">
                                                 <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
-                                                <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                                                        @click="toggleAllLevels(card)"
-                                                        x-text="(card.levelCodes || []).length === allLevels.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                                                <button type="button"
+                                                        x-show="card.levelCode"
+                                                        @click="card.levelCode = ''"
+                                                        class="text-[10px] text-red-600 hover:text-red-800 font-medium hover:underline">{{ __("Tozalash") }}</button>
                                             </div>
                                             <button type="button" @click="levelOpen = !levelOpen"
                                                     class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg flex items-center justify-between hover:border-blue-500 transition">
-                                                <span x-show="(card.levelCodes || []).length === 0" class="text-gray-400">{{ __("Kurs tanlang...") }}</span>
-                                                <span x-show="(card.levelCodes || []).length > 0" class="text-gray-800 font-semibold truncate">
-                                                    <span x-text="(card.levelCodes || []).length"></span> {{ __("ta tanlangan") }}
-                                                    <span class="text-gray-400 font-normal" x-text="'(' + (card.levelCodes || []).map(c => allLevels.find(l => l.code === c)?.name).join(', ') + ')'"></span>
-                                                </span>
+                                                <span x-show="!card.levelCode" class="text-gray-400">{{ __("Kurs tanlang...") }}</span>
+                                                <span x-show="card.levelCode" class="text-gray-800 font-semibold truncate"
+                                                      x-text="allLevels.find(l => l.code === card.levelCode)?.name || ''"></span>
                                                 <svg class="w-3.5 h-3.5 text-gray-500 flex-shrink-0 ml-1" :class="levelOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
                                                 </svg>
@@ -305,10 +304,13 @@
                                                  class="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto"
                                                  style="z-index:60;">
                                                 <template x-for="lv in allLevels" :key="lv.code">
-                                                    <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-blue-50 px-3 py-2 cursor-pointer border-b border-gray-100 last:border-b-0">
-                                                        <input type="checkbox" :value="lv.code" x-model="card.levelCodes" class="rounded text-blue-600 focus:ring-blue-500">
+                                                    <button type="button"
+                                                            @click="card.levelCode = lv.code; levelOpen = false"
+                                                            :class="card.levelCode === lv.code ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-700'"
+                                                            class="w-full text-left text-xs hover:bg-blue-50 px-3 py-2 border-b border-gray-100 last:border-b-0 transition">
                                                         <span x-text="lv.name"></span>
-                                                    </label>
+                                                        <span x-show="card.levelCode === lv.code" class="ml-2 text-blue-600">✓</span>
+                                                    </button>
                                                 </template>
                                             </div>
                                         </div>
@@ -486,8 +488,8 @@
                             fid: d.id,
                             name: d.name,
                             specialtyPks: [],
-                            levelCodes: [],          // multi-select kurslar
-                            semesterCodes: [],       // faqat Xalqaro uchun
+                            levelCode: '',           // bitta kurs
+                            semesterCodes: [],       // faqat Xalqaro uchun ishlatiladi
                         });
                     },
 
@@ -499,16 +501,13 @@
                         return this.cards.some(c => this.isXalqaro(c));
                     },
 
-                    // "fid|spec_pk|level_code" triplets — har spec × har level
+                    // "fid|spec_pk|level_code" triplets ro'yxati (kurs endi bitta)
                     get assignments() {
                         const out = [];
                         for (const c of this.cards) {
-                            const lvs = c.levelCodes || [];
-                            if (lvs.length === 0) continue;
+                            if (!c.levelCode) continue;
                             for (const pk of c.specialtyPks) {
-                                for (const lv of lvs) {
-                                    out.push(`${c.fid}|${pk}|${lv}`);
-                                }
+                                out.push(`${c.fid}|${pk}|${c.levelCode}`);
                             }
                         }
                         return out;
@@ -529,14 +528,13 @@
                         if (this.assignments.length === 0) return 0;
                         let total = 0;
                         for (const c of this.cards) {
-                            const lvs = c.levelCodes || [];
-                            if (lvs.length === 0 || c.specialtyPks.length === 0) continue;
+                            if (!c.levelCode || c.specialtyPks.length === 0) continue;
                             const isX = this.isXalqaro(c);
                             if (isX) {
                                 if (!c.semesterCodes || c.semesterCodes.length === 0) return 0;
-                                total += c.specialtyPks.length * lvs.length * c.semesterCodes.length;
+                                total += c.specialtyPks.length * c.semesterCodes.length;
                             } else {
-                                total += c.specialtyPks.length * lvs.length;
+                                total += c.specialtyPks.length;
                             }
                         }
                         return total;
@@ -545,11 +543,6 @@
                     toggleAllSpecialties(card) {
                         const all = this.specialtiesFor(card.fid).map(sp => sp.pk);
                         card.specialtyPks = card.specialtyPks.length === all.length ? [] : all;
-                    },
-                    toggleAllLevels(card) {
-                        if (!Array.isArray(card.levelCodes)) card.levelCodes = [];
-                        card.levelCodes = card.levelCodes.length === this.allLevels.length
-                            ? [] : this.allLevels.map(lv => lv.code);
                     },
                     toggleAllSemestersFor(card) {
                         if (!Array.isArray(card.semesterCodes)) card.semesterCodes = [];

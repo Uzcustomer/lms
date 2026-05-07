@@ -286,11 +286,7 @@ class RetakeWindowController extends Controller
                             'session_id' => $data['session_id'],
                             'specialty_id' => (int) $sp->specialty_hemis_id,
                             'specialty_name' => $sp->name,
-                            // Foydalanuvchi qaysi fakultet kartochkasi ostidan tanladi —
-                            // o'shani saqlaymiz. Aks holda bir xil yo'nalish turli
-                            // fakultetlarda bitta oynaga to'g'ri kelib, ikkinchisi
-                            // "allaqachon mavjud" xatosi bilan o'tkazib yuboriladi.
-                            'department_hemis_id' => (string) $t['fid'],
+                            'department_hemis_id' => (string) $sp->department_hemis_id,
                             'level_code' => $t['level_code'],
                             'level_name' => $levelMap->get($t['level_code']) ?? $t['level_code'],
                             'semester_code' => $sem['code'],
@@ -310,10 +306,7 @@ class RetakeWindowController extends Controller
 
         $msg = "{$created} ta qabul oynasi yaratildi";
         if ($skipped > 0) {
-            $msg .= ", {$skipped} ta o'tkazib yuborildi";
-            if ($firstError) {
-                $msg .= " (sabab: {$firstError})";
-            }
+            $msg .= ", {$skipped} ta o'tkazib yuborildi (allaqachon mavjud)";
         }
 
         return redirect()->route('admin.retake-sessions.show', $data['session_id'])

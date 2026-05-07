@@ -253,8 +253,10 @@
                                             <div class="text-[10px] text-gray-400 mb-0.5">Snapshot</div>
                                             @if($snapshotUrl)
                                                 <img src="{{ $snapshotUrl }}" alt="snapshot"
-                                                     class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300 cursor-pointer"
-                                                     onclick="openComparePair('{{ $snapshotUrl }}', '{{ $studentUrl }}', @json($titleName))">
+                                                     class="compare-thumb w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300 cursor-pointer"
+                                                     data-snap="{{ $snapshotUrl }}"
+                                                     data-stud="{{ $studentUrl }}"
+                                                     data-name="{{ $titleName }}">
                                             @else
                                                 <div class="w-12 h-12 rounded border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">—</div>
                                             @endif
@@ -263,8 +265,10 @@
                                             <div class="text-[10px] text-gray-400 mb-0.5">Talaba</div>
                                             @if($studentUrl)
                                                 <img src="{{ $studentUrl }}" alt="talaba"
-                                                     class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300 cursor-pointer"
-                                                     onclick="openComparePair('{{ $snapshotUrl }}', '{{ $studentUrl }}', @json($titleName))">
+                                                     class="compare-thumb w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300 cursor-pointer"
+                                                     data-snap="{{ $snapshotUrl }}"
+                                                     data-stud="{{ $studentUrl }}"
+                                                     data-name="{{ $titleName }}">
                                             @else
                                                 <div class="w-12 h-12 rounded border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">—</div>
                                             @endif
@@ -332,6 +336,11 @@
                 document.getElementById('compareModal').style.display = 'none';
             }
             document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCompareModal(); });
+            document.addEventListener('click', function(e) {
+                const t = e.target.closest('.compare-thumb');
+                if (!t) return;
+                openComparePair(t.dataset.snap || '', t.dataset.stud || '', t.dataset.name || '');
+            });
             </script>
             @endpush
             @endif

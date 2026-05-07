@@ -14,6 +14,13 @@
              rejectUrlBase: '{{ url('/admin/retake-groups/applications') }}',
              csrf: '{{ csrf_token() }}',
              minReasonLength: {{ \App\Models\RetakeSetting::rejectReasonMinLength() }},
+             pageApps: @js($pendingApps->getCollection()->map(fn($a) => [
+                 'id' => $a->id,
+                 'subject_id' => $a->subject_id,
+                 'subject_name' => $a->subject_name,
+                 'semester_id' => $a->semester_id,
+                 'semester_name' => $a->semester_name,
+             ])->values()->all()),
          })">
 
         @if(session('success'))
@@ -91,7 +98,13 @@
                     <table class="min-w-full divide-y divide-gray-100">
                         <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-3 py-2 text-center" style="width:40px;"></th>
+                            <th class="px-3 py-2 text-center" style="width:40px;">
+                                <input type="checkbox"
+                                       :checked="allPageSelected"
+                                       @change="toggleAllOnPage()"
+                                       title="{{ __('Hammasini tanlash (bir xil fan + semestr)') }}"
+                                       class="rounded text-blue-600 focus:ring-blue-500">
+                            </th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:48px;">{{ __("T/R") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fakultet / Yo'nalish") }}</th>
@@ -567,7 +580,7 @@
 
     @push('scripts')
         <script>
-            function groupFormation({ lookupUrl, storeUrl, csrf, rejectUrlBase, minReasonLength }) {
+            function groupFormation({ lookupUrl, storeUrl, csrf, rejectUrlBase, minReasonLength, pageApps }) {
                 return {
                     lookupUrl, storeUrl, csrf, rejectUrlBase, minReasonLength,
                     showFormation: false,
@@ -581,7 +594,38 @@
                     windowDates: null, // {start_date, end_date} — qabul oynasidan
 
                     // Bulk tanlash uchun (yassi jadvaldagi arizalar)
+                    pageApps: pageApps || [], // joriy sahifadagi barcha arizalar
                     selectedApps: [], // [{id, subject_id, subject_name, semester_id, semester_name}]
+
+                    // Joriy "lock guruhi" (birinchi tanlangan arizaning subject+semester'i) bo'yicha
+                    // sahifadagi shu fan/semestrga tegishli arizalar
+                    matchingPageApps() {
+                        if (this.selectedApps.length === 0) {
+                            // Hech narsa tanlanmagan — birinchi qator subject+semester'iga moslar
+                            if (this.pageApps.length === 0) return [];
+                            const ref = this.pageApps[0];
+                            return this.pageApps.filter(a =>
+                                a.subject_name === ref.subject_name && a.semester_name === ref.semester_name
+                            );
+                        }
+                        const ref = this.selectedApps[0];
+                        return this.pageApps.filter(a =>
+                            a.subject_name === ref.subject_name && a.semester_name === ref.semester_name
+                        );
+                    },
+
+                    get allPageSelected() {
+                        const matching = this.matchingPageApps();
+                        if (matching.length === 0) return false;
+                        return matching.every(m => this.selectedApps.some(s => s.id === m.id));
+                    },
+
+                    toggleAllOnPage() {
+                        const matching = this.matchingPageApps();
+                        if (matching.length === 0) return;
+                        const allSelected = matching.every(m => this.selectedApps.some(s => s.id === m.id));
+                        this.selectedApps = allSelected ? [] : matching.slice();
+                    },
 
                     get selectedCount() { return this.selected.length; },
                     get allSelected() { return this.applications.length > 0 && this.selected.length === this.applications.length; },

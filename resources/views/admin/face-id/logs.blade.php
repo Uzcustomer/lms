@@ -36,7 +36,7 @@
                 <div class="bg-white rounded-lg border p-5 mb-4">
                     <h2 class="font-semibold text-gray-700 mb-4">🌐 Global holat</h2>
                     <label class="flex items-center gap-3 cursor-pointer">
-                        <div class="relative">
+                        <div class="relative w-11 h-6 flex-shrink-0">
                             <input type="hidden" name="faceid_global_enabled" value="0">
                             <input type="checkbox" name="faceid_global_enabled" value="1" class="sr-only peer"
                                    {{ !empty($settings['global_enabled']) ? 'checked' : '' }}>
@@ -55,7 +55,7 @@
 
                     <div class="mb-4">
                         <label class="flex items-center gap-3 cursor-pointer">
-                            <div class="relative">
+                            <div class="relative w-11 h-6 flex-shrink-0">
                                 <input type="hidden" name="faceid_arcface_enabled" value="0">
                                 <input type="checkbox" name="faceid_arcface_enabled" value="1" class="sr-only peer"
                                        {{ !empty($settings['arcface_enabled']) ? 'checked' : '' }}>
@@ -91,50 +91,17 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-lg border p-5 mb-4">
-                    <h2 class="font-semibold text-gray-700 mb-4">👁️ Liveness</h2>
-
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Ko'z yumish soni</label>
-                        <select name="faceid_blinks_required" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                            @foreach([0, 1, 2, 3] as $n)
-                            <option value="{{ $n }}" {{ ($settings['blinks_required'] ?? 2) == $n ? 'selected' : '' }}>
-                                {{ $n }} marta{{ $n === 0 ? ' (o\'chirilgan)' : '' }}
-                            </option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="mb-4">
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <div class="relative">
-                                <input type="hidden" name="faceid_head_turn_required" value="0">
-                                <input type="checkbox" name="faceid_head_turn_required" value="1" class="sr-only peer"
-                                       {{ !empty($settings['head_turn_required']) ? 'checked' : '' }}>
-                                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-blue-600"></div>
-                                <div class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow peer-checked:translate-x-5 transition-transform"></div>
-                            </div>
-                            <div>
-                                <div class="font-medium text-sm text-gray-800">Bosh burilishini tekshirish</div>
-                            </div>
-                        </label>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Liveness vaqt chegarasi (soniya)</label>
-                        <input type="number" name="faceid_liveness_timeout"
-                               value="{{ $settings['liveness_timeout'] ?? 30 }}"
-                               min="10" max="120"
-                               class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-32">
-                    </div>
-                </div>
+                {{-- Liveness o'chirilgan; backend validatsiyasi uchun yashirin qiymatlar --}}
+                <input type="hidden" name="faceid_blinks_required"    value="{{ $settings['blinks_required'] ?? 0 }}">
+                <input type="hidden" name="faceid_head_turn_required" value="{{ !empty($settings['head_turn_required']) ? 1 : 0 }}">
+                <input type="hidden" name="faceid_liveness_timeout"   value="{{ $settings['liveness_timeout'] ?? 30 }}">
 
                 <div class="bg-white rounded-lg border p-5 mb-4">
                     <h2 class="font-semibold text-gray-700 mb-4">📸 Snapshot</h2>
 
                     <div class="mb-4">
                         <label class="flex items-center gap-3 cursor-pointer">
-                            <div class="relative">
+                            <div class="relative w-11 h-6 flex-shrink-0">
                                 <input type="hidden" name="faceid_save_snapshots" value="0">
                                 <input type="checkbox" name="faceid_save_snapshots" value="1" class="sr-only peer"
                                        {{ !empty($settings['save_snapshots']) ? 'checked' : '' }}>
@@ -208,7 +175,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Yaqinlik</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sabab</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">IP</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Snapshot</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rasmlar</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
@@ -255,12 +222,35 @@
                                 <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate">{{ $log->failure_reason ?? '—' }}</td>
                                 <td class="px-4 py-3 text-xs text-gray-400 font-mono">{{ $log->ip_address }}</td>
                                 <td class="px-4 py-3">
-                                    @if($log->snapshot)
-                                        <a href="{{ route('admin.face-id.logs.snapshot', $log->id) }}" target="_blank"
-                                           class="text-blue-500 hover:text-blue-700 text-xs underline">Ko'rish</a>
-                                    @else
-                                        <span class="text-gray-300 text-xs">—</span>
-                                    @endif
+                                    @php
+                                        $sp = $studentPhotos[$log->student_id_number] ?? null;
+                                    @endphp
+                                    <div class="flex items-center gap-2">
+                                        <div class="text-center">
+                                            <div class="text-[10px] text-gray-400 mb-0.5">Snapshot</div>
+                                            @if($log->snapshot)
+                                                <a href="{{ route('admin.face-id.logs.snapshot', $log->id) }}" target="_blank">
+                                                    <img src="{{ route('admin.face-id.logs.snapshot', $log->id) }}"
+                                                         alt="snapshot"
+                                                         class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300">
+                                                </a>
+                                            @else
+                                                <div class="w-12 h-12 rounded border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">—</div>
+                                            @endif
+                                        </div>
+                                        <div class="text-center">
+                                            <div class="text-[10px] text-gray-400 mb-0.5">Talaba</div>
+                                            @if($sp && $sp->photo_path)
+                                                <a href="{{ asset($sp->photo_path) }}" target="_blank">
+                                                    <img src="{{ asset($sp->photo_path) }}"
+                                                         alt="talaba"
+                                                         class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300">
+                                                </a>
+                                            @else
+                                                <div class="w-12 h-12 rounded border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">—</div>
+                                            @endif
+                                        </div>
+                                    </div>
                                 </td>
                             </tr>
                             @empty

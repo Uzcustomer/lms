@@ -111,6 +111,18 @@ class FaceIdAdminController extends Controller
         }
 
         $logs      = $query->paginate(50)->appends($request->query());
+
+        // Talaba rasmlari (student_photos jadvalidan, eng so'nggi approved/pending)
+        $studentNumbers = $logs->pluck('student_id_number')->filter()->unique()->values()->all();
+        $studentPhotos = [];
+        if (!empty($studentNumbers)) {
+            $studentPhotos = \App\Models\StudentPhoto::whereIn('student_id_number', $studentNumbers)
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('student_id_number')
+                ->map(fn($group) => $group->first())
+                ->all();
+        }
         $todayTotal   = FaceIdLog::whereDate('created_at', today())->count();
         $todaySuccess = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
 
@@ -141,7 +153,7 @@ class FaceIdAdminController extends Controller
 
         return view('admin.face-id.logs', compact(
             'logs', 'todayTotal', 'todaySuccess',
-            'settings', 'settingsError', 'activeTab'
+            'settings', 'settingsError', 'activeTab', 'studentPhotos'
         ));
     }
 

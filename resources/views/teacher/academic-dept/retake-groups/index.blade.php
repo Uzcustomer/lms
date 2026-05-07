@@ -39,7 +39,7 @@
             ]),
         ])
 
-        {{-- Tasdiqlanishi kutilayotgan arizalar — yassi raqamlangan ro'yxat --}}
+        {{-- Tasdiqlanishi kutilayotgan arizalar — yassi raqamlangan ro'yxat (checkbox bilan) --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
             <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <h3 class="text-sm font-semibold text-gray-900">
@@ -55,6 +55,33 @@
                 @endif
             </div>
 
+            {{-- Bulk action panel (faqat kamida 1 ta tanlanganda) --}}
+            <div x-show="selectedApps.length > 0" x-cloak
+                 class="px-5 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between flex-wrap gap-3">
+                <div class="text-xs text-blue-900 flex items-center gap-2">
+                    <span class="font-bold text-base text-blue-700" x-text="selectedApps.length"></span>
+                    <span>{{ __("ta ariza tanlangan") }}</span>
+                    <span class="text-blue-700">·</span>
+                    <span class="font-medium" x-text="selectedApps[0]?.subject_name"></span>
+                    <span class="text-blue-600">·</span>
+                    <span x-text="selectedApps[0]?.semester_name"></span>
+                </div>
+                <div class="flex gap-2">
+                    <button type="button"
+                            @click="bulkOpenFormation()"
+                            class="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        {{ __("Guruh shakllantirish") }}
+                    </button>
+                    <button type="button" @click="clearSelection()"
+                            class="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                        {{ __("Tozalash") }}
+                    </button>
+                </div>
+            </div>
+
             @if($pendingApps->count() === 0)
                 <div class="p-10 text-center text-gray-500 text-sm">
                     {{ __("Hozircha tasdiqlanishi kutilayotgan ariza yo'q") }}
@@ -64,6 +91,7 @@
                     <table class="min-w-full divide-y divide-gray-100">
                         <thead class="bg-gray-50">
                         <tr>
+                            <th class="px-3 py-2 text-center" style="width:40px;"></th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:48px;">{{ __("T/R") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fakultet / Yo'nalish") }}</th>
@@ -71,13 +99,29 @@
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
                             <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:80px;">{{ __("Kredit") }}</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:170px;"></th>
                         </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-100">
                         @foreach($pendingApps as $i => $app)
-                            @php $student = $app->group?->student; @endphp
-                            <tr>
+                            @php
+                                $student = $app->group?->student;
+                                $rowMeta = json_encode([
+                                    'id' => $app->id,
+                                    'subject_id' => $app->subject_id,
+                                    'subject_name' => $app->subject_name,
+                                    'semester_id' => $app->semester_id,
+                                    'semester_name' => $app->semester_name,
+                                ]);
+                            @endphp
+                            <tr :class="isLocked({{ $rowMeta }}) ? 'opacity-40 bg-gray-50' : ''">
+                                <td class="px-3 py-2.5 text-center">
+                                    <input type="checkbox"
+                                           :disabled="isLocked({{ $rowMeta }})"
+                                           :checked="selectedApps.some(a => a.id === {{ $app->id }})"
+                                           @change="toggleApp({{ $rowMeta }})"
+                                           class="rounded text-blue-600 focus:ring-blue-500"
+                                           title="{{ $app->subject_name }} · {{ $app->semester_name }}">
+                                </td>
                                 <td class="px-3 py-2.5 text-center text-sm font-bold text-blue-700">
                                     {{ ($pendingApps->currentPage() - 1) * $pendingApps->perPage() + $i + 1 }}
                                 </td>
@@ -96,28 +140,16 @@
                                 <td class="px-3 py-2.5 text-sm font-medium text-gray-800">{{ $app->subject_name }}</td>
                                 <td class="px-3 py-2.5 text-xs text-gray-600">{{ $app->semester_name }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700 text-right">{{ rtrim(rtrim((string) $app->credit, '0'), '.') ?: '—' }}</td>
-                                <td class="px-3 py-2.5 text-right whitespace-nowrap">
-                                    <button type="button"
-                                            @click="openFormation({{ json_encode([
-                                                'subject_id' => $app->subject_id,
-                                                'subject_name' => $app->subject_name,
-                                                'semester_id' => $app->semester_id,
-                                                'semester_name' => $app->semester_name,
-                                            ]) }})"
-                                            class="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        </svg>
-                                        {{ __("Guruh shakllantirish") }}
-                                    </button>
-                                </td>
                             </tr>
                         @endforeach
                         </tbody>
                     </table>
                 </div>
 
-                <div class="p-3 border-t border-gray-100">
+                <div class="p-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                    <p class="text-[11px] text-gray-500">
+                        💡 {{ __("Bir xil fan + semestrdagi arizalarnigina tanlash mumkin (boshqa qatorlar avtomatik bloklanadi)") }}
+                    </p>
                     {{ $pendingApps->links() }}
                 </div>
             @endif
@@ -532,10 +564,45 @@
                     oskeDate: '',
                     testDate: '',
 
+                    // Bulk tanlash uchun (yassi jadvaldagi arizalar)
+                    selectedApps: [], // [{id, subject_id, subject_name, semester_id, semester_name}]
+
                     get selectedCount() { return this.selected.length; },
                     get allSelected() { return this.applications.length > 0 && this.selected.length === this.applications.length; },
 
-                    async openFormation(data) {
+                    // ── Bulk tanlash mantiqi ─────────────────────────────────
+                    isLocked(row) {
+                        if (this.selectedApps.length === 0) return false;
+                        const a = this.selectedApps[0];
+                        return a.subject_name !== row.subject_name || a.semester_name !== row.semester_name;
+                    },
+
+                    toggleApp(row) {
+                        if (this.isLocked(row)) return;
+                        const idx = this.selectedApps.findIndex(x => x.id === row.id);
+                        if (idx >= 0) {
+                            this.selectedApps.splice(idx, 1);
+                        } else {
+                            this.selectedApps.push(row);
+                        }
+                    },
+
+                    clearSelection() { this.selectedApps = []; },
+
+                    bulkOpenFormation() {
+                        if (this.selectedApps.length === 0) return;
+                        const first = this.selectedApps[0];
+                        const ids = this.selectedApps.map(a => a.id);
+                        this.openFormation({
+                            subject_id: first.subject_id,
+                            subject_name: first.subject_name,
+                            semester_id: first.semester_id,
+                            semester_name: first.semester_name,
+                        }, ids);
+                    },
+                    // ─────────────────────────────────────────────────────────
+
+                    async openFormation(data, preselectedIds = null) {
                         this.formData = {
                             subject_id: data.subject_id,
                             subject_name: data.subject_name,
@@ -557,7 +624,14 @@
                         const json = await res.json();
                         this.applications = json.applications || [];
                         this.teachers = json.teachers || [];
-                        this.selected = this.applications.map(a => a.id);
+                        if (preselectedIds && preselectedIds.length > 0) {
+                            const set = new Set(preselectedIds.map(Number));
+                            this.selected = this.applications
+                                .filter(a => set.has(Number(a.id)))
+                                .map(a => a.id);
+                        } else {
+                            this.selected = this.applications.map(a => a.id);
+                        }
 
                         this.$nextTick(() => this.syncTeacherOptions());
                     },

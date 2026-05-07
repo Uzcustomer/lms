@@ -75,11 +75,20 @@ class RetakeWindowService
             ]);
         }
 
-        return RetakeApplicationWindow::create([
+        $payload = [
             ...$data,
             'created_by_user_id' => $createdBy->id,
             'created_by_name' => $createdBy->full_name,
-        ]);
+        ];
+
+        // Migration hali qo'llanmagan bo'lsa creation_batch_id ustuni yo'q —
+        // 500 oldini olish uchun himoya
+        if (isset($payload['creation_batch_id']) &&
+            !\Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', 'creation_batch_id')) {
+            unset($payload['creation_batch_id']);
+        }
+
+        return RetakeApplicationWindow::create($payload);
     }
 
     /**

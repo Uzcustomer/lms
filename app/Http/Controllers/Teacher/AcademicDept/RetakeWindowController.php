@@ -53,9 +53,18 @@ class RetakeWindowController extends Controller
         }
 
         if ($departmentId) {
+            // Window'da saqlangan haqiqiy fakultet bo'yicha filtr;
+            // eski yozuvlar uchun specialty orqali fallback ham qo'shamiz.
             $specialtyIdsForDept = Specialty::where('department_hemis_id', $departmentId)
                 ->pluck('specialty_hemis_id');
-            $windowsQuery->whereIn('specialty_id', $specialtyIdsForDept);
+            $windowsQuery->where(function ($q) use ($departmentId, $specialtyIdsForDept) {
+                $q->where('department_hemis_id', $departmentId)
+                  ->orWhere(function ($q2) use ($departmentId, $specialtyIdsForDept) {
+                      $q2->where(function ($q3) {
+                          $q3->whereNull('department_hemis_id')->orWhere('department_hemis_id', '');
+                      })->whereIn('specialty_id', $specialtyIdsForDept);
+                  });
+            });
         }
 
         if ($specialtyId) {
@@ -72,10 +81,14 @@ class RetakeWindowController extends Controller
 
         $windows = $windowsQuery->paginate($perPage)->withQueryString();
 
-        // Bevosita department_hemis_id'dan fakultet nomi
-        $deptIdToName = Department::pluck('name', 'department_hemis_id');
+        // Bevosita department_hemis_id'dan fakultet nomi.
+        // Faqat structure_type_code = 11 (fakultet) bo'yicha — bir hemis_id
+        // turli kafedra bilan to'qnashishi mumkinligini istisno qilish uchun.
+        $deptIdToName = Department::where('structure_type_code', 11)
+            ->pluck('name', 'department_hemis_id');
         $specialtyToFaculty = Specialty::query()
             ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
+            ->where('departments.structure_type_code', 11)
             ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
             ->pluck('faculty_name', 'sp_hemis_id');
 
@@ -154,7 +167,11 @@ class RetakeWindowController extends Controller
 
         $data = $request->validate([
             'session_id' => 'required|integer|exists:retake_window_sessions,id',
-            'specialty_pks' => 'required|array|min:1',
+            // Yangi format: "fakultet_hemis_id|specialty_pk" juftliklari
+            'assignments' => 'nullable|array',
+            'assignments.*' => 'string|regex:/^\d+\|\d+$/',
+            // Eski format (orqaga moslik uchun): faqat specialty PK lari
+            'specialty_pks' => 'nullable|array',
             'specialty_pks.*' => 'integer',
             'level_codes' => 'required|array|min:1',
             'level_codes.*' => 'string|max:10',
@@ -164,6 +181,12 @@ class RetakeWindowController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
 
+        if (empty($data['assignments']) && empty($data['specialty_pks'])) {
+            return redirect()->back()->withErrors([
+                'assignments' => 'Kamida bitta yo\'nalish tanlang',
+            ])->withInput();
+        }
+
         $session = \App\Models\RetakeWindowSession::findOrFail($data['session_id']);
         if ($session->is_closed) {
             return redirect()->back()->withErrors([
@@ -171,9 +194,29 @@ class RetakeWindowController extends Controller
             ])->withInput();
         }
 
-        // Tanlangan yo'nalishlar (PK orqali — bir aniqlik) va ularning fakultetlari
-        $specialties = Specialty::whereIn('id', $data['specialty_pks'])
-            ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id']);
+        // Yuborilgan juftliklarni (fakultet_hemis_id, specialty_pk) ko'rinishida normalizatsiya.
+        // Eski format kelsa, har bir spec'ning intrinsik department_hemis_id ishlatiladi.
+        $pairs = [];
+        if (!empty($data['assignments'])) {
+            foreach ($data['assignments'] as $raw) {
+                [$deptHemisId, $specPk] = explode('|', $raw, 2);
+                $pairs[] = ['department_hemis_id' => (string) $deptHemisId, 'specialty_pk' => (int) $specPk];
+            }
+        } else {
+            $legacySpecs = Specialty::whereIn('id', $data['specialty_pks'])
+                ->get(['id', 'department_hemis_id']);
+            foreach ($legacySpecs as $sp) {
+                $pairs[] = [
+                    'department_hemis_id' => (string) $sp->department_hemis_id,
+                    'specialty_pk' => (int) $sp->id,
+                ];
+            }
+        }
+
+        $specPks = array_values(array_unique(array_map(fn ($p) => $p['specialty_pk'], $pairs)));
+        $specialties = Specialty::whereIn('id', $specPks)
+            ->get(['id', 'specialty_hemis_id', 'name'])
+            ->keyBy('id');
 
         $allLevels = config('app.retake_levels')
             ?? collect(Semester::query()
@@ -187,11 +230,12 @@ class RetakeWindowController extends Controller
         $levelMap = collect($allLevels)->keyBy(fn ($lv) => is_array($lv) ? $lv['code'] : $lv->code)
             ->map(fn ($lv) => is_array($lv) ? $lv['name'] : $lv->name);
 
-        // Xalqaro fakultet bormi — semester majburligini tekshirish
-        $depHemisIds = $specialties->pluck('department_hemis_id')->unique()->toArray();
+        // Foydalanuvchi tanlagan fakultetlar nomlarini yuklaymiz
+        $depHemisIds = array_values(array_unique(array_map(fn ($p) => $p['department_hemis_id'], $pairs)));
         $departments = Department::whereIn('department_hemis_id', $depHemisIds)
             ->pluck('name', 'department_hemis_id');
 
+        // Xalqaro fakultet bormi — semester majburligini tekshirish
         $hasXalqaro = $departments->contains(fn ($n) => preg_match('/xalqaro/i', (string) $n));
         if ($hasXalqaro && empty($data['semester_codes'])) {
             return redirect()->back()->withErrors([
@@ -219,12 +263,17 @@ class RetakeWindowController extends Controller
         // batch ostidagi barcha fakultetlarni ko'rsatish uchun ishlatiladi.
         $batchId = (string) \Illuminate\Support\Str::uuid();
 
-        DB::transaction(function () use ($data, $specialties, $levelMap, $departments, $semesterCombos, $user, &$created, &$skipped, &$firstError, $hasXalqaro, $batchId) {
-            foreach ($specialties as $sp) {
-                $depName = (string) ($departments[$sp->department_hemis_id] ?? '');
-                $isSpecXalqaro = preg_match('/xalqaro/i', $depName) === 1;
-                // Xalqaro bo'lmagan yo'nalishlar uchun semester='' qo'llanadi
-                $combos = ($hasXalqaro && $isSpecXalqaro) ? $semesterCombos : [['code' => '', 'name' => '']];
+        DB::transaction(function () use ($data, $pairs, $specialties, $levelMap, $departments, $semesterCombos, $user, &$created, &$skipped, &$firstError, $hasXalqaro, $batchId) {
+            foreach ($pairs as $pair) {
+                $sp = $specialties->get($pair['specialty_pk']);
+                if (!$sp) {
+                    continue;
+                }
+                $deptHemisId = $pair['department_hemis_id'];
+                $depName = (string) ($departments[$deptHemisId] ?? '');
+                $isDeptXalqaro = preg_match('/xalqaro/i', $depName) === 1;
+                // Xalqaro bo'lmagan fakultetlar uchun semester='' qo'llanadi
+                $combos = ($hasXalqaro && $isDeptXalqaro) ? $semesterCombos : [['code' => '', 'name' => '']];
 
                 foreach ($data['level_codes'] as $lvCode) {
                     foreach ($combos as $sem) {
@@ -233,7 +282,7 @@ class RetakeWindowController extends Controller
                                 'session_id' => $data['session_id'],
                                 'specialty_id' => (int) $sp->specialty_hemis_id,
                                 'specialty_name' => $sp->name,
-                                'department_hemis_id' => (string) $sp->department_hemis_id,
+                                'department_hemis_id' => $deptHemisId,
                                 'level_code' => $lvCode,
                                 'level_name' => $levelMap->get($lvCode) ?? $lvCode,
                                 'semester_code' => $sem['code'],

@@ -9,6 +9,7 @@ use App\Models\RetakeWindowSession;
 use App\Models\Specialty;
 use App\Models\Teacher;
 use App\Services\Retake\RetakeAccess;
+use App\Services\Retake\RetakeFacultyResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -304,7 +305,14 @@ class RetakeWindowSessionController extends Controller
         if ($departmentId) {
             $specialtyIdsForDept = Specialty::where('department_hemis_id', $departmentId)
                 ->pluck('specialty_hemis_id');
-            $windowsQuery->whereIn('specialty_id', $specialtyIdsForDept);
+            $windowsQuery->where(function ($q) use ($departmentId, $specialtyIdsForDept) {
+                $q->where('department_hemis_id', $departmentId)
+                  ->orWhere(function ($q2) use ($departmentId, $specialtyIdsForDept) {
+                      $q2->where(function ($q3) {
+                          $q3->whereNull('department_hemis_id')->orWhere('department_hemis_id', '');
+                      })->whereIn('specialty_id', $specialtyIdsForDept);
+                  });
+            });
         }
 
         if ($specialtyId) {
@@ -323,12 +331,16 @@ class RetakeWindowSessionController extends Controller
 
         $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
 
-        // Bevosita department_hemis_id'dan fakultet nomi (window'da saqlangan)
-        $deptIdToName = Department::pluck('name', 'department_hemis_id');
+        // Bevosita department_hemis_id'dan fakultet nomi (window'da saqlangan).
+        // Faqat structure_type_code = 11 (fakultet) bo'yicha qidiriladi shunda
+        // bir xil hemis_id'li kafedra bilan to'qnashish bo'lmasin.
+        $deptIdToName = Department::where('structure_type_code', 11)
+            ->pluck('name', 'department_hemis_id');
 
         // Eski view va batch fallback uchun legacy lookup (specialty_hemis_id -> faculty_name)
         $specialtyToFaculty = Specialty::query()
             ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
+            ->where('departments.structure_type_code', 11)
             ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
             ->pluck('faculty_name', 'sp_hemis_id');
 
@@ -377,6 +389,11 @@ class RetakeWindowSessionController extends Controller
         $specialties = Specialty::orderBy('name')
             ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id']);
 
+        // Real (fakultet, yo'nalish) juftliklari — talabalar mavjudligi asosida.
+        // Shu bilan formada faqat aslida talabasi bor kombinatsiyalar ko'rsatiladi
+        // va oynaning fakulteti foydalanuvchi tanlovi bo'yicha saqlanadi.
+        $facultySpecialtyPairs = RetakeFacultyResolver::studentFacultySpecialtyPairs();
+
         // Har bir qatorga to'g'ri fakultet nomi map qilamiz
         $rowFaculties = collect();
         foreach ($windows as $w) {
@@ -391,6 +408,7 @@ class RetakeWindowSessionController extends Controller
             'batchFaculties' => $batchFaculties,
             'departments' => $departments,
             'specialties' => $specialties,
+            'facultySpecialtyPairs' => $facultySpecialtyPairs,
             'levels' => $this->levels(),
             'semesters' => $this->semesters(),
             'statusFilter' => $statusFilter,

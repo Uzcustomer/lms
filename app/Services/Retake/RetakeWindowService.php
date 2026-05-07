@@ -22,7 +22,7 @@ class RetakeWindowService
         }
 
         return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code)
+            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''))
             ->active()
             ->whereHas('session', fn ($q) => $q->where('is_closed', false))
             ->orderByDesc('end_date')
@@ -41,7 +41,7 @@ class RetakeWindowService
         }
 
         return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code)
+            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''))
             ->orderByDesc('start_date')
             ->get();
     }
@@ -62,16 +62,22 @@ class RetakeWindowService
             ]);
         }
 
-        $exists = RetakeApplicationWindow::query()
+        // Bir xil sessiya, fakultet, yo'nalish, kurs va semestr kombinatsiyasi
+        // bittadan ortiq oyna sifatida yaratilmasin (turli fakultetlarda
+        // alohida oyna ochish ruxsat etiladi).
+        $existsQuery = RetakeApplicationWindow::query()
             ->where('session_id', $data['session_id'])
             ->where('specialty_id', $data['specialty_id'])
             ->where('level_code', $data['level_code'])
-            ->where('semester_code', $data['semester_code'])
-            ->exists();
+            ->where('semester_code', $data['semester_code']);
 
-        if ($exists) {
+        if (!empty($data['department_hemis_id'])) {
+            $existsQuery->where('department_hemis_id', $data['department_hemis_id']);
+        }
+
+        if ($existsQuery->exists()) {
             throw ValidationException::withMessages([
-                'specialty_id' => 'Joriy sessiyada bu yo\'nalish, kurs va semestr uchun oyna allaqachon mavjud',
+                'specialty_id' => 'Joriy sessiyada bu fakultet, yo\'nalish, kurs va semestr uchun oyna allaqachon mavjud',
             ]);
         }
 

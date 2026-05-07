@@ -14,7 +14,7 @@
     @endphp
     <div class="py-4 px-3 sm:px-4 lg:px-6 w-full"
          x-data="retakeJournal({
-             saveUrl: '{{ route('admin.retake-journal.save-grade', $group->id) }}',
+             saveJoriyUrl: '{{ route('admin.retake-journal.save-joriy', $group->id) }}',
              gradeMustaqilUrl: '{{ route('admin.retake-journal.mustaqil-grade', $group->id) }}',
              vedomostUrl: '{{ route('admin.retake-journal.vedomost', $group->id) }}',
              csrf: '{{ csrf_token() }}',
@@ -83,36 +83,35 @@
                         @else
                             <div class="overflow-x-auto">
                                 <table class="min-w-full text-xs border-collapse rj-table">
-                                    <thead class="bg-gray-50 sticky top-0 z-20">
+                                    <thead class="bg-gray-50">
                                         <tr>
-                                            <th class="px-2 py-2 text-center font-semibold text-gray-600 sticky left-0 bg-gray-50 z-30 border-r border-gray-200" style="min-width:36px;">T/R</th>
-                                            <th class="px-2 py-2 text-left font-semibold text-gray-600 sticky bg-gray-50 z-30 border-r border-gray-200" style="left:36px;min-width:240px;">F.I.SH.</th>
-                                            <th class="px-2 py-2 text-center font-semibold text-amber-700 bg-amber-50 border-r border-gray-200" style="min-width:60px;" title="{{ __('Registrator tasdiqlagan oldingi joriy bahosi') }}">
-                                                Joriy<br><span class="text-[9px] font-normal text-gray-500">eski</span>
+                                            <th class="px-2 py-2 text-center font-semibold text-gray-600 border-r border-gray-200" style="min-width:36px;">T/R</th>
+                                            <th class="px-2 py-2 text-left font-semibold text-gray-600 border-r border-gray-200" style="min-width:240px;">F.I.SH.</th>
+                                            <th class="px-3 py-2 text-center font-semibold text-blue-800 bg-blue-50" style="min-width:120px;">
+                                                {{ __("Joriy nazorat (JN)") }}
+                                                <div class="text-[9px] font-normal text-gray-500 mt-0.5">{{ __("yagona baho") }}</div>
                                             </th>
-                                            <th class="px-2 py-2 text-center font-semibold text-amber-700 bg-amber-50 border-r border-gray-200" style="min-width:60px;" title="{{ __('Registrator tasdiqlagan oldingi mustaqil bahosi') }}">
-                                                Mustaqil<br><span class="text-[9px] font-normal text-gray-500">eski</span>
-                                            </th>
-                                            @foreach($dates as $d)
-                                                <th class="px-1 py-2 text-center font-semibold text-gray-700 border-r border-gray-200" style="min-width:48px;">
-                                                    <div class="text-[10px] leading-tight">{{ \Carbon\Carbon::parse($d)->format('d.m') }}</div>
-                                                </th>
-                                            @endforeach
-                                            <th class="px-2 py-2 text-center font-semibold text-blue-700 bg-blue-50" style="min-width:64px;">{{ __("O'rtacha") }}</th>
+                                            <th class="px-2 py-2 text-left font-semibold text-gray-600" style="min-width:160px;">{{ __("Qachon qo'yilgan") }}</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white">
                                     @foreach($applications as $i => $app)
                                         @php
                                             $student = $app->group->student ?? null;
-                                            $rowGrades = $gradesMap[$app->id] ?? [];
-                                            $rowGradeValues = collect($rowGrades)->map(fn ($g) => $g->grade)->filter(fn ($v) => $v !== null);
-                                            $avg = $rowGradeValues->isNotEmpty() ? (int) round($rowGradeValues->avg()) : null;
+                                            $val = $app->joriy_score;
                                             $attempt = $attemptsMap[$app->id] ?? 1;
+                                            $cellStyle = '';
+                                            if ($val !== null) {
+                                                $f = (float) $val;
+                                                if ($f < 60)        $cellStyle = 'color:#b91c1c;font-weight:700;';
+                                                elseif ($f < 75)    $cellStyle = 'color:#b45309;font-weight:600;';
+                                                elseif ($f < 90)    $cellStyle = 'color:#15803d;font-weight:600;';
+                                                else                $cellStyle = 'color:#0f5132;font-weight:700;';
+                                            }
                                         @endphp
                                         <tr class="border-b border-gray-100 hover:bg-gray-50" data-app-row="{{ $app->id }}">
-                                            <td class="px-2 py-1.5 text-center text-gray-600 sticky left-0 bg-white border-r border-gray-200">{{ $i + 1 }}</td>
-                                            <td class="px-2 py-1.5 sticky bg-white border-r border-gray-200" style="left:36px;">
+                                            <td class="px-2 py-1.5 text-center text-gray-600 border-r border-gray-200">{{ $i + 1 }}</td>
+                                            <td class="px-2 py-1.5 border-r border-gray-200">
                                                 <div class="flex items-center gap-1.5">
                                                     <span class="text-gray-900 font-medium truncate" style="max-width:170px;">{{ $student?->full_name ?? '—' }}</span>
                                                     @if($attempt === 1)
@@ -123,41 +122,25 @@
                                                 </div>
                                                 <span class="block text-[10px] text-gray-500">{{ $app->student_hemis_id }}</span>
                                             </td>
-                                            <td class="px-2 py-1.5 text-center text-amber-800 bg-amber-50/50 border-r border-gray-200 font-semibold">
-                                                {{ $app->previous_joriy_grade !== null ? rtrim(rtrim(number_format($app->previous_joriy_grade, 2, '.', ''), '0'), '.') : '—' }}
+                                            <td class="px-2 py-1 text-center bg-blue-50">
+                                                <input type="text"
+                                                       inputmode="numeric"
+                                                       maxlength="3"
+                                                       value="{{ $val !== null ? rtrim(rtrim(number_format($val, 2, '.', ''), '0'), '.') : '' }}"
+                                                       data-joriy-input="{{ $app->id }}"
+                                                       @if(!$canEdit) readonly @endif
+                                                       @change="saveJoriy($event, {{ $app->id }})"
+                                                       placeholder="—"
+                                                       class="w-20 px-2 py-1.5 text-center text-base font-bold bg-white border border-blue-200 rounded focus:ring-2 focus:ring-blue-400 focus:border-blue-500 outline-none {{ $canEdit ? '' : 'cursor-default bg-gray-50' }}"
+                                                       style="{{ $cellStyle }}">
                                             </td>
-                                            <td class="px-2 py-1.5 text-center text-amber-800 bg-amber-50/50 border-r border-gray-200 font-semibold">
-                                                {{ $app->previous_mustaqil_grade !== null ? rtrim(rtrim(number_format($app->previous_mustaqil_grade, 2, '.', ''), '0'), '.') : '—' }}
-                                            </td>
-                                            @foreach($dates as $d)
-                                                @php
-                                                    $cell = $rowGrades[$d] ?? null;
-                                                    $val = $cell?->grade;
-                                                    $cellStyle = '';
-                                                    if ($val !== null) {
-                                                        $f = (float) $val;
-                                                        if ($f < 60)        $cellStyle = 'color:#b91c1c;font-weight:700;';
-                                                        elseif ($f < 75)    $cellStyle = 'color:#b45309;font-weight:600;';
-                                                        elseif ($f < 90)    $cellStyle = 'color:#15803d;font-weight:600;';
-                                                        else                $cellStyle = 'color:#0f5132;font-weight:700;';
-                                                    }
-                                                @endphp
-                                                <td class="px-0 py-0 text-center border-r border-gray-200"
-                                                    data-app-id="{{ $app->id }}" data-date="{{ $d }}">
-                                                    <input type="text"
-                                                           inputmode="numeric"
-                                                           maxlength="3"
-                                                           value="{{ $val !== null ? rtrim(rtrim(number_format($val, 2, '.', ''), '0'), '.') : '' }}"
-                                                           data-grade-input="{{ $app->id }}"
-                                                           @if(!$canEdit) readonly @endif
-                                                           @change="saveCell($event, {{ $app->id }}, '{{ $d }}')"
-                                                           class="w-full px-0.5 py-1.5 text-xs text-center bg-transparent border-0 focus:ring-2 focus:ring-blue-300 focus:bg-white outline-none {{ $canEdit ? '' : 'cursor-default' }}"
-                                                           style="{{ $cellStyle }}">
-                                                </td>
-                                            @endforeach
-                                            <td class="px-2 py-1.5 text-center bg-blue-50 font-bold {{ $avg !== null && $avg < 60 ? 'text-red-700' : 'text-blue-700' }}"
-                                                data-avg-cell="{{ $app->id }}">
-                                                {{ $avg !== null ? $avg : '—' }}
+                                            <td class="px-2 py-1.5 text-[11px] text-gray-500">
+                                                @if($app->joriy_graded_at)
+                                                    {{ $app->joriy_graded_at->format('d.m.Y H:i') }}
+                                                    <span class="block text-[10px] text-gray-400">{{ $app->joriy_graded_by_name }}</span>
+                                                @else
+                                                    —
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
@@ -169,7 +152,7 @@
 
                     @if($canEdit && !$group->is_locked)
                         <div class="mt-2 text-[11px] text-gray-500">
-                            💡 {{ __("Bahoni katakka kiritib, boshqa joyga bosing — avtomatik saqlanadi. O'rtacha avtomatik yangilanadi.") }}
+                            💡 {{ __("JN bahosini katakka kiritib, boshqa joyga bosing — avtomatik saqlanadi. Oyna yopilish kunigacha tahrirlash mumkin.") }}
                         </div>
                     @endif
 
@@ -463,7 +446,7 @@
                                 <div class="rj-row-label">{{ __("Davr") }}</div>
                                 <div class="rj-row-value">
                                     {{ $group->start_date->format('d.m.Y') }} → {{ $group->end_date->format('d.m.Y') }}
-                                    <span class="text-[10px] text-gray-500 ml-1">({{ count($dates) }} {{ __("kun") }})</span>
+                                    <span class="text-[10px] text-gray-500 ml-1">({{ $group->start_date->diffInDays($group->end_date) + 1 }} {{ __("kun") }})</span>
                                 </div>
                             </div>
                         </div>
@@ -703,9 +686,9 @@
 
     @push('scripts')
         <script>
-            function retakeJournal({ saveUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode, weightsModalOpen, weights, generating }) {
+            function retakeJournal({ saveJoriyUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode, weightsModalOpen, weights, generating }) {
                 return {
-                    saveUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode,
+                    saveJoriyUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode,
                     weightsModalOpen, weights, generating,
                     saving: {},
 
@@ -763,24 +746,24 @@
                         }
                     },
 
-                    async saveCell(e, appId, date) {
+                    async saveJoriy(e, appId) {
                         if (!this.canEdit) return;
                         const input = e.target;
                         const raw = (input.value || '').trim();
-                        const grade = raw === '' ? null : Number(raw);
+                        const score = raw === '' ? null : Number(raw);
 
-                        if (grade !== null && (isNaN(grade) || grade < 0 || grade > 100)) {
+                        if (score !== null && (isNaN(score) || score < 0 || score > 100)) {
                             input.classList.add('bg-red-50');
                             alert("Baho 0 dan 100 gacha bo'lishi kerak");
                             return;
                         }
 
-                        const key = `${appId}|${date}`;
+                        const key = `j|${appId}`;
                         if (this.saving[key]) return;
                         this.saving[key] = true;
 
                         try {
-                            const res = await fetch(this.saveUrl, {
+                            const res = await fetch(this.saveJoriyUrl, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -789,8 +772,7 @@
                                 },
                                 body: JSON.stringify({
                                     application_id: appId,
-                                    lesson_date: date,
-                                    grade: grade,
+                                    score: score,
                                 }),
                             });
                             const data = await res.json();
@@ -802,7 +784,7 @@
                                 input.classList.add('bg-green-50');
                                 setTimeout(() => input.classList.remove('bg-green-50'), 600);
 
-                                const v = data.grade !== null ? Number(data.grade) : null;
+                                const v = data.score !== null ? Number(data.score) : null;
                                 input.style.color = '';
                                 input.style.fontWeight = '';
                                 if (v !== null) {
@@ -811,40 +793,12 @@
                                     else if (v < 90) { input.style.color = '#15803d'; input.style.fontWeight = '600'; }
                                     else { input.style.color = '#0f5132'; input.style.fontWeight = '700'; }
                                 }
-
-                                this.recomputeAverage(appId);
                             }
                         } catch (err) {
                             alert('Tarmoq xatosi');
                             input.classList.add('bg-red-50');
                         } finally {
                             delete this.saving[key];
-                        }
-                    },
-
-                    recomputeAverage(appId) {
-                        const inputs = document.querySelectorAll(`input[data-grade-input="${appId}"]`);
-                        const values = [];
-                        inputs.forEach(inp => {
-                            const raw = (inp.value || '').trim();
-                            if (raw !== '' && !isNaN(Number(raw))) values.push(Number(raw));
-                        });
-                        const cell = document.querySelector(`td[data-avg-cell="${appId}"]`);
-                        if (!cell) return;
-                        if (values.length === 0) {
-                            cell.textContent = '—';
-                            cell.classList.remove('text-red-700');
-                            cell.classList.add('text-blue-700');
-                            return;
-                        }
-                        const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
-                        cell.textContent = avg;
-                        if (avg < 60) {
-                            cell.classList.remove('text-blue-700');
-                            cell.classList.add('text-red-700');
-                        } else {
-                            cell.classList.remove('text-red-700');
-                            cell.classList.add('text-blue-700');
                         }
                     },
 

@@ -181,10 +181,10 @@ class RetakeGroupController extends Controller
             'application_ids' => 'required|array|min:1',
             'application_ids.*' => 'integer',
             'action' => 'required|in:save,publish',
-            // assessment_type registrator flaglari asosida service ichida auto-derive qilinadi
-            'assessment_type' => 'nullable|in:oske,test,oske_test,sinov_fan',
-            'oske_date' => 'nullable|date',
-            'test_date' => 'nullable|date|after_or_equal:oske_date',
+            // O'quv bo'limi qo'lda tanlaydi — majburiy
+            'assessment_type' => 'required|in:oske,test,oske_test,sinov_fan',
+            'oske_date' => 'nullable|date|required_if:assessment_type,oske,oske_test',
+            'test_date' => 'nullable|date|required_if:assessment_type,test,oske_test|after_or_equal:oske_date',
         ]);
 
         $publish = $data['action'] === 'publish';

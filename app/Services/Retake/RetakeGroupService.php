@@ -152,9 +152,8 @@ class RetakeGroupService
         $data['subject_id'] = $apps->pluck('subject_id')->countBy()->sortDesc()->keys()->first() ?: ($data['subject_id'] ?? null);
         $data['semester_id'] = $apps->pluck('semester_id')->countBy()->sortDesc()->keys()->first() ?: ($data['semester_id'] ?? null);
 
-        // Assessment turi — registrator belgilagan flaglar (has_oske/has_test/has_sinov) asosida
-        // ko'pchilik bo'yicha avtomatik aniqlanadi. O'quv bo'limi qo'lda tanlamaydi.
-        $data['assessment_type'] = $this->deriveAssessmentType($apps);
+        // Baholash turi (OSKE/TEST/OSKE+TEST/SINOV) — O'quv bo'limi qo'lda tanlaydi.
+        // assessment_type majburiy — validateAssessment() tekshiradi.
 
         $teacher = Teacher::find($data['teacher_id']);
         if (!$teacher) {

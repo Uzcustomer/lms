@@ -839,6 +839,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'index'])->name('index');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'show'])->name('show');
             Route::post('/{groupId}/save-grade', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'saveGrade'])->name('save-grade');
+            Route::post('/{groupId}/save-joriy', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'saveJoriy'])->name('save-joriy');
             Route::post('/{groupId}/mustaqil/grade', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'gradeMustaqil'])->name('mustaqil-grade');
             Route::get('/{groupId}/mustaqil/{submissionId}/download', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'downloadMustaqil'])->name('mustaqil-download');
             Route::post('/{groupId}/lock', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'lock'])->name('lock');
@@ -901,6 +902,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware([\App\Http\Middleware\AdminMultiGuardAuth::class, \Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin'])->group(function () {
         Route::get('/staff-evaluation', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'index'])->name('staff-evaluation.index');
         Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
+        Route::post('/staff-evaluation/generate-selected-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateSelectedQr'])->name('staff-evaluation.generate-selected-qr');
         Route::delete('/staff-evaluation/delete-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteAllQr'])->name('staff-evaluation.delete-all-qr');
         Route::get('/staff-evaluation/{teacher}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
         Route::post('/staff-evaluation/{teacher}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');

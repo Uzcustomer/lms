@@ -36,7 +36,16 @@ class RetakeJournalController extends Controller
         if (!$actor) abort(403);
 
         $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
-        $isTeacher = $actor instanceof Teacher;
+        // Staff rollari (o'quv bo'limi / registrator / dekan / test markazi) — hamma guruhlarni ko'radi
+        $isStaffViewer = $actor->hasAnyRole([
+            ProjectRole::ACADEMIC_DEPARTMENT->value,
+            ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+            ProjectRole::REGISTRAR_OFFICE->value,
+            ProjectRole::DEAN->value,
+            ProjectRole::TEST_CENTER->value,
+        ]);
+        // Faqat oddiy o'qituvchi bo'lsa (staff emas) — o'z guruhlari
+        $isOnlyTeacher = $actor instanceof Teacher && !$isAdmin && !$isStaffViewer;
 
         // Cascade filtrlar (talaba ma'lumotlari + fan)
         $studentFilters = [
@@ -58,8 +67,9 @@ class RetakeJournalController extends Controller
             ->withCount('applications as students_count')
             ->orderByDesc('start_date');
 
-        // O'qituvchi faqat o'zining guruhlarini ko'radi (admin emas)
-        if ($isTeacher && !$isAdmin) {
+        // Faqat oddiy o'qituvchi (staff emas) o'zining guruhlarini ko'radi.
+        // O'quv bo'limi / registrator / dekan / test markazi — barcha guruhlarni ko'radi.
+        if ($isOnlyTeacher) {
             $query->where('teacher_id', $actor->id);
         }
 
@@ -384,6 +394,54 @@ class RetakeJournalController extends Controller
     /**
      * Bitta katakni saqlash (AJAX).
      */
+    /**
+     * Joriy nazorat (JN) bahosini saqlash — har talaba uchun bitta yagona baho.
+     */
+    public function saveJoriy(Request $request, int $groupId): JsonResponse
+    {
+        $actor = RetakeAccess::currentStaff();
+        if (!$actor) {
+            return response()->json(['success' => false, 'message' => 'Avtorizatsiya talab qilinadi'], 403);
+        }
+
+        $data = $request->validate([
+            'application_id' => 'required|integer',
+            'score' => 'nullable|numeric|min:0|max:100',
+        ]);
+
+        $group = RetakeGroup::findOrFail($groupId);
+        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+
+        if (!$isAdmin) {
+            if (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor)) {
+                return response()->json(['success' => false, 'message' => 'Siz bu guruhga biriktirilmagansiz'], 403);
+            }
+        }
+
+        try {
+            $app = $this->service->saveJoriyScore(
+                $group,
+                (int) $data['application_id'],
+                $data['score'] !== null && $data['score'] !== '' ? (float) $data['score'] : null,
+                $actor instanceof Teacher ? $actor : new Teacher(['id' => 0, 'full_name' => $actor->name ?? 'admin']),
+                $isAdmin,
+            );
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first(),
+                'errors' => $e->errors(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'score' => $app->joriy_score,
+            'graded_by_name' => $app->joriy_graded_by_name,
+            'graded_at' => optional($app->joriy_graded_at)->format('Y-m-d H:i'),
+        ]);
+    }
+
     public function saveGrade(Request $request, int $groupId): JsonResponse
     {
         $actor = RetakeAccess::currentStaff();

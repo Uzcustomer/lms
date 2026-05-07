@@ -215,13 +215,9 @@ class RetakeApprovalController extends Controller
             'reason' => 'nullable|string|min:' . \App\Models\RetakeSetting::rejectReasonMinLength() . '|max:1000',
         ];
 
-        if ($role === 'registrar' && $request->input('decision') === 'approved') {
-            $rules['previous_joriy_grade'] = 'required|numeric|min:0|max:100';
-            $rules['previous_mustaqil_grade'] = 'required|numeric|min:0|max:100';
-            $rules['has_oske'] = 'sometimes|boolean';
-            $rules['has_test'] = 'sometimes|boolean';
-            $rules['has_sinov'] = 'sometimes|boolean';
-        }
+        // Eski Joriy/Mustaqil va OSKE/TEST/Sinov flaglar registrator tomonidan
+        // endi belgilanmaydi — O'quv bo'limi guruh yaratayotganda baholash turi
+        // tanlanadi.
 
         $data = $request->validate($rules);
 
@@ -243,13 +239,6 @@ class RetakeApprovalController extends Controller
                     $user,
                     $data['decision'],
                     $data['reason'] ?? null,
-                    [
-                        'previous_joriy_grade' => $data['previous_joriy_grade'] ?? null,
-                        'previous_mustaqil_grade' => $data['previous_mustaqil_grade'] ?? null,
-                        'has_oske' => (bool) ($data['has_oske'] ?? false),
-                        'has_test' => (bool) ($data['has_test'] ?? false),
-                        'has_sinov' => (bool) ($data['has_sinov'] ?? false),
-                    ],
                 );
             }
         } catch (ValidationException $e) {

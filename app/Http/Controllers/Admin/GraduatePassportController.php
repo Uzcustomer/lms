@@ -193,7 +193,14 @@ class GraduatePassportController extends Controller
         $path = storage_path('app/public/' . $passport->$field);
         if (!file_exists($path)) abort(404);
 
-        return response()->file($path);
+        // Talaba faylni qayta yuklasa, eski cache ko'rinmasligi uchun no-cache:
+        // URL bir xil bo'lgani uchun brauzer eski rasmni cache'dan ko'rsatadi —
+        // shuni oldini olamiz.
+        return response()->file($path, [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
     }
 
     public function approve($id)

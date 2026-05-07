@@ -4,25 +4,26 @@
     $titleText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
     $ctaText = $template['description'] ?: "QR kodni skanerlang va xodim xizmatini xolis baholang";
     $padX = 1.5;
-    $padY = 1.5;
-    $titleH = $titleText !== '' ? 4.5 : 0;
-    $gapV = $titleText !== '' ? 1.0 : 0;
-    $rowH = $h - $padY * 2 - $titleH - $gapV;
+    $padTop = 1.0;
+    $padBottom = 1.5;
+    $titleH = $titleText !== '' ? 4.0 : 0;
+    $gapV = $titleText !== '' ? 1.5 : 0;
+    $rowH = $h - $padTop - $padBottom - $titleH - $gapV;
     $rowW = $w - $padX * 2;
     $qrSize = max(15, min($rowH, $rowW * 0.55));
-    $leftW = max(8, $rowW - $qrSize - 1.5);
+    $leftW = max(8, min($rowW - $qrSize - 1.5, $rowW * 0.4));
     $logoSize = $qrSize * 0.18;
 @endphp
-<div id="{{ $cardId }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:{{ $padY }}mm {{ $padX }}mm; box-sizing:border-box; display:flex; flex-direction:column; font-family:Arial,sans-serif; background:white; overflow:hidden;">
+<div id="{{ $cardId }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:{{ $padTop }}mm {{ $padX }}mm {{ $padBottom }}mm; box-sizing:border-box; display:flex; flex-direction:column; font-family:Arial,sans-serif; background:white; overflow:hidden;">
     @if($titleText !== '')
-    <div style="height:{{ $titleH }}mm; display:flex; align-items:center; justify-content:center; text-align:center;">
+    <div style="height:{{ $titleH }}mm; display:flex; align-items:flex-start; justify-content:center; text-align:center;">
         <div style="font-size:2.0mm; color:#1e3a8a; font-weight:700; line-height:1.1; white-space:nowrap;">{{ $titleText }}</div>
     </div>
     <div style="height:{{ $gapV }}mm;"></div>
     @endif
-    <div style="flex:1 1 auto; display:flex; flex-direction:row; align-items:center; gap:1.5mm;">
+    <div style="flex:1 1 auto; display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:1.5mm;">
         <div style="width:{{ $leftW }}mm; display:flex; align-items:center; justify-content:center; text-align:center;">
-            <div style="font-size:2.4mm; color:#0f172a; font-weight:600; line-height:1.2;">
+            <div style="font-size:1.9mm; color:#0f172a; font-weight:600; line-height:1.2;">
                 {{ $ctaText }}
             </div>
         </div>

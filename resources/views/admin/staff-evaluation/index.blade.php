@@ -256,6 +256,14 @@
                         <label class="filter-label"><span class="fl-dot" style="background:#0f766e;"></span> Tavsif (ixtiyoriy)</label>
                         <textarea name="description" rows="2" class="filter-input" style="width:100%;height:auto;padding:8px 10px;" maxlength="1000" placeholder="QR kod tagida ko'rinadigan qisqa matn">{{ old('description', $template['description']) }}</textarea>
                     </div>
+                    <div>
+                        <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Eni (mm)</label>
+                        <input type="number" step="0.1" min="20" max="300" name="width_mm" value="{{ old('width_mm', $template['width_mm']) }}" class="filter-input" style="width:100%;">
+                    </div>
+                    <div>
+                        <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Bo'yi (mm)</label>
+                        <input type="number" step="0.1" min="20" max="300" name="height_mm" value="{{ old('height_mm', $template['height_mm']) }}" class="filter-input" style="width:100%;">
+                    </div>
                     <div class="md:col-span-2 flex items-center gap-2">
                         <label class="flex items-center gap-2 text-sm text-slate-700">
                             <input type="checkbox" name="show_logo" value="1" class="cb-styled" {{ $template['show_logo'] ? 'checked' : '' }}>
@@ -289,54 +297,56 @@
                     <div class="text-xs text-slate-500 mt-1">{{ $template['description'] }}</div>
                     @endif
                 </div>
+                <div class="bg-white rounded-lg border p-3 md:col-span-2">
+                    <div class="text-[11px] uppercase font-bold text-slate-400 tracking-wide mb-1">O'lcham</div>
+                    <div class="font-semibold text-slate-800">{{ rtrim(rtrim(number_format($template['width_mm'], 1, '.', ''), '0'), '.') }} mm × {{ rtrim(rtrim(number_format($template['height_mm'], 1, '.', ''), '0'), '.') }} mm</div>
+                </div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-4">
             @forelse($teachers as $teacher)
             @if($teacher->eval_qr_token)
-            <div class="border rounded-lg overflow-hidden shadow-sm bg-white">
-                <div id="card-{{ $teacher->id }}" style="padding:32px 24px; text-align:center; font-family:Arial,sans-serif; background:white;">
-                    @if($template['title'])
-                    <div style="font-size:14px; color:#0f766e; font-weight:700; margin-bottom:10px;">
-                        {{ $template['title'] }}
-                    </div>
-                    @endif
+            <div class="border rounded-lg overflow-hidden shadow-sm bg-white flex flex-col items-center">
+                @php
+                    $w = $template['width_mm'];
+                    $h = $template['height_mm'];
+                    $qrSize = max(20, min($w, $h) * 0.55);
+                    $logoSize = $qrSize * 0.22;
+                @endphp
+                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:2mm; box-sizing:border-box; display:flex; flex-direction:row; align-items:center; gap:2mm; font-family:Arial,sans-serif; background:white; overflow:hidden;">
                     {{-- QR kod with logo --}}
-                    <div style="display:inline-block; padding:10px; border:2px solid #e5e7eb; border-radius:12px; margin-bottom:16px; position:relative;">
-                        {!! QrCode::size(180)->errorCorrection('H')->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                    <div style="flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;">
+                        <div style="width:{{ $qrSize }}mm; height:{{ $qrSize }}mm; display:flex; align-items:center; justify-content:center;">
+                            {!! str_replace('<svg ', '<svg style="width:100%;height:100%;display:block;" ', QrCode::size(300)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token))) !!}
+                        </div>
                         @if($template['show_logo'])
                         <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
-                            <div style="background:white; border-radius:50%; padding:4px; display:flex;">
-                                <img src="{{ asset('logo.png') }}" alt="Logo" style="width:42px; height:42px; border-radius:50%;">
+                            <div style="background:white; border-radius:50%; padding:0.3mm; display:flex;">
+                                <img src="{{ asset('logo.png') }}" alt="Logo" style="width:{{ $logoSize }}mm; height:{{ $logoSize }}mm; border-radius:50%;">
                             </div>
                         </div>
                         @endif
                     </div>
                     {{-- Ma'lumotlar --}}
-                    @if($template['institution'])
-                    <div style="font-size:13px; color:#1e3a8a; font-weight:700; line-height:1.4; margin-bottom:4px;">
-                        {{ $template['institution'] }}
+                    <div style="flex:1 1 auto; min-width:0; text-align:left; line-height:1.2;">
+                        @if($template['title'])
+                        <div style="font-size:2.4mm; color:#0f766e; font-weight:700; margin-bottom:0.6mm;">{{ $template['title'] }}</div>
+                        @endif
+                        @if($template['institution'])
+                        <div style="font-size:2.4mm; color:#1e3a8a; font-weight:700; margin-bottom:0.4mm;">{{ $template['institution'] }}</div>
+                        @endif
+                        @if($template['branch'])
+                        <div style="font-size:2.2mm; color:#1e3a8a; margin-bottom:0.8mm;">{{ $template['branch'] }}</div>
+                        @endif
+                        @if($template['position_label'])
+                        <div style="font-size:2mm; color:#6b7280; margin-bottom:0.3mm;">{{ $template['position_label'] }}</div>
+                        @endif
+                        <div style="font-size:2.6mm; color:#111827; font-weight:700;">{{ $teacher->full_name }}</div>
+                        @if($template['description'])
+                        <div style="font-size:1.9mm; color:#6b7280; margin-top:0.6mm;">{{ $template['description'] }}</div>
+                        @endif
                     </div>
-                    @endif
-                    @if($template['branch'])
-                    <div style="font-size:12px; color:#1e3a8a; margin-bottom:12px;">
-                        {{ $template['branch'] }}
-                    </div>
-                    @endif
-                    @if($template['position_label'])
-                    <div style="font-size:12px; color:#6b7280; margin-bottom:4px;">
-                        {{ $template['position_label'] }}
-                    </div>
-                    @endif
-                    <div style="font-size:15px; color:#111827; font-weight:700;">
-                        {{ $teacher->full_name }}
-                    </div>
-                    @if($template['description'])
-                    <div style="font-size:11px; color:#6b7280; margin-top:10px; line-height:1.4;">
-                        {{ $template['description'] }}
-                    </div>
-                    @endif
                 </div>
                 {{-- Yuklab olish tugmasi --}}
                 <div class="border-t px-4 py-3 text-center bg-gray-50">

@@ -14,6 +14,7 @@ class RetakeApplicationWindow extends Model
         'session_id',
         'specialty_id',
         'specialty_name',
+        'department_hemis_id',
         'level_code',
         'level_name',
         'semester_code',

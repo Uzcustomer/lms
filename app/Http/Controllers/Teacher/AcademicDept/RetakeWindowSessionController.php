@@ -323,23 +323,31 @@ class RetakeWindowSessionController extends Controller
 
         $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
 
+        // Bevosita department_hemis_id'dan fakultet nomi (window'da saqlangan)
+        $deptIdToName = Department::pluck('name', 'department_hemis_id');
+        // Eski yozuvlar uchun fallback: specialty_hemis_id orqali (lekin xato bo'lishi mumkin)
         $specialtyToFaculty = Specialty::query()
             ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
             ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
             ->pluck('faculty_name', 'sp_hemis_id');
 
-        // Batch'dagi qo'shimcha fakultetlar — har bir oynaning creation_batch_id bo'yicha
-        // shu batchda yaratilgan boshqa oynalar va ularning fakultetlari nomi
+        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyToFaculty) {
+            if (!empty($w->department_hemis_id) && $deptIdToName->has($w->department_hemis_id)) {
+                return $deptIdToName[$w->department_hemis_id];
+            }
+            return $specialtyToFaculty[$w->specialty_id] ?? null;
+        };
+
+        // Batch'dagi qo'shni fakultetlar
         $batchIds = $windows->pluck('creation_batch_id')->filter()->unique()->values();
         $batchFaculties = collect();
         if ($batchIds->isNotEmpty()) {
             $batchSiblings = \App\Models\RetakeApplicationWindow::query()
                 ->whereIn('creation_batch_id', $batchIds)
-                ->get(['id', 'creation_batch_id', 'specialty_id']);
+                ->get(['id', 'creation_batch_id', 'specialty_id', 'department_hemis_id']);
             $batchFaculties = $batchSiblings->groupBy('creation_batch_id')
-                ->map(function ($siblings) use ($specialtyToFaculty) {
-                    return $siblings->pluck('specialty_id')
-                        ->map(fn ($spId) => $specialtyToFaculty[$spId] ?? null)
+                ->map(function ($siblings) use ($resolveFaculty) {
+                    return $siblings->map(fn ($s) => $resolveFaculty($s))
                         ->filter()
                         ->unique()
                         ->values()
@@ -353,9 +361,16 @@ class RetakeWindowSessionController extends Controller
         $specialties = Specialty::orderBy('name')
             ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id']);
 
+        // Har bir qatorga to'g'ri fakultet nomi map qilamiz
+        $rowFaculties = collect();
+        foreach ($windows as $w) {
+            $rowFaculties[$w->id] = $resolveFaculty($w);
+        }
+
         return view('teacher.academic-dept.retake-sessions.show', [
             'session' => $session,
             'windows' => $windows,
+            'rowFaculties' => $rowFaculties,
             'specialtyToFaculty' => $specialtyToFaculty,
             'batchFaculties' => $batchFaculties,
             'departments' => $departments,

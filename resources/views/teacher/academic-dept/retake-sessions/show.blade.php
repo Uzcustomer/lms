@@ -193,9 +193,11 @@
         <div x-show="showCreate" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showCreate = false">
             <div class="flex items-center justify-center min-h-screen p-3">
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
-                <div class="relative bg-white rounded-xl shadow-xl w-full z-10 overflow-y-auto" style="max-width:1100px;max-height:min(1000px,92vh);">
-                    {{-- LMS-style header --}}
-                    <div class="px-5 py-3 border-b border-gray-100 sticky top-0 z-20" style="background:linear-gradient(135deg,#1a3268,#2b5ea7);">
+                <div class="relative bg-white rounded-xl shadow-xl w-full z-10 overflow-y-auto"
+                     style="max-width:1100px; max-height:1000px; max-height:min(1000px, 92vh);">
+                    {{-- LMS-style header (sticky, eng yuqori z-index) --}}
+                    <div class="px-5 py-3 sticky top-0"
+                         style="background:linear-gradient(135deg,#1a3268,#2b5ea7); z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-base font-bold text-white">{{ __("Yangi qabul oynasi") }}</h3>

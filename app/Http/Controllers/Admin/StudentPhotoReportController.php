@@ -666,6 +666,7 @@ class StudentPhotoReportController extends Controller
 
         try {
             $response = Http::timeout($timeout)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->post($serviceUrl . '/compare', [
                     'image1' => $student->image,
@@ -674,10 +675,11 @@ class StudentPhotoReportController extends Controller
         } catch (\Throwable $e) {
             Log::error('Face compare service unreachable', [
                 'photo_id' => $photo->id,
+                'service_url' => $serviceUrl,
                 'error' => $e->getMessage(),
             ]);
             return response()->json([
-                'error' => 'AI servisga ulanib bo\'lmadi: ' . $e->getMessage(),
+                'error' => 'AI servisga ulanib bo\'lmadi. Iltimos, keyinroq qayta urinib ko\'ring yoki administrator bilan bog\'laning.',
             ], 503);
         }
 
@@ -688,7 +690,7 @@ class StudentPhotoReportController extends Controller
                 'body' => $response->body(),
             ]);
             return response()->json([
-                'error' => 'AI servis xatoligi: ' . ($response->json('detail') ?? $response->body()),
+                'error' => 'AI servis vaqtinchalik javob bermayapti. Iltimos, biroz kutib qayta urinib ko\'ring.',
             ], 502);
         }
 
@@ -726,6 +728,7 @@ class StudentPhotoReportController extends Controller
 
         try {
             $response = Http::timeout($timeout)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->post($serviceUrl . '/quality-check', [
                     'image' => asset($photo->photo_path),
@@ -733,9 +736,12 @@ class StudentPhotoReportController extends Controller
         } catch (\Throwable $e) {
             Log::error('Quality service unreachable', [
                 'photo_id' => $photo->id,
+                'service_url' => $serviceUrl,
                 'error' => $e->getMessage(),
             ]);
-            return response()->json(['error' => 'AI servisga ulanib bo\'lmadi: ' . $e->getMessage()], 503);
+            return response()->json([
+                'error' => 'AI servisga ulanib bo\'lmadi. Iltimos, keyinroq qayta urinib ko\'ring yoki administrator bilan bog\'laning.',
+            ], 503);
         }
 
         if (!$response->successful()) {
@@ -745,7 +751,7 @@ class StudentPhotoReportController extends Controller
                 'body' => $response->body(),
             ]);
             return response()->json([
-                'error' => 'AI servis xatoligi: ' . ($response->json('detail') ?? $response->body()),
+                'error' => 'AI servis vaqtinchalik javob bermayapti. Iltimos, biroz kutib qayta urinib ko\'ring.',
             ], 502);
         }
 

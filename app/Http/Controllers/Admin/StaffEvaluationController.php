@@ -87,6 +87,39 @@ class StaffEvaluationController extends Controller
         ))->with('success', "{$count} ta xodim uchun QR kod yaratildi.");
     }
 
+    public function generateSelectedQr(Request $request)
+    {
+        $request->validate([
+            'teacher_ids' => 'required|array|min:1',
+            'teacher_ids.*' => 'integer|exists:teachers,id',
+        ]);
+
+        $count = 0;
+        $skipped = 0;
+        Teacher::whereIn('id', $request->teacher_ids)
+            ->where('is_active', true)
+            ->chunkById(100, function ($teachers) use (&$count, &$skipped) {
+                foreach ($teachers as $teacher) {
+                    if ($teacher->eval_qr_token) {
+                        $skipped++;
+                        continue;
+                    }
+                    $teacher->update(['eval_qr_token' => Str::random(32)]);
+                    $count++;
+                }
+            });
+
+        $message = "{$count} ta xodim uchun QR kod yaratildi.";
+        if ($skipped > 0) {
+            $message .= " ({$skipped} ta xodim avval QR kodi bo'lgani uchun o'tkazib yuborildi.)";
+        }
+
+        return redirect()->route('admin.staff-evaluation.index', array_merge(
+            $request->only('search'),
+            ['tab' => 'qr']
+        ))->with('success', $message);
+    }
+
     public function deleteAllQr()
     {
         $teachers = Teacher::whereNotNull('eval_qr_token')->get();

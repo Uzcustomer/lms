@@ -102,21 +102,27 @@ class RetakeWindowController extends Controller
             $rowFaculties[$w->id] = $resolveFaculty($w);
         }
 
-        // Bulk batch'dagi qo'shni fakultetlar
-        $batchIds = $windows->pluck('creation_batch_id')->filter()->unique()->values();
+        // Bulk batch'dagi qo'shni fakultetlar (migration mavjud bo'lganda)
         $batchFaculties = collect();
-        if ($batchIds->isNotEmpty()) {
-            $batchSiblings = RetakeApplicationWindow::query()
-                ->whereIn('creation_batch_id', $batchIds)
-                ->get(['id', 'creation_batch_id', 'specialty_id', 'department_hemis_id']);
-            $batchFaculties = $batchSiblings->groupBy('creation_batch_id')
-                ->map(function ($siblings) use ($resolveFaculty) {
-                    return $siblings->map(fn ($s) => $resolveFaculty($s))
-                        ->filter()
-                        ->unique()
-                        ->values()
-                        ->all();
-                });
+        $hasBatchCol = \Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', 'creation_batch_id');
+        $hasDeptCol = \Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', 'department_hemis_id');
+        if ($hasBatchCol) {
+            $batchIds = $windows->pluck('creation_batch_id')->filter()->unique()->values();
+            if ($batchIds->isNotEmpty()) {
+                $cols = ['id', 'creation_batch_id', 'specialty_id'];
+                if ($hasDeptCol) $cols[] = 'department_hemis_id';
+                $batchSiblings = RetakeApplicationWindow::query()
+                    ->whereIn('creation_batch_id', $batchIds)
+                    ->get($cols);
+                $batchFaculties = $batchSiblings->groupBy('creation_batch_id')
+                    ->map(function ($siblings) use ($resolveFaculty) {
+                        return $siblings->map(fn ($s) => $resolveFaculty($s))
+                            ->filter()
+                            ->unique()
+                            ->values()
+                            ->all();
+                    });
+            }
         }
 
         // Form uchun ma'lumotlar — faqat fakultetlar (structure_type_code = 11)

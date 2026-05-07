@@ -190,7 +190,7 @@
                           action="{{ route('admin.retake-windows.store') }}"
                           x-data="windowForm({
                               departments: @js($departments->map(fn($d) => ['id' => (string)$d->department_hemis_id, 'name' => $d->name])->values()->all()),
-                              specialties: @js($specialties->map(fn($s) => ['id' => (string)$s->specialty_hemis_id, 'name' => $s->name, 'department_hemis_id' => (string)($s->department_hemis_id ?? '')])->values()->all()),
+                              specialties: @js($specialties->map(fn($s) => ['pk' => $s->id, 'id' => (string)$s->specialty_hemis_id, 'name' => $s->name, 'department_hemis_id' => (string)($s->department_hemis_id ?? '')])->values()->all()),
                               levels: @js(collect($levels)->map(fn($lv) => ['code' => $lv['code'], 'name' => $lv['name']])->all()),
                               semesters: @js(collect($semesters)->map(fn($s) => ['code' => $s['code'], 'name' => $s['name']])->all()),
                           })"
@@ -229,14 +229,14 @@
                             </div>
                             <div class="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2 space-y-1 bg-white">
                                 <p x-show="departmentIds.length === 0" class="text-xs text-gray-400 px-1 py-2">— {{ __("Avval fakultet tanlang") }} —</p>
-                                <template x-for="sp in filteredSpecialties" :key="sp.id">
+                                <template x-for="sp in filteredSpecialties" :key="sp.pk">
                                     <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-gray-50 px-1 py-0.5 rounded cursor-pointer">
-                                        <input type="checkbox" :value="sp.id" x-model="specialtyIds" class="rounded">
+                                        <input type="checkbox" :value="sp.pk" x-model="specialtyPks" class="rounded">
                                         <span x-text="sp.name"></span>
                                     </label>
                                 </template>
                             </div>
-                            <p class="text-[10px] text-gray-500 mt-1" x-text="specialtyIds.length + ' {{ __("ta tanlangan") }}'"></p>
+                            <p class="text-[10px] text-gray-500 mt-1" x-text="specialtyPks.length + ' {{ __("ta tanlangan") }}'"></p>
                         </div>
 
                         {{-- Kurs — multi-select --}}
@@ -275,9 +275,9 @@
                             </div>
                         </div>
 
-                        {{-- Hidden inputs (form submit) --}}
-                        <template x-for="id in specialtyIds" :key="'sp-'+id">
-                            <input type="hidden" name="specialty_ids[]" :value="id">
+                        {{-- Hidden inputs (form submit) — Specialty primary key (id) yuboriladi --}}
+                        <template x-for="pk in specialtyPks" :key="'sp-'+pk">
+                            <input type="hidden" name="specialty_pks[]" :value="pk">
                         </template>
                         <template x-for="code in levelCodes" :key="'lv-'+code">
                             <input type="hidden" name="level_codes[]" :value="code">
@@ -361,7 +361,7 @@
                     allLevels: levels || [],
                     allSemesters: semesters || [],
                     departmentIds: [],
-                    specialtyIds: [],
+                    specialtyPks: [],
                     levelCodes: [],
                     semesterCodes: [],
 
@@ -378,7 +378,7 @@
                     },
 
                     get combinationCount() {
-                        const sp = this.specialtyIds.length;
+                        const sp = this.specialtyPks.length;
                         const lv = this.levelCodes.length;
                         const sm = this.hasXalqaroSelected ? Math.max(this.semesterCodes.length, 0) : 1;
                         if (sp === 0 || lv === 0) return 0;
@@ -389,14 +389,14 @@
                     toggleAllDepartments() {
                         if (this.departmentIds.length === this.allDepartments.length) {
                             this.departmentIds = [];
-                            this.specialtyIds = [];
+                            this.specialtyPks = [];
                         } else {
                             this.departmentIds = this.allDepartments.map(d => d.id);
                         }
                     },
                     toggleAllSpecialties() {
-                        const all = this.filteredSpecialties.map(sp => sp.id);
-                        this.specialtyIds = this.specialtyIds.length === all.length ? [] : all;
+                        const all = this.filteredSpecialties.map(sp => sp.pk);
+                        this.specialtyPks = this.specialtyPks.length === all.length ? [] : all;
                     },
                     toggleAllLevels() {
                         this.levelCodes = this.levelCodes.length === this.allLevels.length
@@ -409,10 +409,10 @@
 
                     prepareSubmit(e) {
                         // Yo'nalishlardan faqat tanlangan fakultetlar ostidagilarni qoldirish
-                        const allowed = this.filteredSpecialties.map(sp => String(sp.id));
-                        this.specialtyIds = this.specialtyIds.filter(id => allowed.includes(String(id)));
+                        const allowed = this.filteredSpecialties.map(sp => Number(sp.pk));
+                        this.specialtyPks = this.specialtyPks.filter(pk => allowed.includes(Number(pk)));
 
-                        if (this.specialtyIds.length === 0 || this.levelCodes.length === 0 ||
+                        if (this.specialtyPks.length === 0 || this.levelCodes.length === 0 ||
                             (this.hasXalqaroSelected && this.semesterCodes.length === 0)) {
                             e.preventDefault();
                             alert("{{ __("Iltimos, kamida bittadan yo'nalish va kurs tanlang") }}");

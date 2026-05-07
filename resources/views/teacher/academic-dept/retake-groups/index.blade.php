@@ -427,16 +427,27 @@
                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                             </div>
 
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Boshlanish") }}</label>
-                                <input type="date" name="start_date" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <p class="text-[10px] text-gray-500 mt-0.5">{{ __("Bo'sh qoldirilsa qabul oynasidan olinadi") }}</p>
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Tugash") }}</label>
-                                <input type="date" name="end_date" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                                <p class="text-[10px] text-gray-500 mt-0.5">{{ __("Bo'sh qoldirilsa qabul oynasidan olinadi") }}</p>
+                            {{-- Sanalar — qabul oynasidan avtomatik olinadi, tahrirlanmaydi --}}
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">
+                                    {{ __("O'qish davri") }}
+                                    <span class="text-[10px] font-normal text-gray-500">({{ __("qabul oynasidan avtomatik") }})</span>
+                                </label>
+                                <div class="px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2"
+                                     x-show="windowDates" x-cloak>
+                                    <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                    <span class="font-medium text-gray-800" x-text="windowDates?.start_date"></span>
+                                    <span class="text-gray-400">→</span>
+                                    <span class="font-medium text-gray-800" x-text="windowDates?.end_date"></span>
+                                </div>
+                                <div class="px-3 py-2 text-sm bg-amber-50 border border-amber-200 rounded-lg text-amber-800"
+                                     x-show="!windowDates" x-cloak>
+                                    ⚠️ {{ __("Qabul oynasi sanasi topilmadi") }}
+                                </div>
+                                <input type="hidden" name="start_date" :value="windowDates?.start_date || ''">
+                                <input type="hidden" name="end_date" :value="windowDates?.end_date || ''">
                             </div>
                         </div>
 
@@ -536,11 +547,15 @@
                             <button type="button" @click="closeFormation()"
                                     class="flex-1 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">{{ __("Bekor qilish") }}</button>
                             <button type="submit" name="action" value="save"
-                                    class="flex-1 px-3 py-2 text-sm bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">
+                                    :disabled="!windowDates"
+                                    :class="!windowDates ? 'bg-gray-300 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600'"
+                                    class="flex-1 px-3 py-2 text-sm text-white rounded-lg">
                                 {{ __("Saqlash (draft)") }}
                             </button>
                             <button type="submit" name="action" value="publish"
-                                    class="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                    :disabled="!windowDates"
+                                    :class="!windowDates ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+                                    class="flex-1 px-3 py-2 text-sm text-white rounded-lg">
                                 {{ __("Tasdiqlash") }}
                             </button>
                         </div>
@@ -563,6 +578,7 @@
                     assessmentType: '',
                     oskeDate: '',
                     testDate: '',
+                    windowDates: null, // {start_date, end_date} — qabul oynasidan
 
                     // Bulk tanlash uchun (yassi jadvaldagi arizalar)
                     selectedApps: [], // [{id, subject_id, subject_name, semester_id, semester_name}]
@@ -617,6 +633,7 @@
                         this.assessmentType = '';
                         this.oskeDate = '';
                         this.testDate = '';
+                        this.windowDates = null;
                         this.showFormation = true;
 
                         const url = `${this.lookupUrl}?subject_name=${encodeURIComponent(data.subject_name)}&semester_name=${encodeURIComponent(data.semester_name)}`;
@@ -624,6 +641,7 @@
                         const json = await res.json();
                         this.applications = json.applications || [];
                         this.teachers = json.teachers || [];
+                        this.windowDates = json.windowDates || null;
                         if (preselectedIds && preselectedIds.length > 0) {
                             const set = new Set(preselectedIds.map(Number));
                             this.selected = this.applications

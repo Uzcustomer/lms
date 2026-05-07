@@ -194,6 +194,23 @@ class RetakeGroupController extends Controller
             ];
         });
 
+        // Qabul oynasidagi sanalar — guruh shu vaqtga moslashadi.
+        // Arizalar bir nechta oyna ostida bo'lishi mumkin (turli fakultet/kurs);
+        // shuning uchun majority bo'yicha eng ko'p uchragan oynani olamiz.
+        $windowDates = null;
+        $windowIds = $apps->pluck('group.window_id')->filter();
+        if ($windowIds->isNotEmpty()) {
+            $countByWindow = $windowIds->countBy()->sortDesc();
+            $topWindowId = $countByWindow->keys()->first();
+            $window = \App\Models\RetakeApplicationWindow::find($topWindowId);
+            if ($window) {
+                $windowDates = [
+                    'start_date' => $window->start_date->format('Y-m-d'),
+                    'end_date' => $window->end_date->format('Y-m-d'),
+                ];
+            }
+        }
+
         // O'qituvchilar — barcha aktiv teacher'lar (kelajakda fakultetga moslashtirsa bo'ladi)
         $teachers = Teacher::query()
             ->where('status', true)
@@ -204,6 +221,7 @@ class RetakeGroupController extends Controller
         return response()->json([
             'applications' => $applications,
             'teachers' => $teachers,
+            'windowDates' => $windowDates,
         ]);
     }
 

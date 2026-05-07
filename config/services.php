@@ -64,6 +64,7 @@ return [
         'ssh_port' => env('MOODLE_SSH_PORT', 22),
         'push_script' => env('MOODLE_PUSH_SCRIPT', '/opt/scripts/moodle_to_lmsttatf_push.php'),
         'sync_secret' => env('MOODLE_SYNC_SECRET'),
+        'pull_secret' => env('MOODLE_PULL_SECRET'),
 
         // local_hemisexport plugin web service
         'ws_url' => env('MOODLE_WS_URL'),

@@ -154,15 +154,26 @@ class RetakeWindowController extends Controller
 
         $data = $request->validate([
             'session_id' => 'required|integer|exists:retake_window_sessions,id',
-            'specialty_pks' => 'required|array|min:1',
+            // Yangi format: "fid|specialty_pk|level_code" triplet'lari.
+            // Har triplet bitta (fakultet, yo'nalish, kurs) kombinatsiyasi.
+            'assignments' => 'nullable|array|min:1',
+            'assignments.*' => ['string', 'regex:/^\d+\|\d+\|[A-Za-z0-9_-]+$/'],
+            // Eski format (orqaga moslik): yo'nalishlar va kurslar yassi ro'yxat.
+            'specialty_pks' => 'nullable|array',
             'specialty_pks.*' => 'integer',
-            'level_codes' => 'required|array|min:1',
+            'level_codes' => 'nullable|array',
             'level_codes.*' => 'string|max:10',
             'semester_codes' => 'nullable|array',
             'semester_codes.*' => 'string|max:50',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
+
+        if (empty($data['assignments']) && empty($data['specialty_pks'])) {
+            return redirect()->back()->withErrors([
+                'assignments' => 'Kamida bitta fakultet, yo\'nalish va kurs tanlang',
+            ])->withInput();
+        }
 
         $session = \App\Models\RetakeWindowSession::findOrFail($data['session_id']);
         if ($session->is_closed) {
@@ -171,9 +182,52 @@ class RetakeWindowController extends Controller
             ])->withInput();
         }
 
-        // Tanlangan yo'nalishlar (PK orqali — bir aniqlik) va ularning fakultetlari
-        $specialties = Specialty::whereIn('id', $data['specialty_pks'])
-            ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id']);
+        // (fid, specialty_pk, level_code) triplet'larni normalizatsiya.
+        // Eski format kelgan bo'lsa, har spec.dept × har level → triplet.
+        $triplets = [];
+        if (!empty($data['assignments'])) {
+            foreach ($data['assignments'] as $raw) {
+                [$fid, $spPk, $lvCode] = explode('|', $raw, 3);
+                $triplets[] = [
+                    'fid' => (string) $fid,
+                    'specialty_pk' => (int) $spPk,
+                    'level_code' => (string) $lvCode,
+                ];
+            }
+        } else {
+            if (empty($data['level_codes'])) {
+                return redirect()->back()->withErrors([
+                    'level_codes' => 'Kursni tanlang',
+                ])->withInput();
+            }
+            $legacySpecs = Specialty::whereIn('id', $data['specialty_pks'])
+                ->get(['id', 'department_hemis_id']);
+            foreach ($legacySpecs as $sp) {
+                foreach ($data['level_codes'] as $lvCode) {
+                    $triplets[] = [
+                        'fid' => (string) $sp->department_hemis_id,
+                        'specialty_pk' => (int) $sp->id,
+                        'level_code' => (string) $lvCode,
+                    ];
+                }
+            }
+        }
+
+        if (empty($triplets)) {
+            return redirect()->back()->withErrors([
+                'assignments' => 'Kombinatsiyalar bo\'sh',
+            ])->withInput();
+        }
+
+        // Yo'nalishlar va fakultet nomlarini bir martagina yuklab olamiz.
+        $specPks = collect($triplets)->pluck('specialty_pk')->unique()->values()->all();
+        $specialties = Specialty::whereIn('id', $specPks)
+            ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id'])
+            ->keyBy('id');
+
+        $depHemisIds = collect($triplets)->pluck('fid')->unique()->values()->all();
+        $departments = Department::whereIn('department_hemis_id', $depHemisIds)
+            ->pluck('name', 'department_hemis_id');
 
         $allLevels = config('app.retake_levels')
             ?? collect(Semester::query()
@@ -187,11 +241,7 @@ class RetakeWindowController extends Controller
         $levelMap = collect($allLevels)->keyBy(fn ($lv) => is_array($lv) ? $lv['code'] : $lv->code)
             ->map(fn ($lv) => is_array($lv) ? $lv['name'] : $lv->name);
 
-        // Xalqaro fakultet bormi — semester majburligini tekshirish
-        $depHemisIds = $specialties->pluck('department_hemis_id')->unique()->toArray();
-        $departments = Department::whereIn('department_hemis_id', $depHemisIds)
-            ->pluck('name', 'department_hemis_id');
-
+        // Xalqaro fakultet ishtirok etganmi — semester majburligi
         $hasXalqaro = $departments->contains(fn ($n) => preg_match('/xalqaro/i', (string) $n));
         if ($hasXalqaro && empty($data['semester_codes'])) {
             return redirect()->back()->withErrors([
@@ -204,10 +254,6 @@ class RetakeWindowController extends Controller
             $semesterMap = Semester::whereIn('code', $data['semester_codes'])
                 ->pluck('name', 'code');
         }
-        // Agar xalqaro yo'q bo'lsa, bitta bo'sh semester combo bilan iteratsiya qilamiz
-        $semesterCombos = $hasXalqaro
-            ? collect($data['semester_codes'])->map(fn ($c) => ['code' => $c, 'name' => $semesterMap->get($c) ?? $c])->all()
-            : [['code' => '', 'name' => '']];
 
         /** @var Teacher $user */
         $user = RetakeAccess::currentStaff();
@@ -215,38 +261,44 @@ class RetakeWindowController extends Controller
         $skipped = 0;
         $firstError = null;
 
-        // Bulk operatsiya uchun bitta umumiy batch ID — natija jadvalida shu
-        // batch ostidagi barcha fakultetlarni ko'rsatish uchun ishlatiladi.
+        // Bulk operatsiya uchun bitta umumiy batch ID
         $batchId = (string) \Illuminate\Support\Str::uuid();
 
-        DB::transaction(function () use ($data, $specialties, $levelMap, $departments, $semesterCombos, $user, &$created, &$skipped, &$firstError, $hasXalqaro, $batchId) {
-            foreach ($specialties as $sp) {
-                $depName = (string) ($departments[$sp->department_hemis_id] ?? '');
-                $isSpecXalqaro = preg_match('/xalqaro/i', $depName) === 1;
-                // Xalqaro bo'lmagan yo'nalishlar uchun semester='' qo'llanadi
-                $combos = ($hasXalqaro && $isSpecXalqaro) ? $semesterCombos : [['code' => '', 'name' => '']];
+        DB::transaction(function () use ($data, $triplets, $specialties, $levelMap, $departments, $semesterMap, $user, &$created, &$skipped, &$firstError, $batchId) {
+            foreach ($triplets as $t) {
+                $sp = $specialties->get($t['specialty_pk']);
+                if (!$sp) {
+                    continue;
+                }
+                $depName = (string) ($departments[$t['fid']] ?? '');
+                $isXalqaro = preg_match('/xalqaro/i', $depName) === 1;
 
-                foreach ($data['level_codes'] as $lvCode) {
-                    foreach ($combos as $sem) {
-                        try {
-                            $this->windowService->createWindow([
-                                'session_id' => $data['session_id'],
-                                'specialty_id' => (int) $sp->specialty_hemis_id,
-                                'specialty_name' => $sp->name,
-                                'department_hemis_id' => (string) $sp->department_hemis_id,
-                                'level_code' => $lvCode,
-                                'level_name' => $levelMap->get($lvCode) ?? $lvCode,
-                                'semester_code' => $sem['code'],
-                                'semester_name' => $sem['name'],
-                                'start_date' => $data['start_date'],
-                                'end_date' => $data['end_date'],
-                                'creation_batch_id' => $batchId,
-                            ], $user);
-                            $created++;
-                        } catch (ValidationException $e) {
-                            $skipped++;
-                            $firstError = $firstError ?? collect($e->errors())->flatten()->first();
-                        }
+                // Xalqaro fakultet uchun har semestr alohida oyna; aks holda — bitta bo'sh semester
+                $combos = ($isXalqaro && !empty($data['semester_codes']))
+                    ? collect($data['semester_codes'])
+                        ->map(fn ($c) => ['code' => $c, 'name' => $semesterMap->get($c) ?? $c])
+                        ->all()
+                    : [['code' => '', 'name' => '']];
+
+                foreach ($combos as $sem) {
+                    try {
+                        $this->windowService->createWindow([
+                            'session_id' => $data['session_id'],
+                            'specialty_id' => (int) $sp->specialty_hemis_id,
+                            'specialty_name' => $sp->name,
+                            'department_hemis_id' => (string) $sp->department_hemis_id,
+                            'level_code' => $t['level_code'],
+                            'level_name' => $levelMap->get($t['level_code']) ?? $t['level_code'],
+                            'semester_code' => $sem['code'],
+                            'semester_name' => $sem['name'],
+                            'start_date' => $data['start_date'],
+                            'end_date' => $data['end_date'],
+                            'creation_batch_id' => $batchId,
+                        ], $user);
+                        $created++;
+                    } catch (ValidationException $e) {
+                        $skipped++;
+                        $firstError = $firstError ?? collect($e->errors())->flatten()->first();
                     }
                 }
             }

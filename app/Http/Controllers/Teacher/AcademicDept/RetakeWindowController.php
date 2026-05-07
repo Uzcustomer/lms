@@ -304,6 +304,11 @@ class RetakeWindowController extends Controller
                         } catch (ValidationException $e) {
                             $skipped++;
                             $firstError = $firstError ?? collect($e->errors())->flatten()->first();
+                        } catch (\Illuminate\Database\QueryException $e) {
+                            // DB unique cheklov (eski indeks fakultetni qamramaydi) yoki
+                            // boshqa SQL xatosi — tushunarli xabar bilan o'tkazib yuboramiz.
+                            $skipped++;
+                            $firstError = $firstError ?? 'Bu kombinatsiya uchun oyna allaqachon mavjud (eski indeks). Migration\'ni ishga tushiring.';
                         }
                     }
                 }

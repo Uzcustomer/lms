@@ -243,27 +243,28 @@
                                     @php
                                         $sp = $studentPhotos[$log->student_id_number] ?? null;
                                     @endphp
+                                    @php
+                                        $snapshotUrl = $log->snapshot ? route('admin.face-id.logs.snapshot', $log->id) : '';
+                                        $studentUrl  = ($sp && $sp->photo_path) ? asset($sp->photo_path) : '';
+                                        $titleName   = $log->student->full_name ?? $log->student_id_number ?? '—';
+                                    @endphp
                                     <div class="flex items-center gap-2">
                                         <div class="text-center">
                                             <div class="text-[10px] text-gray-400 mb-0.5">Snapshot</div>
-                                            @if($log->snapshot)
-                                                <a href="{{ route('admin.face-id.logs.snapshot', $log->id) }}" target="_blank">
-                                                    <img src="{{ route('admin.face-id.logs.snapshot', $log->id) }}"
-                                                         alt="snapshot"
-                                                         class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300">
-                                                </a>
+                                            @if($snapshotUrl)
+                                                <img src="{{ $snapshotUrl }}" alt="snapshot"
+                                                     class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300 cursor-pointer"
+                                                     onclick="openComparePair('{{ $snapshotUrl }}', '{{ $studentUrl }}', @json($titleName))">
                                             @else
                                                 <div class="w-12 h-12 rounded border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">—</div>
                                             @endif
                                         </div>
                                         <div class="text-center">
                                             <div class="text-[10px] text-gray-400 mb-0.5">Talaba</div>
-                                            @if($sp && $sp->photo_path)
-                                                <a href="{{ asset($sp->photo_path) }}" target="_blank">
-                                                    <img src="{{ asset($sp->photo_path) }}"
-                                                         alt="talaba"
-                                                         class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300">
-                                                </a>
+                                            @if($studentUrl)
+                                                <img src="{{ $studentUrl }}" alt="talaba"
+                                                     class="w-12 h-12 object-cover rounded border border-gray-200 hover:ring-2 hover:ring-blue-300 cursor-pointer"
+                                                     onclick="openComparePair('{{ $snapshotUrl }}', '{{ $studentUrl }}', @json($titleName))">
                                             @else
                                                 <div class="w-12 h-12 rounded border border-dashed border-gray-200 flex items-center justify-center text-gray-300 text-xs">—</div>
                                             @endif
@@ -283,6 +284,56 @@
                 <div class="px-4 py-3 border-t">{{ $logs->links() }}</div>
                 @endif
             </div>
+
+            {{-- Compare modal --}}
+            <div id="compareModal"
+                 style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:9999; align-items:center; justify-content:center; padding:20px;"
+                 onclick="if(event.target === this) closeCompareModal()">
+                <div style="background:#fff; border-radius:14px; max-width:900px; width:100%; max-height:90vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+                    <div style="padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between;">
+                        <div style="font-size:14px; font-weight:700; color:#0f172a;" id="compareModalTitle">Rasmlarni solishtirish</div>
+                        <button type="button" onclick="closeCompareModal()" style="background:none; border:none; font-size:24px; line-height:1; color:#64748b; cursor:pointer;">&times;</button>
+                    </div>
+                    <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                        <div style="text-align:center;">
+                            <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em;">Snapshot</div>
+                            <div style="background:#f1f5f9; border-radius:10px; min-height:200px; display:flex; align-items:center; justify-content:center; padding:8px;">
+                                <img id="compareSnapshot" src="" alt="snapshot" style="max-width:100%; max-height:60vh; border-radius:8px; display:none;">
+                                <span id="compareSnapshotEmpty" style="color:#94a3b8; font-size:13px;">Yo'q</span>
+                            </div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em;">Talaba (student_photos)</div>
+                            <div style="background:#f1f5f9; border-radius:10px; min-height:200px; display:flex; align-items:center; justify-content:center; padding:8px;">
+                                <img id="compareStudent" src="" alt="talaba" style="max-width:100%; max-height:60vh; border-radius:8px; display:none;">
+                                <span id="compareStudentEmpty" style="color:#94a3b8; font-size:13px;">Yo'q</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @push('scripts')
+            <script>
+            function openComparePair(snapUrl, studUrl, name) {
+                const modal = document.getElementById('compareModal');
+                const snap = document.getElementById('compareSnapshot');
+                const stud = document.getElementById('compareStudent');
+                const snapE = document.getElementById('compareSnapshotEmpty');
+                const studE = document.getElementById('compareStudentEmpty');
+                document.getElementById('compareModalTitle').textContent = 'Rasmlarni solishtirish — ' + (name || '');
+                if (snapUrl) { snap.src = snapUrl; snap.style.display = ''; snapE.style.display = 'none'; }
+                else         { snap.src = '';      snap.style.display = 'none'; snapE.style.display = ''; }
+                if (studUrl) { stud.src = studUrl; stud.style.display = ''; studE.style.display = 'none'; }
+                else         { stud.src = '';      stud.style.display = 'none'; studE.style.display = ''; }
+                modal.style.display = 'flex';
+            }
+            function closeCompareModal() {
+                document.getElementById('compareModal').style.display = 'none';
+            }
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCompareModal(); });
+            </script>
+            @endpush
             @endif
 
         </div>

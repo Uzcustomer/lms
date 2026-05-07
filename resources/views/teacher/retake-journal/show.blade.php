@@ -87,12 +87,6 @@
                                         <tr>
                                             <th class="px-2 py-2 text-center font-semibold text-gray-600 border-r border-gray-200" style="min-width:36px;">T/R</th>
                                             <th class="px-2 py-2 text-left font-semibold text-gray-600 border-r border-gray-200" style="min-width:240px;">F.I.SH.</th>
-                                            <th class="px-2 py-2 text-center font-semibold text-amber-700 bg-amber-50 border-r border-gray-200" style="min-width:60px;" title="{{ __('Registrator tasdiqlagan oldingi joriy bahosi') }}">
-                                                Joriy<br><span class="text-[9px] font-normal text-gray-500">eski</span>
-                                            </th>
-                                            <th class="px-2 py-2 text-center font-semibold text-amber-700 bg-amber-50 border-r border-gray-200" style="min-width:60px;" title="{{ __('Registrator tasdiqlagan oldingi mustaqil bahosi') }}">
-                                                Mustaqil<br><span class="text-[9px] font-normal text-gray-500">eski</span>
-                                            </th>
                                             <th class="px-3 py-2 text-center font-semibold text-blue-800 bg-blue-50" style="min-width:120px;">
                                                 {{ __("Joriy nazorat (JN)") }}
                                                 <div class="text-[9px] font-normal text-gray-500 mt-0.5">{{ __("yagona baho") }}</div>
@@ -127,12 +121,6 @@
                                                     @endif
                                                 </div>
                                                 <span class="block text-[10px] text-gray-500">{{ $app->student_hemis_id }}</span>
-                                            </td>
-                                            <td class="px-2 py-1.5 text-center text-amber-800 bg-amber-50/50 border-r border-gray-200 font-semibold">
-                                                {{ $app->previous_joriy_grade !== null ? rtrim(rtrim(number_format($app->previous_joriy_grade, 2, '.', ''), '0'), '.') : '—' }}
-                                            </td>
-                                            <td class="px-2 py-1.5 text-center text-amber-800 bg-amber-50/50 border-r border-gray-200 font-semibold">
-                                                {{ $app->previous_mustaqil_grade !== null ? rtrim(rtrim(number_format($app->previous_mustaqil_grade, 2, '.', ''), '0'), '.') : '—' }}
                                             </td>
                                             <td class="px-2 py-1 text-center bg-blue-50">
                                                 <input type="text"

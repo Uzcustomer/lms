@@ -307,23 +307,11 @@ class RetakeApplicationService
             $this->assertReason($reason);
         }
 
-        if ($decision === RetakeApplication::STATUS_APPROVED) {
-            // Joriy va mustaqil ta'lim baholari majburiy
-            $joriy = $details['previous_joriy_grade'] ?? null;
-            $mustaqil = $details['previous_mustaqil_grade'] ?? null;
-            if ($joriy === null || $joriy === '' || $mustaqil === null || $mustaqil === '') {
-                throw ValidationException::withMessages([
-                    'previous_grades' => 'Joriy va mustaqil ta\'lim baholarini to\'ldirish majburiy',
-                ]);
-            }
-            if ((float) $joriy < 0 || (float) $joriy > 100 || (float) $mustaqil < 0 || (float) $mustaqil > 100) {
-                throw ValidationException::withMessages([
-                    'previous_grades' => 'Baholar 0 dan 100 gacha bo\'lishi kerak',
-                ]);
-            }
-        }
+        // Eski Joriy / Mustaqil baho hamda OSKE/TEST/Sinov flaglar registrator
+        // tomonidan endi belgilanmaydi — O'quv bo'limi guruh yaratayotganda
+        // assessment turi tanlanadi.
 
-        return DB::transaction(function () use ($app, $actor, $decision, $reason, $details) {
+        return DB::transaction(function () use ($app, $actor, $decision, $reason) {
             $from = $app->registrar_status;
 
             $update = [
@@ -333,14 +321,6 @@ class RetakeApplicationService
                 'registrar_decision_at' => now(),
                 'registrar_reason' => $reason,
             ];
-
-            if ($decision === RetakeApplication::STATUS_APPROVED) {
-                $update['previous_joriy_grade'] = (float) $details['previous_joriy_grade'];
-                $update['previous_mustaqil_grade'] = (float) $details['previous_mustaqil_grade'];
-                $update['has_oske'] = !empty($details['has_oske']);
-                $update['has_test'] = !empty($details['has_test']);
-                $update['has_sinov'] = !empty($details['has_sinov']);
-            }
 
             $app->update($update);
 

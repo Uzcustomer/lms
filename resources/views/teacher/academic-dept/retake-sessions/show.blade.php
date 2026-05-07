@@ -193,16 +193,16 @@
         <div x-show="showCreate" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showCreate = false">
             <div class="flex items-center justify-center min-h-screen p-3">
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
-                <div class="relative bg-white rounded-xl shadow-xl w-full z-10 max-h-[92vh] overflow-y-auto" style="max-width:1100px;">
+                <div class="relative bg-white rounded-xl shadow-xl w-full z-10 overflow-y-auto" style="max-width:1100px;max-height:min(1000px,92vh);">
                     {{-- LMS-style header --}}
-                    <div class="px-5 py-3 border-b border-gray-100" style="background:linear-gradient(135deg,#1a3268,#2b5ea7);">
+                    <div class="px-5 py-3 border-b border-gray-100 sticky top-0 z-20" style="background:linear-gradient(135deg,#1a3268,#2b5ea7);">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <h3 class="text-base font-bold text-white">{{ __("Yangi qabul oynasi") }}</h3>
-                                <p class="text-[11px] text-blue-100 mt-0.5">{{ $session->name }} · {{ __("Har fakultet uchun alohida yo'nalish va kurs tanlanadi") }}</p>
+                                <p class="text-[11px] text-white mt-0.5 opacity-90">{{ $session->name }} · {{ __("Har fakultet uchun alohida yo'nalish va kurs tanlanadi") }}</p>
                             </div>
                             <button type="button" @click="showCreate = false"
-                                    class="text-blue-100 hover:text-white text-2xl leading-none px-1">×</button>
+                                    class="text-white hover:opacity-80 text-2xl leading-none px-1">×</button>
                         </div>
                     </div>
 
@@ -270,19 +270,30 @@
                                         </div>
                                     </div>
 
-                                    {{-- Kurs (checkbox) --}}
-                                    <div>
+                                    {{-- Kurs (custom dropdown) --}}
+                                    <div x-data="{ levelOpen: false }" @click.outside="levelOpen = false" class="relative">
                                         <div class="flex items-center justify-between mb-1">
                                             <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
                                             <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
                                                     @click="toggleAllLevels(card)"
                                                     x-text="card.levelCodes.length === allLevels.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
                                         </div>
-                                        <div class="grid grid-cols-3 gap-1">
+                                        <button type="button" @click="levelOpen = !levelOpen"
+                                                class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg flex items-center justify-between hover:border-blue-500 transition">
+                                            <span x-show="card.levelCodes.length === 0" class="text-gray-400">{{ __("Kurs tanlang...") }}</span>
+                                            <span x-show="card.levelCodes.length > 0" class="text-gray-800 font-semibold truncate">
+                                                <span x-text="card.levelCodes.length"></span> {{ __("ta tanlangan") }}
+                                                <span class="text-gray-400 font-normal" x-text="'(' + card.levelCodes.map(c => allLevels.find(l => l.code === c)?.name).join(', ') + ')'"></span>
+                                            </span>
+                                            <svg class="w-3.5 h-3.5 text-gray-500 flex-shrink-0 ml-1" :class="levelOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </button>
+                                        <div x-show="levelOpen" x-cloak
+                                             class="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
                                             <template x-for="lv in allLevels" :key="lv.code">
-                                                <label class="flex items-center justify-center gap-1 text-[11px] font-medium text-gray-700 border border-gray-300 hover:bg-white px-1.5 py-1.5 rounded cursor-pointer bg-white transition"
-                                                       :class="card.levelCodes.includes(lv.code) ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50 text-blue-700' : ''">
-                                                    <input type="checkbox" class="sr-only" :value="lv.code" x-model="card.levelCodes">
+                                                <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-blue-50 px-3 py-2 cursor-pointer border-b border-gray-100 last:border-b-0">
+                                                    <input type="checkbox" :value="lv.code" x-model="card.levelCodes" class="rounded text-blue-600 focus:ring-blue-500">
                                                     <span x-text="lv.name"></span>
                                                 </label>
                                             </template>
@@ -300,11 +311,11 @@
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                                     <span x-text="cards.length === 0 ? '{{ __('Fakultet tanlash') }}' : '{{ __('Yana fakultet qo\'shish') }}'"></span>
                                 </button>
-                                <div x-show="open" x-cloak class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <div x-show="open" x-cloak class="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto">
                                     <template x-for="d in availableDepartments" :key="d.id">
                                         <button type="button"
                                                 @click="addCard(d); open = false"
-                                                class="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition">
+                                                class="w-full text-left px-3 py-2.5 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition">
                                             <span x-text="d.name"></span>
                                         </button>
                                     </template>
@@ -312,19 +323,40 @@
                             </div>
                         </div>
 
-                        {{-- Semestr — Xalqaro talim fakulteti tanlanganda (multi-select) --}}
+                        {{-- Semestr — Xalqaro talim fakulteti tanlanganda (custom dropdown) --}}
                         <div x-show="hasXalqaroSelected" x-cloak class="rounded-lg p-3" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a;">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                                 <div>
                                     <label class="filter-label"><span class="fl-dot" style="background:#d97706;"></span> {{ __("Semestr (Xalqaro fakulteti uchun)") }} <span class="text-red-500">*</span></label>
-                                    <p class="text-[10px] text-amber-700 mt-1">{{ __("Bir nechtasini tanlash uchun Ctrl/Cmd bilan bosing") }}</p>
                                 </div>
-                                <select x-model="semesterCodes" multiple size="6"
-                                        class="w-full px-2.5 py-2 text-xs border border-amber-300 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
-                                    <template x-for="s in allSemesters" :key="s.code">
-                                        <option :value="s.code" x-text="s.name"></option>
-                                    </template>
-                                </select>
+                                <div x-data="{ semOpen: false }" @click.outside="semOpen = false" class="relative">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span></span>
+                                        <button type="button" class="text-[10px] text-amber-700 hover:text-amber-900 font-medium hover:underline"
+                                                @click="toggleAllSemesters()"
+                                                x-text="semesterCodes.length === allSemesters.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                                    </div>
+                                    <button type="button" @click="semOpen = !semOpen"
+                                            class="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg flex items-center justify-between hover:border-amber-500 transition">
+                                        <span x-show="semesterCodes.length === 0" class="text-amber-700/70">{{ __("Semestr tanlang...") }}</span>
+                                        <span x-show="semesterCodes.length > 0" class="text-amber-900 font-semibold truncate">
+                                            <span x-text="semesterCodes.length"></span> {{ __("ta tanlangan") }}
+                                            <span class="text-amber-700 font-normal" x-text="'(' + semesterCodes.map(c => allSemesters.find(s => s.code === c)?.name).join(', ') + ')'"></span>
+                                        </span>
+                                        <svg class="w-3.5 h-3.5 text-amber-700 flex-shrink-0 ml-1" :class="semOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </button>
+                                    <div x-show="semOpen" x-cloak
+                                         class="absolute z-30 mt-1 w-full bg-white border border-amber-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                                        <template x-for="s in allSemesters" :key="s.code">
+                                            <label class="flex items-center gap-2 text-xs text-amber-900 hover:bg-amber-50 px-3 py-2 cursor-pointer border-b border-amber-100 last:border-b-0">
+                                                <input type="checkbox" :value="s.code" x-model="semesterCodes" class="rounded text-amber-600 focus:ring-amber-500">
+                                                <span x-text="s.name"></span>
+                                            </label>
+                                        </template>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

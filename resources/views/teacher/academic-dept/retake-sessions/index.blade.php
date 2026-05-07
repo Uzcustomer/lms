@@ -202,6 +202,19 @@
                                             {{ __("O'chirish") }}
                                         </button>
                                     </form>
+                                @elseif($canForceDelete ?? false)
+                                    {{-- Superadmin: oynalar va arizalar bilan birga majburiy o'chirish --}}
+                                    <form method="POST"
+                                          action="{{ route('admin.retake-sessions.force-destroy', $session->id) }}"
+                                          onsubmit="return confirm('{{ __("DIQQAT! Bu sessiyaga oynalar va arizalar yuborilgan. Hammasi cascade o'chiriladi (qaytarib bo'lmaydi). Davom etamizmi?") }}')"
+                                          class="inline">
+                                        @csrf @method('DELETE')
+                                        <button type="submit"
+                                                class="px-3 py-1.5 text-xs bg-red-100 text-red-800 rounded hover:bg-red-200 font-semibold"
+                                                title="{{ __('Majburiy o\'chirish — barcha oynalar va arizalar bilan birga') }}">
+                                            ⚠ {{ __("Majburiy o'chirish") }}
+                                        </button>
+                                    </form>
                                 @endif
                             </div>
                         </div>

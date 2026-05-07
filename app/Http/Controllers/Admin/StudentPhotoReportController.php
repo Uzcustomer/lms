@@ -389,6 +389,68 @@ class StudentPhotoReportController extends Controller
         ]);
     }
 
+    public function bulkRejectByIds(Request $request)
+    {
+        $request->validate([
+            'idnumbers' => 'required|string',
+            'rejection_reason' => 'required|string|max:500',
+        ]);
+
+        $idnumbers = collect(preg_split('/[\s,;]+/', trim((string) $request->idnumbers)))
+            ->map(fn($v) => trim((string) $v))
+            ->filter(fn($v) => $v !== '')
+            ->unique()
+            ->values();
+
+        if ($idnumbers->isEmpty()) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'Hech qanday ID topilmadi.',
+            ], 422);
+        }
+
+        $photos = StudentPhoto::query()
+            ->whereIn('student_id_number', $idnumbers)
+            ->where('status', StudentPhoto::STATUS_APPROVED)
+            ->get(['id', 'student_id_number']);
+
+        $matchedIds = $photos->pluck('student_id_number')->unique();
+        $missing = $idnumbers->diff($matchedIds)->values();
+
+        $user = Auth::user();
+        $reviewer = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        $updated = 0;
+        if ($photos->isNotEmpty()) {
+            $updated = StudentPhoto::query()
+                ->whereIn('id', $photos->pluck('id'))
+                ->update([
+                    'status' => StudentPhoto::STATUS_REJECTED,
+                    'reviewed_by_name' => $reviewer,
+                    'reviewed_at' => now(),
+                    'rejection_reason' => $request->rejection_reason,
+                    'updated_at' => now(),
+                ]);
+
+            Log::info('student-photos: bulk reject by ids', [
+                'requested' => $idnumbers->count(),
+                'matched' => $photos->count(),
+                'updated' => $updated,
+                'reviewer' => $reviewer,
+                'reason' => $request->rejection_reason,
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'requested' => $idnumbers->count(),
+            'matched' => $photos->count(),
+            'updated' => $updated,
+            'missing' => $missing->take(50)->values(),
+            'missing_count' => $missing->count(),
+        ]);
+    }
+
     public function approve(Request $request, $id)
     {
         $photo = StudentPhoto::findOrFail($id);

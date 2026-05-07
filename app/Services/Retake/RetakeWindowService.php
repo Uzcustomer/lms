@@ -81,11 +81,12 @@ class RetakeWindowService
             'created_by_name' => $createdBy->full_name,
         ];
 
-        // Migration hali qo'llanmagan bo'lsa creation_batch_id ustuni yo'q —
-        // 500 oldini olish uchun himoya
-        if (isset($payload['creation_batch_id']) &&
-            !\Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', 'creation_batch_id')) {
-            unset($payload['creation_batch_id']);
+        // Migration hali qo'llanmagan bo'lsa yangi ustunlar yo'q — 500 oldini olish
+        foreach (['creation_batch_id', 'department_hemis_id'] as $col) {
+            if (isset($payload[$col]) &&
+                !\Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', $col)) {
+                unset($payload[$col]);
+            }
         }
 
         return RetakeApplicationWindow::create($payload);

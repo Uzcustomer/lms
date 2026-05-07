@@ -109,10 +109,11 @@
                                     {{ ($windows->currentPage() - 1) * $windows->perPage() + $i + 1 }}
                                 </td>
                                 <td class="px-3 py-2.5 text-sm font-semibold text-gray-900">
-                                    {{ $specialtyToFaculty[$w->specialty_id] ?? '—' }}
+                                    @php $rowFaculty = $rowFaculties[$w->id] ?? '—'; @endphp
+                                    {{ $rowFaculty }}
                                     @php
                                         $siblings = $w->creation_batch_id ? ($batchFaculties[$w->creation_batch_id] ?? []) : [];
-                                        $others = collect($siblings)->reject(fn ($f) => $f === ($specialtyToFaculty[$w->specialty_id] ?? null))->values();
+                                        $others = collect($siblings)->reject(fn ($f) => $f === $rowFaculty)->values();
                                     @endphp
                                     @if(count($others) > 0)
                                         <div class="text-[10px] text-gray-500 font-normal mt-0.5"

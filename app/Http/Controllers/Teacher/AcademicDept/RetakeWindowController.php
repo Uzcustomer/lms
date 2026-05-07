@@ -72,11 +72,24 @@ class RetakeWindowController extends Controller
 
         $windows = $windowsQuery->paginate($perPage)->withQueryString();
 
-        // Yo'nalish bo'yicha fakultet nomini topish uchun map
+        // Bevosita department_hemis_id'dan fakultet nomi
+        $deptIdToName = Department::pluck('name', 'department_hemis_id');
         $specialtyToFaculty = Specialty::query()
             ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
             ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
             ->pluck('faculty_name', 'sp_hemis_id');
+
+        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyToFaculty) {
+            if (!empty($w->department_hemis_id) && $deptIdToName->has($w->department_hemis_id)) {
+                return $deptIdToName[$w->department_hemis_id];
+            }
+            return $specialtyToFaculty[$w->specialty_id] ?? null;
+        };
+
+        $rowFaculties = collect();
+        foreach ($windows as $w) {
+            $rowFaculties[$w->id] = $resolveFaculty($w);
+        }
 
         // Bulk batch'dagi qo'shni fakultetlar
         $batchIds = $windows->pluck('creation_batch_id')->filter()->unique()->values();
@@ -84,11 +97,10 @@ class RetakeWindowController extends Controller
         if ($batchIds->isNotEmpty()) {
             $batchSiblings = RetakeApplicationWindow::query()
                 ->whereIn('creation_batch_id', $batchIds)
-                ->get(['id', 'creation_batch_id', 'specialty_id']);
+                ->get(['id', 'creation_batch_id', 'specialty_id', 'department_hemis_id']);
             $batchFaculties = $batchSiblings->groupBy('creation_batch_id')
-                ->map(function ($siblings) use ($specialtyToFaculty) {
-                    return $siblings->pluck('specialty_id')
-                        ->map(fn ($spId) => $specialtyToFaculty[$spId] ?? null)
+                ->map(function ($siblings) use ($resolveFaculty) {
+                    return $siblings->map(fn ($s) => $resolveFaculty($s))
                         ->filter()
                         ->unique()
                         ->values()
@@ -123,6 +135,7 @@ class RetakeWindowController extends Controller
             'windows' => $windows,
             'activeWindows' => $activeWindows,
             'specialtyToFaculty' => $specialtyToFaculty,
+            'rowFaculties' => $rowFaculties,
             'batchFaculties' => $batchFaculties,
             'departments' => $departments,
             'specialties' => $specialties,
@@ -222,6 +235,7 @@ class RetakeWindowController extends Controller
                                 'session_id' => $data['session_id'],
                                 'specialty_id' => (int) $sp->specialty_hemis_id,
                                 'specialty_name' => $sp->name,
+                                'department_hemis_id' => (string) $sp->department_hemis_id,
                                 'level_code' => $lvCode,
                                 'level_name' => $levelMap->get($lvCode) ?? $lvCode,
                                 'semester_code' => $sem['code'],

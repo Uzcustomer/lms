@@ -50,6 +50,11 @@
                         </button>
 
                         @if($activeTab === 'qr')
+                            <button type="button" id="btn-download-selected-qr" class="btn-success" disabled
+                                    onclick="downloadSelectedQrZip()">
+                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                <span id="btn-download-selected-qr-label">Tanlanganlarni ZIP yuklab olish</span>
+                            </button>
                             <button type="button" class="btn-danger"
                                     onclick="if(confirm('Barcha QR kodlar va baholar o\'chiriladi. Davom etasizmi?')) document.getElementById('form-delete-all-qr').submit();">
                                 Hammasini o'chirish
@@ -165,34 +170,46 @@
 
         @elseif($activeTab === 'qr')
         {{-- ==================== QR KODLAR TABI ==================== --}}
-        <div class="space-y-3">
+        @if($teachers->count() > 0)
+        <div class="px-4 pt-3 flex items-center gap-2">
+            <label class="flex items-center gap-2 text-sm text-slate-600">
+                <input type="checkbox" id="qr-select-all" class="cb-styled" onchange="toggleSelectAllQr(this)">
+                Hammasini tanlash
+            </label>
+        </div>
+        @endif
+        <div class="space-y-3 p-3">
             @forelse($teachers as $teacher)
-            <a href="{{ route('admin.staff-evaluation.show', $teacher) }}"
-               class="flex items-center gap-3 border rounded-lg p-3 hover:shadow-md transition-shadow group bg-white">
+            <div class="flex items-center gap-3 border rounded-lg p-3 hover:shadow-md transition-shadow group bg-white">
+                <input type="checkbox"
+                       class="cb-styled qr-row-checkbox"
+                       data-teacher-id="{{ $teacher->id }}"
+                       data-teacher-slug="{{ Str::slug($teacher->full_name) }}"
+                       onchange="updateSelectedQr()">
                 <div class="flex-shrink-0 w-8 text-center text-sm font-bold text-gray-400">
                     {{ $teachers->firstItem() + $loop->index }}
                 </div>
-                <div class="flex-shrink-0 relative">
-                    {!! QrCode::size(80)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
-                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div class="bg-white rounded-full" style="padding:3px;">
-                            <img src="{{ asset('logo.png') }}" alt="Logo" class="rounded-full" style="width:28px;height:28px;">
+                <a href="{{ route('admin.staff-evaluation.show', $teacher) }}" class="flex items-center gap-3 flex-1 min-w-0">
+                    <div class="flex-shrink-0 relative">
+                        {!! QrCode::size(80)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                        @if($template['show_logo'])
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div class="bg-white rounded-full" style="padding:3px;">
+                                <img src="{{ asset('logo.png') }}" alt="Logo" class="rounded-full" style="width:28px;height:28px;">
+                            </div>
                         </div>
+                        @endif
                     </div>
-                    <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto"
-                         onclick="event.preventDefault(); window.location.href='{{ route('admin.staff-evaluation.download-qr', $teacher) }}'">
-                        <span class="px-3 py-1 bg-white text-gray-800 rounded text-xs font-medium shadow">&#8681; Yuklab olish</span>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{{ $teacher->full_name }}</div>
+                        @if($teacher->department)
+                            <div class="text-sm text-gray-400">{{ $teacher->department }}</div>
+                        @endif
+                        @if($teacher->staff_position)
+                            <div class="text-xs text-gray-400">{{ $teacher->staff_position }}</div>
+                        @endif
                     </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{{ $teacher->full_name }}</div>
-                    @if($teacher->department)
-                        <div class="text-sm text-gray-400">{{ $teacher->department }}</div>
-                    @endif
-                    @if($teacher->staff_position)
-                        <div class="text-xs text-gray-400">{{ $teacher->staff_position }}</div>
-                    @endif
-                </div>
+                </a>
                 <div class="flex-shrink-0 text-right">
                     @if($teacher->staff_evaluations_avg_rating)
                         @php
@@ -210,7 +227,7 @@
                         <span class="text-gray-300 text-sm">Baholar yo'q</span>
                     @endif
                 </div>
-            </a>
+            </div>
             @empty
             <div class="text-center text-gray-500 py-8">
                 @if(request('search'))
@@ -221,6 +238,99 @@
             </div>
             @endforelse
         </div>
+
+        {{-- Yashirin shablon kartochkalari (zip yuklash uchun) --}}
+        <div id="qr-hidden-cards" style="position:fixed; left:-10000px; top:0; pointer-events:none;">
+            @php
+                $w = $template['width_mm'];
+                $h = $template['height_mm'];
+                $bottomText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
+                $padY = 2.2;
+                $captionSpace = $bottomText !== '' ? 3.0 : 0;
+                $gap = $bottomText !== '' ? 1.2 : 0;
+                $qrSize = max(15, min($w - 4, $h - $captionSpace - $gap - $padY * 2));
+                $logoSize = $qrSize * 0.18;
+            @endphp
+            @foreach($teachers as $teacher)
+            <div id="hidden-card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:{{ $padY }}mm 1.5mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:{{ $gap }}mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
+                <div style="flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;">
+                    <div style="width:{{ $qrSize }}mm; height:{{ $qrSize }}mm; display:flex; align-items:center; justify-content:center;">
+                        {!! str_replace('<svg ', '<svg style="width:100%;height:100%;display:block;" ', QrCode::size(300)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token))) !!}
+                    </div>
+                    @if($template['show_logo'])
+                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
+                        <div style="background:white; border-radius:50%; padding:0.3mm; display:flex;">
+                            <img src="{{ asset('logo.png') }}" alt="Logo" style="width:{{ $logoSize }}mm; height:{{ $logoSize }}mm; border-radius:50%;">
+                        </div>
+                    </div>
+                    @endif
+                </div>
+                @if($bottomText !== '')
+                <div style="font-size:1.9mm; color:#1e3a8a; font-weight:700; line-height:1.1; white-space:nowrap;">
+                    {{ $bottomText }}
+                </div>
+                @endif
+            </div>
+            @endforeach
+        </div>
+
+        @push('scripts')
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+        <script>
+        function toggleSelectAllQr(master) {
+            document.querySelectorAll('.qr-row-checkbox').forEach(cb => cb.checked = master.checked);
+            updateSelectedQr();
+        }
+        function updateSelectedQr() {
+            const count = document.querySelectorAll('.qr-row-checkbox:checked').length;
+            const btn = document.getElementById('btn-download-selected-qr');
+            const lbl = document.getElementById('btn-download-selected-qr-label');
+            if (!btn) return;
+            if (count > 0) {
+                btn.disabled = false;
+                lbl.textContent = 'Tanlanganlarni ZIP yuklab olish (' + count + ')';
+            } else {
+                btn.disabled = true;
+                lbl.textContent = 'Tanlanganlarni ZIP yuklab olish';
+            }
+        }
+        async function downloadSelectedQrZip() {
+            const checked = Array.from(document.querySelectorAll('.qr-row-checkbox:checked'));
+            if (checked.length === 0) return;
+            const btn = document.getElementById('btn-download-selected-qr');
+            const lbl = document.getElementById('btn-download-selected-qr-label');
+            btn.disabled = true;
+            const zip = new JSZip();
+            for (let i = 0; i < checked.length; i++) {
+                const cb = checked[i];
+                const id = cb.dataset.teacherId;
+                const slug = cb.dataset.teacherSlug || ('xodim-' + id);
+                const el = document.getElementById('hidden-card-' + id);
+                if (!el) continue;
+                lbl.textContent = 'Tayyorlanmoqda... (' + (i + 1) + '/' + checked.length + ')';
+                try {
+                    const canvas = await html2canvas(el, { scale: 4, backgroundColor: '#ffffff', useCORS: true });
+                    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                    zip.file('qr-' + slug + '.png', blob);
+                } catch (e) {
+                    console.error('Karta yaratilmadi:', id, e);
+                }
+            }
+            lbl.textContent = 'ZIP yaratilmoqda...';
+            const content = await zip.generateAsync({ type: 'blob' });
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'qr-shablonlar.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            updateSelectedQr();
+        }
+        </script>
+        @endpush
         @elseif($activeTab === 'shablon')
         {{-- ==================== SHABLON TABI ==================== --}}
         {{-- Manual shablon tahriri --}}

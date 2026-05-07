@@ -62,42 +62,10 @@ class RetakeWindowService
             ]);
         }
 
-        // Bir xil sessiya, fakultet, yo'nalish, kurs va semestr kombinatsiyasi
-        // bittadan ortiq oyna sifatida yaratilmasin (turli fakultetlarda
-        // alohida oyna ochish ruxsat etiladi).
-        $existsQuery = RetakeApplicationWindow::query()
-            ->where('session_id', $data['session_id'])
-            ->where('specialty_id', $data['specialty_id'])
-            ->where('level_code', $data['level_code'])
-            ->where('semester_code', $data['semester_code']);
-
-        if (!empty($data['department_hemis_id'])) {
-            $existsQuery->where('department_hemis_id', $data['department_hemis_id']);
-        }
-
-        if ($existsQuery->exists()) {
-            throw ValidationException::withMessages([
-                'specialty_id' => 'Joriy sessiyada bu fakultet, yo\'nalish, kurs va semestr uchun oyna allaqachon mavjud',
-            ]);
-        }
-
-        // Soft-deleted yozuv bor bo'lsa — DB'dagi unique index `deleted_at`'ni
-        // hisobga olmaydi, shuning uchun yangi insert 500 xato beradi.
-        // Eskilarini butunlay o'chirib yuboramiz, shunda yangi yozuv yaratilishi mumkin.
-        $trashedQuery = RetakeApplicationWindow::onlyTrashed()
-            ->where('session_id', $data['session_id'])
-            ->where('specialty_id', $data['specialty_id'])
-            ->where('level_code', $data['level_code'])
-            ->where('semester_code', $data['semester_code']);
-
-        if (!empty($data['department_hemis_id']) &&
-            \Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', 'department_hemis_id')) {
-            $trashedQuery->where('department_hemis_id', $data['department_hemis_id']);
-        }
-
-        foreach ($trashedQuery->get() as $trashedWindow) {
-            $trashedWindow->forceDelete();
-        }
+        // Bir xil (sessiya, fakultet, yo'nalish, kurs, semestr) kombinatsiyasi
+        // takroriy oyna sifatida yaratilishi ruxsat etiladi (foydalanuvchi
+        // talabiga ko'ra). Avvalgi unique check va trashed-cleanup logikalari
+        // olib tashlandi.
 
         $payload = [
             ...$data,

@@ -302,6 +302,42 @@
                                             </template>
                                         </div>
                                     </div>
+
+                                    {{-- Semestr — faqat Xalqaro fakulteti kartochkasida, kurs ostida --}}
+                                    <div x-show="/xalqaro/i.test(card.name || '')" x-cloak
+                                         x-data="{ semOpenInCard: false }" @click.outside="semOpenInCard = false"
+                                         class="relative mt-2 rounded-lg p-2"
+                                         style="background:#fffbeb;border:1px solid #fde68a;">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-[10px] font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1">
+                                                <span class="fl-dot" style="background:#d97706;"></span>
+                                                {{ __("Semestr") }} <span class="text-red-500">*</span>
+                                            </label>
+                                            <button type="button" class="text-[10px] text-amber-700 hover:text-amber-900 font-medium hover:underline"
+                                                    @click="toggleAllSemesters()"
+                                                    x-text="semesterCodes.length === allSemesters.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                                        </div>
+                                        <button type="button" @click="semOpenInCard = !semOpenInCard"
+                                                class="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg flex items-center justify-between hover:border-amber-500 transition">
+                                            <span x-show="semesterCodes.length === 0" class="text-amber-700/70">{{ __("Semestr tanlang...") }}</span>
+                                            <span x-show="semesterCodes.length > 0" class="text-amber-900 font-semibold truncate">
+                                                <span x-text="semesterCodes.length"></span> {{ __("ta tanlangan") }}
+                                            </span>
+                                            <svg class="w-3.5 h-3.5 text-amber-700 flex-shrink-0 ml-1" :class="semOpenInCard ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </button>
+                                        <div x-show="semOpenInCard" x-cloak
+                                             class="absolute left-0 right-0 mt-1 bg-white border border-amber-300 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+                                             style="z-index:60;">
+                                            <template x-for="s in allSemesters" :key="s.code">
+                                                <label class="flex items-center gap-2 text-xs text-amber-900 hover:bg-amber-50 px-3 py-2 cursor-pointer border-b border-amber-100 last:border-b-0">
+                                                    <input type="checkbox" :value="s.code" x-model="semesterCodes" class="rounded text-amber-600 focus:ring-amber-500">
+                                                    <span x-text="s.name"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </div>
                             </template>
 
@@ -324,44 +360,6 @@
                                             <span x-text="d.name"></span>
                                         </button>
                                     </template>
-                                </div>
-                            </div>
-                        </div>
-
-                        {{-- Semestr — Xalqaro talim fakulteti tanlanganda (custom dropdown) --}}
-                        <div x-show="hasXalqaroSelected" x-cloak class="rounded-lg p-3" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a;">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
-                                <div>
-                                    <label class="filter-label"><span class="fl-dot" style="background:#d97706;"></span> {{ __("Semestr (Xalqaro fakulteti uchun)") }} <span class="text-red-500">*</span></label>
-                                </div>
-                                <div x-data="{ semOpen: false }" @click.outside="semOpen = false" class="relative">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <span></span>
-                                        <button type="button" class="text-[10px] text-amber-700 hover:text-amber-900 font-medium hover:underline"
-                                                @click="toggleAllSemesters()"
-                                                x-text="semesterCodes.length === allSemesters.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
-                                    </div>
-                                    <button type="button" @click="semOpen = !semOpen"
-                                            class="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg flex items-center justify-between hover:border-amber-500 transition">
-                                        <span x-show="semesterCodes.length === 0" class="text-amber-700/70">{{ __("Semestr tanlang...") }}</span>
-                                        <span x-show="semesterCodes.length > 0" class="text-amber-900 font-semibold truncate">
-                                            <span x-text="semesterCodes.length"></span> {{ __("ta tanlangan") }}
-                                            <span class="text-amber-700 font-normal" x-text="'(' + semesterCodes.map(c => allSemesters.find(s => s.code === c)?.name).join(', ') + ')'"></span>
-                                        </span>
-                                        <svg class="w-3.5 h-3.5 text-amber-700 flex-shrink-0 ml-1" :class="semOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                                        </svg>
-                                    </button>
-                                    <div x-show="semOpen" x-cloak
-                                         class="absolute mt-1 w-full bg-white border border-amber-300 rounded-lg shadow-xl max-h-64 overflow-y-auto"
-                                         style="z-index:60;">
-                                        <template x-for="s in allSemesters" :key="s.code">
-                                            <label class="flex items-center gap-2 text-xs text-amber-900 hover:bg-amber-50 px-3 py-2 cursor-pointer border-b border-amber-100 last:border-b-0">
-                                                <input type="checkbox" :value="s.code" x-model="semesterCodes" class="rounded text-amber-600 focus:ring-amber-500">
-                                                <span x-text="s.name"></span>
-                                            </label>
-                                        </template>
-                                    </div>
                                 </div>
                             </div>
                         </div>

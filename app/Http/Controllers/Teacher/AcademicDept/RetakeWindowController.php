@@ -286,7 +286,11 @@ class RetakeWindowController extends Controller
                             'session_id' => $data['session_id'],
                             'specialty_id' => (int) $sp->specialty_hemis_id,
                             'specialty_name' => $sp->name,
-                            'department_hemis_id' => (string) $sp->department_hemis_id,
+                            // BUG FIX: foydalanuvchi tanlagan fakultet (user-selected fid)
+                            // ishlatiladi. Avval $sp->department_hemis_id ishlatilardi,
+                            // bir xil yo'nalish bir nechta fakultetda bo'lsa unique
+                            // check'da to'qnashib, faqat birinchi oyna yaratilardi.
+                            'department_hemis_id' => (string) $t['fid'],
                             'level_code' => $t['level_code'],
                             'level_name' => $levelMap->get($t['level_code']) ?? $t['level_code'],
                             'semester_code' => $sem['code'],

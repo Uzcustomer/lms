@@ -194,7 +194,7 @@
             <div class="flex items-center justify-center min-h-screen p-3">
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
                 <div class="relative bg-white rounded-xl shadow-xl w-full z-10 overflow-y-auto"
-                     style="max-width:1100px; max-height:1000px; max-height:min(1000px, 92vh);">
+                     style="max-width:1100px; height:1000px; max-height:92vh;">
                     {{-- LMS-style header (sticky, eng yuqori z-index) --}}
                     <div class="px-5 py-3 sticky top-0"
                          style="background:linear-gradient(135deg,#1a3268,#2b5ea7); z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
@@ -292,7 +292,8 @@
                                             </svg>
                                         </button>
                                         <div x-show="levelOpen" x-cloak
-                                             class="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                                             class="absolute mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto"
+                                             style="z-index:60;">
                                             <template x-for="lv in allLevels" :key="lv.code">
                                                 <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-blue-50 px-3 py-2 cursor-pointer border-b border-gray-100 last:border-b-0">
                                                     <input type="checkbox" :value="lv.code" x-model="card.levelCodes" class="rounded text-blue-600 focus:ring-blue-500">
@@ -304,8 +305,9 @@
                                 </div>
                             </template>
 
-                            {{-- Fakultet qo'shish (bitta col oladi) --}}
-                            <div class="relative" :class="cards.length % 2 === 0 ? 'md:col-span-2' : ''" x-data="{ open: false }" @click.outside="open = false">
+                            {{-- Fakultet qo'shish (bitta col oladi). z-0 — boshqa dropdownlar
+                                 (kurs/semester) bu tugma ustida ochilishi uchun. --}}
+                            <div class="relative" style="z-index:0;" :class="cards.length % 2 === 0 ? 'md:col-span-2' : ''" x-data="{ open: false }" @click.outside="open = false">
                                 <button type="button" @click="open = !open"
                                         :disabled="availableDepartments.length === 0"
                                         :class="availableDepartments.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-500 hover:bg-blue-50'"
@@ -313,7 +315,8 @@
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                                     <span x-text="cards.length === 0 ? '{{ __('Fakultet tanlash') }}' : '{{ __('Yana fakultet qo\'shish') }}'"></span>
                                 </button>
-                                <div x-show="open" x-cloak class="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto">
+                                <div x-show="open" x-cloak class="absolute mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto"
+                                     style="z-index:60;">
                                     <template x-for="d in availableDepartments" :key="d.id">
                                         <button type="button"
                                                 @click="addCard(d); open = false"
@@ -350,7 +353,8 @@
                                         </svg>
                                     </button>
                                     <div x-show="semOpen" x-cloak
-                                         class="absolute z-30 mt-1 w-full bg-white border border-amber-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                                         class="absolute mt-1 w-full bg-white border border-amber-300 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+                                         style="z-index:60;">
                                         <template x-for="s in allSemesters" :key="s.code">
                                             <label class="flex items-center gap-2 text-xs text-amber-900 hover:bg-amber-50 px-3 py-2 cursor-pointer border-b border-amber-100 last:border-b-0">
                                                 <input type="checkbox" :value="s.code" x-model="semesterCodes" class="rounded text-amber-600 focus:ring-amber-500">

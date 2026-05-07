@@ -48,6 +48,45 @@
                 quality: null, qualityLoading: false, qualityError: null,
             },
             reject: { open: false, id: null, name: '' },
+            bulkReject: {
+                open: false, ids: '', reason: 'Yuz aniqlanmadi (Moodle enroll)',
+                loading: false, result: null, error: null,
+            },
+            openBulkRejectByIds() {
+                this.bulkReject = {
+                    open: true, ids: '', reason: 'Yuz aniqlanmadi (Moodle enroll)',
+                    loading: false, result: null, error: null,
+                };
+            },
+            async submitBulkRejectByIds() {
+                this.bulkReject.loading = true;
+                this.bulkReject.error = null;
+                this.bulkReject.result = null;
+                try {
+                    const res = await fetch(`{{ route('admin.student-photos.bulk-reject-by-ids') }}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            idnumbers: this.bulkReject.ids,
+                            rejection_reason: this.bulkReject.reason,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.ok) {
+                        this.bulkReject.error = data.error || ('HTTP ' + res.status);
+                    } else {
+                        this.bulkReject.result = data;
+                    }
+                } catch (e) {
+                    this.bulkReject.error = e.message;
+                } finally {
+                    this.bulkReject.loading = false;
+                }
+            },
             bulk: {
                 open: false, phase: 'confirm', // confirm | running | done
                 ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
@@ -460,6 +499,12 @@
                                 class="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
                             Tanlovni tozalash
                         </button>
+                        <button type="button" @click="openBulkRejectByIds()"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 text-white text-xs font-semibold rounded-md hover:bg-rose-800"
+                                title="Talaba ID ro'yxatini paste qilib, mos approved rasmlarni rad etish">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            Ro'yxat bo'yicha rad etish
+                        </button>
                     </div>
                 </div>
 
@@ -853,6 +898,80 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        {{-- Ro'yxat bo'yicha rad etish modali --}}
+        <div x-show="bulkReject.open" x-cloak x-transition.opacity
+             class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+             @click.self="if (!bulkReject.loading) bulkReject.open = false"
+             @keydown.escape.window="if (!bulkReject.loading) bulkReject.open = false">
+            <div class="bg-white rounded-lg shadow-2xl max-w-xl w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-1">Ro'yxat bo'yicha rad etish</h3>
+                <p class="text-xs text-gray-500 mb-4">
+                    Talaba ID raqamlarini pastdagi maydonga joylashtiring (har qatorga bitta yoki vergul bilan ajratilgan).
+                    Faqat hozirda <strong>tasdiqlangan</strong> holatdagi rasmlar rad etiladi.
+                </p>
+
+                <template x-if="!bulkReject.result">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Talaba IDlar</label>
+                        <textarea x-model="bulkReject.ids" rows="8"
+                                  :disabled="bulkReject.loading"
+                                  class="w-full rounded-md border-gray-300 shadow-sm text-sm font-mono mb-3"
+                                  placeholder="368231101075&#10;368241100401&#10;..."></textarea>
+
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Rad etish sababi</label>
+                        <input type="text" x-model="bulkReject.reason" maxlength="500"
+                               :disabled="bulkReject.loading"
+                               class="w-full rounded-md border-gray-300 shadow-sm text-sm mb-3" />
+
+                        <div x-show="bulkReject.error" class="text-sm text-red-600 mb-3" x-text="bulkReject.error"></div>
+
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="bulkReject.open = false"
+                                    :disabled="bulkReject.loading"
+                                    class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200 disabled:opacity-50">
+                                Bekor qilish
+                            </button>
+                            <button type="button" @click="submitBulkRejectByIds()"
+                                    :disabled="bulkReject.loading || !bulkReject.ids.trim() || !bulkReject.reason.trim()"
+                                    class="px-4 py-2 bg-rose-700 text-white text-sm font-semibold rounded-md hover:bg-rose-800 disabled:opacity-50">
+                                <span x-show="!bulkReject.loading">Rad etish</span>
+                                <span x-show="bulkReject.loading">Yuborilmoqda…</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="bulkReject.result">
+                    <div>
+                        <div class="rounded-md bg-emerald-50 border border-emerald-200 p-4 mb-4 text-sm">
+                            <div>Yuborilgan IDlar: <strong x-text="bulkReject.result.requested"></strong></div>
+                            <div>Approved rasmga mos kelgan: <strong x-text="bulkReject.result.matched"></strong></div>
+                            <div>Rad etilgan: <strong class="text-rose-700" x-text="bulkReject.result.updated"></strong></div>
+                            <div>Topilmadi (yoki approved emas): <strong x-text="bulkReject.result.missing_count"></strong></div>
+                        </div>
+
+                        <template x-if="bulkReject.result.missing && bulkReject.result.missing.length">
+                            <div class="mb-4">
+                                <div class="text-xs font-semibold text-gray-600 mb-1">
+                                    Topilmagan IDlar (birinchi <span x-text="bulkReject.result.missing.length"></span> ta):
+                                </div>
+                                <textarea readonly rows="4"
+                                          class="w-full rounded-md border-gray-200 bg-gray-50 text-xs font-mono"
+                                          x-text="bulkReject.result.missing.join('\n')"></textarea>
+                            </div>
+                        </template>
+
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="bulkReject.open = false; window.location.reload();"
+                                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">
+                                Yopish va sahifani yangilash
+                            </button>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
 

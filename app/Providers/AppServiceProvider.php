@@ -115,6 +115,25 @@ class AppServiceProvider extends ServiceProvider
                                 return $count;
                             }
 
+                            // O'quv bo'limi — Dekan+Registrator tasdiqlagan, hali tasdiqlamagan
+                            // arizalar (QO': Arizalar sahifasidagi "Tasdiq kutmoqda" bosqichi).
+                            $academicRoles = [
+                                \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT->value,
+                                \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+                            ];
+                            if (in_array($activeRole, $academicRoles, true)) {
+                                return \App\Models\RetakeApplication::query()
+                                    ->where('dean_status', 'approved')
+                                    ->where('registrar_status', 'approved')
+                                    ->where('academic_dept_status', 'pending')
+                                    ->where('final_status', 'pending')
+                                    ->whereHas('group', function ($q) {
+                                        $q->whereNotNull('payment_uploaded_at')
+                                          ->where('payment_verification_status', 'approved');
+                                    })
+                                    ->count();
+                            }
+
                             return 0;
                         }
                     );

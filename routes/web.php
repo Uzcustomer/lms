@@ -817,6 +817,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{windowId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'destroy'])->name('destroy');
         });
 
+        // O'quv bo'limi: Qayta o'qish arizalari (oldindan tasdiqlash)
+        Route::prefix('retake-applications')->name('retake-applications.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'index'])->name('index');
+            Route::post('/{applicationId}/approve', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'approve'])->name('approve');
+            Route::post('/{applicationId}/reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'reject'])->name('reject');
+            Route::post('/bulk-approve', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'bulkApprove'])->name('bulk-approve');
+            Route::post('/bulk-reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'bulkReject'])->name('bulk-reject');
+        });
+
         // O'quv bo'limi: Qayta o'qish guruhlari
         Route::prefix('retake-groups')->name('retake-groups.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'index'])->name('index');

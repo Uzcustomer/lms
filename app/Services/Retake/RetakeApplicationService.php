@@ -379,6 +379,49 @@ class RetakeApplicationService
     }
 
     /**
+     * O'quv bo'limi arizani guruh tashkil qilmasdan oldindan tasdiqlaydi.
+     * Bu — yangi 2-bosqichli oqim: avval QO': Arizalar sahifasidan tasdiq, so'ng
+     * QO': Guruhlar sahifasidan guruhlarga ajratish. Tasdiqlash paytida
+     * `academic_dept_status = approved` bo'ladi, lekin `final_status` hali
+     * `pending` qoladi va `retake_group_id` NULL — guruh keyinroq biriktiriladi.
+     */
+    public function academicPreApprove(RetakeApplication $app, Teacher $actor): RetakeApplication
+    {
+        if ($app->final_status !== RetakeApplication::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'application' => 'Faqat kutilayotgan arizani tasdiqlash mumkin',
+            ]);
+        }
+
+        if (!$app->isDualApproved()) {
+            throw ValidationException::withMessages([
+                'application' => 'Avval dekan va registrator tasdiqlashi kerak',
+            ]);
+        }
+
+        if ($app->academic_dept_status === RetakeApplication::STATUS_APPROVED) {
+            return $app; // allaqachon pre-approved
+        }
+
+        return DB::transaction(function () use ($app, $actor) {
+            $app->update([
+                'academic_dept_status' => RetakeApplication::STATUS_APPROVED,
+                'academic_dept_user_id' => $actor->id,
+                'academic_dept_user_name' => $actor->full_name,
+                'academic_dept_decision_at' => now(),
+                'academic_dept_reason' => null,
+                // final_status va retake_group_id — guruh tashkil qilinganda yangilanadi
+            ]);
+
+            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_APPROVED, $actor, null, [
+                'pre_approved' => true,
+            ]);
+
+            return $app->refresh();
+        });
+    }
+
+    /**
      * O'quv bo'limi guruhga biriktirib tasdiqlaydi.
      * Bu metod RetakeGroupService dan chaqiriladi — bir nechta arizani birga tasdiqlaydi.
      */

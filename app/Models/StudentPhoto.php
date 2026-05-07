@@ -37,6 +37,8 @@ class StudentPhoto extends Model
         'moodle_sync_error',
         'moodle_file_hash',
         'moodle_response',
+        'descriptor_confirmed_at',
+        'descriptor_confirmed_notified_at',
     ];
 
     protected $casts = [
@@ -52,7 +54,14 @@ class StudentPhoto extends Model
         'embedding_extracted_at' => 'datetime',
         'moodle_synced_at' => 'datetime',
         'moodle_response' => 'array',
+        'descriptor_confirmed_at' => 'datetime',
+        'descriptor_confirmed_notified_at' => 'datetime',
     ];
+
+    public function isDescriptorConfirmed(): bool
+    {
+        return $this->status === self::STATUS_APPROVED && $this->descriptor_confirmed_at !== null;
+    }
 
     public function getPhotoUrlAttribute(): string
     {

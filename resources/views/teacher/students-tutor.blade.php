@@ -245,8 +245,10 @@
                                             @if($studentPhoto->rejection_reason)
                                                 <div style="font-size:10px;color:#991b1b;max-width:140px;margin-top:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
                                             @endif
-                                        @elseif($studentPhoto && $studentPhoto->status === 'approved')
+                                        @elseif($studentPhoto && $studentPhoto->status === 'approved' && $studentPhoto->descriptor_confirmed_at)
                                             <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
+                                        @elseif($studentPhoto && $studentPhoto->status === 'approved')
+                                            <span class="student-status" style="background:#e0e7ff;color:#3730a3;">Moodle'da ishlanmoqda</span>
                                         @elseif($studentPhoto)
                                             <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                         @endif
@@ -290,8 +292,10 @@
                                         @if($studentPhoto->rejection_reason)
                                             <div style="font-size:10px;color:#991b1b;max-width:160px;margin-top:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
                                         @endif
-                                    @elseif(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'approved')
+                                    @elseif(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'approved' && $studentPhoto->descriptor_confirmed_at)
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
+                                    @elseif(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'approved')
+                                        <span class="student-status" style="background:#e0e7ff;color:#3730a3;">Moodle'da ishlanmoqda</span>
                                     @elseif(!$isNazoratchi && $studentPhoto)
                                         <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                     @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')

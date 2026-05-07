@@ -191,7 +191,7 @@
                           x-data="windowForm({
                               departments: @js($departments->map(fn($d) => ['id' => (string)$d->department_hemis_id, 'name' => $d->name])->values()->all()),
                               specialties: @js($specialties->map(fn($s) => ['pk' => $s->id, 'id' => (string)$s->specialty_hemis_id, 'name' => $s->name])->values()->all()),
-                              facultySpecialtyPairs: @js($facultySpecialtyPairs ?? (object)[]),
+                              facultySpecialtyPairs: @js((object)($facultySpecialtyPairs ?? [])),
                               levels: @js(collect($levels)->map(fn($lv) => ['code' => $lv['code'], 'name' => $lv['name']])->all()),
                               semesters: @js(collect($semesters)->map(fn($s) => ['code' => $s['code'], 'name' => $s['name']])->all()),
                           })"

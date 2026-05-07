@@ -28,60 +28,6 @@
             </div>
         @endif
 
-        {{-- Tasdiqlanishi kutilayotgan to'plamlar --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
-            <div class="px-5 py-4 border-b border-gray-100">
-                <h3 class="text-sm font-semibold text-gray-900">
-                    {{ __("Guruh shakllantirish kutilmoqda") }}
-                    <span class="text-xs font-normal text-gray-500">
-                        ({{ __("dekan + registrator tasdiqlagan, fan + semestr bo'yicha to'plangan") }})
-                    </span>
-                </h3>
-            </div>
-
-            @if($aggregations->count() === 0)
-                <div class="p-8 text-center text-gray-500 text-sm">
-                    {{ __("Hozircha tasdiqlanishi kutilayotgan ariza yo'q") }}
-                </div>
-            @else
-                <div class="divide-y divide-gray-100">
-                    @foreach($aggregations as $agg)
-                        @php $variantsCount = count($agg['subject_id_variants'] ?? []); @endphp
-                        <div class="px-5 py-3 flex items-center justify-between">
-                            <div>
-                                <p class="text-sm font-medium text-gray-900 flex items-center gap-2">
-                                    {{ $agg['subject_name'] }}
-                                    @if($variantsCount > 1)
-                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold"
-                                              title="{{ __('Turli yo\'nalish/curriculum talabalari bir nomli fan bo\'yicha ariza bergan — birlashtirilgan') }}">
-                                            ⛓ {{ $variantsCount }} {{ __('curriculum') }}
-                                        </span>
-                                    @endif
-                                </p>
-                                <p class="text-xs text-gray-500 mt-0.5">{{ $agg['semester_name'] }}</p>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <span class="text-sm text-gray-700">
-                                    <span class="font-bold text-blue-700">{{ $agg['count'] }}</span>
-                                    {{ __("ta talaba") }}
-                                </span>
-                                <button type="button"
-                                        @click="openFormation({{ json_encode([
-                                            'subject_id' => $agg['subject_id'],
-                                            'subject_name' => $agg['subject_name'],
-                                            'semester_id' => $agg['semester_id'],
-                                            'semester_name' => $agg['semester_name'],
-                                        ]) }})"
-                                        class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                                    {{ __("Guruh shakllantirish") }}
-                                </button>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-        </div>
-
         {{-- Cascading filtrlar (talaba ma'lumotlari + Fan bo'yicha) --}}
         @include('partials._retake_filters', [
             'formAction' => route('admin.retake-groups.index'),
@@ -92,6 +38,134 @@
                 'search' => $search ?: null,
             ]),
         ])
+
+        {{-- Tasdiqlanishi kutilayotgan arizalar — yassi raqamlangan ro'yxat --}}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
+                <h3 class="text-sm font-semibold text-gray-900">
+                    {{ __("Guruh shakllantirish kutilmoqda") }}
+                    <span class="text-xs font-normal text-gray-500">
+                        ({{ __("O'quv bo'limi tasdiqlagan, guruh kutmoqda") }})
+                    </span>
+                </h3>
+                @if($pendingApps->total() > 0)
+                    <span class="text-xs text-gray-600">
+                        {{ __("Jami") }}: <span class="font-bold text-blue-700">{{ $pendingApps->total() }}</span> {{ __("ta ariza") }}
+                    </span>
+                @endif
+            </div>
+
+            @if($pendingApps->count() === 0)
+                <div class="p-10 text-center text-gray-500 text-sm">
+                    {{ __("Hozircha tasdiqlanishi kutilayotgan ariza yo'q") }}
+                </div>
+            @else
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-100">
+                        <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:48px;">{{ __("T/R") }}</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fakultet / Yo'nalish") }}</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Kurs / Guruh") }}</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:80px;">{{ __("Kredit") }}</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:170px;"></th>
+                        </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-100">
+                        @foreach($pendingApps as $i => $app)
+                            @php $student = $app->group?->student; @endphp
+                            <tr>
+                                <td class="px-3 py-2.5 text-center text-sm font-bold text-blue-700">
+                                    {{ ($pendingApps->currentPage() - 1) * $pendingApps->perPage() + $i + 1 }}
+                                </td>
+                                <td class="px-3 py-2.5 text-sm">
+                                    <div class="font-medium text-gray-900">{{ $student?->full_name ?? '—' }}</div>
+                                    <div class="text-[11px] text-gray-500">{{ $student?->hemis_id ?? '' }}</div>
+                                </td>
+                                <td class="px-3 py-2.5 text-xs text-gray-700">
+                                    <div>{{ $student?->department_name ?? '—' }}</div>
+                                    <div class="text-[11px] text-gray-500">{{ $student?->specialty_name ?? '' }}</div>
+                                </td>
+                                <td class="px-3 py-2.5 text-xs text-gray-700">
+                                    <div>{{ $student?->level_name ?? '—' }}</div>
+                                    <div class="text-[11px] text-gray-500">{{ $student?->group_name ?? '' }}</div>
+                                </td>
+                                <td class="px-3 py-2.5 text-sm font-medium text-gray-800">{{ $app->subject_name }}</td>
+                                <td class="px-3 py-2.5 text-xs text-gray-600">{{ $app->semester_name }}</td>
+                                <td class="px-3 py-2.5 text-sm text-gray-700 text-right">{{ rtrim(rtrim((string) $app->credit, '0'), '.') ?: '—' }}</td>
+                                <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                    <button type="button"
+                                            @click="openFormation({{ json_encode([
+                                                'subject_id' => $app->subject_id,
+                                                'subject_name' => $app->subject_name,
+                                                'semester_id' => $app->semester_id,
+                                                'semester_name' => $app->semester_name,
+                                            ]) }})"
+                                            class="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 inline-flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        </svg>
+                                        {{ __("Guruh shakllantirish") }}
+                                    </button>
+                                </td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="p-3 border-t border-gray-100">
+                    {{ $pendingApps->links() }}
+                </div>
+            @endif
+        </div>
+
+        {{-- Mavjud fan/semestr to'plamlari (statistika) --}}
+        @if($aggregations->count() > 0)
+            <details class="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
+                <summary class="px-5 py-3 cursor-pointer text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    {{ __("Fan + semestr bo'yicha to'plamlar") }}
+                    <span class="text-xs text-gray-500">({{ $aggregations->count() }} {{ __("ta") }})</span>
+                </summary>
+                <div class="divide-y divide-gray-100 border-t border-gray-100">
+                    @foreach($aggregations as $agg)
+                        @php $variantsCount = count($agg['subject_id_variants'] ?? []); @endphp
+                        <div class="px-5 py-2.5 flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                    {{ $agg['subject_name'] }}
+                                    @if($variantsCount > 1)
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold"
+                                              title="{{ __('Turli curriculum talabalari birlashtirilgan') }}">
+                                            ⛓ {{ $variantsCount }}
+                                        </span>
+                                    @endif
+                                </p>
+                                <p class="text-[11px] text-gray-500">{{ $agg['semester_name'] }}</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-700">
+                                    <span class="font-bold text-blue-700">{{ $agg['count'] }}</span> {{ __("ta") }}
+                                </span>
+                                <button type="button"
+                                        @click="openFormation({{ json_encode([
+                                            'subject_id' => $agg['subject_id'],
+                                            'subject_name' => $agg['subject_name'],
+                                            'semester_id' => $agg['semester_id'],
+                                            'semester_name' => $agg['semester_name'],
+                                        ]) }})"
+                                        class="px-2.5 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
+                                    {{ __("Shakllantirish") }}
+                                </button>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </details>
+        @endif
 
         {{-- Mavjud guruhlar --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100"

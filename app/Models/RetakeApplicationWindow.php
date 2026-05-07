@@ -79,10 +79,27 @@ class RetakeApplicationWindow extends Model
         return $this->status === 'active';
     }
 
-    public function scopeForStudent($query, int $specialtyId, string $levelCode)
+    /**
+     * Talabaning oynalarini tanlash. Agar talabaning fakulteti uzatilsa,
+     * shu fakultetga (yoki fakulteti belgilanmagan eski yozuvlarga) tegishli
+     * oynalar qaytariladi. Shu bilan bir xil yo'nalish/kurs uchun turli
+     * fakultetlarda alohida oynalar bo'lganda har talaba o'z fakulteti
+     * oynasiga yo'naltiriladi.
+     */
+    public function scopeForStudent($query, int $specialtyId, string $levelCode, ?string $studentDepartmentHemisId = null)
     {
-        return $query->where('specialty_id', $specialtyId)
+        $query->where('specialty_id', $specialtyId)
             ->where('level_code', $levelCode);
+
+        if ($studentDepartmentHemisId !== null && $studentDepartmentHemisId !== '') {
+            $query->where(function ($q) use ($studentDepartmentHemisId) {
+                $q->where('department_hemis_id', $studentDepartmentHemisId)
+                    ->orWhereNull('department_hemis_id')
+                    ->orWhere('department_hemis_id', '');
+            });
+        }
+
+        return $query;
     }
 
     /**

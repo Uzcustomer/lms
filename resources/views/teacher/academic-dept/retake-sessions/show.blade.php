@@ -190,7 +190,8 @@
                           action="{{ route('admin.retake-windows.store') }}"
                           x-data="windowForm({
                               departments: @js($departments->map(fn($d) => ['id' => (string)$d->department_hemis_id, 'name' => $d->name])->values()->all()),
-                              specialties: @js($specialties->map(fn($s) => ['pk' => $s->id, 'id' => (string)$s->specialty_hemis_id, 'name' => $s->name, 'department_hemis_id' => (string)($s->department_hemis_id ?? '')])->values()->all()),
+                              specialties: @js($specialties->map(fn($s) => ['pk' => $s->id, 'id' => (string)$s->specialty_hemis_id, 'name' => $s->name])->values()->all()),
+                              facultySpecialtyPairs: @js($facultySpecialtyPairs ?? (object)[]),
                               levels: @js(collect($levels)->map(fn($lv) => ['code' => $lv['code'], 'name' => $lv['name']])->all()),
                               semesters: @js(collect($semesters)->map(fn($s) => ['code' => $s['code'], 'name' => $s['name']])->all()),
                           })"
@@ -275,9 +276,12 @@
                             </div>
                         </div>
 
-                        {{-- Hidden inputs (form submit) — Specialty primary key (id) yuboriladi --}}
-                        <template x-for="pk in specialtyPks" :key="'sp-'+pk">
-                            <input type="hidden" name="specialty_pks[]" :value="pk">
+                        {{-- Hidden inputs (form submit).
+                             `assignments[]` — har bir element "fakultet_id|specialty_pk" formatida.
+                             Backend shu juftliklarga asoslanib oyna(lar)ni yaratadi va oynaning
+                             fakultetini foydalanuvchi tanloviga qarab saqlaydi. --}}
+                        <template x-for="pair in validAssignments" :key="'as-'+pair">
+                            <input type="hidden" name="assignments[]" :value="pair">
                         </template>
                         <template x-for="code in levelCodes" :key="'lv-'+code">
                             <input type="hidden" name="level_codes[]" :value="code">
@@ -354,10 +358,12 @@
 
     @push('scripts')
         <script>
-            function windowForm({ departments, specialties, levels, semesters }) {
+            function windowForm({ departments, specialties, facultySpecialtyPairs, levels, semesters }) {
                 return {
                     allDepartments: departments || [],
                     allSpecialties: specialties || [],
+                    // {fakultet_id: [spec_pk, ...]} — talabalardan kelgan haqiqiy bog'lanishlar
+                    pairsByFaculty: facultySpecialtyPairs || {},
                     allLevels: levels || [],
                     allSemesters: semesters || [],
                     departmentIds: [],
@@ -365,25 +371,52 @@
                     levelCodes: [],
                     semesterCodes: [],
 
+                    // Tanlangan fakultetlar ostida talabalari bor yo'nalishlar (bittadan, deduplicated)
                     get filteredSpecialties() {
                         if (this.departmentIds.length === 0) return [];
-                        const ids = this.departmentIds.map(String);
-                        return this.allSpecialties.filter(sp => ids.includes(String(sp.department_hemis_id)));
+                        const allowedPks = new Set();
+                        for (const deptId of this.departmentIds) {
+                            const list = this.pairsByFaculty[String(deptId)] || [];
+                            list.forEach(pk => allowedPks.add(Number(pk)));
+                        }
+                        return this.allSpecialties
+                            .filter(sp => allowedPks.has(Number(sp.pk)))
+                            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                    },
+
+                    // Yaratiladigan haqiqiy juftliklar: tanlangan fakultet × tanlangan yo'nalish,
+                    // FAQAT shu fakultetda real talabasi bor bo'lsa.
+                    // Format: "fakultet_id|spec_pk"
+                    get validAssignments() {
+                        const out = [];
+                        for (const deptId of this.departmentIds) {
+                            const allowedPks = new Set((this.pairsByFaculty[String(deptId)] || []).map(Number));
+                            for (const pk of this.specialtyPks) {
+                                if (allowedPks.has(Number(pk))) {
+                                    out.push(`${deptId}|${pk}`);
+                                }
+                            }
+                        }
+                        return out;
                     },
 
                     get hasXalqaroSelected() {
+                        // Faqat haqiqiy juftlik mavjud bo'lgan fakultetlarni hisobga olamiz —
+                        // tanlangan fakultetda umuman yo'nalish bo'lmasa, oyna ham yaratilmaydi.
+                        const activeDeptIds = new Set();
+                        this.validAssignments.forEach(a => activeDeptIds.add(a.split('|')[0]));
                         return this.allDepartments
-                            .filter(d => this.departmentIds.includes(d.id))
+                            .filter(d => activeDeptIds.has(String(d.id)))
                             .some(d => /xalqaro/i.test(d.name || ''));
                     },
 
                     get combinationCount() {
-                        const sp = this.specialtyPks.length;
+                        const pairs = this.validAssignments.length;
                         const lv = this.levelCodes.length;
                         const sm = this.hasXalqaroSelected ? Math.max(this.semesterCodes.length, 0) : 1;
-                        if (sp === 0 || lv === 0) return 0;
+                        if (pairs === 0 || lv === 0) return 0;
                         if (this.hasXalqaroSelected && this.semesterCodes.length === 0) return 0;
-                        return sp * lv * sm;
+                        return pairs * lv * sm;
                     },
 
                     toggleAllDepartments() {
@@ -408,11 +441,11 @@
                     },
 
                     prepareSubmit(e) {
-                        // Yo'nalishlardan faqat tanlangan fakultetlar ostidagilarni qoldirish
-                        const allowed = this.filteredSpecialties.map(sp => Number(sp.pk));
-                        this.specialtyPks = this.specialtyPks.filter(pk => allowed.includes(Number(pk)));
+                        // Tanlangan yo'nalishlardan faqat hozirgi fakultet tanloviga mos keladiganlarini qoldiramiz
+                        const allowed = new Set(this.filteredSpecialties.map(sp => Number(sp.pk)));
+                        this.specialtyPks = this.specialtyPks.filter(pk => allowed.has(Number(pk)));
 
-                        if (this.specialtyPks.length === 0 || this.levelCodes.length === 0 ||
+                        if (this.validAssignments.length === 0 || this.levelCodes.length === 0 ||
                             (this.hasXalqaroSelected && this.semesterCodes.length === 0)) {
                             e.preventDefault();
                             alert("{{ __("Iltimos, kamida bittadan yo'nalish va kurs tanlang") }}");

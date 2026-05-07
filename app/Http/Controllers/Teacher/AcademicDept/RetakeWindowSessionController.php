@@ -326,6 +326,12 @@ class RetakeWindowSessionController extends Controller
         // Bevosita department_hemis_id'dan fakultet nomi (window'da saqlangan)
         $deptIdToName = Department::pluck('name', 'department_hemis_id');
 
+        // Eski view va batch fallback uchun legacy lookup (specialty_hemis_id -> faculty_name)
+        $specialtyToFaculty = Specialty::query()
+            ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
+            ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
+            ->pluck('faculty_name', 'sp_hemis_id');
+
         // specialty_hemis_id -> [department_hemis_id, ...] (bir nechta bo'lishi mumkin)
         $specialtyDeptOptions = Specialty::query()
             ->select('specialty_hemis_id', 'department_hemis_id')

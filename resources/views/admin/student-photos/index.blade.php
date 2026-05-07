@@ -500,7 +500,7 @@
                             Tanlovni tozalash
                         </button>
                         <button type="button" @click="openBulkRejectByIds()"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-700 text-white text-xs font-semibold rounded-md hover:bg-rose-800"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-700 text-white text-xs font-semibold rounded-md hover:bg-red-800"
                                 title="Talaba ID ro'yxatini paste qilib, mos approved rasmlarni rad etish">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                             Ro'yxat bo'yicha rad etish
@@ -936,7 +936,7 @@
                             </button>
                             <button type="button" @click="submitBulkRejectByIds()"
                                     :disabled="bulkReject.loading || !bulkReject.ids.trim() || !bulkReject.reason.trim()"
-                                    class="px-4 py-2 bg-rose-700 text-white text-sm font-semibold rounded-md hover:bg-rose-800 disabled:opacity-50">
+                                    class="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-md hover:bg-red-800 disabled:opacity-50">
                                 <span x-show="!bulkReject.loading">Rad etish</span>
                                 <span x-show="bulkReject.loading">Yuborilmoqda…</span>
                             </button>
@@ -949,7 +949,7 @@
                         <div class="rounded-md bg-emerald-50 border border-emerald-200 p-4 mb-4 text-sm">
                             <div>Yuborilgan IDlar: <strong x-text="bulkReject.result.requested"></strong></div>
                             <div>Approved rasmga mos kelgan: <strong x-text="bulkReject.result.matched"></strong></div>
-                            <div>Rad etilgan: <strong class="text-rose-700" x-text="bulkReject.result.updated"></strong></div>
+                            <div>Rad etilgan: <strong class="text-red-700" x-text="bulkReject.result.updated"></strong></div>
                             <div>Topilmadi (yoki approved emas): <strong x-text="bulkReject.result.missing_count"></strong></div>
                         </div>
 

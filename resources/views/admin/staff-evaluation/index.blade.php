@@ -311,10 +311,12 @@
                 @php
                     $w = $template['width_mm'];
                     $h = $template['height_mm'];
-                    $qrSize = max(15, min($w, $h) * 0.7);
-                    $logoSize = $qrSize * 0.22;
+                    $bottomText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
+                    $captionSpace = $bottomText !== '' ? 3.5 : 0;
+                    $qrSize = max(15, min($w - 2, $h - $captionSpace - 1.5));
+                    $logoSize = $qrSize * 0.18;
                 @endphp
-                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:1.2mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.8mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
+                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:0.8mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.6mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
                     {{-- QR kod with logo --}}
                     <div style="flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;">
                         <div style="width:{{ $qrSize }}mm; height:{{ $qrSize }}mm; display:flex; align-items:center; justify-content:center;">
@@ -329,11 +331,8 @@
                         @endif
                     </div>
                     {{-- Pastki yozuv --}}
-                    @php
-                        $bottomText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
-                    @endphp
                     @if($bottomText !== '')
-                    <div style="font-size:1.8mm; color:#1e3a8a; font-weight:600; line-height:1.15;">
+                    <div style="font-size:1.9mm; color:#1e3a8a; font-weight:700; line-height:1.1; white-space:nowrap;">
                         {{ $bottomText }}
                     </div>
                     @endif

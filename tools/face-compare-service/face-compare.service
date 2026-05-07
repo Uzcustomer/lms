@@ -1,6 +1,6 @@
 [Unit]
 Description=LMS Face Compare Service
-After=network.target
+After=network.target mysql.service
 
 [Service]
 Type=simple
@@ -11,7 +11,15 @@ Environment="PATH=/var/www/face-compare-service/venv/bin"
 Environment="HOME=/var/www/face-compare-service"
 Environment="DEEPFACE_HOME=/var/www/face-compare-service"
 Environment="TF_CPP_MIN_LOG_LEVEL=2"
-ExecStart=/var/www/face-compare-service/venv/bin/uvicorn app:app --host 127.0.0.1 --port 5005
+# Laravel .env yo'lini ko'rsatish — service uni o'qib DB ulanish ma'lumotlarini oladi
+Environment="LARAVEL_ENV_PATH=/var/www/lmsttatf/.env"
+# Yoki to'g'ridan-to'g'ri inline berish (kerak bo'lsa):
+# Environment="DB_HOST=127.0.0.1"
+# Environment="DB_PORT=3306"
+# Environment="DB_DATABASE=lmsttatf"
+# Environment="DB_USERNAME=falcon"
+# Environment="DB_PASSWORD=Password@123"
+ExecStart=/var/www/face-compare-service/venv/bin/uvicorn app:app --host 0.0.0.0 --port 5005
 Restart=always
 RestartSec=5
 

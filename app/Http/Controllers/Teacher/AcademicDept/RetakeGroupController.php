@@ -36,6 +36,20 @@ class RetakeGroupController extends Controller
         $statusFilter = $request->input('status', 'all');
         $search = trim((string) $request->input('search', ''));
 
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $perPage = (int) $request->input('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
+
         $groupsQuery = RetakeGroup::query()
             ->with('teacher')
             ->withCount(['applications as students_count'])
@@ -55,7 +69,39 @@ class RetakeGroupController extends Controller
             });
         }
 
-        $groups = $groupsQuery->paginate(20)->withQueryString();
+        // Talaba ma'lumotlari bo'yicha filtrlar — guruh ichidagi arizalardan
+        // hech bo'lmaganda bittasi tanlangan talaba shartiga mos kelishi kerak.
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+        if ($hasStudentFilter) {
+            $groupsQuery->whereHas('applications', function ($q) use ($studentFilters) {
+                $q->whereIn('student_hemis_id', function ($sub) use ($studentFilters) {
+                    $sub->select('hemis_id')->from('students');
+                    if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+                    if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+                    if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+                    if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+                    if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+                    if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+                });
+            });
+        }
+
+        if ($subjectFilter) {
+            $groupsQuery->where('subject_id', $subjectFilter);
+        }
+
+        $groups = $groupsQuery->paginate($perPage)->withQueryString();
+
+        $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
+        $subjects = \App\Services\Retake\RetakeFilterCache::subjects();
+
+        // Bo'sh (talabasiz) guruh ID'lari — o'chirish mumkin
+        $deletableGroupIds = $groups->getCollection()
+            ->filter(fn ($g) => ($g->students_count ?? 0) === 0)
+            ->pluck('id')
+            ->all();
+
+        $trashedCount = RetakeGroup::onlyTrashed()->count();
 
         return view('teacher.academic-dept.retake-groups.index', [
             'aggregations' => $aggregations,
@@ -63,6 +109,10 @@ class RetakeGroupController extends Controller
             'statusFilter' => $statusFilter,
             'search' => $search,
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+            'educationTypes' => $educationTypes,
+            'subjects' => $subjects,
+            'deletableGroupIds' => $deletableGroupIds,
+            'trashedCount' => $trashedCount,
         ]);
     }
 
@@ -128,6 +178,9 @@ class RetakeGroupController extends Controller
             'application_ids' => 'required|array|min:1',
             'application_ids.*' => 'integer',
             'action' => 'required|in:save,publish',
+            'assessment_type' => 'required|in:oske,test,oske_test,sinov_fan',
+            'oske_date' => 'nullable|date|required_if:assessment_type,oske,oske_test',
+            'test_date' => 'nullable|date|required_if:assessment_type,test,oske_test|after_or_equal:oske_date',
         ]);
 
         $publish = $data['action'] === 'publish';
@@ -187,6 +240,9 @@ class RetakeGroupController extends Controller
             'start_date' => 'sometimes|date',
             'end_date' => 'sometimes|date',
             'max_students' => 'sometimes|nullable|integer|min:1',
+            'assessment_type' => 'sometimes|in:oske,test,oske_test,sinov_fan',
+            'oske_date' => 'sometimes|nullable|date',
+            'test_date' => 'sometimes|nullable|date|after_or_equal:oske_date',
         ]);
 
         $group = RetakeGroup::findOrFail($groupId);
@@ -265,6 +321,113 @@ class RetakeGroupController extends Controller
         $group->update(['status' => $data['status']]);
 
         return redirect()->back()->with('success', __('Holat o\'zgartirildi'));
+    }
+
+    /**
+     * Guruhni arxivga ko'chirish (soft delete) — faqat hech qanday talaba
+     * biriktirilmagan bo'lsa.
+     */
+    public function destroy(int $groupId): RedirectResponse
+    {
+        $this->authorize();
+
+        $group = RetakeGroup::withCount('applications as students_count')->findOrFail($groupId);
+
+        if (($group->students_count ?? 0) > 0) {
+            return redirect()->back()->withErrors([
+                'group' => 'Bu guruhga talabalar biriktirilgan, o\'chirib bo\'lmaydi',
+            ]);
+        }
+
+        $group->delete();
+
+        return redirect()->route('admin.retake-groups.index')
+            ->with('success', __('Guruh arxivga ko\'chirildi'));
+    }
+
+    /**
+     * Tanlangan guruhlarni ommaviy arxivga ko'chirish.
+     */
+    public function bulkDestroy(Request $request): RedirectResponse
+    {
+        $this->authorize();
+
+        $data = $request->validate([
+            'group_ids' => 'required|array|min:1',
+            'group_ids.*' => 'integer',
+        ]);
+
+        $groups = RetakeGroup::withCount('applications as students_count')
+            ->whereIn('id', $data['group_ids'])
+            ->get();
+
+        $deleted = 0;
+        $skipped = 0;
+
+        foreach ($groups as $group) {
+            if (($group->students_count ?? 0) > 0) {
+                $skipped++;
+                continue;
+            }
+            $group->delete();
+            $deleted++;
+        }
+
+        $msg = "{$deleted} ta guruh arxivga ko'chirildi";
+        if ($skipped > 0) {
+            $msg .= ", {$skipped} ta guruhga talabalar biriktirilgani sababli o'tkazib yuborildi";
+        }
+
+        return redirect()->route('admin.retake-groups.index')->with('success', $msg);
+    }
+
+    /**
+     * Tarix sahifasi — arxivlangan guruhlar.
+     */
+    public function trashed()
+    {
+        $this->authorize();
+
+        $groups = RetakeGroup::onlyTrashed()
+            ->with('teacher')
+            ->withCount('applications as students_count')
+            ->orderByDesc('deleted_at')
+            ->get();
+
+        return view('teacher.academic-dept.retake-groups.trashed', [
+            'groups' => $groups,
+            'canForceDelete' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+        ]);
+    }
+
+    /**
+     * Arxivdan tiklash.
+     */
+    public function restore(int $groupId): RedirectResponse
+    {
+        $this->authorize();
+
+        $group = RetakeGroup::onlyTrashed()->findOrFail($groupId);
+        $group->restore();
+
+        return redirect()->route('admin.retake-groups.trashed')
+            ->with('success', __('Guruh tiklandi'));
+    }
+
+    /**
+     * Arxivdan butunlay o'chirish (faqat super-admin).
+     */
+    public function forceDestroy(int $groupId): RedirectResponse
+    {
+        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
+            abort(403);
+        }
+
+        $group = RetakeGroup::onlyTrashed()->findOrFail($groupId);
+        $group->forceDelete();
+
+        return redirect()->route('admin.retake-groups.trashed')
+            ->with('success', __('Guruh butunlay o\'chirildi'));
     }
 
     private function authorize(): void

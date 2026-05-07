@@ -4,22 +4,48 @@ Face Comparison + Photo Quality Service
 - POST /compare        compare two face images, return similarity %
 - POST /quality-check  inspect a photo against student-photo standards
                        (centering, framing, white coat, lighting, size)
+- POST /embed          extract a 512-dim ArcFace embedding for one image
+- POST /identify       1:N identification — find best match in cached embeddings
+- POST /refresh-cache  replace the in-memory student embedding cache
+- POST /reload-from-db reload cache from MySQL (student_photos.face_embedding)
+- GET  /cache-info     report cache size and sample IDs
 
-Used by the LMS admin student-photo review page. Runs bound to
-127.0.0.1:5005 and the Docker bridge IP; do not expose publicly.
+On startup, the service reads embeddings directly from the MySQL DB
+(student_photos.face_embedding for status='approved' rows). This means
+the cache survives service restarts without external action.
+
+Used by the LMS admin student-photo review page and student Face ID login.
+Runs bound to 127.0.0.1:5005 and the Docker bridge IP; do not expose
+publicly.
 """
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from deepface import DeepFace
+import json
 import logging
 import os
 import io
+import threading
 import requests
 from urllib.parse import urlsplit, urlunsplit, quote
 import numpy as np
 import cv2
 from PIL import Image
+
+# DB ulanishlari (PyMySQL — sof Python, oddiy)
+import pymysql
+
+# .env faylni o'qish uchun (agar mavjud bo'lsa)
+try:
+    from dotenv import load_dotenv
+    # Laravel .env odatda /var/www/lmsttatf/.env yo'lida; service uni
+    # EnvironmentFile yoki LARAVEL_ENV_PATH orqali topadi
+    _env_path = os.environ.get("LARAVEL_ENV_PATH")
+    if _env_path and os.path.isfile(_env_path):
+        load_dotenv(_env_path)
+except Exception:
+    pass
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
@@ -28,6 +54,12 @@ logger = logging.getLogger("uvicorn.error")
 
 MODEL_NAME = "ArcFace"
 DETECTOR_BACKEND = "opencv"
+
+# ─────────────────────── In-memory identification cache ───────────────────────
+# {student_id_number: np.ndarray (512,)}
+_identify_cache: dict[str, np.ndarray] = {}
+_identify_meta: dict[str, dict] = {}
+_cache_lock = threading.Lock()
 
 
 class CompareRequest(BaseModel):
@@ -39,6 +71,112 @@ class QualityRequest(BaseModel):
     image: str  # URL or absolute local path
 
 
+class EmbedRequest(BaseModel):
+    image: str  # URL or absolute local path
+
+
+class IdentifyRequest(BaseModel):
+    image: str  # URL or absolute local path
+    top_k: int = 1
+
+
+class CacheItem(BaseModel):
+    student_id_number: str
+    embedding: list[float] | None = None
+    image: str | None = None  # URL/path — server o'zi embedding hisoblaydi
+    full_name: str | None = None
+
+
+class RefreshCacheRequest(BaseModel):
+    items: list[CacheItem]
+    replace: bool = True   # True bo'lsa eski cache butunlay yangilanadi
+
+
+# ───────────────────────── DB cache loader ────────────────────────────
+
+def _db_connect():
+    """
+    MySQL ulanish — DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD
+    environment variable'lari (Laravel .env'dan keladi).
+    """
+    host = os.environ.get("DB_HOST", "127.0.0.1")
+    port = int(os.environ.get("DB_PORT", "3306"))
+    database = os.environ.get("DB_DATABASE")
+    user = os.environ.get("DB_USERNAME")
+    password = os.environ.get("DB_PASSWORD", "")
+    if not (database and user):
+        raise RuntimeError("DB_DATABASE va DB_USERNAME atrof-muhit o'zgaruvchilari kerak")
+    return pymysql.connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        database=database,
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=10,
+    )
+
+
+def _load_cache_from_db() -> dict:
+    """
+    student_photos jadvalidan tasdiqlangan va embedding mavjud yozuvlarni o'qib
+    cache'ni qayta tuzadi. Yangi cache lug'ati va meta lug'atini qaytaradi
+    (eski cache'ni almashtirish uchun atomic swap).
+    """
+    new_cache: dict[str, np.ndarray] = {}
+    new_meta: dict[str, dict] = {}
+    failed = 0
+
+    conn = _db_connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT student_id_number, full_name, face_embedding
+                FROM student_photos
+                WHERE status = 'approved'
+                  AND face_embedding IS NOT NULL
+            """)
+            for row in cur:
+                sid = (row.get("student_id_number") or "").strip()
+                if not sid:
+                    continue
+                emb_raw = row.get("face_embedding")
+                if isinstance(emb_raw, (bytes, bytearray)):
+                    emb_raw = emb_raw.decode("utf-8", errors="ignore")
+                try:
+                    if isinstance(emb_raw, str):
+                        arr_list = json.loads(emb_raw)
+                    elif isinstance(emb_raw, list):
+                        arr_list = emb_raw
+                    else:
+                        failed += 1
+                        continue
+                    arr = np.asarray(arr_list, dtype=np.float32)
+                    norm = np.linalg.norm(arr)
+                    if norm < 1e-6:
+                        failed += 1
+                        continue
+                    new_cache[sid] = arr / norm
+                    new_meta[sid] = {"full_name": row.get("full_name") or ""}
+                except Exception:
+                    failed += 1
+    finally:
+        conn.close()
+
+    logger.info(f"DB cache yuklandi: {len(new_cache)} ta, xato {failed}")
+    return {"cache": new_cache, "meta": new_meta, "failed": failed}
+
+
+def _swap_cache(new_cache: dict, new_meta: dict) -> int:
+    with _cache_lock:
+        _identify_cache.clear()
+        _identify_meta.clear()
+        _identify_cache.update(new_cache)
+        _identify_meta.update(new_meta)
+        return len(_identify_cache)
+
+
 @app.on_event("startup")
 def warmup():
     try:
@@ -47,10 +185,18 @@ def warmup():
     except Exception as e:
         logger.error(f"warmup failed: {e}")
 
+    # Cache'ni DB'dan yuklash (xato bo'lsa service ishlayveradi, faqat cache bo'sh qoladi)
+    try:
+        loaded = _load_cache_from_db()
+        size = _swap_cache(loaded["cache"], loaded["meta"])
+        logger.info(f"identify cache restored from DB: cache_size={size}")
+    except Exception as e:
+        logger.error(f"DB cache load failed: {e}")
+
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": MODEL_NAME}
+    return {"status": "ok", "model": MODEL_NAME, "cache_size": len(_identify_cache)}
 
 
 # ───────────────────────────── /compare ──────────────────────────────
@@ -85,6 +231,201 @@ def compare(req: CompareRequest):
         "distance": round(distance, 4),
         "threshold": round(threshold, 4),
         "match": verified,
+        "model": MODEL_NAME,
+    }
+
+
+# ─────────────────────────── /embed ───────────────────────────────────
+
+def _extract_embedding(src: str) -> np.ndarray | None:
+    """ArcFace 512-dim embedding chiqarish. None — yuz topilmadi yoki xato."""
+    try:
+        reps = DeepFace.represent(
+            img_path=src,
+            model_name=MODEL_NAME,
+            detector_backend=DETECTOR_BACKEND,
+            enforce_detection=False,
+            align=True,
+        )
+    except Exception as e:
+        logger.warning(f"represent failed: {e}")
+        return None
+
+    if not reps:
+        return None
+    emb = reps[0].get("embedding") if isinstance(reps, list) else None
+    if not emb:
+        return None
+    arr = np.asarray(emb, dtype=np.float32)
+    norm = np.linalg.norm(arr)
+    if norm < 1e-6:
+        return None
+    return arr / norm  # L2-normalized → cosine similarity = dot product
+
+
+@app.post("/embed")
+def embed(req: EmbedRequest):
+    arr = _extract_embedding(req.image)
+    if arr is None:
+        raise HTTPException(status_code=422, detail="Yuz aniqlanmadi yoki embedding hisoblab bo'lmadi")
+    return {
+        "embedding": arr.tolist(),
+        "dim": int(arr.shape[0]),
+        "model": MODEL_NAME,
+    }
+
+
+# ──────────────────────── /refresh-cache ──────────────────────────────
+
+@app.post("/refresh-cache")
+def refresh_cache(req: RefreshCacheRequest):
+    """
+    Cache'ga embedding'larni yuklash. Har item uchun:
+      - embedding berilgan bo'lsa: shu darhol saqlanadi
+      - image berilgan bo'lsa: bu yerda hisoblanadi va saqlanadi
+    `replace=True` — eski cache butunlay almashtiriladi (item dagilarsiz oldingilar yo'q bo'ladi).
+    """
+    new_entries: dict[str, np.ndarray] = {}
+    new_meta: dict[str, dict] = {}
+    failed: list[dict] = []
+
+    for it in req.items:
+        sid = (it.student_id_number or '').strip()
+        if not sid:
+            continue
+        if it.embedding:
+            arr = np.asarray(it.embedding, dtype=np.float32)
+            norm = np.linalg.norm(arr)
+            if norm > 1e-6:
+                arr = arr / norm
+        elif it.image:
+            arr = _extract_embedding(it.image)
+            if arr is None:
+                failed.append({"student_id_number": sid, "reason": "embedding_not_extracted"})
+                continue
+        else:
+            failed.append({"student_id_number": sid, "reason": "neither_embedding_nor_image"})
+            continue
+
+        new_entries[sid] = arr
+        new_meta[sid] = {"full_name": it.full_name or ""}
+
+    with _cache_lock:
+        if req.replace:
+            _identify_cache.clear()
+            _identify_meta.clear()
+        _identify_cache.update(new_entries)
+        _identify_meta.update(new_meta)
+        size = len(_identify_cache)
+
+    return {
+        "ok": True,
+        "added_or_updated": len(new_entries),
+        "cache_size": size,
+        "failed": failed,
+    }
+
+
+@app.get("/cache-info")
+def cache_info():
+    with _cache_lock:
+        size = len(_identify_cache)
+        sample = list(_identify_cache.keys())[:10]
+    return {"cache_size": size, "sample_ids": sample, "model": MODEL_NAME}
+
+
+@app.post("/reload-from-db")
+def reload_from_db():
+    """
+    Cache'ni MySQL student_photos jadvalidan qayta yuklash.
+    Manual chaqirilganda ishlatiladi (masalan Laravel approve hookida).
+    """
+    try:
+        loaded = _load_cache_from_db()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"DB load xato: {e}")
+
+    size = _swap_cache(loaded["cache"], loaded["meta"])
+    return {
+        "ok": True,
+        "cache_size": size,
+        "failed": loaded["failed"],
+        "model": MODEL_NAME,
+    }
+
+
+# ─────────────────────────── /identify ────────────────────────────────
+
+@app.post("/identify")
+def identify(req: IdentifyRequest):
+    """
+    1:N identifikatsiya — kelayotgan rasm uchun cache'dan eng yaqin
+    talabani topadi. Cosine similarity (embedding'lar L2-normalized,
+    shuning uchun matmul yetarli).
+    """
+    with _cache_lock:
+        if not _identify_cache:
+            raise HTTPException(status_code=503, detail="Cache bo'sh — avval /refresh-cache chaqiring")
+        ids = list(_identify_cache.keys())
+        matrix = np.stack([_identify_cache[i] for i in ids], axis=0)  # (N, D)
+        meta_snapshot = {i: _identify_meta.get(i, {}) for i in ids}
+
+    query = _extract_embedding(req.image)
+    if query is None:
+        raise HTTPException(status_code=422, detail="Yuz aniqlanmadi")
+
+    sims = matrix @ query                    # cosine similarity (-1..1)
+    # Realroq mapping: ArcFace uchun
+    # cos < 0.40 → 0% (boshqa odam)
+    # cos = 0.60 → 50%
+    # cos > 0.80 → 100% (aniq mos)
+    LOW, HIGH = 0.40, 0.80
+    sims_clipped = np.clip(sims, LOW, HIGH)
+    percents = (sims_clipped - LOW) / (HIGH - LOW) * 100.0  # 0..100
+
+    top_k = max(1, min(int(req.top_k or 1), 5))
+    top_idx = np.argsort(-sims)[:max(top_k, 2)]  # at least 2 for margin check
+    top1_cos = float(sims[top_idx[0]])
+    top2_cos = float(sims[top_idx[1]]) if len(top_idx) > 1 else 0.0
+    margin = top1_cos - top2_cos
+
+    # Xavfsizlik filtri:
+    # 1) Eng yaxshi cos >= MIN_COSINE bo'lishi kerak (boshqa odamlardan ajralib turish)
+    # 2) Top1 va top2 farqi >= MIN_MARGIN bo'lishi kerak (ko'p odamlarga o'xshamasligi)
+    MIN_COSINE = 0.65     # raw cosine pol (false positive'ga qarshi qattiq)
+    MIN_MARGIN = 0.12     # top1 va top2 farqi (ambiguity'ga qarshi qattiq)
+
+    if top1_cos < MIN_COSINE or margin < MIN_MARGIN:
+        # Match topilmadi - tashqaridan kelgan yoki ko'p odamga o'xshash
+        return {
+            "matches": [],
+            "best_cos": round(top1_cos, 4),
+            "second_cos": round(top2_cos, 4),
+            "margin": round(margin, 4),
+            "rejected_reason": (
+                "low_cosine" if top1_cos < MIN_COSINE
+                else "ambiguous_match"  # ko'p odamga o'xshaydi
+            ),
+            "cache_size": len(ids),
+            "model": MODEL_NAME,
+        }
+
+    matches = []
+    for i in top_idx[:top_k]:
+        sid = ids[int(i)]
+        if float(sims[int(i)]) < MIN_COSINE:
+            continue
+        matches.append({
+            "student_id_number": sid,
+            "similarity_percent": round(float(percents[int(i)]), 2),
+            "cosine": round(float(sims[int(i)]), 4),
+            "full_name": meta_snapshot.get(sid, {}).get("full_name", ""),
+        })
+
+    return {
+        "matches": matches,
+        "margin": round(margin, 4),
+        "cache_size": len(ids),
         "model": MODEL_NAME,
     }
 

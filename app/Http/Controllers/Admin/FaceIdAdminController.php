@@ -111,56 +111,10 @@ class FaceIdAdminController extends Controller
         }
 
         $logs      = $query->paginate(50)->appends($request->query());
-
-        // Filtrlangan statistikalar
-        $statsBase = FaceIdLog::query();
-        if ($request->result) {
-            $statsBase->where('result', $request->result);
-        }
-        if ($request->student_id_number) {
-            $statsBase->where('student_id_number', 'like', '%' . $request->student_id_number . '%');
-        }
-        if ($request->date) {
-            $statsBase->whereDate('created_at', $request->date);
-        }
-
-        $resultCounts = (clone $statsBase)
-            ->selectRaw('result, COUNT(*) as cnt')
-            ->groupBy('result')
-            ->pluck('cnt', 'result')
-            ->toArray();
-
-        $totalAll = array_sum($resultCounts);
-        $stats = [
-            'total'           => $totalAll,
-            'success'         => $resultCounts['success']         ?? 0,
-            'failed'          => $resultCounts['failed']          ?? 0,
-            'liveness_failed' => $resultCounts['liveness_failed'] ?? 0,
-            'not_found'       => $resultCounts['not_found']       ?? 0,
-            'disabled'        => $resultCounts['disabled']        ?? 0,
-            'avg_confidence'  => (clone $statsBase)->whereNotNull('confidence')->avg('confidence'),
-        ];
-
-        // 4 ta confidence oralig'i (0-1)
-        $confidenceRanges = [
-            ['label' => '0–25%',   'min' => 0.00, 'max' => 0.25, 'color' => 'bg-red-100 text-red-700'],
-            ['label' => '25–50%',  'min' => 0.25, 'max' => 0.50, 'color' => 'bg-orange-100 text-orange-700'],
-            ['label' => '50–75%',  'min' => 0.50, 'max' => 0.75, 'color' => 'bg-yellow-100 text-yellow-700'],
-            ['label' => '75–100%', 'min' => 0.75, 'max' => 1.01, 'color' => 'bg-green-100 text-green-700'],
-        ];
-        foreach ($confidenceRanges as &$r) {
-            $r['count'] = (clone $statsBase)
-                ->whereNotNull('confidence')
-                ->where('confidence', '>=', $r['min'])
-                ->where('confidence', '<',  $r['max'])
-                ->count();
-        }
-        unset($r);
-
         $todayTotal   = FaceIdLog::whereDate('created_at', today())->count();
         $todaySuccess = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
 
-        return view('admin.face-id.logs', compact('logs', 'todayTotal', 'todaySuccess', 'stats', 'confidenceRanges'));
+        return view('admin.face-id.logs', compact('logs', 'todayTotal', 'todaySuccess'));
     }
 
     /**

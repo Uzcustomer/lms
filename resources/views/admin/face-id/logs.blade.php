@@ -20,6 +20,64 @@
     <div class="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{{ session('success') }}</div>
     @endif
 
+    <!-- Umumiy statistika -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        <div class="bg-white border rounded-lg p-3">
+            <div class="text-[11px] uppercase font-bold text-gray-400 tracking-wide">Jami</div>
+            <div class="text-2xl font-bold text-gray-800 mt-1">{{ number_format($stats['total']) }}</div>
+        </div>
+        <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div class="text-[11px] uppercase font-bold text-green-600 tracking-wide">✅ Muvaffaqiyatli</div>
+            <div class="text-2xl font-bold text-green-700 mt-1">{{ number_format($stats['success']) }}</div>
+            <div class="text-[11px] text-green-600/70">{{ $stats['total'] ? round($stats['success'] / $stats['total'] * 100, 1) : 0 }}%</div>
+        </div>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div class="text-[11px] uppercase font-bold text-red-600 tracking-wide">❌ Failed</div>
+            <div class="text-2xl font-bold text-red-700 mt-1">{{ number_format($stats['failed']) }}</div>
+            <div class="text-[11px] text-red-600/70">{{ $stats['total'] ? round($stats['failed'] / $stats['total'] * 100, 1) : 0 }}%</div>
+        </div>
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div class="text-[11px] uppercase font-bold text-yellow-700 tracking-wide">👁️ Liveness</div>
+            <div class="text-2xl font-bold text-yellow-700 mt-1">{{ number_format($stats['liveness_failed']) }}</div>
+        </div>
+        <div class="bg-gray-50 border rounded-lg p-3">
+            <div class="text-[11px] uppercase font-bold text-gray-500 tracking-wide">🔍 Topilmadi</div>
+            <div class="text-2xl font-bold text-gray-700 mt-1">{{ number_format($stats['not_found']) }}</div>
+        </div>
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div class="text-[11px] uppercase font-bold text-blue-600 tracking-wide">O'rt. yaqinlik</div>
+            <div class="text-2xl font-bold text-blue-700 mt-1">
+                {{ $stats['avg_confidence'] !== null ? round($stats['avg_confidence'] * 100, 1) . '%' : '—' }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Confidence oraliqlari -->
+    <div class="bg-white border rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+            <div class="text-sm font-semibold text-gray-700">📊 Yaqinlik (confidence) oraliqlari</div>
+            <div class="text-xs text-gray-400">Faqat confidence yozilgan loglar</div>
+        </div>
+        @php
+            $rangeTotal = array_sum(array_column($confidenceRanges, 'count'));
+        @endphp
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            @foreach($confidenceRanges as $r)
+            @php $pct = $rangeTotal ? round($r['count'] / $rangeTotal * 100, 1) : 0; @endphp
+            <div class="border rounded-lg p-3">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $r['color'] }}">{{ $r['label'] }}</span>
+                    <span class="text-xs text-gray-400">{{ $pct }}%</span>
+                </div>
+                <div class="text-xl font-bold text-gray-800">{{ number_format($r['count']) }}</div>
+                <div class="w-full bg-gray-100 rounded-full h-1.5 mt-2 overflow-hidden">
+                    <div class="h-full bg-blue-500" style="width: {{ $pct }}%;"></div>
+                </div>
+            </div>
+            @endforeach
+        </div>
+    </div>
+
     <!-- Filter -->
     <form method="GET" class="bg-white rounded-lg border p-4 mb-4 flex flex-wrap gap-3 items-end">
         <div>

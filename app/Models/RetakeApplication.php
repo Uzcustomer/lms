@@ -35,6 +35,9 @@ class RetakeApplication extends Model
         'has_sinov',
         'oske_score',
         'test_score',
+        'joriy_score',
+        'joriy_graded_by_name',
+        'joriy_graded_at',
         'final_grade_value',
         'final_grade_set_at',
 
@@ -56,6 +59,8 @@ class RetakeApplication extends Model
         'has_sinov' => 'boolean',
         'oske_score' => 'decimal:2',
         'test_score' => 'decimal:2',
+        'joriy_score' => 'decimal:2',
+        'joriy_graded_at' => 'datetime',
         'final_grade_value' => 'decimal:2',
         'final_grade_set_at' => 'datetime',
         'dean_decision_at' => 'datetime',

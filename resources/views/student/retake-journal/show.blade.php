@@ -12,12 +12,8 @@
     </x-slot>
 
     @php
-        $values = $grades->map(fn ($g) => $g->grade)->filter(fn ($v) => $v !== null);
-        $avg = $values->isNotEmpty() ? (int) round($values->avg()) : null;
-        $gradedCount = $values->count();
-        $totalDays = count($dates);
-        $passCount = $values->filter(fn ($v) => (float) $v >= 60)->count();
-        $failCount = $gradedCount - $passCount;
+        $jn = $application?->joriy_score;
+        $jnInt = $jn !== null ? (int) round((float) $jn) : null;
     @endphp
 
     <div class="py-3 sm:py-6 px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto">
@@ -38,17 +34,13 @@
             <h3 class="text-lg sm:text-xl font-bold mt-1 truncate">{{ $group->subject_name }}</h3>
             <p class="text-xs text-blue-100 mt-0.5 truncate">{{ $group->name }}</p>
 
-            <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-white/20">
+            <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-white/20">
                 <div>
                     <p class="text-[9px] uppercase text-blue-100">{{ __("O'qituvchi") }}</p>
                     <p class="text-[11px] font-medium mt-0.5 truncate">{{ $group->teacher_name ?? '—' }}</p>
                 </div>
                 <div>
                     <p class="text-[9px] uppercase text-blue-100">{{ __("Davr") }}</p>
-                    <p class="text-[11px] font-medium mt-0.5">{{ $totalDays }} {{ __("kun") }}</p>
-                </div>
-                <div>
-                    <p class="text-[9px] uppercase text-blue-100">{{ __("Sanalar") }}</p>
                     <p class="text-[11px] font-medium mt-0.5">
                         {{ $group->start_date->format('d.m') }} — {{ $group->end_date->format('d.m.Y') }}
                     </p>
@@ -56,71 +48,32 @@
             </div>
         </div>
 
-        {{-- Statistika kartalari (mobile-friendly grid) --}}
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
-                <p class="text-[9px] uppercase text-gray-500 tracking-wide">{{ __("O'rtacha") }}</p>
-                @if($avg !== null)
-                    @php $avgClass = $avg >= 75 ? 'text-green-600' : ($avg >= 60 ? 'text-amber-600' : 'text-red-600'); @endphp
-                    <p class="text-2xl font-bold {{ $avgClass }} mt-1">{{ $avg }}</p>
+        {{-- Joriy nazorat (yagona JN bahosi) --}}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div class="px-4 py-3 border-b border-gray-100">
+                <h3 class="text-sm font-semibold text-gray-900">{{ __("Joriy nazorat (JN)") }}</h3>
+                <p class="text-[10px] text-gray-500 mt-0.5">{{ __("Bu fan uchun yagona JN bahongiz") }}</p>
+            </div>
+            <div class="p-6 text-center">
+                @if($jnInt !== null)
+                    @php $jnClass = $jnInt >= 75 ? 'text-green-600 bg-green-50 border-green-300' : ($jnInt >= 60 ? 'text-amber-600 bg-amber-50 border-amber-300' : 'text-red-600 bg-red-50 border-red-300'); @endphp
+                    <div class="inline-flex flex-col items-center justify-center w-32 h-32 rounded-full border-4 {{ $jnClass }}">
+                        <p class="text-5xl font-bold leading-none">{{ $jnInt }}</p>
+                        <p class="text-[10px] uppercase tracking-wider mt-1 opacity-70">JN</p>
+                    </div>
+                    @if($application?->joriy_graded_at)
+                        <p class="text-[11px] text-gray-500 mt-3">
+                            {{ $application->joriy_graded_by_name }} ·
+                            {{ $application->joriy_graded_at->format('d.m.Y H:i') }}
+                        </p>
+                    @endif
                 @else
-                    <p class="text-2xl font-bold text-gray-300 mt-1">—</p>
+                    <div class="inline-flex flex-col items-center justify-center w-32 h-32 rounded-full border-4 border-gray-200 text-gray-300">
+                        <p class="text-5xl font-bold leading-none">—</p>
+                        <p class="text-[10px] uppercase tracking-wider mt-1">JN</p>
+                    </div>
+                    <p class="text-[11px] text-gray-500 mt-3">{{ __("O'qituvchi hali baho qo'ymagan") }}</p>
                 @endif
-            </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
-                <p class="text-[9px] uppercase text-gray-500 tracking-wide">{{ __("Baholangan") }}</p>
-                <p class="text-2xl font-bold text-blue-600 mt-1">{{ $gradedCount }}<span class="text-sm text-gray-400">/{{ $totalDays }}</span></p>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
-                <p class="text-[9px] uppercase text-gray-500 tracking-wide">{{ __("O'tilgan") }}</p>
-                <p class="text-2xl font-bold text-green-600 mt-1">{{ $passCount }}</p>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
-                <p class="text-[9px] uppercase text-gray-500 tracking-wide">{{ __("Yiqilgan") }}</p>
-                <p class="text-2xl font-bold text-red-500 mt-1">{{ $failCount }}</p>
-            </div>
-        </div>
-
-        {{-- Kunlik baholar — ixcham grid (mobile + desktop bir xil) --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-gray-900">{{ __("Kunlik baholar") }}</h3>
-                <div class="flex items-center gap-1.5 text-[10px]">
-                    <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500"></span><span class="text-gray-500">≥75</span></span>
-                    <span class="inline-flex items-center gap-1 ml-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-gray-500">60-74</span></span>
-                    <span class="inline-flex items-center gap-1 ml-1"><span class="w-2 h-2 rounded-full bg-red-500"></span><span class="text-gray-500">&lt;60</span></span>
-                </div>
-            </div>
-
-            <div class="p-3">
-                <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
-                    @foreach($dates as $d)
-                        @php
-                            $g = $grades->get($d);
-                            $v = $g?->grade;
-                            $hasV = $v !== null;
-                            if ($hasV) {
-                                $f = (float) $v;
-                                $cls = $f >= 75 ? 'bg-green-50 border-green-300 text-green-700' : ($f >= 60 ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-red-50 border-red-300 text-red-700');
-                            } else {
-                                $cls = 'bg-gray-50 border-gray-200 text-gray-300';
-                            }
-                            $carb = \Carbon\Carbon::parse($d);
-                        @endphp
-                        <div class="border-2 {{ $cls }} rounded-lg p-2 text-center transition hover:shadow-sm"
-                             title="{{ $carb->format('Y-m-d') }}{{ $g?->comment ? ' — ' . $g->comment : '' }}">
-                            <p class="text-[10px] uppercase font-semibold opacity-70">{{ $carb->format('d.m') }}</p>
-                            <p class="text-xl font-bold mt-0.5 leading-tight">
-                                @if($hasV)
-                                    {{ rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.') }}
-                                @else
-                                    <span class="text-2xl">—</span>
-                                @endif
-                            </p>
-                            <p class="text-[9px] opacity-60">{{ $carb->format('D') }}</p>
-                        </div>
-                    @endforeach
-                </div>
             </div>
         </div>
 

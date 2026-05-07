@@ -114,6 +114,49 @@ class RetakeJournalService
     /**
      * Bitta katakka baho qo'yish/tahrirlash.
      */
+    /**
+     * Talabaning yagona Joriy nazorat (JN) bahosini saqlash.
+     * Bitta talaba = bitta JN bahosi (kunlik jadval emas).
+     * end_date'gacha qo'yish/tahrirlash mumkin (isEditable orqali).
+     */
+    public function saveJoriyScore(
+        RetakeGroup $group,
+        int $applicationId,
+        ?float $score,
+        Teacher $actor,
+        bool $isAdmin = false,
+    ): RetakeApplication {
+        if (!$isAdmin && !$this->isEditable($group)) {
+            throw ValidationException::withMessages([
+                'group' => "Bu guruh muddati tugagan yoki qulflangan, baho qo'yib bo'lmaydi",
+            ]);
+        }
+
+        $app = RetakeApplication::where('id', $applicationId)
+            ->where('retake_group_id', $group->id)
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->first();
+        if (!$app) {
+            throw ValidationException::withMessages([
+                'application_id' => 'Ariza guruhga tegishli emas yoki tasdiqlanmagan',
+            ]);
+        }
+
+        if ($score !== null && ($score < 0 || $score > 100)) {
+            throw ValidationException::withMessages([
+                'score' => 'Baho 0 dan 100 gacha bo\'lishi kerak',
+            ]);
+        }
+
+        $app->update([
+            'joriy_score' => $score,
+            'joriy_graded_by_name' => $actor->full_name,
+            'joriy_graded_at' => now(),
+        ]);
+
+        return $app->refresh();
+    }
+
     public function saveGrade(
         RetakeGroup $group,
         int $applicationId,
@@ -626,11 +669,8 @@ class RetakeJournalService
             $student = $app->group->student ?? null;
             $hemisId = $app->student_hemis_id;
 
-            // Joriy = kunlik baholar o'rtachasi
-            $rowGrades = collect($gradesMap[$app->id] ?? [])
-                ->map(fn ($g) => $g->grade)
-                ->filter(fn ($v) => $v !== null);
-            $jnVal = $rowGrades->isNotEmpty() ? (int) round($rowGrades->avg()) : 0;
+            // Joriy = bitta saqlangan JN bahosi (yagona, kunlik jadval emas)
+            $jnVal = $app->joriy_score !== null ? (int) round((float) $app->joriy_score) : 0;
 
             // Mustaqil ta'lim
             $sub = $mustaqilMap[$app->id] ?? null;

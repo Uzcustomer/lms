@@ -194,7 +194,7 @@
             <div class="flex items-center justify-center min-h-screen p-3">
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="showCreate = false"></div>
                 <div class="relative bg-white rounded-xl shadow-xl w-full z-10 overflow-y-auto"
-                     style="max-width:1100px; height:1000px; max-height:92vh;">
+                     style="max-width:1100px; max-height:1000px; max-height:min(1000px, 92vh);">
                     {{-- LMS-style header (sticky, eng yuqori z-index) --}}
                     <div class="px-5 py-3 sticky top-0"
                          style="background:linear-gradient(135deg,#1a3268,#2b5ea7); z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
@@ -237,152 +237,136 @@
                             </div>
                         </div>
 
-                        {{-- Fakultetlar bloki: kartochkalar + qo'shish + semester (umumiy konteyner) --}}
-                        <div class="rounded-xl border border-gray-200 bg-white p-3 space-y-3">
-                            <div class="flex items-center justify-between">
-                                <h4 class="text-xs font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-                                    <svg style="width:14px;height:14px;color:#2b5ea7;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg>
-                                    {{ __("Fakultetlar va yo'nalishlar") }}
-                                </h4>
-                                <span class="text-[10px] text-gray-500" x-text="cards.length + ' / ' + allDepartments.length + ' fakultet'"></span>
-                            </div>
-
-                            {{-- Kartochkalar grid (har qatorda 2 ta) --}}
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <template x-for="card in cards" :key="card.fid">
-                                    <div class="rounded-lg p-3" style="background:linear-gradient(135deg,#f0f4f8,#e8edf5);border:1px solid #dbe4ef;">
-                                        <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-200">
-                                            <div class="flex items-center gap-2">
-                                                <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#1a3268,#2b5ea7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">
-                                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg>
-                                                </div>
-                                                <span class="text-xs font-bold text-gray-800" x-text="card.name"></span>
+                        {{-- Fakultet kartochkalari — bitta qatorda 2 ta --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <template x-for="card in cards" :key="card.fid">
+                                <div class="rounded-lg p-3" style="background:linear-gradient(135deg,#f0f4f8,#e8edf5);border:1px solid #dbe4ef;">
+                                    <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-200">
+                                        <div class="flex items-center gap-2">
+                                            <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#1a3268,#2b5ea7);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">
+                                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg>
                                             </div>
-                                            <button type="button" @click="removeCard(card.fid)"
-                                                    class="text-[10px] text-red-600 hover:text-red-700 font-medium hover:underline">× {{ __("Olib tashlash") }}</button>
+                                            <span class="text-xs font-bold text-gray-800" x-text="card.name"></span>
                                         </div>
+                                        <button type="button" @click="removeCard(card.fid)"
+                                                class="text-[10px] text-red-600 hover:text-red-700 font-medium hover:underline">× {{ __("Olib tashlash") }}</button>
+                                    </div>
 
-                                        {{-- Yo'nalish --}}
-                                        <div class="mb-2">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
-                                                <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                                                        @click="toggleAllSpecialties(card)"
-                                                        x-show="specialtiesFor(card.fid).length > 0"
-                                                        x-text="card.specialtyPks.length === specialtiesFor(card.fid).length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
-                                            </div>
-                                            <div class="max-h-32 overflow-y-auto rounded-lg p-1.5 space-y-0.5 bg-white border border-gray-200">
-                                                <p x-show="specialtiesFor(card.fid).length === 0" class="text-[10px] text-gray-400 px-1 py-1">— {{ __("Yo'nalishlar yo'q") }} —</p>
-                                                <template x-for="sp in specialtiesFor(card.fid)" :key="sp.pk">
-                                                    <label class="flex items-center gap-1.5 text-[11px] text-gray-700 hover:bg-blue-50 px-1.5 py-1 rounded cursor-pointer transition">
-                                                        <input type="checkbox" :value="sp.pk" x-model="card.specialtyPks" class="rounded text-blue-600 focus:ring-blue-500">
-                                                        <span x-text="sp.name"></span>
-                                                    </label>
-                                                </template>
-                                            </div>
+                                    {{-- Yo'nalish --}}
+                                    <div class="mb-2">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Yo'nalish") }} <span class="text-red-500">*</span></label>
+                                            <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                                    @click="toggleAllSpecialties(card)"
+                                                    x-show="specialtiesFor(card.fid).length > 0"
+                                                    x-text="card.specialtyPks.length === specialtiesFor(card.fid).length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
                                         </div>
-
-                                        {{-- Kurs (multi-select checkbox dropdown) --}}
-                                        <div x-data="{ levelOpen: false }" @click.outside="levelOpen = false" class="relative mb-2">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
-                                                <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                                                        @click="toggleAllLevels(card)"
-                                                        x-text="(card.levelCodes || []).length === allLevels.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
-                                            </div>
-                                            <button type="button" @click="levelOpen = !levelOpen"
-                                                    class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg flex items-center justify-between hover:border-blue-500 transition">
-                                                <span x-show="(card.levelCodes || []).length === 0" class="text-gray-400">{{ __("Kurs tanlang...") }}</span>
-                                                <span x-show="(card.levelCodes || []).length > 0" class="text-gray-800 font-semibold truncate">
-                                                    <span x-text="(card.levelCodes || []).length"></span> {{ __("ta tanlangan") }}
-                                                    <span class="text-gray-400 font-normal" x-text="'(' + (card.levelCodes || []).map(c => allLevels.find(l => l.code === c)?.name).join(', ') + ')'"></span>
-                                                </span>
-                                                <svg class="w-3.5 h-3.5 text-gray-500 flex-shrink-0 ml-1" :class="levelOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                                                </svg>
-                                            </button>
-                                            <div x-show="levelOpen" x-cloak
-                                                 class="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto"
-                                                 style="z-index:60;">
-                                                <template x-for="lv in allLevels" :key="lv.code">
-                                                    <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-blue-50 px-3 py-2 cursor-pointer border-b border-gray-100 last:border-b-0">
-                                                        <input type="checkbox" :value="lv.code" x-model="card.levelCodes" class="rounded text-blue-600 focus:ring-blue-500">
-                                                        <span x-text="lv.name"></span>
-                                                    </label>
-                                                </template>
-                                            </div>
-                                        </div>
-
-                                        {{-- Semestr — faqat shu kartochka Xalqaro fakulteti bo'lsa --}}
-                                        <div x-show="/xalqaro/i.test(card.name || '')" x-cloak
-                                             x-data="{ semOpen: false }" @click.outside="semOpen = false"
-                                             class="relative rounded-lg p-2 mt-2"
-                                             style="background:#fffbeb;border:1px solid #fde68a;">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <label class="text-[10px] font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1">
-                                                    <span class="fl-dot" style="background:#d97706;"></span>
-                                                    {{ __("Semestr") }} <span class="text-red-500">*</span>
+                                        <div class="max-h-32 overflow-y-auto rounded-lg p-1.5 space-y-0.5 bg-white border border-gray-200">
+                                            <p x-show="specialtiesFor(card.fid).length === 0" class="text-[10px] text-gray-400 px-1 py-1">— {{ __("Yo'nalishlar yo'q") }} —</p>
+                                            <template x-for="sp in specialtiesFor(card.fid)" :key="sp.pk">
+                                                <label class="flex items-center gap-1.5 text-[11px] text-gray-700 hover:bg-blue-50 px-1.5 py-1 rounded cursor-pointer transition">
+                                                    <input type="checkbox" :value="sp.pk" x-model="card.specialtyPks" class="rounded text-blue-600 focus:ring-blue-500">
+                                                    <span x-text="sp.name"></span>
                                                 </label>
-                                                <button type="button" class="text-[10px] text-amber-700 hover:text-amber-900 font-medium hover:underline"
-                                                        @click="toggleAllSemestersFor(card)"
-                                                        x-text="(card.semesterCodes || []).length === allSemesters.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
-                                            </div>
-                                            <button type="button" @click="semOpen = !semOpen"
-                                                    class="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg flex items-center justify-between hover:border-amber-500 transition">
-                                                <span x-show="(card.semesterCodes || []).length === 0" class="text-amber-700/70">{{ __("Semestr tanlang...") }}</span>
-                                                <span x-show="(card.semesterCodes || []).length > 0" class="text-amber-900 font-semibold truncate">
-                                                    <span x-text="(card.semesterCodes || []).length"></span> {{ __("ta tanlangan") }}
-                                                </span>
-                                                <svg class="w-3.5 h-3.5 text-amber-700 flex-shrink-0 ml-1" :class="semOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                                                </svg>
-                                            </button>
-                                            <div x-show="semOpen" x-cloak
-                                                 class="absolute left-0 right-0 mt-1 bg-white border border-amber-300 rounded-lg shadow-xl max-h-64 overflow-y-auto"
-                                                 style="z-index:60;">
-                                                <template x-for="s in allSemesters" :key="s.code">
-                                                    <label class="flex items-center gap-2 text-xs text-amber-900 hover:bg-amber-50 px-3 py-2 cursor-pointer border-b border-amber-100 last:border-b-0">
-                                                        <input type="checkbox" :value="s.code"
-                                                               :checked="(card.semesterCodes || []).includes(s.code)"
-                                                               @change="toggleSemesterFor(card, s.code)"
-                                                               class="rounded text-amber-600 focus:ring-amber-500">
-                                                        <span x-text="s.name"></span>
-                                                    </label>
-                                                </template>
-                                            </div>
+                                            </template>
                                         </div>
                                     </div>
-                                </template>
 
-                                {{-- Fakultet qo'shish (bitta col oladi) --}}
-                                <div class="relative" :class="cards.length % 2 === 0 ? 'md:col-span-2' : ''" x-data="{ open: false }" @click.outside="open = false">
-                                    <button type="button" @click="open = !open"
-                                            :disabled="availableDepartments.length === 0"
-                                            :class="availableDepartments.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-500 hover:bg-blue-50'"
-                                            class="w-full px-3 py-3 text-xs font-semibold bg-white text-blue-700 border-2 border-dashed border-blue-300 rounded-lg flex items-center justify-center gap-2 transition">
-                                        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                                        <span x-text="cards.length === 0 ? '{{ __('Fakultet tanlash') }}' : '{{ __('Yana fakultet qo\'shish') }}'"></span>
+                                    {{-- Kurs (custom dropdown) --}}
+                                    <div x-data="{ levelOpen: false }" @click.outside="levelOpen = false" class="relative">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-[10px] font-bold text-gray-700 uppercase tracking-wide">{{ __("Kurs") }} <span class="text-red-500">*</span></label>
+                                            <button type="button" class="text-[10px] text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                                    @click="toggleAllLevels(card)"
+                                                    x-text="card.levelCodes.length === allLevels.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                                        </div>
+                                        <button type="button" @click="levelOpen = !levelOpen"
+                                                class="w-full px-3 py-2 text-xs bg-white border border-gray-300 rounded-lg flex items-center justify-between hover:border-blue-500 transition">
+                                            <span x-show="card.levelCodes.length === 0" class="text-gray-400">{{ __("Kurs tanlang...") }}</span>
+                                            <span x-show="card.levelCodes.length > 0" class="text-gray-800 font-semibold truncate">
+                                                <span x-text="card.levelCodes.length"></span> {{ __("ta tanlangan") }}
+                                                <span class="text-gray-400 font-normal" x-text="'(' + card.levelCodes.map(c => allLevels.find(l => l.code === c)?.name).join(', ') + ')'"></span>
+                                            </span>
+                                            <svg class="w-3.5 h-3.5 text-gray-500 flex-shrink-0 ml-1" :class="levelOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                                            </svg>
+                                        </button>
+                                        <div x-show="levelOpen" x-cloak
+                                             class="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                                            <template x-for="lv in allLevels" :key="lv.code">
+                                                <label class="flex items-center gap-2 text-xs text-gray-700 hover:bg-blue-50 px-3 py-2 cursor-pointer border-b border-gray-100 last:border-b-0">
+                                                    <input type="checkbox" :value="lv.code" x-model="card.levelCodes" class="rounded text-blue-600 focus:ring-blue-500">
+                                                    <span x-text="lv.name"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            {{-- Fakultet qo'shish (bitta col oladi) --}}
+                            <div class="relative" :class="cards.length % 2 === 0 ? 'md:col-span-2' : ''" x-data="{ open: false }" @click.outside="open = false">
+                                <button type="button" @click="open = !open"
+                                        :disabled="availableDepartments.length === 0"
+                                        :class="availableDepartments.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-500 hover:bg-blue-50'"
+                                        class="w-full px-3 py-3 text-xs font-semibold bg-white text-blue-700 border-2 border-dashed border-blue-300 rounded-lg flex items-center justify-center gap-2 transition">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                    <span x-text="cards.length === 0 ? '{{ __('Fakultet tanlash') }}' : '{{ __('Yana fakultet qo\'shish') }}'"></span>
+                                </button>
+                                <div x-show="open" x-cloak class="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto">
+                                    <template x-for="d in availableDepartments" :key="d.id">
+                                        <button type="button"
+                                                @click="addCard(d); open = false"
+                                                class="w-full text-left px-3 py-2.5 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition">
+                                            <span x-text="d.name"></span>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- Semestr — Xalqaro talim fakulteti tanlanganda (custom dropdown) --}}
+                        <div x-show="hasXalqaroSelected" x-cloak class="rounded-lg p-3" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a;">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                                <div>
+                                    <label class="filter-label"><span class="fl-dot" style="background:#d97706;"></span> {{ __("Semestr (Xalqaro fakulteti uchun)") }} <span class="text-red-500">*</span></label>
+                                </div>
+                                <div x-data="{ semOpen: false }" @click.outside="semOpen = false" class="relative">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span></span>
+                                        <button type="button" class="text-[10px] text-amber-700 hover:text-amber-900 font-medium hover:underline"
+                                                @click="toggleAllSemesters()"
+                                                x-text="semesterCodes.length === allSemesters.length ? '{{ __("Tozalash") }}' : '{{ __("Hammasi") }}'"></button>
+                                    </div>
+                                    <button type="button" @click="semOpen = !semOpen"
+                                            class="w-full px-3 py-2 text-xs bg-white border border-amber-300 rounded-lg flex items-center justify-between hover:border-amber-500 transition">
+                                        <span x-show="semesterCodes.length === 0" class="text-amber-700/70">{{ __("Semestr tanlang...") }}</span>
+                                        <span x-show="semesterCodes.length > 0" class="text-amber-900 font-semibold truncate">
+                                            <span x-text="semesterCodes.length"></span> {{ __("ta tanlangan") }}
+                                            <span class="text-amber-700 font-normal" x-text="'(' + semesterCodes.map(c => allSemesters.find(s => s.code === c)?.name).join(', ') + ')'"></span>
+                                        </span>
+                                        <svg class="w-3.5 h-3.5 text-amber-700 flex-shrink-0 ml-1" :class="semOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                                        </svg>
                                     </button>
-                                    <div x-show="open" x-cloak class="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto" style="z-index:60;">
-                                        <template x-for="d in availableDepartments" :key="d.id">
-                                            <button type="button"
-                                                    @click="addCard(d); open = false"
-                                                    class="w-full text-left px-3 py-2.5 text-xs hover:bg-blue-50 border-b border-gray-100 last:border-b-0 transition">
-                                                <span x-text="d.name"></span>
-                                            </button>
+                                    <div x-show="semOpen" x-cloak
+                                         class="absolute z-30 mt-1 w-full bg-white border border-amber-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                                        <template x-for="s in allSemesters" :key="s.code">
+                                            <label class="flex items-center gap-2 text-xs text-amber-900 hover:bg-amber-50 px-3 py-2 cursor-pointer border-b border-amber-100 last:border-b-0">
+                                                <input type="checkbox" :value="s.code" x-model="semesterCodes" class="rounded text-amber-600 focus:ring-amber-500">
+                                                <span x-text="s.name"></span>
+                                            </label>
                                         </template>
                                     </div>
                                 </div>
                             </div>
-
                         </div>
 
                         {{-- Hidden inputs (form submit) — har bir oyna uchun "fid|spec_pk|level_code" --}}
                         <template x-for="a in assignments" :key="'as-'+a">
                             <input type="hidden" name="assignments[]" :value="a">
                         </template>
-                        {{-- Xalqaro fakultet kartochkalaridan semester_codes ni yig'amiz --}}
-                        <template x-for="code in collectedSemesterCodes" :key="'sm-'+code">
+                        <template x-for="code in semesterCodes" :key="'sm-'+code">
                             <input type="hidden" name="semester_codes[]" :value="code">
                         </template>
 
@@ -465,7 +449,8 @@
                     allSpecialties: specialties || [],
                     allLevels: levels || [],
                     allSemesters: semesters || [],
-                    cards: [], // [{fid, name, specialtyPks:[], levelCode:'', semesterCodes:[]}]
+                    cards: [], // [{fid, name, specialtyPks: [], levelCodes: []}]
+                    semesterCodes: [],
 
                     get availableDepartments() {
                         const taken = new Set(this.cards.map(c => String(c.fid)));
@@ -476,18 +461,13 @@
                         return this.allSpecialties.filter(sp => String(sp.department_hemis_id) === String(fid));
                     },
 
-                    isXalqaro(card) {
-                        return /xalqaro/i.test(card?.name || '');
-                    },
-
                     addCard(d) {
                         if (this.cards.some(c => String(c.fid) === String(d.id))) return;
                         this.cards.push({
                             fid: d.id,
                             name: d.name,
                             specialtyPks: [],
-                            levelCodes: [],          // multi-select kurslar
-                            semesterCodes: [],       // faqat Xalqaro uchun
+                            levelCodes: [],
                         });
                     },
 
@@ -496,17 +476,15 @@
                     },
 
                     get hasXalqaroSelected() {
-                        return this.cards.some(c => this.isXalqaro(c));
+                        return this.cards.some(c => /xalqaro/i.test(c.name || ''));
                     },
 
-                    // "fid|spec_pk|level_code" triplets — har spec × har level
+                    // Hidden input uchun "fid|spec_pk|level_code" triplets ro'yxati
                     get assignments() {
                         const out = [];
                         for (const c of this.cards) {
-                            const lvs = c.levelCodes || [];
-                            if (lvs.length === 0) continue;
                             for (const pk of c.specialtyPks) {
-                                for (const lv of lvs) {
+                                for (const lv of c.levelCodes) {
                                     out.push(`${c.fid}|${pk}|${lv}`);
                                 }
                             }
@@ -514,30 +492,15 @@
                         return out;
                     },
 
-                    // Backend uchun semester_codes — barcha Xalqaro kartochkalardan yig'iladi (unique)
-                    get collectedSemesterCodes() {
-                        const set = new Set();
-                        for (const c of this.cards) {
-                            if (this.isXalqaro(c) && Array.isArray(c.semesterCodes)) {
-                                for (const code of c.semesterCodes) set.add(code);
-                            }
-                        }
-                        return [...set];
-                    },
-
                     get combinationCount() {
                         if (this.assignments.length === 0) return 0;
+                        if (this.hasXalqaroSelected && this.semesterCodes.length === 0) return 0;
+                        // Xalqaro fakultetdagi assignment'lar har semestr uchun alohida oyna
                         let total = 0;
                         for (const c of this.cards) {
-                            const lvs = c.levelCodes || [];
-                            if (lvs.length === 0 || c.specialtyPks.length === 0) continue;
-                            const isX = this.isXalqaro(c);
-                            if (isX) {
-                                if (!c.semesterCodes || c.semesterCodes.length === 0) return 0;
-                                total += c.specialtyPks.length * lvs.length * c.semesterCodes.length;
-                            } else {
-                                total += c.specialtyPks.length * lvs.length;
-                            }
+                            const isX = /xalqaro/i.test(c.name || '');
+                            const sm = isX ? Math.max(this.semesterCodes.length, 0) : 1;
+                            total += c.specialtyPks.length * c.levelCodes.length * sm;
                         }
                         return total;
                     },
@@ -547,26 +510,19 @@
                         card.specialtyPks = card.specialtyPks.length === all.length ? [] : all;
                     },
                     toggleAllLevels(card) {
-                        if (!Array.isArray(card.levelCodes)) card.levelCodes = [];
                         card.levelCodes = card.levelCodes.length === this.allLevels.length
                             ? [] : this.allLevels.map(lv => lv.code);
                     },
-                    toggleAllSemestersFor(card) {
-                        if (!Array.isArray(card.semesterCodes)) card.semesterCodes = [];
-                        card.semesterCodes = card.semesterCodes.length === this.allSemesters.length
+                    toggleAllSemesters() {
+                        this.semesterCodes = this.semesterCodes.length === this.allSemesters.length
                             ? [] : this.allSemesters.map(s => s.code);
-                    },
-                    toggleSemesterFor(card, code) {
-                        if (!Array.isArray(card.semesterCodes)) card.semesterCodes = [];
-                        const idx = card.semesterCodes.indexOf(code);
-                        if (idx === -1) card.semesterCodes.push(code);
-                        else card.semesterCodes.splice(idx, 1);
                     },
 
                     prepareSubmit(e) {
-                        if (this.combinationCount === 0) {
+                        if (this.assignments.length === 0 ||
+                            (this.hasXalqaroSelected && this.semesterCodes.length === 0)) {
                             e.preventDefault();
-                            alert("{{ __("Iltimos, har fakultet uchun kamida bittadan yo'nalish va kurs tanlang. Xalqaro fakulteti uchun semestr ham majburiy.") }}");
+                            alert("{{ __("Iltimos, har fakultet uchun kamida bittadan yo'nalish va kurs tanlang") }}");
                         }
                     },
                 };

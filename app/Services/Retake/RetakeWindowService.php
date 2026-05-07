@@ -81,6 +81,24 @@ class RetakeWindowService
             ]);
         }
 
+        // Soft-deleted yozuv bor bo'lsa — DB'dagi unique index `deleted_at`'ni
+        // hisobga olmaydi, shuning uchun yangi insert 500 xato beradi.
+        // Eskilarini butunlay o'chirib yuboramiz, shunda yangi yozuv yaratilishi mumkin.
+        $trashedQuery = RetakeApplicationWindow::onlyTrashed()
+            ->where('session_id', $data['session_id'])
+            ->where('specialty_id', $data['specialty_id'])
+            ->where('level_code', $data['level_code'])
+            ->where('semester_code', $data['semester_code']);
+
+        if (!empty($data['department_hemis_id']) &&
+            \Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', 'department_hemis_id')) {
+            $trashedQuery->where('department_hemis_id', $data['department_hemis_id']);
+        }
+
+        foreach ($trashedQuery->get() as $trashedWindow) {
+            $trashedWindow->forceDelete();
+        }
+
         $payload = [
             ...$data,
             'created_by_user_id' => $createdBy->id,

@@ -99,7 +99,16 @@ class RetakeWindowController extends Controller
             ->groupBy('specialty_hemis_id')
             ->map(fn ($rows) => $rows->pluck('department_hemis_id')->filter()->unique()->values()->all());
 
-        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyDeptOptions) {
+        // Window'lar uchun haqiqiy fakultet ID larini Student ma'lumotlari
+        // asosida runtime'da aniqlaymiz — saqlangan department_hemis_id eski
+        // (noto'g'ri) bo'lsa ham, ekranda real fakultet ko'rsatiladi.
+        $resolvedDeptByWindow = \App\Services\Retake\RetakeFacultyResolver::resolveFacultiesForWindows($windows);
+
+        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyDeptOptions, $resolvedDeptByWindow) {
+            $resolved = $resolvedDeptByWindow[$w->id] ?? null;
+            if ($resolved && $deptIdToName->has($resolved)) {
+                return $deptIdToName[$resolved];
+            }
             if (!empty($w->department_hemis_id) && $deptIdToName->has($w->department_hemis_id)) {
                 return $deptIdToName[$w->department_hemis_id];
             }

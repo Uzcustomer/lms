@@ -352,17 +352,24 @@ class RetakeWindowSessionController extends Controller
             ->groupBy('specialty_hemis_id')
             ->map(fn ($rows) => $rows->pluck('department_hemis_id')->filter()->unique()->values()->all());
 
-        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyDeptOptions) {
-            // 1) Window'da department_hemis_id saqlangan bo'lsa to'g'ridan-to'g'ri shu
+        // Real talabalar bo'yicha (specialty, level) — fakultet xaritasi
+        $resolvedDeptByWindow = RetakeFacultyResolver::resolveFacultiesForWindows($windows);
+
+        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyDeptOptions, $resolvedDeptByWindow) {
+            // 1) Eng ishonchli — Student jadvalidan kelgan haqiqiy fakultet
+            $resolved = $resolvedDeptByWindow[$w->id] ?? null;
+            if ($resolved && $deptIdToName->has($resolved)) {
+                return $deptIdToName[$resolved];
+            }
+            // 2) Window'da saqlangan department_hemis_id
             if (!empty($w->department_hemis_id) && $deptIdToName->has($w->department_hemis_id)) {
                 return $deptIdToName[$w->department_hemis_id];
             }
-            // 2) Eski yozuvlar — specialty_hemis_id orqali, agar faqat 1 ta variant bo'lsa
+            // 3) Eski yozuvlar — specialty_hemis_id orqali (faqat 1 ta variant bo'lsa)
             $opts = $specialtyDeptOptions->get($w->specialty_id, []);
             if (count($opts) === 1) {
                 return $deptIdToName[$opts[0]] ?? null;
             }
-            // 3) Bir nechta variant bo'lsa — qaysi biri ekanini bilolmaymiz
             return null;
         };
 

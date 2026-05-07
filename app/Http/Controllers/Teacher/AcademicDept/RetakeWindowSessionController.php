@@ -325,17 +325,27 @@ class RetakeWindowSessionController extends Controller
 
         // Bevosita department_hemis_id'dan fakultet nomi (window'da saqlangan)
         $deptIdToName = Department::pluck('name', 'department_hemis_id');
-        // Eski yozuvlar uchun fallback: specialty_hemis_id orqali (lekin xato bo'lishi mumkin)
-        $specialtyToFaculty = Specialty::query()
-            ->join('departments', 'departments.department_hemis_id', '=', 'specialties.department_hemis_id')
-            ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
-            ->pluck('faculty_name', 'sp_hemis_id');
 
-        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyToFaculty) {
+        // specialty_hemis_id -> [department_hemis_id, ...] (bir nechta bo'lishi mumkin)
+        $specialtyDeptOptions = Specialty::query()
+            ->select('specialty_hemis_id', 'department_hemis_id')
+            ->whereIn('specialty_hemis_id', $windows->pluck('specialty_id')->filter()->unique())
+            ->get()
+            ->groupBy('specialty_hemis_id')
+            ->map(fn ($rows) => $rows->pluck('department_hemis_id')->filter()->unique()->values()->all());
+
+        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyDeptOptions) {
+            // 1) Window'da department_hemis_id saqlangan bo'lsa to'g'ridan-to'g'ri shu
             if (!empty($w->department_hemis_id) && $deptIdToName->has($w->department_hemis_id)) {
                 return $deptIdToName[$w->department_hemis_id];
             }
-            return $specialtyToFaculty[$w->specialty_id] ?? null;
+            // 2) Eski yozuvlar — specialty_hemis_id orqali, agar faqat 1 ta variant bo'lsa
+            $opts = $specialtyDeptOptions->get($w->specialty_id, []);
+            if (count($opts) === 1) {
+                return $deptIdToName[$opts[0]] ?? null;
+            }
+            // 3) Bir nechta variant bo'lsa — qaysi biri ekanini bilolmaymiz
+            return null;
         };
 
         // Batch'dagi qo'shni fakultetlar

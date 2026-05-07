@@ -79,11 +79,22 @@ class RetakeWindowController extends Controller
             ->select('specialties.specialty_hemis_id as sp_hemis_id', 'departments.name as faculty_name')
             ->pluck('faculty_name', 'sp_hemis_id');
 
-        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyToFaculty) {
+        $specialtyDeptOptions = Specialty::query()
+            ->select('specialty_hemis_id', 'department_hemis_id')
+            ->whereIn('specialty_hemis_id', $windows->pluck('specialty_id')->filter()->unique())
+            ->get()
+            ->groupBy('specialty_hemis_id')
+            ->map(fn ($rows) => $rows->pluck('department_hemis_id')->filter()->unique()->values()->all());
+
+        $resolveFaculty = function ($w) use ($deptIdToName, $specialtyDeptOptions) {
             if (!empty($w->department_hemis_id) && $deptIdToName->has($w->department_hemis_id)) {
                 return $deptIdToName[$w->department_hemis_id];
             }
-            return $specialtyToFaculty[$w->specialty_id] ?? null;
+            $opts = $specialtyDeptOptions->get($w->specialty_id, []);
+            if (count($opts) === 1) {
+                return $deptIdToName[$opts[0]] ?? null;
+            }
+            return null;
         };
 
         $rowFaculties = collect();
@@ -120,20 +131,8 @@ class RetakeWindowController extends Controller
 
         $educationTypes = \App\Services\Retake\RetakeFilterCache::educationTypes();
 
-        // Hozir ochiq (faol) oynalar — sahifaning yuqorisida ko'rsatish uchun
-        $today = now()->toDateString();
-        $activeWindows = RetakeApplicationWindow::query()
-            ->with('session')
-            ->withCount('applicationGroups as applications_count')
-            ->whereDate('start_date', '<=', $today)
-            ->whereDate('end_date', '>=', $today)
-            ->whereHas('session', fn ($q) => $q->where('is_closed', false))
-            ->orderByDesc('start_date')
-            ->get();
-
         return view('teacher.academic-dept.retake-windows.index', [
             'windows' => $windows,
-            'activeWindows' => $activeWindows,
             'specialtyToFaculty' => $specialtyToFaculty,
             'rowFaculties' => $rowFaculties,
             'batchFaculties' => $batchFaculties,
@@ -155,8 +154,8 @@ class RetakeWindowController extends Controller
 
         $data = $request->validate([
             'session_id' => 'required|integer|exists:retake_window_sessions,id',
-            'specialty_ids' => 'required|array|min:1',
-            'specialty_ids.*' => 'integer',
+            'specialty_pks' => 'required|array|min:1',
+            'specialty_pks.*' => 'integer',
             'level_codes' => 'required|array|min:1',
             'level_codes.*' => 'string|max:10',
             'semester_codes' => 'nullable|array',
@@ -172,10 +171,9 @@ class RetakeWindowController extends Controller
             ])->withInput();
         }
 
-        // Tanlangan yo'nalishlar va kurslarni nomlari bilan birga olish
-        $specialties = Specialty::whereIn('specialty_hemis_id', $data['specialty_ids'])
-            ->get(['specialty_hemis_id', 'name', 'department_hemis_id'])
-            ->keyBy('specialty_hemis_id');
+        // Tanlangan yo'nalishlar (PK orqali — bir aniqlik) va ularning fakultetlari
+        $specialties = Specialty::whereIn('id', $data['specialty_pks'])
+            ->get(['id', 'specialty_hemis_id', 'name', 'department_hemis_id']);
 
         $allLevels = config('app.retake_levels')
             ?? collect(Semester::query()

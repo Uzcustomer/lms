@@ -223,33 +223,120 @@
         </div>
         @elseif($activeTab === 'shablon')
         {{-- ==================== SHABLON TABI ==================== --}}
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {{-- Manual shablon tahriri --}}
+        <div class="p-4 sm:p-6 border-b bg-gradient-to-br from-slate-50 to-slate-100">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h3 class="text-base font-bold text-slate-800">Shablonni qo'lda tayyorlash</h3>
+                    <p class="text-xs text-slate-500 mt-1">Quyidagi maydonlarni to'ldiring — barcha xodim kartochkalarida shu ma'lumotlar ko'rsatiladi.</p>
+                </div>
+                <button type="button" onclick="toggleTplEditor()" class="btn-secondary" id="tpl-toggle-btn">Tahrirlash</button>
+            </div>
+
+            <form method="POST" action="{{ route('admin.staff-evaluation.save-template') }}" id="tpl-form" style="display:none;">
+                @csrf
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="filter-label"><span class="fl-dot" style="background:#1e3a8a;"></span> Muassasa nomi</label>
+                        <input type="text" name="institution" value="{{ old('institution', $template['institution']) }}" class="filter-input" style="width:100%;" maxlength="255">
+                    </div>
+                    <div>
+                        <label class="filter-label"><span class="fl-dot" style="background:#1e3a8a;"></span> Filial / bo'lim</label>
+                        <input type="text" name="branch" value="{{ old('branch', $template['branch']) }}" class="filter-input" style="width:100%;" maxlength="255">
+                    </div>
+                    <div>
+                        <label class="filter-label"><span class="fl-dot" style="background:#6b7280;"></span> Lavozim yorlig'i</label>
+                        <input type="text" name="position_label" value="{{ old('position_label', $template['position_label']) }}" class="filter-input" style="width:100%;" maxlength="255" placeholder="Masalan: Registrator ofisi xodimi:">
+                    </div>
+                    <div>
+                        <label class="filter-label"><span class="fl-dot" style="background:#0f766e;"></span> Sarlavha (ixtiyoriy)</label>
+                        <input type="text" name="title" value="{{ old('title', $template['title']) }}" class="filter-input" style="width:100%;" maxlength="255" placeholder="Masalan: Xodimni baholash">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="filter-label"><span class="fl-dot" style="background:#0f766e;"></span> Tavsif (ixtiyoriy)</label>
+                        <textarea name="description" rows="2" class="filter-input" style="width:100%;height:auto;padding:8px 10px;" maxlength="1000" placeholder="QR kod tagida ko'rinadigan qisqa matn">{{ old('description', $template['description']) }}</textarea>
+                    </div>
+                    <div class="md:col-span-2 flex items-center gap-2">
+                        <label class="flex items-center gap-2 text-sm text-slate-700">
+                            <input type="checkbox" name="show_logo" value="1" class="cb-styled" {{ $template['show_logo'] ? 'checked' : '' }}>
+                            QR markazida logotipni ko'rsatish
+                        </label>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 mt-3">
+                    <button type="submit" class="btn-apply">Saqlash</button>
+                    <button type="button" onclick="toggleTplEditor()" class="btn-secondary">Bekor qilish</button>
+                </div>
+            </form>
+
+            <div id="tpl-preview" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div class="bg-white rounded-lg border p-3">
+                    <div class="text-[11px] uppercase font-bold text-slate-400 tracking-wide mb-1">Muassasa</div>
+                    <div class="font-semibold text-slate-800">{{ $template['institution'] ?: '—' }}</div>
+                </div>
+                <div class="bg-white rounded-lg border p-3">
+                    <div class="text-[11px] uppercase font-bold text-slate-400 tracking-wide mb-1">Filial</div>
+                    <div class="font-semibold text-slate-800">{{ $template['branch'] ?: '—' }}</div>
+                </div>
+                <div class="bg-white rounded-lg border p-3">
+                    <div class="text-[11px] uppercase font-bold text-slate-400 tracking-wide mb-1">Lavozim yorlig'i</div>
+                    <div class="font-semibold text-slate-800">{{ $template['position_label'] ?: '—' }}</div>
+                </div>
+                <div class="bg-white rounded-lg border p-3">
+                    <div class="text-[11px] uppercase font-bold text-slate-400 tracking-wide mb-1">Sarlavha / tavsif</div>
+                    <div class="font-semibold text-slate-800">{{ $template['title'] ?: '—' }}</div>
+                    @if($template['description'])
+                    <div class="text-xs text-slate-500 mt-1">{{ $template['description'] }}</div>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-4">
             @forelse($teachers as $teacher)
             @if($teacher->eval_qr_token)
             <div class="border rounded-lg overflow-hidden shadow-sm bg-white">
                 <div id="card-{{ $teacher->id }}" style="padding:32px 24px; text-align:center; font-family:Arial,sans-serif; background:white;">
+                    @if($template['title'])
+                    <div style="font-size:14px; color:#0f766e; font-weight:700; margin-bottom:10px;">
+                        {{ $template['title'] }}
+                    </div>
+                    @endif
                     {{-- QR kod with logo --}}
                     <div style="display:inline-block; padding:10px; border:2px solid #e5e7eb; border-radius:12px; margin-bottom:16px; position:relative;">
                         {!! QrCode::size(180)->errorCorrection('H')->margin(1)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                        @if($template['show_logo'])
                         <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
                             <div style="background:white; border-radius:50%; padding:4px; display:flex;">
                                 <img src="{{ asset('logo.png') }}" alt="Logo" style="width:42px; height:42px; border-radius:50%;">
                             </div>
                         </div>
+                        @endif
                     </div>
                     {{-- Ma'lumotlar --}}
+                    @if($template['institution'])
                     <div style="font-size:13px; color:#1e3a8a; font-weight:700; line-height:1.4; margin-bottom:4px;">
-                        Toshkent davlat tibbiyot universiteti
+                        {{ $template['institution'] }}
                     </div>
+                    @endif
+                    @if($template['branch'])
                     <div style="font-size:12px; color:#1e3a8a; margin-bottom:12px;">
-                        Termiz filiali
+                        {{ $template['branch'] }}
                     </div>
+                    @endif
+                    @if($template['position_label'])
                     <div style="font-size:12px; color:#6b7280; margin-bottom:4px;">
-                        Registrator ofisi xodimi:
+                        {{ $template['position_label'] }}
                     </div>
+                    @endif
                     <div style="font-size:15px; color:#111827; font-weight:700;">
                         {{ $teacher->full_name }}
                     </div>
+                    @if($template['description'])
+                    <div style="font-size:11px; color:#6b7280; margin-top:10px; line-height:1.4;">
+                        {{ $template['description'] }}
+                    </div>
+                    @endif
                 </div>
                 {{-- Yuklab olish tugmasi --}}
                 <div class="border-t px-4 py-3 text-center bg-gray-50">
@@ -273,6 +360,20 @@
         @push('scripts')
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <script>
+        function toggleTplEditor() {
+            const f = document.getElementById('tpl-form');
+            const p = document.getElementById('tpl-preview');
+            const b = document.getElementById('tpl-toggle-btn');
+            if (f.style.display === 'none' || !f.style.display) {
+                f.style.display = '';
+                p.style.display = 'none';
+                b.style.display = 'none';
+            } else {
+                f.style.display = 'none';
+                p.style.display = '';
+                b.style.display = '';
+            }
+        }
         function downloadCard(elementId, filename) {
             const el = document.getElementById(elementId);
             html2canvas(el, { scale: 3, backgroundColor: '#ffffff', useCORS: true }).then(canvas => {

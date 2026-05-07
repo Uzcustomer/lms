@@ -904,6 +904,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
         Route::post('/staff-evaluation/generate-selected-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateSelectedQr'])->name('staff-evaluation.generate-selected-qr');
         Route::delete('/staff-evaluation/delete-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteAllQr'])->name('staff-evaluation.delete-all-qr');
+        Route::post('/staff-evaluation/save-template', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'saveTemplate'])->name('staff-evaluation.save-template');
         Route::get('/staff-evaluation/{teacher}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
         Route::post('/staff-evaluation/{teacher}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');
         Route::delete('/staff-evaluation/{teacher}/delete-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteQr'])->name('staff-evaluation.delete-qr');

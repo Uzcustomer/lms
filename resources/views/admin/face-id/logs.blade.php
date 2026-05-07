@@ -289,23 +289,23 @@
             <div id="compareModal"
                  style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:9999; align-items:center; justify-content:center; padding:20px;"
                  onclick="if(event.target === this) closeCompareModal()">
-                <div style="background:#fff; border-radius:14px; max-width:900px; width:100%; max-height:90vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
-                    <div style="padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between;">
+                <div style="background:#fff; border-radius:14px; width:96vw; max-width:1600px; max-height:96vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+                    <div style="padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
                         <div style="font-size:14px; font-weight:700; color:#0f172a;" id="compareModalTitle">Rasmlarni solishtirish</div>
-                        <button type="button" onclick="closeCompareModal()" style="background:none; border:none; font-size:24px; line-height:1; color:#64748b; cursor:pointer;">&times;</button>
+                        <button type="button" onclick="closeCompareModal()" style="background:none; border:none; font-size:28px; line-height:1; color:#64748b; cursor:pointer;">&times;</button>
                     </div>
-                    <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-                        <div style="text-align:center;">
-                            <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em;">Snapshot</div>
-                            <div style="background:#f1f5f9; border-radius:10px; min-height:200px; display:flex; align-items:center; justify-content:center; padding:8px;">
-                                <img id="compareSnapshot" src="" alt="snapshot" style="max-width:100%; max-height:60vh; border-radius:8px; display:none;">
+                    <div style="padding:20px; display:grid; grid-template-columns:1fr 1fr; gap:20px; flex:1 1 auto; min-height:0;">
+                        <div style="display:flex; flex-direction:column; min-height:0;">
+                            <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em; text-align:center;">Snapshot</div>
+                            <div style="background:#f1f5f9; border-radius:10px; flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px; overflow:hidden;">
+                                <img id="compareSnapshot" src="" alt="snapshot" style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; border-radius:8px; display:none;">
                                 <span id="compareSnapshotEmpty" style="color:#94a3b8; font-size:13px;">Yo'q</span>
                             </div>
                         </div>
-                        <div style="text-align:center;">
-                            <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em;">Talaba (student_photos)</div>
-                            <div style="background:#f1f5f9; border-radius:10px; min-height:200px; display:flex; align-items:center; justify-content:center; padding:8px;">
-                                <img id="compareStudent" src="" alt="talaba" style="max-width:100%; max-height:60vh; border-radius:8px; display:none;">
+                        <div style="display:flex; flex-direction:column; min-height:0;">
+                            <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em; text-align:center;">Talaba (student_photos)</div>
+                            <div style="background:#f1f5f9; border-radius:10px; flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; padding:8px; overflow:hidden;">
+                                <img id="compareStudent" src="" alt="talaba" style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; border-radius:8px; display:none;">
                                 <span id="compareStudentEmpty" style="color:#94a3b8; font-size:13px;">Yo'q</span>
                             </div>
                         </div>

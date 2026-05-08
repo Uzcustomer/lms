@@ -507,19 +507,34 @@
                     for (var g = 0; g < grades.length; g++) {
                         var gr = grades[g];
                         var isDebt = gr.is_debt || false;
-                        var point = (!isDebt && gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
-                        var grade = (!isDebt && gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
+                        var isOrphan = gr.is_orphan || false;
+                        var point = (gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
+                        var grade = (gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
+                        if (isDebt) { point = '-'; grade = '-'; }
                         var gradeClass = isDebt ? 'cell-fail' : 'cell-pass';
-                        var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
+                        var rowBg;
+                        if (isOrphan) {
+                            rowBg = 'background:#fef9c3;';   // sariq — orphan
+                        } else if (isDebt) {
+                            rowBg = 'background:#fef2f2;';
+                        } else {
+                            rowBg = 'background:#fff;';
+                        }
                         gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
-                        gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
+                        gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name);
+                        if (isOrphan) {
+                            gh += ' <span style="font-size:10px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:1px 6px;border-radius:8px;margin-left:4px;" title="Curriculum_subjects va student_subjects-da yo&apos;q, lekin academic_records-da bor">Notanish</span>';
+                        }
+                        gh += '</td>';
                         gh += '<td>' + esc(gr.credit) + '</td>';
                         gh += '<td>' + esc(gr.total_acload) + '</td>';
                         gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
                         gh += '<td>' + (isDebt ? '<span style="color:#94a3b8;">—</span>' : '<span class="badge badge-indigo">' + esc(grade) + '</span>') + '</td>';
                         gh += '<td>';
-                        if (isDebt) {
+                        if (isOrphan) {
+                            gh += '<span style="display:inline-block;padding:2px 8px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;font-size:11px;font-weight:600;">Faqat AR\'da</span>';
+                        } else if (isDebt) {
                             gh += '<span class="reason-badge">Qarzdor</span>';
                         } else {
                             gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';

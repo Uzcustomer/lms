@@ -5306,6 +5306,7 @@ class ReportController extends Controller
             // Curriculum fanlarini academic records bilan birlashtirish.
             // Tanlov fanlar uchun student_subjects'dan olingan haqiqiy fanga qaraymiz.
             $grades = [];
+            $expectedSubjectIds = [];   // qarz hisobiga olingan fanlar
             foreach ($currSubjects as $sub) {
                 $effectiveSubjectId = $sub->subject_id;
                 $effectiveSubjectName = $sub->subject_name;
@@ -5321,6 +5322,8 @@ class ReportController extends Controller
                     }
                 }
 
+                $expectedSubjectIds[(string) $effectiveSubjectId] = true;
+
                 $ar = $arRecords->get($effectiveSubjectId);
                 $grades[] = (object) [
                     'subject_name' => $effectiveSubjectName,
@@ -5329,6 +5332,33 @@ class ReportController extends Controller
                     'total_point'  => $ar->total_point ?? null,
                     'grade'        => $ar->grade ?? null,
                     'is_debt'      => !$ar, // academic_records da yo'q = qarzdor
+                    'is_orphan'    => false,
+                ];
+            }
+
+            // Orphan: academic_records da bor, lekin curriculum_subjects'da ham,
+            // student_subjects'da ham yo'q. Sariq bilan alohida ko'rsatamiz.
+            $studentSubjectIds = DB::table('student_subjects')
+                ->where('student_hemis_id', $studentId)
+                ->where('semester_id', $semesterCode)
+                ->pluck('subject_id')
+                ->map(fn ($v) => (string) $v)
+                ->all();
+            $studentSubjectIdsSet = array_flip($studentSubjectIds);
+
+            foreach ($arRecords as $ar) {
+                $sid = (string) $ar->subject_id;
+                if (isset($expectedSubjectIds[$sid])) continue;       // allaqachon ko'rsatilgan
+                if (isset($studentSubjectIdsSet[$sid])) continue;     // student_subjects'da bor — orphan emas
+
+                $grades[] = (object) [
+                    'subject_name' => $ar->subject_name,
+                    'credit'       => $ar->credit,
+                    'total_acload' => $ar->total_acload,
+                    'total_point'  => $ar->total_point ?? null,
+                    'grade'        => $ar->grade ?? null,
+                    'is_debt'      => false,
+                    'is_orphan'    => true,    // sariq fond bilan ko'rsatiladi
                 ];
             }
 

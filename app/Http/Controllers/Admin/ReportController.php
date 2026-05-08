@@ -5193,9 +5193,7 @@ class ReportController extends Controller
             $groupName = $request->get('group_name', '');
 
             // Curriculum subjects — shu semestrga tegishli barcha fanlar.
-            // Jurnal getSubjects() bilan bir xil mantiq: curricula+semesters JOIN +
-            // baho qo'yilmaydigan fan namunalari chiqarib tashlanadi. is_active va
-            // subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            // Faqat is_active = 1 bo'lgan fanlar olinadi.
             $currSubjectsQuery = DB::table('curriculum_subjects as cs')
                 ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
                 ->join('semesters as sem', function ($join) {
@@ -5204,6 +5202,7 @@ class ReportController extends Controller
                 })
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.semester_code', $semesterCode)
+                ->where('cs.is_active', 1)
                 ->select('cs.subject_id', 'cs.subject_name', 'cs.semester_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
                 ->orderBy('cs.subject_name');
@@ -5274,9 +5273,7 @@ class ReportController extends Controller
 
             $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
 
-            // Jurnal getSubjects() bilan bir xil mantiq:
-            // curricula → semesters join, baho qo'yilmaydigan fan namunalari chiqarib tashlanadi.
-            // is_active va subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
+            // Faqat is_active = 1 bo'lgan fanlar olinadi.
             $semesterListQuery = DB::table('curriculum_subjects as cs')
                 ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
                 ->join('semesters as sem', function ($join) {
@@ -5284,6 +5281,7 @@ class ReportController extends Controller
                         ->on('sem.code', '=', 'cs.semester_code');
                 })
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->where('cs.is_active', 1)
                 ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_name')
                 ->distinct()
                 ->orderBy('cs.semester_code');
@@ -5320,6 +5318,7 @@ class ReportController extends Controller
                         ->on('sem.code', '=', 'cs.semester_code');
                 })
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->where('cs.is_active', 1)
                 ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
                 ->orderBy('cs.semester_code')

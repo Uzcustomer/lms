@@ -984,16 +984,39 @@ class AcademicScheduleController extends Controller
     /**
      * Tanlangan urinish uchun talabalar ro'yxatini filtrlash:
      *  - 1-urinish: barcha talabalar
-     *  - 2-urinish: 1-urinishdan o'tmaganlar (failed_attempt1)
-     *  - 3-urinish: 2-urinishdan o'tmaganlar (failed_attempt2)
+     *  - 2-urinish: 1-urinishdan o'tmaganlar (failed_attempt1) YOKI shaxsiy
+     *               resit sanasi belgilangan talabalar
+     *  - 3-urinish: 2-urinishdan o'tmaganlar (failed_attempt2) YOKI shaxsiy
+     *               resit2 sanasi belgilangan talabalar
+     *
+     * Test Markazi uchun bu filtr biroz yumshoqroq: agar baholar hali
+     * to'liq import qilinmagan bo'lsa ham, akademik bo'lim shaxsiy resit
+     * sanasini belgilagan talabalar ko'rinishi kerak. Agar hech bir talaba
+     * topilmasa — guruhdagi barchasi ko'rsatiladi (informational fallback).
      */
     private function filterStudentsForAttempt(array $students, int $attempt): array
     {
         if ($attempt === 1) {
             return $students;
         }
-        $failedKey = $attempt === 2 ? 'failed_attempt1' : 'failed_attempt2';
-        return array_values(array_filter($students, fn($s) => !empty($s[$failedKey])));
+
+        if ($attempt === 2) {
+            $filtered = array_values(array_filter($students, function ($s) {
+                return !empty($s['failed_attempt1'])
+                    || !empty($s['oski_resit_date'])
+                    || !empty($s['test_resit_date']);
+            }));
+        } else { // 3
+            $filtered = array_values(array_filter($students, function ($s) {
+                return !empty($s['failed_attempt2'])
+                    || !empty($s['oski_resit2_date'])
+                    || !empty($s['test_resit2_date']);
+            }));
+        }
+
+        // Hech bir talaba topilmasa — guruhdagi barchasi ko'rsatiladi (Test Markazi uchun
+        // ro'yxat bo'sh ko'rinmasligi muhim)
+        return !empty($filtered) ? $filtered : $students;
     }
 
     public function testCenterView(Request $request)

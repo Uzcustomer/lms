@@ -678,6 +678,10 @@
         function toggleShowStudents() {
             var btn = document.getElementById('show-students-toggle');
             btn.classList.toggle('active');
+            // Toggle bosilgan zahoti qaytadan qidiramiz — foydalanuvchi alohida "Qidirish" bosishini kutmaslik uchun
+            if (typeof applyFilter === 'function') {
+                applyFilter();
+            }
         }
 
         function fp() {

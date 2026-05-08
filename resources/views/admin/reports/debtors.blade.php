@@ -490,8 +490,6 @@
                 data: { student_id: studentId, semester_code: semesterCode, group_name: groupName },
                 success: function(resp) {
                     var grades = resp.grades || [];
-                    var histGroup = resp.group_name || groupName;
-                    $('#semester-modal-title').html(esc(studentName) + ' &mdash; <span style="color:#a5b4fc;">' + esc(histGroup) + '</span> &mdash; ' + esc(semesterName));
                     if (!grades.length) {
                         $('#semester-modal-body').html('<div style="padding:24px;text-align:center;color:#94a3b8;">Bu semestrda academic record topilmadi</div>');
                         return;

@@ -5392,16 +5392,8 @@ class ReportController extends Controller
 
             $semesterName = $currSubjects->first()->semester_name ?? $semesterCode . '-semestr';
 
-            // Shu semestrda talaba qaysi guruhda bo'lganini attendances'dan topamiz
-            $historicalGroup = DB::table('attendances')
-                ->where('student_hemis_id', $studentId)
-                ->where('semester_code', $semesterCode)
-                ->orderByDesc('lesson_date')
-                ->value('group_name');
-
             return response()->json([
                 'semester_name' => $semesterName,
-                'group_name'    => $historicalGroup,
                 'grades' => $grades,
             ]);
         } catch (\Exception $e) {

@@ -41,20 +41,23 @@
             {{ __("Dekan va registrator tasdiqlagan arizalar — guruhga ajratishdan oldin O'quv bo'limi tasdig'i kerak") }}
         </p>
 
-        {{-- Bosqich tablari --}}
+        {{-- Bosqich tablari (Hammasi default; har biriga sanoq) --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
             <div class="flex border-b border-gray-100">
                 @php
+                    $totalCount = ($counters['pending'] ?? 0) + ($counters['preapproved'] ?? 0) + ($counters['rejected'] ?? 0);
                     $tabs = [
-                        'pending' => ['label' => "Tasdiq kutmoqda", 'color' => 'amber', 'icon' => '⏳'],
-                        'preapproved' => ['label' => "Tasdiqlangan (guruhsiz)", 'color' => 'blue', 'icon' => '✓'],
-                        'rejected' => ['label' => "Rad etilgan", 'color' => 'red', 'icon' => '✕'],
+                        'all' => ['label' => "Hammasi", 'color' => 'gray', 'icon' => '📋', 'count' => $totalCount],
+                        'pending' => ['label' => "Tasdiq kutmoqda", 'color' => 'amber', 'icon' => '⏳', 'count' => $counters['pending'] ?? 0],
+                        'preapproved' => ['label' => "Tasdiqlangan (guruhsiz)", 'color' => 'blue', 'icon' => '✓', 'count' => $counters['preapproved'] ?? 0],
+                        'rejected' => ['label' => "Rad etilgan", 'color' => 'red', 'icon' => '✕', 'count' => $counters['rejected'] ?? 0],
                     ];
                 @endphp
                 @foreach($tabs as $key => $tab)
                     @php
-                        $active = ($stage ?? 'pending') === $key;
+                        $active = ($stage ?? 'all') === $key;
                         $activeBg = match($tab['color']) {
+                            'gray' => 'bg-gray-100 border-b-2 border-gray-500 text-gray-900',
                             'amber' => 'bg-amber-50 border-b-2 border-amber-500 text-amber-800',
                             'blue' => 'bg-blue-50 border-b-2 border-blue-500 text-blue-800',
                             'red' => 'bg-red-50 border-b-2 border-red-500 text-red-800',
@@ -66,7 +69,7 @@
                         <span class="text-base mr-1">{{ $tab['icon'] }}</span>
                         {{ __($tab['label']) }}
                         <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold {{ $active ? 'bg-white' : 'bg-gray-100' }}">
-                            {{ $counters[$key] ?? 0 }}
+                            {{ $tab['count'] }}
                         </span>
                     </a>
                 @endforeach
@@ -78,69 +81,75 @@
             'formAction' => route('admin.retake-applications.index'),
             'educationTypes' => $educationTypes ?? collect(),
             'extraQueryFields' => array_filter([
-                'stage' => $stage !== 'pending' ? $stage : null,
+                'stage' => ($stage ?? 'all') !== 'all' ? $stage : null,
             ]),
         ])
 
-        {{-- Bulk actions panel (faqat tasdiq kutmoqda bosqichida ko'rinadi) --}}
-        @if($stage === 'pending')
-            <div x-show="selected.length > 0" x-cloak
-                 class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
-                <div class="text-sm text-blue-800">
-                    <strong x-text="selected.length"></strong> {{ __("ta ariza tanlangan") }}
-                </div>
-                <div class="flex gap-2">
-                    <form method="POST" action="{{ route('admin.retake-applications.bulk-approve') }}" class="inline">
-                        @csrf
-                        <template x-for="id in selected" :key="id">
-                            <input type="hidden" name="application_ids[]" :value="id">
-                        </template>
-                        <button type="submit"
-                                class="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 inline-flex items-center gap-1.5">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            {{ __("Tanlanganlarni tasdiqlash") }}
-                        </button>
-                    </form>
-                    <button type="button" @click="bulkRejectOpen = true"
-                            class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 inline-flex items-center gap-1.5">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                        {{ __("Tanlanganlarni rad etish") }}
-                    </button>
-                    <button type="button" @click="selected = []"
-                            class="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                        {{ __("Tozalash") }}
-                    </button>
-                </div>
+        {{-- Bulk actions panel (har qachon ko'rinadi — tanlangan arizalar bo'lsa) --}}
+        <div x-show="selected.length > 0" x-cloak
+             class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
+            <div class="text-sm text-blue-800">
+                <strong x-text="selected.length"></strong> {{ __("ta ariza tanlangan") }}
+                <span class="text-xs text-blue-600">
+                    ({{ __("faqat \"Tasdiq kutmoqda\" holatidagilar tasdiqlanadi/rad etiladi") }})
+                </span>
             </div>
-        @endif
+            <div class="flex gap-2">
+                <form method="POST" action="{{ route('admin.retake-applications.bulk-approve') }}" class="inline">
+                    @csrf
+                    <template x-for="id in selected" :key="id">
+                        <input type="hidden" name="application_ids[]" :value="id">
+                    </template>
+                    <button type="submit"
+                            class="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 inline-flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        {{ __("Tanlanganlarni tasdiqlash") }}
+                    </button>
+                </form>
+                <button type="button" @click="bulkRejectOpen = true"
+                        class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 inline-flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    {{ __("Tanlanganlarni rad etish") }}
+                </button>
+                <button type="button" @click="selected = []"
+                        class="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                    {{ __("Tozalash") }}
+                </button>
+            </div>
+        </div>
 
         {{-- Arizalar jadvali --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             @if($applications->count() === 0)
                 <div class="p-10 text-center text-gray-500 text-sm">
-                    {{ __("Ushbu bosqichda ariza yo'q") }}
+                    {{ __("Ariza topilmadi") }}
                 </div>
             @else
                 @php
-                    $pageIds = $applications->pluck('id')->toArray();
-                    $actionableIds = $stage === 'pending' ? $pageIds : [];
+                    // Faqat dean+registrator tasdiqlagan, academic_dept hali pending bo'lganlarni tanlash mumkin
+                    $actionableIds = $applications->filter(function ($a) {
+                        return $a->dean_status === 'approved'
+                            && $a->registrar_status === 'approved'
+                            && $a->academic_dept_status === 'pending'
+                            && $a->final_status === 'pending';
+                    })->pluck('id')->toArray();
                 @endphp
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-100">
                         <thead class="bg-gray-50">
                         <tr>
-                            @if($stage === 'pending')
-                                <th class="px-3 py-2 text-center" style="width:40px;">
-                                    <input type="checkbox"
-                                           @change="toggleAll(@js($actionableIds))"
-                                           :checked="@js($actionableIds).length > 0 && @js($actionableIds).every(id => selected.includes(id))"
-                                           class="rounded">
-                                </th>
-                            @endif
+                            <th class="px-3 py-2 text-center" style="width:40px;">
+                                <input type="checkbox"
+                                       @change="toggleAll(@js($actionableIds))"
+                                       :checked="@js($actionableIds).length > 0 && @js($actionableIds).every(id => selected.includes(id))"
+                                       :disabled="@js($actionableIds).length === 0"
+                                       title="{{ __('Tasdiq kutayotganlarni tanlash') }}"
+                                       class="rounded">
+                            </th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:48px;">{{ __("T/R") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
@@ -149,22 +158,27 @@
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Registrator") }}</th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("O'quv bo'limi") }}</th>
                             <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Yuborilgan") }}</th>
-                            @if($stage === 'pending')
-                                <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:160px;"></th>
-                            @endif
+                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:160px;"></th>
                         </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-100">
                         @foreach($applications as $i => $app)
                             @php
                                 $student = $app->group?->student;
+                                $isActionable = $app->dean_status === 'approved'
+                                    && $app->registrar_status === 'approved'
+                                    && $app->academic_dept_status === 'pending'
+                                    && $app->final_status === 'pending';
                             @endphp
                             <tr>
-                                @if($stage === 'pending')
-                                    <td class="px-3 py-2.5 text-center">
+                                <td class="px-3 py-2.5 text-center">
+                                    @if($isActionable)
                                         <input type="checkbox" :value="{{ $app->id }}" x-model="selected" class="rounded">
-                                    </td>
-                                @endif
+                                    @else
+                                        <span class="inline-block w-4 h-4 rounded border border-gray-200 bg-gray-50"
+                                              title="{{ __('Bu ariza ustida amal qilib bo\'lmaydi') }}"></span>
+                                    @endif
+                                </td>
                                 <td class="px-3 py-2.5 text-center text-sm font-bold text-blue-700">
                                     {{ ($applications->currentPage() - 1) * $applications->perPage() + $i + 1 }}
                                 </td>
@@ -220,8 +234,8 @@
                                     {{ $app->created_at->diffForHumans() }}
                                 </td>
 
-                                @if($stage === 'pending')
-                                    <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                                    @if($isActionable)
                                         <form method="POST" action="{{ route('admin.retake-applications.approve', $app->id) }}" class="inline">
                                             @csrf
                                             <button type="submit" title="{{ __('Tasdiqlash') }}"
@@ -241,8 +255,10 @@
                                             </svg>
                                             {{ __("Rad") }}
                                         </button>
-                                    </td>
-                                @endif
+                                    @else
+                                        <span class="text-[11px] text-gray-400">—</span>
+                                    @endif
+                                </td>
                             </tr>
                         @endforeach
                         </tbody>

@@ -4816,6 +4816,10 @@ class ReportController extends Controller
                 })
                 ->whereIn('cs.curricula_hemis_id', $curriculumIds)
                 ->where('cs.is_active', 1)
+                ->where(function ($q) {
+                    // in_group bo'sh yoki NULL bo'lganlar — guruhli fanlar e'tiborga olinmaydi
+                    $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                })
                 ->select('cs.curricula_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
                 ->distinct();
 
@@ -5205,6 +5209,9 @@ class ReportController extends Controller
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.semester_code', $semesterCode)
                 ->where('cs.is_active', 1)
+                ->where(function ($q) {
+                    $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                })
                 ->select('cs.subject_id', 'cs.subject_name', 'cs.semester_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
                 ->orderBy('cs.subject_name');
@@ -5286,6 +5293,9 @@ class ReportController extends Controller
                 })
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.is_active', 1)
+                ->where(function ($q) {
+                    $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                })
                 ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_name')
                 ->distinct()
                 ->orderBy('cs.semester_code');
@@ -5323,6 +5333,9 @@ class ReportController extends Controller
                 })
                 ->where('cs.curricula_hemis_id', $student->curriculum_id)
                 ->where('cs.is_active', 1)
+                ->where(function ($q) {
+                    $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                })
                 ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
                 ->distinct()
                 ->orderBy('cs.semester_code')

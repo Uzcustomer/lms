@@ -359,7 +359,41 @@
                                                             <span style="color:#cbd5e1;">—</span>
                                                         @endif
                                                     </td>
-                                                    <td colspan="3"></td>
+                                                    <td colspan="2"></td>
+                                                    <td style="text-align:center;padding:4px 6px;">
+                                                        @php
+                                                            // Talabaga mos shaxsiy vaqt — agar mavjud bo'lsa
+                                                            $stuPersonalTime = null;
+                                                            if ($attempt === 2) {
+                                                                $stuPersonalTime = ($item['yn_type'] === 'OSKI') ? ($stuRow['oski_resit_time'] ?? null) : ($stuRow['test_resit_time'] ?? null);
+                                                            } elseif ($attempt === 3) {
+                                                                $stuPersonalTime = ($item['yn_type'] === 'OSKI') ? ($stuRow['oski_resit2_time'] ?? null) : ($stuRow['test_resit2_time'] ?? null);
+                                                            }
+                                                        @endphp
+                                                        @if($attempt > 1 && !$stuBlocked)
+                                                            <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+                                                                <input type="text" class="student-time-input"
+                                                                       value="{{ $stuPersonalTime ? \Carbon\Carbon::parse($stuPersonalTime)->format('H:i') : '' }}"
+                                                                       data-group-hemis-id="{{ $item['group']->group_hemis_id }}"
+                                                                       data-subject-id="{{ $item['subject']->subject_id ?? '' }}"
+                                                                       data-semester-code="{{ $item['subject']->semester_code ?? '' }}"
+                                                                       data-student-hemis-id="{{ $stuRow['hemis_id'] }}"
+                                                                       data-student-name="{{ $stuRow['full_name'] }}"
+                                                                       data-yn-type="{{ $item['yn_type'] ?? '' }}"
+                                                                       data-attempt="{{ $attempt }}"
+                                                                       placeholder="HH:MM" maxlength="5"
+                                                                       style="width:80px;padding:2px 4px;border:1px solid #d1d5db;border-radius:5px;font-size:11px;text-align:center;cursor:{{ $tcReadOnly ? 'default' : 'pointer' }};{{ $tcReadOnly ? 'background:#f1f5f9;color:#475569;' : '' }}"
+                                                                       {{ $tcReadOnly ? 'readonly' : '' }}
+                                                                       @if(!$tcReadOnly) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
+                                                                @if(!$tcReadOnly)
+                                                                <button type="button" class="save-student-time-btn" onclick="saveStudentTime(this)"
+                                                                        style="padding:2px 6px;background:#3b82f6;color:#fff;border:none;border-radius:5px;font-size:10px;cursor:pointer;white-space:nowrap;" title="Talaba vaqtini saqlash">
+                                                                    <svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                                </button>
+                                                                @endif
+                                                            </div>
+                                                        @endif
+                                                    </td>
                                                 </tr>
                                             @endforeach
                                         @endif
@@ -567,6 +601,61 @@
                 } else {
                     showToast('Xatolik', 'Xatolik yuz berdi', true);
                 }
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            });
+        }
+
+        function saveStudentTime(btn) {
+            var container = btn.parentElement;
+            var input = container.querySelector('.student-time-input');
+            var timeVal = input.value.trim();
+            if (!timeVal) {
+                showToast('Xatolik', 'Iltimos, vaqtni kiriting', true);
+                return;
+            }
+            var match = timeVal.match(/^(\d{1,2}):(\d{2})$/);
+            if (!match || parseInt(match[1]) > 23 || parseInt(match[2]) > 59) {
+                showToast('Xatolik', 'Vaqt formati noto\'g\'ri. HH:MM formatida kiriting', true);
+                return;
+            }
+
+            var studentName = input.getAttribute('data-student-name') || 'Talaba';
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+
+            var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            fetch('{{ route($routePrefix . ".academic-schedule.test-center.save-student-time") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    group_hemis_id: input.getAttribute('data-group-hemis-id'),
+                    subject_id: input.getAttribute('data-subject-id'),
+                    semester_code: input.getAttribute('data-semester-code'),
+                    student_hemis_id: input.getAttribute('data-student-hemis-id'),
+                    yn_type: input.getAttribute('data-yn-type') || 'Test',
+                    attempt: parseInt(input.getAttribute('data-attempt') || '2', 10),
+                    test_time: timeVal
+                })
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    showToast('Saqlandi!', '<b>' + studentName + '</b> uchun vaqt belgilandi: ' + timeVal, false);
+                    btn.style.background = '#16a34a';
+                    setTimeout(function() { btn.style.background = '#3b82f6'; }, 1500);
+                } else {
+                    showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
+                }
+            })
+            .catch(function() {
+                showToast('Xatolik', 'Xatolik yuz berdi', true);
             })
             .finally(function() {
                 btn.disabled = false;

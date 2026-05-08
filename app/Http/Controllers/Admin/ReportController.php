@@ -4897,6 +4897,24 @@ class ReportController extends Controller
                 }
             }
 
+            // 5.5-QADAM: student_subjects'dagi BARCHA fanlarni yuklab olamiz —
+            // curriculum_subjects'da YO'Q (lekin student_subjects'da bor) tanlov fanlarni
+            // ham qarz hisobiga qo'shish uchun.
+            // Map: [student_hemis_id][semester_id] => [{subject_id, subject_name}, ...]
+            $studentSubjectsBySem = [];
+            if (!empty($studentHemisIds)) {
+                $allSs = DB::table('student_subjects')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->select('student_hemis_id', 'semester_id', 'subject_id', 'subject_name')
+                    ->get();
+                foreach ($allSs as $row) {
+                    $studentSubjectsBySem[$row->student_hemis_id][$row->semester_id][] = [
+                        'subject_id'   => $row->subject_id,
+                        'subject_name' => $row->subject_name,
+                    ];
+                }
+            }
+
             // 6-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
 
@@ -4926,6 +4944,9 @@ class ReportController extends Controller
                     $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
                     $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
+                    // Shu sem'da qaysi subject_id'lar curriculum'dan kelganini kuzatamiz
+                    $coveredSubjectIds = [];
+
                     foreach ($subjectsForSem as $sub) {
                         // Tanlov fan bo'lsa, talaba tanlovini olamiz
                         $effectiveSubjectId = $sub->subject_id;
@@ -4940,6 +4961,8 @@ class ReportController extends Controller
                             }
                         }
 
+                        $coveredSubjectIds[(string) $effectiveSubjectId] = true;
+
                         $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
                         if (isset($arExistsLookup[$arKey])) continue;
 
@@ -4952,13 +4975,32 @@ class ReportController extends Controller
                             'total_acload'  => $sub->total_acload,
                         ];
                     }
+
+                    // Qo'shimcha tanlov fanlar — student_subjects'da bor, lekin
+                    // curriculum_subjects'da yo'q. Ularni ham qarz/yopiq tekshiramiz.
+                    foreach ($studentSubjectsBySem[$st->hemis_id][$semCode] ?? [] as $extra) {
+                        $sid = (string) $extra['subject_id'];
+                        if (isset($coveredSubjectIds[$sid])) continue;
+
+                        $arKey = $st->hemis_id . '|' . $sid . '|' . $semCode;
+                        if (isset($arExistsLookup[$arKey])) continue;
+
+                        $debts[] = [
+                            'subject_id'    => $extra['subject_id'],
+                            'subject_name'  => $extra['subject_name'],
+                            'semester_code' => (string) $semCode,
+                            'semester_name' => $semCode . '-semestr',
+                            'credit'        => 0,
+                            'total_acload'  => 0,
+                        ];
+                    }
                 }
 
                 $debtCount = count($debts);
                 if ($debtCount < $minDebtCount) continue;
 
                 // Semestr bo'yicha tartiblash
-                usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                usort($debts, fn($a, $b) => (int) $a['semester_code'] <=> (int) $b['semester_code']);
 
                 $finalResults[] = [
                     'hemis_id'          => $st->hemis_id,
@@ -5364,15 +5406,37 @@ class ReportController extends Controller
                 ];
             }
 
-            // Orphan: academic_records da bor, lekin curriculum_subjects'da ham,
-            // student_subjects'da ham yo'q. Sariq bilan alohida ko'rsatamiz.
-            $studentSubjectIds = DB::table('student_subjects')
+            // Qo'shimcha tanlov fanlar — student_subjects'da bor, lekin
+            // curriculum_subjects'da yo'q. Ularni ham qarz/yopiq tekshiramiz.
+            $studentSubjectsForSem = DB::table('student_subjects')
                 ->where('student_hemis_id', $studentId)
                 ->where('semester_id', $semesterCode)
-                ->pluck('subject_id')
-                ->map(fn ($v) => (string) $v)
-                ->all();
-            $studentSubjectIdsSet = array_flip($studentSubjectIds);
+                ->select('subject_id', 'subject_name')
+                ->get();
+
+            foreach ($studentSubjectsForSem as $extra) {
+                $sid = (string) $extra->subject_id;
+                if (isset($expectedSubjectIds[$sid])) continue;
+
+                $expectedSubjectIds[$sid] = true;
+                $ar = $arRecords->get($extra->subject_id);
+                $grades[] = (object) [
+                    'subject_name' => $extra->subject_name,
+                    'credit'       => $ar->credit ?? 0,
+                    'total_acload' => $ar->total_acload ?? 0,
+                    'total_point'  => $ar->total_point ?? null,
+                    'grade'        => $ar->grade ?? null,
+                    'is_debt'      => !$ar,
+                    'is_orphan'    => false,
+                ];
+            }
+
+            // Orphan: academic_records da bor, lekin curriculum_subjects'da ham,
+            // student_subjects'da ham yo'q. Sariq bilan alohida ko'rsatamiz.
+            $studentSubjectIdsSet = [];
+            foreach ($studentSubjectsForSem as $r) {
+                $studentSubjectIdsSet[(string) $r->subject_id] = true;
+            }
 
             foreach ($arRecords as $ar) {
                 $sid = (string) $ar->subject_id;
@@ -5515,6 +5579,7 @@ class ReportController extends Controller
 
             // 5) Qarzlar: curriculum da bor, academic_records da yo'q.
             $debtsAll = [];
+            $coveredBySem = []; // [sem_code => [subject_id => true]]
 
             foreach ($currSubjects as $sub) {
                 $subSemCode = (int) $sub->semester_code;
@@ -5538,6 +5603,8 @@ class ReportController extends Controller
                     }
                 }
 
+                $coveredBySem[(string) $sub->semester_code][(string) $effectiveSubjectId] = true;
+
                 if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
 
                 $debtsAll[] = [
@@ -5546,6 +5613,37 @@ class ReportController extends Controller
                     'subject_name'  => $effectiveSubjectName,
                     'credit'        => $sub->credit,
                     'total_acload'  => $sub->total_acload,
+                    'status'        => 'Qarzdor',
+                ];
+            }
+
+            // Qo'shimcha tanlov fanlar — student_subjects'da bor, lekin curriculum_subjects'da yo'q
+            $extraSs = DB::table('student_subjects')
+                ->where('student_hemis_id', $studentId)
+                ->select('semester_id', 'subject_id', 'subject_name')
+                ->get();
+            foreach ($extraSs as $extra) {
+                $semCode = (string) $extra->semester_id;
+                $semInt = (int) $semCode;
+
+                if ($showCurrentSemester) {
+                    if ($studentSemesterCode && $semInt !== (int) $studentSemesterCode) continue;
+                } else {
+                    if ($studentSemesterCode && $semInt >= (int) $studentSemesterCode) continue;
+                }
+
+                $sid = (string) $extra->subject_id;
+                if (isset($coveredBySem[$semCode][$sid])) continue;
+                if (isset($arExists[$extra->subject_id . '|' . $semCode])) continue;
+
+                $coveredBySem[$semCode][$sid] = true;
+
+                $debtsAll[] = [
+                    'semester_code' => $semCode,
+                    'semester_name' => $semCode . '-semestr',
+                    'subject_name'  => $extra->subject_name,
+                    'credit'        => 0,
+                    'total_acload'  => 0,
                     'status'        => 'Qarzdor',
                 ];
             }

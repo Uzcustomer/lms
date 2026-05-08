@@ -76,7 +76,7 @@ class StudentContextBuilder {
 
       for (final s in subjects) {
         if (s is! Map<String, dynamic>) continue;
-        final id = s['id'];
+        final id = s['subject_id'] ?? s['id'];
         final name = s['subject_name'] ?? s['name'] ?? '?';
         final grades = s['grades'] as Map<String, dynamic>? ?? {};
         final yn = _computeYn(grades);
@@ -88,9 +88,13 @@ class StudentContextBuilder {
         _line(buf, 'ON (oraliq nazorat)', grades['on']);
         _line(buf, 'OSKI', grades['oski']);
         _line(buf, 'TEST', grades['test']);
+        _line(buf, 'Umumiy ball', grades['total']);
         _line(buf, 'Kredit', s['credit'] ?? s['credits']);
-        _line(buf, 'O\'qituvchi', s['teacher_name'] ?? s['teacher']);
+        _line(buf, 'O\'qituvchi', s['employee_name'] ?? s['teacher_name'] ?? s['teacher']);
         _line(buf, 'Dars turi', s['subject_type'] ?? s['type']);
+        _line(buf, 'Davomat %', s['dav_percent']);
+        _line(buf, 'Sababsiz soatlar', s['absent_hours']);
+        _line(buf, 'Auditoriya soatlari', s['auditorium_hours']);
 
         if (s['mt_submission'] is Map<String, dynamic>) {
           final mt = s['mt_submission'] as Map<String, dynamic>;
@@ -98,6 +102,9 @@ class StudentContextBuilder {
               mt['has_submission'] == true ? 'Ha' : 'Yo\'q');
           _line(buf, 'MT yuklash mumkin',
               mt['can_submit'] == true ? 'Ha' : 'Yo\'q');
+          _line(buf, 'MT muddat', mt['deadline']);
+          _line(buf, 'MT muddati o\'tgan', mt['is_overdue'] == true ? 'Ha' : null);
+          _line(buf, 'MT baho', mt['grade']);
           _line(buf, 'MT yuklangan sana', mt['submitted_at']);
         }
 

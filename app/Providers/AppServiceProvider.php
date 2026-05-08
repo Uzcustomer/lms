@@ -140,6 +140,42 @@ class AppServiceProvider extends ServiceProvider
                 }
             } catch (\Throwable $e) {}
             $view->with('pendingRetakeCount', $pendingRetake);
+
+            // O'quv bo'limi uchun: tasdiqlangan, lekin guruhga biriktirilmagan arizalar soni
+            // (QO': Guruhlar sidebar badge uchun)
+            $pendingGrouping = 0;
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('retake_applications')) {
+                    $activeRoleG = (string) session('active_role', '');
+                    $teacherG = \Illuminate\Support\Facades\Auth::guard('teacher')->user();
+                    $userIdG = $teacherG?->id ?? \Illuminate\Support\Facades\Auth::guard('web')->id() ?? 0;
+                    $academicRolesG = [
+                        \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT->value,
+                        \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+                        \App\Enums\ProjectRole::SUPERADMIN->value,
+                        \App\Enums\ProjectRole::ADMIN->value,
+                    ];
+                    if (in_array($activeRoleG, $academicRolesG, true)) {
+                        $cacheKeyG = "retake.grouping.{$activeRoleG}.{$userIdG}";
+                        $pendingGrouping = \Illuminate\Support\Facades\Cache::remember(
+                            $cacheKeyG,
+                            60,
+                            function () {
+                                return \App\Models\RetakeApplication::query()
+                                    ->where('academic_dept_status', 'approved')
+                                    ->where('final_status', 'pending')
+                                    ->whereNull('retake_group_id')
+                                    ->whereHas('group', function ($q) {
+                                        $q->whereNotNull('payment_uploaded_at')
+                                          ->where('payment_verification_status', 'approved');
+                                    })
+                                    ->count();
+                            }
+                        );
+                    }
+                }
+            } catch (\Throwable $e) {}
+            $view->with('pendingGroupingCount', $pendingGrouping);
         });
 
         // Carbon diffForHumans() uchun o'zbek lotin alifbosida

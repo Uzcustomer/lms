@@ -39,7 +39,7 @@ class RetakeAcademicApplicationController extends Controller
         $semesterCode = $request->input('semester_code');
         $groupId = $request->input('group');
         $search = trim((string) $request->input('search', ''));
-        $stage = $request->input('stage', 'pending'); // pending|preapproved|all|rejected
+        $stage = $request->input('stage', 'all'); // all|pending|preapproved|rejected
 
         $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {

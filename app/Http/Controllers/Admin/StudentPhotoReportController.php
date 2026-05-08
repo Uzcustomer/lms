@@ -470,10 +470,11 @@ class StudentPhotoReportController extends Controller
         // ArcFace embedding'ni hisoblab DB ga va Python identify cache'iga qo'shish
         $this->extractAndCacheEmbedding($photo);
 
-        // Tasdiqlangan rasmni Moodle ga yuborish (asinxron, queue orqali)
+        // Tasdiqlangan rasmni Moodle ga yuborish (asinxron, queue orqali).
+        // Tyutorga xabar AYNI ZAHOTI yuborilmaydi — Moodle plagini descriptor
+        // ajratib, /api/moodle-descriptor-confirmed endpointiga callback
+        // yuborganda yuboriladi (StudentPhotoReportController::notifyTutor).
         \App\Jobs\SendStudentPhotoToMoodle::dispatch($photo->id)->afterCommit();
-
-        $this->notifyTutor($photo, true);
 
         return $this->reviewResponse($request, true, 'Rasm tasdiqlandi.');
     }
@@ -571,39 +572,11 @@ class StudentPhotoReportController extends Controller
 
     protected function notifyTutor(StudentPhoto $photo, bool $approved, ?string $reason = null): void
     {
-        $teacher = null;
-        if ($photo->uploaded_by_teacher_id) {
-            $teacher = Teacher::find($photo->uploaded_by_teacher_id);
-        }
-        if (!$teacher && $photo->uploaded_by) {
-            $teacher = Teacher::where('full_name', $photo->uploaded_by)->first();
-        }
-
-        if (!$teacher || empty($teacher->telegram_chat_id)) {
-            return;
-        }
-
+        $notifier = app(\App\Services\StudentPhotoNotifier::class);
         if ($approved) {
-            $text = "✅ Talaba rasmi qabul qilindi\n\n"
-                  . "Talaba: {$photo->full_name}\n"
-                  . "Guruh: " . ($photo->group_name ?: '—') . "\n\n"
-                  . "Admin tomonidan tasdiqlandi.";
+            $notifier->notifyApproved($photo);
         } else {
-            $text = "❌ Talaba rasmi rad etildi\n\n"
-                  . "Talaba: {$photo->full_name}\n"
-                  . "Guruh: " . ($photo->group_name ?: '—') . "\n"
-                  . "Sabab: " . ($reason ?: 'Standartlarga mos emas') . "\n\n"
-                  . "Iltimos, talaba rasmi standartlarga (tirsakdan yuqori, oq xalatda, oq fonda) mos ravishda qayta yuklang.";
-        }
-
-        try {
-            app(TelegramService::class)->sendAndGetId((string) $teacher->telegram_chat_id, $text);
-        } catch (\Throwable $e) {
-            Log::warning('Tyutorga telegram bildirish yuborilmadi', [
-                'photo_id' => $photo->id,
-                'teacher_id' => $teacher->id,
-                'error' => $e->getMessage(),
-            ]);
+            $notifier->notifyRejected($photo, $reason);
         }
     }
 

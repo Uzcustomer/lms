@@ -89,7 +89,7 @@ class FaceIdAdminController extends Controller
         Setting::set('faceid_arcface_enabled',    $request->boolean('faceid_arcface_enabled') ? '1' : '0');
         Setting::set('faceid_arcface_threshold',  $request->faceid_arcface_threshold);
 
-        return redirect()->route('admin.face-id.settings')
+        return redirect()->route('admin.face-id.logs', ['tab' => 'settings'])
             ->with('success', 'Face ID sozlamalari saqlandi.');
     }
 
@@ -111,10 +111,50 @@ class FaceIdAdminController extends Controller
         }
 
         $logs      = $query->paginate(50)->appends($request->query());
+
+        // Talaba rasmlari (student_photos jadvalidan, eng so'nggi approved/pending)
+        $studentNumbers = $logs->pluck('student_id_number')->filter()->unique()->values()->all();
+        $studentPhotos = [];
+        if (!empty($studentNumbers)) {
+            $studentPhotos = \App\Models\StudentPhoto::whereIn('student_id_number', $studentNumbers)
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('student_id_number')
+                ->map(fn($group) => $group->first())
+                ->all();
+        }
         $todayTotal   = FaceIdLog::whereDate('created_at', today())->count();
         $todaySuccess = FaceIdLog::where('result', 'success')->whereDate('created_at', today())->count();
 
-        return view('admin.face-id.logs', compact('logs', 'todayTotal', 'todaySuccess'));
+        // Sozlamalar (xato bo'lsa default)
+        $settings = [
+            'global_enabled' => true,
+            'threshold' => 0.40,
+            'arcface_enabled' => true,
+            'arcface_threshold' => 85.0,
+            'blinks_required' => 2,
+            'head_turn_required' => true,
+            'liveness_timeout' => 30,
+            'save_snapshots' => true,
+            'max_snapshot_kb' => 50,
+        ];
+        $settingsError = null;
+        try {
+            $loaded = FaceIdService::getSettings();
+            if (is_array($loaded)) {
+                $settings = array_merge($settings, $loaded);
+            }
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Sozlamalarni yuklashda xato', ['error' => $e->getMessage()]);
+            $settingsError = 'Sozlamalarni yuklashda xatolik: ' . $e->getMessage();
+        }
+
+        $activeTab = $request->input('tab', 'logs');
+
+        return view('admin.face-id.logs', compact(
+            'logs', 'todayTotal', 'todaySuccess',
+            'settings', 'settingsError', 'activeTab', 'studentPhotos'
+        ));
     }
 
     /**

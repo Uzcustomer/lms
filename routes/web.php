@@ -765,6 +765,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
             Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
+            Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
@@ -1330,6 +1331,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
             Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
+            Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');

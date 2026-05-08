@@ -302,9 +302,13 @@ class AcademicScheduleController extends Controller
                         'hemis_id' => $stu->hemis_id,
                         'full_name' => $stu->full_name,
                         'oski_resit_date' => $perRow?->oski_resit_date?->format('Y-m-d'),
+                        'oski_resit_time' => $perRow?->oski_resit_time,
                         'oski_resit2_date' => $perRow?->oski_resit2_date?->format('Y-m-d'),
+                        'oski_resit2_time' => $perRow?->oski_resit2_time,
                         'test_resit_date' => $perRow?->test_resit_date?->format('Y-m-d'),
+                        'test_resit_time' => $perRow?->test_resit_time,
                         'test_resit2_date' => $perRow?->test_resit2_date?->format('Y-m-d'),
+                        'test_resit2_time' => $perRow?->test_resit2_time,
                         'failed_attempt1' => $stat['failed1'],
                         'failed_attempt2' => $stat['failed2'],
                         'is_pullik' => $stat['pullik'],
@@ -984,16 +988,39 @@ class AcademicScheduleController extends Controller
     /**
      * Tanlangan urinish uchun talabalar ro'yxatini filtrlash:
      *  - 1-urinish: barcha talabalar
-     *  - 2-urinish: 1-urinishdan o'tmaganlar (failed_attempt1)
-     *  - 3-urinish: 2-urinishdan o'tmaganlar (failed_attempt2)
+     *  - 2-urinish: 1-urinishdan o'tmaganlar (failed_attempt1) YOKI shaxsiy
+     *               resit sanasi belgilangan talabalar
+     *  - 3-urinish: 2-urinishdan o'tmaganlar (failed_attempt2) YOKI shaxsiy
+     *               resit2 sanasi belgilangan talabalar
+     *
+     * Test Markazi uchun bu filtr biroz yumshoqroq: agar baholar hali
+     * to'liq import qilinmagan bo'lsa ham, akademik bo'lim shaxsiy resit
+     * sanasini belgilagan talabalar ko'rinishi kerak. Agar hech bir talaba
+     * topilmasa — guruhdagi barchasi ko'rsatiladi (informational fallback).
      */
     private function filterStudentsForAttempt(array $students, int $attempt): array
     {
         if ($attempt === 1) {
             return $students;
         }
-        $failedKey = $attempt === 2 ? 'failed_attempt1' : 'failed_attempt2';
-        return array_values(array_filter($students, fn($s) => !empty($s[$failedKey])));
+
+        if ($attempt === 2) {
+            $filtered = array_values(array_filter($students, function ($s) {
+                return !empty($s['failed_attempt1'])
+                    || !empty($s['oski_resit_date'])
+                    || !empty($s['test_resit_date']);
+            }));
+        } else { // 3
+            $filtered = array_values(array_filter($students, function ($s) {
+                return !empty($s['failed_attempt2'])
+                    || !empty($s['oski_resit2_date'])
+                    || !empty($s['test_resit2_date']);
+            }));
+        }
+
+        // Hech bir talaba topilmasa — guruhdagi barchasi ko'rsatiladi (Test Markazi uchun
+        // ro'yxat bo'sh ko'rinmasligi muhim)
+        return !empty($filtered) ? $filtered : $students;
     }
 
     public function testCenterView(Request $request)
@@ -2998,6 +3025,93 @@ class AcademicScheduleController extends Controller
             'success' => true,
             'time_changed' => $timeChanged,
             'message' => $statusMsg . ($students->count() > 0 ? " va {$students->count()} ta talabaga xabar yuborildi" : ''),
+        ]);
+    }
+
+    /**
+     * Test markazi: bitta talaba uchun shaxsiy 2-/3-urinish vaqtini saqlash.
+     * Per-student exam_schedules yozuvi (student_hemis_id NOT NULL) yaratiladi yoki yangilanadi.
+     * Sana — agar shaxsiy belgilanmagan bo'lsa — guruh darajasidagi resit sanasidan ko'chiriladi.
+     */
+    public function saveStudentTime(Request $request)
+    {
+        if ($this->isTestCenterReadOnly()) {
+            return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
+        }
+
+        $request->validate([
+            'group_hemis_id' => 'required|string',
+            'subject_id' => 'required|string',
+            'semester_code' => 'required|string',
+            'student_hemis_id' => 'required|string',
+            'yn_type' => 'required|string|in:OSKI,Test',
+            'attempt' => 'required|integer|in:2,3',
+            'test_time' => 'required|date_format:H:i',
+        ]);
+
+        $columns = [
+            'OSKI' => [
+                2 => ['date' => 'oski_resit_date',  'time' => 'oski_resit_time'],
+                3 => ['date' => 'oski_resit2_date', 'time' => 'oski_resit2_time'],
+            ],
+            'Test' => [
+                2 => ['date' => 'test_resit_date',  'time' => 'test_resit_time'],
+                3 => ['date' => 'test_resit2_date', 'time' => 'test_resit2_time'],
+            ],
+        ];
+        $cols = $columns[$request->yn_type][(int) $request->attempt];
+        $timeColumn = $cols['time'];
+        $dateColumn = $cols['date'];
+
+        $groupSchedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->whereNull('student_hemis_id')
+            ->first();
+
+        $perStudent = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->where('student_hemis_id', $request->student_hemis_id)
+            ->first();
+
+        $resolvedDate = $perStudent?->{$dateColumn} ?? $groupSchedule?->{$dateColumn};
+        if (!$resolvedDate) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu urinish uchun avval sana belgilanmagan. Avval akademik bo\'lim sanani belgilashi kerak.',
+            ], 422);
+        }
+
+        $payload = [$timeColumn => $request->test_time];
+        if (!$perStudent) {
+            $payload = array_merge($payload, [
+                'group_hemis_id' => $request->group_hemis_id,
+                'subject_id' => $request->subject_id,
+                'subject_name' => $groupSchedule?->subject_name,
+                'semester_code' => $request->semester_code,
+                'student_hemis_id' => $request->student_hemis_id,
+                'department_hemis_id' => $groupSchedule?->department_hemis_id,
+                'specialty_hemis_id' => $groupSchedule?->specialty_hemis_id,
+                'curriculum_hemis_id' => $groupSchedule?->curriculum_hemis_id,
+                'education_year' => $groupSchedule?->education_year,
+                $dateColumn => $resolvedDate,
+                'created_by' => auth()->id(),
+            ]);
+            $perStudent = ExamSchedule::create($payload);
+        } else {
+            // Sana yo'q bo'lsa, guruh sanasidan ko'chiramiz
+            if (empty($perStudent->{$dateColumn}) && $groupSchedule?->{$dateColumn}) {
+                $payload[$dateColumn] = $groupSchedule->{$dateColumn};
+            }
+            $payload['updated_by'] = auth()->id();
+            $perStudent->update($payload);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Talaba uchun vaqt saqlandi.',
+            'time' => $request->test_time,
         ]);
     }
 

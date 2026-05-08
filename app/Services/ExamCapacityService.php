@@ -255,17 +255,27 @@ class ExamCapacityService
         $start = Carbon::parse($date . ' ' . substr($time, 0, 5));
         $end = $start->copy()->addMinutes($duration);
 
+        // Har bir YN turi va urinish bo'yicha tegishli sana/vaqt ustunlari
+        $slots = [
+            ['yn' => 'oski', 'attempt' => 1, 'date_col' => 'oski_date',         'time_col' => 'oski_time',         'check_na' => true],
+            ['yn' => 'oski', 'attempt' => 2, 'date_col' => 'oski_resit_date',   'time_col' => 'oski_resit_time',   'check_na' => false],
+            ['yn' => 'oski', 'attempt' => 3, 'date_col' => 'oski_resit2_date',  'time_col' => 'oski_resit2_time',  'check_na' => false],
+            ['yn' => 'test', 'attempt' => 1, 'date_col' => 'test_date',         'time_col' => 'test_time',         'check_na' => true],
+            ['yn' => 'test', 'attempt' => 2, 'date_col' => 'test_resit_date',   'time_col' => 'test_resit_time',   'check_na' => false],
+            ['yn' => 'test', 'attempt' => 3, 'date_col' => 'test_resit2_date',  'time_col' => 'test_resit2_time',  'check_na' => false],
+        ];
+
         $rows = ExamSchedule::query()
-            ->where(function ($q) use ($date) {
-                $q->where(function ($q2) use ($date) {
-                    $q2->whereDate('oski_date', $date)
-                       ->where('oski_na', false)
-                       ->whereNotNull('oski_time');
-                })->orWhere(function ($q2) use ($date) {
-                    $q2->whereDate('test_date', $date)
-                       ->where('test_na', false)
-                       ->whereNotNull('test_time');
-                });
+            ->where(function ($q) use ($date, $slots) {
+                foreach ($slots as $slot) {
+                    $q->orWhere(function ($q2) use ($date, $slot) {
+                        $q2->whereDate($slot['date_col'], $date)
+                           ->whereNotNull($slot['time_col']);
+                        if ($slot['check_na']) {
+                            $q2->where($slot['yn'] . '_na', false);
+                        }
+                    });
+                }
             })
             ->get();
 
@@ -273,21 +283,19 @@ class ExamCapacityService
 
         $total = 0;
         foreach ($rows as $row) {
-            // OSKI
-            if ($row->oski_date && $row->oski_date->format('Y-m-d') === $date
-                && !$row->oski_na && $row->oski_time
-                && !self::isExcluded($row, 'oski', $exclude)) {
-                $rowStart = Carbon::parse($date . ' ' . substr((string) $row->oski_time, 0, 5));
-                $rowEnd = $rowStart->copy()->addMinutes($duration);
-                if ($rowStart->lt($end) && $rowEnd->gt($start)) {
-                    $total += $groupCounts[$row->group_hemis_id] ?? 0;
+            foreach ($slots as $slot) {
+                $rowDate = $row->{$slot['date_col']};
+                $rowTime = $row->{$slot['time_col']};
+                if (!$rowDate || $rowDate->format('Y-m-d') !== $date || !$rowTime) {
+                    continue;
                 }
-            }
-            // Test
-            if ($row->test_date && $row->test_date->format('Y-m-d') === $date
-                && !$row->test_na && $row->test_time
-                && !self::isExcluded($row, 'test', $exclude)) {
-                $rowStart = Carbon::parse($date . ' ' . substr((string) $row->test_time, 0, 5));
+                if ($slot['check_na'] && $row->{$slot['yn'] . '_na'}) {
+                    continue;
+                }
+                if (self::isExcluded($row, $slot['yn'], $exclude, $slot['attempt'])) {
+                    continue;
+                }
+                $rowStart = Carbon::parse($date . ' ' . substr((string) $rowTime, 0, 5));
                 $rowEnd = $rowStart->copy()->addMinutes($duration);
                 if ($rowStart->lt($end) && $rowEnd->gt($start)) {
                     $total += $groupCounts[$row->group_hemis_id] ?? 0;
@@ -311,14 +319,20 @@ class ExamCapacityService
             ->toArray();
     }
 
-    private static function isExcluded($row, string $ynType, ?array $exclude): bool
+    private static function isExcluded($row, string $ynType, ?array $exclude, int $attempt = 1): bool
     {
         if (!$exclude) {
             return false;
         }
-        return ($exclude['group_hemis_id'] ?? null) === $row->group_hemis_id
+        $matchesKey = ($exclude['group_hemis_id'] ?? null) === $row->group_hemis_id
             && (string) ($exclude['subject_id'] ?? null) === (string) $row->subject_id
             && (string) ($exclude['semester_code'] ?? null) === (string) $row->semester_code
             && strtolower((string) ($exclude['yn_type'] ?? null)) === $ynType;
+        if (!$matchesKey) {
+            return false;
+        }
+        // Eski chaqiruvlar `attempt` bermaydi — ular faqat 1-urinish (asosiy) yozuvini istisno qiladi
+        $excludeAttempt = (int) ($exclude['attempt'] ?? 1);
+        return $excludeAttempt === $attempt;
     }
 }

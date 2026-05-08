@@ -830,8 +830,6 @@ class AcademicScheduleController extends Controller
         $transformedData = collect();
         foreach ($scheduleData as $groupHemisId => $items) {
             foreach ($items as $item) {
-                $oskiDate = $item['oski_date'] ?? null;
-                $testDate = $item['test_date'] ?? null;
                 $oskiNa = $item['oski_na'] ?? false;
                 $testNa = $item['test_na'] ?? false;
 
@@ -843,25 +841,33 @@ class AcademicScheduleController extends Controller
                     'education_form_name' => $curriculumFormMap->get($item['group']->curriculum_hemis_id) ?? '',
                 ];
 
-                $oskiInRange = $oskiDate && (!$dateFrom || $oskiDate >= $dateFrom) && (!$dateTo || $oskiDate <= $dateTo);
-                if ($oskiInRange || ($oskiNa && !$dateFrom && !$dateTo)) {
-                    $ynItem = array_merge($item, $extraFields);
-                    $ynItem['yn_type'] = 'OSKI';
-                    $ynItem['yn_date'] = $oskiDate;
-                    $ynItem['yn_date_carbon'] = $item['oski_date_carbon'] ?? null;
-                    $ynItem['yn_na'] = $oskiNa;
-                    $ynItem['test_time'] = $item['oski_time'] ?? null;
-                    $transformedData->push($ynItem);
-                }
+                // Har bir YN turi (OSKI, Test) uchun 1-, 2-, 3-urinish sanalarini alohida qatorlar sifatida chiqaramiz.
+                // Faqat 1-urinish uchun N/A bayrog'i ishlatiladi (resit larda N/A tushunchasi yo'q).
+                $attemptDefs = [
+                    ['yn_type' => 'OSKI', 'attempt' => 1, 'date' => $item['oski_date'] ?? null,         'date_carbon' => $item['oski_date_carbon'] ?? null,         'time' => $item['oski_time'] ?? null,         'na' => $oskiNa],
+                    ['yn_type' => 'OSKI', 'attempt' => 2, 'date' => $item['oski_resit_date'] ?? null,   'date_carbon' => $item['oski_resit_date_carbon'] ?? null,   'time' => $item['oski_resit_time'] ?? null,   'na' => false],
+                    ['yn_type' => 'OSKI', 'attempt' => 3, 'date' => $item['oski_resit2_date'] ?? null,  'date_carbon' => $item['oski_resit2_date_carbon'] ?? null,  'time' => $item['oski_resit2_time'] ?? null,  'na' => false],
+                    ['yn_type' => 'Test', 'attempt' => 1, 'date' => $item['test_date'] ?? null,         'date_carbon' => $item['test_date_carbon'] ?? null,         'time' => $item['test_time'] ?? null,         'na' => $testNa],
+                    ['yn_type' => 'Test', 'attempt' => 2, 'date' => $item['test_resit_date'] ?? null,   'date_carbon' => $item['test_resit_date_carbon'] ?? null,   'time' => $item['test_resit_time'] ?? null,   'na' => false],
+                    ['yn_type' => 'Test', 'attempt' => 3, 'date' => $item['test_resit2_date'] ?? null,  'date_carbon' => $item['test_resit2_date_carbon'] ?? null,  'time' => $item['test_resit2_time'] ?? null,  'na' => false],
+                ];
 
-                $testInRange = $testDate && (!$dateFrom || $testDate >= $dateFrom) && (!$dateTo || $testDate <= $dateTo);
-                if ($testInRange || ($testNa && !$dateFrom && !$dateTo)) {
+                foreach ($attemptDefs as $def) {
+                    $d = $def['date'];
+                    $inRange = $d && (!$dateFrom || $d >= $dateFrom) && (!$dateTo || $d <= $dateTo);
+                    // 1-urinish N/A bayrog'i tanlangan bo'lsa, sana bo'lmasa ham (sanasi kelajakda belgilanadigan) ko'rsatiladi
+                    $naVisible = $def['attempt'] === 1 && $def['na'] && !$dateFrom && !$dateTo;
+                    if (!$inRange && !$naVisible) {
+                        continue;
+                    }
+
                     $ynItem = array_merge($item, $extraFields);
-                    $ynItem['yn_type'] = 'Test';
-                    $ynItem['yn_date'] = $testDate;
-                    $ynItem['yn_date_carbon'] = $item['test_date_carbon'] ?? null;
-                    $ynItem['yn_na'] = $testNa;
-                    $ynItem['test_time'] = $item['test_time'] ?? null;
+                    $ynItem['yn_type'] = $def['yn_type'];
+                    $ynItem['attempt'] = $def['attempt'];
+                    $ynItem['yn_date'] = $d;
+                    $ynItem['yn_date_carbon'] = $def['date_carbon'];
+                    $ynItem['yn_na'] = $def['attempt'] === 1 ? $def['na'] : false;
+                    $ynItem['test_time'] = $def['time'];
                     $transformedData->push($ynItem);
                 }
             }
@@ -1248,12 +1254,16 @@ class AcademicScheduleController extends Controller
                     'oski_na' => (bool) $existing?->oski_na,
                     'oski_time' => $existing?->oski_time,
                     'oski_resit_date' => $existing?->oski_resit_date?->format('Y-m-d'),
+                    'oski_resit_time' => $existing?->oski_resit_time,
                     'oski_resit2_date' => $existing?->oski_resit2_date?->format('Y-m-d'),
+                    'oski_resit2_time' => $existing?->oski_resit2_time,
                     'test_date' => $existing?->test_date?->format('Y-m-d'),
                     'test_na' => (bool) $existing?->test_na,
                     'test_time' => $existing?->test_time,
                     'test_resit_date' => $existing?->test_resit_date?->format('Y-m-d'),
+                    'test_resit_time' => $existing?->test_resit_time,
                     'test_resit2_date' => $existing?->test_resit2_date?->format('Y-m-d'),
+                    'test_resit2_time' => $existing?->test_resit2_time,
                     'schedule_id' => $existing?->id,
                 ];
 
@@ -1262,6 +1272,10 @@ class AcademicScheduleController extends Controller
                     $item['lesson_end_date_carbon'] = $lessonInfo?->lesson_end ? \Carbon\Carbon::parse($lessonInfo->lesson_end) : null;
                     $item['oski_date_carbon'] = $existing?->oski_date;
                     $item['test_date_carbon'] = $existing?->test_date;
+                    $item['oski_resit_date_carbon'] = $existing?->oski_resit_date;
+                    $item['oski_resit2_date_carbon'] = $existing?->oski_resit2_date;
+                    $item['test_resit_date_carbon'] = $existing?->test_resit_date;
+                    $item['test_resit2_date_carbon'] = $existing?->test_resit2_date;
                 }
 
                 $scheduleData->push($item);
@@ -1278,16 +1292,22 @@ class AcademicScheduleController extends Controller
         // Sana oralig'i filtri
         if ($dateFrom || $dateTo) {
             if ($filterByYnDate) {
-                // YN sanasi bo'yicha filtr (OSKI yoki Test sanasi)
+                // YN sanasi bo'yicha filtr — 1-, 2- va 3-urinish sanalarining istalganidan biri oraliqqa kirsa, ko'rsatiladi
                 $scheduleData = $scheduleData->filter(function ($item) use ($dateFrom, $dateTo) {
-                    $oskiDate = $item['oski_date'];
-                    $testDate = $item['test_date'];
-
-                    // OSKI yoki Test sanalaridan kamida biri oraliqqa to'g'ri kelsa ko'rsatiladi
-                    $oskiMatch = $oskiDate && (!$dateFrom || $oskiDate >= $dateFrom) && (!$dateTo || $oskiDate <= $dateTo);
-                    $testMatch = $testDate && (!$dateFrom || $testDate >= $dateFrom) && (!$dateTo || $testDate <= $dateTo);
-
-                    return $oskiMatch || $testMatch;
+                    $candidates = [
+                        $item['oski_date'] ?? null,
+                        $item['oski_resit_date'] ?? null,
+                        $item['oski_resit2_date'] ?? null,
+                        $item['test_date'] ?? null,
+                        $item['test_resit_date'] ?? null,
+                        $item['test_resit2_date'] ?? null,
+                    ];
+                    foreach ($candidates as $d) {
+                        if ($d && (!$dateFrom || $d >= $dateFrom) && (!$dateTo || $d <= $dateTo)) {
+                            return true;
+                        }
+                    }
+                    return false;
                 });
             } else {
                 // Dars tugash sanasi bo'yicha filtr
@@ -2727,6 +2747,7 @@ class AcademicScheduleController extends Controller
             'semester_code' => 'required|string',
             'test_time' => 'required|date_format:H:i',
             'yn_type' => 'nullable|string|in:OSKI,Test',
+            'attempt' => 'nullable|integer|in:1,2,3',
         ]);
 
         $examSchedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
@@ -2738,11 +2759,29 @@ class AcademicScheduleController extends Controller
             return response()->json(['success' => false, 'message' => 'Jadval topilmadi'], 404);
         }
 
-        // YN turiga qarab tegishli vaqt ustunini yangilash
+        // YN turi va urinishga qarab tegishli sana/vaqt ustunlarini aniqlash
         $ynType = $request->input('yn_type', 'Test');
-        $timeColumn = $ynType === 'OSKI' ? 'oski_time' : 'test_time';
+        $attempt = (int) $request->input('attempt', 1);
+        $columns = [
+            'OSKI' => [
+                1 => ['date' => 'oski_date',         'time' => 'oski_time'],
+                2 => ['date' => 'oski_resit_date',   'time' => 'oski_resit_time'],
+                3 => ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time'],
+            ],
+            'Test' => [
+                1 => ['date' => 'test_date',         'time' => 'test_time'],
+                2 => ['date' => 'test_resit_date',   'time' => 'test_resit_time'],
+                3 => ['date' => 'test_resit2_date',  'time' => 'test_resit2_time'],
+            ],
+        ];
+        $cols = $columns[$ynType][$attempt] ?? $columns[$ynType][1];
+        $timeColumn = $cols['time'];
+        $dateColumn = $cols['date'];
         $ynLabel = $ynType === 'OSKI' ? 'OSKI' : 'Test';
-        $relatedDate = $ynType === 'OSKI' ? $examSchedule->oski_date : $examSchedule->test_date;
+        if ($attempt > 1) {
+            $ynLabel .= ' (' . $attempt . '-urinish)';
+        }
+        $relatedDate = $examSchedule->{$dateColumn};
 
         $oldTime = $examSchedule->{$timeColumn};
         $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
@@ -2790,6 +2829,7 @@ class AcademicScheduleController extends Controller
                 'subject_id' => $request->subject_id,
                 'semester_code' => $request->semester_code,
                 'yn_type' => strtolower($ynType),
+                'attempt' => $attempt,
             ];
 
             $concurrent = ExamCapacityService::concurrentStudentsForSlot($relatedDateStr, $newTime, $exclude);
@@ -2843,9 +2883,12 @@ class AcademicScheduleController extends Controller
         $examSchedule->update([$timeColumn => $request->test_time]);
 
         // Both date and time are now set → assign computers + book on Moodle.
+        // Hozircha kompyuter va Moodle bron qilish faqat 1-urinish uchun ishlaydi;
+        // 2-/3-urinishlar (resit) sanalari Test markazi tomonidan vaqt belgilanadi, biroq
+        // bron qilish bosqichi alohida ko'rib chiqiladi.
         $ynKey = $ynType === 'OSKI' ? 'oski' : 'test';
         $naFlag = $ynKey === 'oski' ? $examSchedule->oski_na : $examSchedule->test_na;
-        if ($relatedDate && !$naFlag) {
+        if ($attempt === 1 && $relatedDate && !$naFlag) {
             AssignComputersJob::dispatch($examSchedule->id, $ynKey);
             BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
         }

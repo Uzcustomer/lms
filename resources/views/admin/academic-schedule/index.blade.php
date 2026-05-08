@@ -234,6 +234,9 @@
                                             $cf = $item['closing_form'] ?? null;
                                             $showOski = $cf === null || in_array($cf, ['oski', 'oski_test'], true);
                                             $showTest = $cf === null || in_array($cf, ['test', 'oski_test'], true);
+                                            // Yopilish shakli belgilangan bo'lsa, N/A tugmasi kerak emas:
+                                            // OSKI/Test'ning kerakliligi to'liq yopilish shakli orqali boshqariladi.
+                                            $cfLocked = $cf !== null;
                                             $cfDashLabels = [
                                                 'test' => 'Faqat Test',
                                                 'oski' => 'Faqat OSKI',
@@ -294,11 +297,13 @@
                                                                    title="Saqlangan sana o'zgartirib bo'lmaydi" />
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $itemOski }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
                                                                    {{ $itemOskiNa ? 'checked' : '' }} disabled>
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($itemOskiNa)
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
                                                         @endif
@@ -316,12 +321,14 @@
                                                                    class="exam-sc-date" autocomplete="off"
                                                                    data-initial-value="{{ $itemOski ? \Carbon\Carbon::parse($itemOski)->format('Y-m-d') : '' }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
                                                                    {{ $itemOskiNa ? 'checked' : '' }}
                                                                    onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($canDelete)
                                                         <button type="button" class="clear-date-btn" title="OSKI sanasini o'chirish"
                                                                 onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'oski')">
@@ -333,11 +340,13 @@
                                                             <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                    class="exam-sc-date" autocomplete="off" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
                                                                    onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                     @endif
                                                 </div>
                                                 @endif
@@ -357,11 +366,13 @@
                                                                    title="Saqlangan sana o'zgartirib bo'lmaydi" />
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $itemTest }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
                                                                    {{ $itemTestNa ? 'checked' : '' }} disabled>
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($itemTestNa)
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
                                                         @endif
@@ -379,12 +390,14 @@
                                                                    class="exam-sc-date" autocomplete="off"
                                                                    data-initial-value="{{ $itemTest ? \Carbon\Carbon::parse($itemTest)->format('Y-m-d') : '' }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
                                                                    {{ $itemTestNa ? 'checked' : '' }}
                                                                    onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($canDelete)
                                                         <button type="button" class="clear-date-btn" title="Test sanasini o'chirish"
                                                                 onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'test')">
@@ -396,11 +409,13 @@
                                                             <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
                                                                    class="exam-sc-date" autocomplete="off" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
                                                                    onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                     @endif
                                                 </div>
                                                 @endif

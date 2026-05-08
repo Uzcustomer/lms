@@ -806,6 +806,8 @@ class AcademicScheduleController extends Controller
         $dateFrom = $request->get('date_from', $today);
         $dateTo = $request->get('date_to', $today);
         $currentSemesterToggle = $request->get('current_semester', '1');
+        $urinishFilter = $request->get('urinish'); // '1' | '2' | '3' | null
+        $showStudents = $request->get('show_students') === '1';
 
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
@@ -816,6 +818,11 @@ class AcademicScheduleController extends Controller
             $selectedLevelCode, $selectedSubject, $selectedStatus,
             $currentSemesterToggle, true, $dateFrom, $dateTo, true
         );
+
+        // Talabalarni ko'rsatish toggle yoqilgan bo'lsa — har item ga "students" massivi qo'shiladi
+        if ($showStudents) {
+            $scheduleData = $this->attachStudentsToSchedule($scheduleData);
+        }
 
         $semesterMap = $currentSemesters->keyBy('code');
         $curriculumHemisIds = collect();
@@ -853,6 +860,11 @@ class AcademicScheduleController extends Controller
                 ];
 
                 foreach ($attemptDefs as $def) {
+                    // Urinish filtri qo'llanilsa — faqat tanlangan urinish qatorlari chiqadi
+                    if ($urinishFilter !== null && $urinishFilter !== '' && (int) $urinishFilter !== $def['attempt']) {
+                        continue;
+                    }
+
                     $d = $def['date'];
                     $inRange = $d && (!$dateFrom || $d >= $dateFrom) && (!$dateTo || $d <= $dateTo);
                     // 1-urinish N/A bayrog'i tanlangan bo'lsa, sana bo'lmasa ham (sanasi kelajakda belgilanadigan) ko'rsatiladi
@@ -868,6 +880,10 @@ class AcademicScheduleController extends Controller
                     $ynItem['yn_date_carbon'] = $def['date_carbon'];
                     $ynItem['yn_na'] = $def['attempt'] === 1 ? $def['na'] : false;
                     $ynItem['test_time'] = $def['time'];
+                    // Urinishga mos talabalar — show_students yoqilganda ko'rsatish uchun
+                    if (!empty($item['students'])) {
+                        $ynItem['students'] = $this->filterStudentsForAttempt($item['students'], $def['attempt']);
+                    }
                     $transformedData->push($ynItem);
                 }
             }
@@ -960,7 +976,24 @@ class AcademicScheduleController extends Controller
         return [
             'scheduleData' => $scheduleData,
             'currentEducationYear' => $currentEducationYear,
+            'urinishFilter' => $urinishFilter,
+            'showStudents' => $showStudents,
         ];
+    }
+
+    /**
+     * Tanlangan urinish uchun talabalar ro'yxatini filtrlash:
+     *  - 1-urinish: barcha talabalar
+     *  - 2-urinish: 1-urinishdan o'tmaganlar (failed_attempt1)
+     *  - 3-urinish: 2-urinishdan o'tmaganlar (failed_attempt2)
+     */
+    private function filterStudentsForAttempt(array $students, int $attempt): array
+    {
+        if ($attempt === 1) {
+            return $students;
+        }
+        $failedKey = $attempt === 2 ? 'failed_attempt1' : 'failed_attempt2';
+        return array_values(array_filter($students, fn($s) => !empty($s[$failedKey])));
     }
 
     public function testCenterView(Request $request)
@@ -989,10 +1022,15 @@ class AcademicScheduleController extends Controller
         $isSearched = true;
         $routePrefix = $this->routePrefix();
 
+        $urinishFilter = $request->get('urinish');
+        $showStudents = $request->get('show_students') === '1';
+
         try {
             $result = $this->buildTestCenterData($request);
             $scheduleData = $result['scheduleData'];
             $currentEducationYear = $result['currentEducationYear'];
+            $urinishFilter = $result['urinishFilter'] ?? $urinishFilter;
+            $showStudents = $result['showStudents'] ?? $showStudents;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView xatolik: ' . $e->getMessage(), [
                 'file' => $e->getFile() . ':' . $e->getLine(),
@@ -1016,6 +1054,8 @@ class AcademicScheduleController extends Controller
                 'dateFrom',
                 'dateTo',
                 'currentSemesterToggle',
+                'urinishFilter',
+                'showStudents',
                 'isSearched',
                 'currentEducationYear',
                 'routePrefix',

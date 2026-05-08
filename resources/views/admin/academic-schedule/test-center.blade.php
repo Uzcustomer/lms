@@ -79,6 +79,22 @@
                                 <option value="belgilanmagan" {{ ($selectedStatus ?? '') == 'belgilanmagan' ? 'selected' : '' }}>Belgilanmagan</option>
                             </select>
                         </div>
+                        <div class="filter-item" style="min-width: 130px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#d97706;"></span> Urinish</label>
+                            <select id="urinish_filter" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="1" {{ ($urinishFilter ?? '') === '1' ? 'selected' : '' }}>1-urinish</option>
+                                <option value="2" {{ ($urinishFilter ?? '') === '2' ? 'selected' : '' }}>2-urinish</option>
+                                <option value="3" {{ ($urinishFilter ?? '') === '3' ? 'selected' : '' }}>3-urinish</option>
+                            </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 180px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch {{ ($showStudents ?? false) ? 'active' : '' }}" id="show-students-toggle" onclick="toggleShowStudents()">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Talabalarni ko'rsatish</span>
+                            </div>
+                        </div>
                         <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:6px;align-items:center;">
@@ -305,6 +321,48 @@
                                                     </div>
                                             </td>
                                         </tr>
+                                        @if(($showStudents ?? false) && !empty($item['students']))
+                                            @foreach($item['students'] as $stuRow)
+                                                @php
+                                                    $stuBadgeBg = $attempt === 1 ? '#dcfce7' : ($attempt === 3 ? '#ffedd5' : '#fef3c7');
+                                                    $stuBadgeFg = $attempt === 1 ? '#16a34a' : ($attempt === 3 ? '#ea580c' : '#d97706');
+                                                    $stuPullik = !empty($stuRow['is_pullik']);
+                                                    $stuHeldBack = !empty($stuRow['is_held_back']);
+                                                    $stuBlocked = ($attempt > 1) && ($stuPullik || $stuHeldBack);
+                                                    $stuPersonalDate = null;
+                                                    if ($attempt === 2) {
+                                                        $stuPersonalDate = ($item['yn_type'] === 'OSKI') ? ($stuRow['oski_resit_date'] ?? null) : ($stuRow['test_resit_date'] ?? null);
+                                                    } elseif ($attempt === 3) {
+                                                        $stuPersonalDate = ($item['yn_type'] === 'OSKI') ? ($stuRow['oski_resit2_date'] ?? null) : ($stuRow['test_resit2_date'] ?? null);
+                                                    }
+                                                @endphp
+                                                <tr class="student-sub-row" style="background:{{ $stuBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
+                                                    <td></td>
+                                                    <td></td>
+                                                    <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $stuBlocked ? '#991b1b' : '#475569' }};">
+                                                        <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $stuBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
+                                                        {{ $stuRow['full_name'] ?? '' }}
+                                                        @if($stuHeldBack)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
+                                                        @elseif($stuPullik && $attempt > 1)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi">Pullik</span>
+                                                        @endif
+                                                    </td>
+                                                    <td style="text-align:center;font-size:9px;color:#64748b;">
+                                                        <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $attempt }}-urinish</span>
+                                                    </td>
+                                                    <td style="text-align:center;font-size:11px;color:#64748b;">{{ $item['yn_type'] ?? '' }}</td>
+                                                    <td style="text-align:center;font-size:11px;color:#475569;">
+                                                        @if($stuPersonalDate)
+                                                            {{ \Carbon\Carbon::parse($stuPersonalDate)->format('d.m.Y') }}
+                                                        @else
+                                                            <span style="color:#cbd5e1;">—</span>
+                                                        @endif
+                                                    </td>
+                                                    <td colspan="3"></td>
+                                                </tr>
+                                            @endforeach
+                                        @endif
                                     @endforeach
                                 @endforeach
                             </tbody>
@@ -617,6 +675,11 @@
             btn.classList.toggle('active');
         }
 
+        function toggleShowStudents() {
+            var btn = document.getElementById('show-students-toggle');
+            btn.classList.toggle('active');
+        }
+
         function fp() {
             return {
                 education_type: $('#education_type').val() || '',
@@ -766,7 +829,9 @@
             var grp = $('#group_id').val();
             var subj = $('#subject_id').val();
             var status = $('#status').val();
+            var urinish = $('#urinish_filter').val();
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
+            var ss = document.getElementById('show-students-toggle').classList.contains('active') ? '1' : '0';
             var dateFrom = $('#date_from').val();
             var dateTo = $('#date_to').val();
             if (et) url.searchParams.set('education_type', et);
@@ -777,9 +842,11 @@
             if (grp) url.searchParams.set('group_id', grp);
             if (subj) url.searchParams.set('subject_id', subj);
             if (status) url.searchParams.set('status', status);
+            if (urinish) url.searchParams.set('urinish', urinish);
             if (dateFrom) url.searchParams.set('date_from', dateFrom);
             if (dateTo) url.searchParams.set('date_to', dateTo);
             url.searchParams.set('current_semester', cs);
+            if (ss === '1') url.searchParams.set('show_students', '1');
             window.location.href = url.toString();
         }
 
@@ -913,6 +980,7 @@
             var grp = $('#group_id').val();
             var subj = $('#subject_id').val();
             var status = $('#status').val();
+            var urinish = $('#urinish_filter').val();
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
             var dateFrom = $('#date_from').val();
             var dateTo = $('#date_to').val();
@@ -924,6 +992,7 @@
             if (grp) url.searchParams.set('group_id', grp);
             if (subj) url.searchParams.set('subject_id', subj);
             if (status) url.searchParams.set('status', status);
+            if (urinish) url.searchParams.set('urinish', urinish);
             if (dateFrom) url.searchParams.set('date_from', dateFrom);
             if (dateTo) url.searchParams.set('date_to', dateTo);
             url.searchParams.set('current_semester', cs);
@@ -999,27 +1068,35 @@
                 }
             });
             var idx = 0;
-            document.querySelectorAll('#schedule-tbody tr.data-row').forEach(function(row) {
-                var show = true;
-                for (var col in filters) {
-                    var cell = row.cells[parseInt(col)];
-                    if (!cell) { show = false; break; }
-                    var cellVal = (cell.getAttribute('data-sort-value') || cell.textContent || '').trim();
-                    if (cellVal !== filters[col]) { show = false; break; }
-                }
-                if (show) {
-                    for (var col in colorFilters) {
+            var rows = Array.from(document.querySelectorAll('#schedule-tbody > tr'));
+            var lastDataVisible = false;
+            rows.forEach(function(row) {
+                if (row.classList.contains('data-row')) {
+                    var show = true;
+                    for (var col in filters) {
                         var cell = row.cells[parseInt(col)];
                         if (!cell) { show = false; break; }
-                        var cellColor = cell.getAttribute('data-color') || '';
-                        if (cellColor !== colorFilters[col]) { show = false; break; }
+                        var cellVal = (cell.getAttribute('data-sort-value') || cell.textContent || '').trim();
+                        if (cellVal !== filters[col]) { show = false; break; }
                     }
-                }
-                row.style.display = show ? '' : 'none';
-                if (show) {
-                    idx++;
-                    var numCell = row.querySelector('.row-num');
-                    if (numCell) numCell.textContent = idx;
+                    if (show) {
+                        for (var col in colorFilters) {
+                            var cell = row.cells[parseInt(col)];
+                            if (!cell) { show = false; break; }
+                            var cellColor = cell.getAttribute('data-color') || '';
+                            if (cellColor !== colorFilters[col]) { show = false; break; }
+                        }
+                    }
+                    row.style.display = show ? '' : 'none';
+                    lastDataVisible = show;
+                    if (show) {
+                        idx++;
+                        var numCell = row.querySelector('.row-num');
+                        if (numCell) numCell.textContent = idx;
+                    }
+                } else {
+                    // Talabalar sub-row — ota data-row ko'rinishiga moslab yashiramiz
+                    row.style.display = lastDataVisible ? '' : 'none';
                 }
             });
         }
@@ -1048,10 +1125,24 @@
         function sortTable(colIndex, dir) {
             var tbody = document.getElementById('schedule-tbody');
             if (!tbody) return;
-            var rows = Array.from(tbody.querySelectorAll('tr.data-row'));
-            rows.sort(function(a, b) {
-                var aCell = a.cells[colIndex];
-                var bCell = b.cells[colIndex];
+
+            // Har bir data-row va undan keyingi student-sub-row qatorlarini bitta "chunk"
+            // sifatida birga saqlaymiz, shunda saralashda talabalar guruhdan ajralib qolmaydi.
+            var allRows = Array.from(tbody.children);
+            var chunks = [];
+            var current = null;
+            allRows.forEach(function(row) {
+                if (row.classList.contains('data-row')) {
+                    current = { head: row, tail: [] };
+                    chunks.push(current);
+                } else if (current) {
+                    current.tail.push(row);
+                }
+            });
+
+            chunks.sort(function(a, b) {
+                var aCell = a.head.cells[colIndex];
+                var bCell = b.head.cells[colIndex];
                 var aVal = (aCell && aCell.getAttribute('data-sort-value')) || '';
                 var bVal = (bCell && bCell.getAttribute('data-sort-value')) || '';
                 if (/^\d+(\.\d+)?$/.test(aVal) && /^\d+(\.\d+)?$/.test(bVal)) {
@@ -1070,9 +1161,11 @@
                 var cmp = aVal.localeCompare(bVal, 'uz');
                 return dir === 'asc' ? cmp : -cmp;
             });
-            rows.forEach(function(row, i) {
-                tbody.appendChild(row);
-                var numCell = row.querySelector('.row-num');
+
+            chunks.forEach(function(chunk, i) {
+                tbody.appendChild(chunk.head);
+                chunk.tail.forEach(function(t) { tbody.appendChild(t); });
+                var numCell = chunk.head.querySelector('.row-num');
                 if (numCell) numCell.textContent = i + 1;
             });
         }

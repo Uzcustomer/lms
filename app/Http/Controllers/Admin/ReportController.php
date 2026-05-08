@@ -4801,20 +4801,54 @@ class ReportController extends Controller
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             $studentMap = $students->keyBy('hemis_id');
 
-            // 2-QADAM: Curriculum subjects olish (barcha talabalarning curriculum_id lari uchun)
-            $curriculumIds = $students->pluck('curriculum_id')->unique()->filter()->values()->toArray();
+            // 2-QADAM: Academic records'ni bir martagina yuklab olamiz —
+            //  • mavjudligini tekshirish (qarz/yopiq aniqlash uchun)
+            //  • har semestrdagi tarixiy curriculum_id (transferdan oldingi yo'lni topish uchun)
+            $arRecords = [];
+            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
+                $arRecords = array_merge($arRecords, DB::table('academic_records')
+                    ->whereIn('student_id', $chunk)
+                    ->select('student_id', 'subject_id', 'semester_id', 'curriculum_id')
+                    ->get()
+                    ->all());
+            }
 
-            // Jurnal getSubjects() bilan bir xil mantiq:
-            // curriculum_subjects → curricula → semesters bo'yicha join qilib,
-            // baho qo'yilmaydigan fan namunalarini chiqarib tashlaymiz.
-            // Faqat is_active = 1 fanlar (foydalanuvchi talabiga ko'ra).
+            $arExistsLookup = [];
+            // [hemis_id][semester_code] => curriculum_id (talaba shu semestrda qaysi rejada o'qigan)
+            $studentSemCurr = [];
+            foreach ($arRecords as $ar) {
+                $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
+                if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
+                    $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
+                }
+            }
+            unset($arRecords);
+
+            // 3-QADAM: Talabalarning kerakli (curriculum_id, semester_code) juftliklarini yig'amiz.
+            //  • O'tgan semestrlar uchun: academic_records'dagi tarixiy curriculum_id
+            //  • Joriy semester uchun: students.curriculum_id (mavjud mantiq)
+            $curriculumPairs = [];   // ['curr_id|sem' => true]
+            foreach ($students as $st) {
+                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+                // O'tgan semestrlar — academic_records'dan
+                foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                    $curriculumPairs[$currId . '|' . $semCode] = true;
+                }
+                // Joriy semester — talabaning hozirgi rejasi (joriy guruh)
+                if ($st->curriculum_id && $studentSemCode) {
+                    $curriculumPairs[$st->curriculum_id . '|' . $studentSemCode] = true;
+                }
+            }
+
+            // 4-QADAM: curriculum_subjects'ni shu juftliklar uchun ommaviy yuklash
+            $allCurriculumIds = collect($curriculumPairs)->keys()
+                ->map(fn ($k) => explode('|', $k)[0])->unique()->values()->all();
+            $allSemCodes = collect($curriculumPairs)->keys()
+                ->map(fn ($k) => explode('|', $k)[1])->unique()->values()->all();
+
             $currSubjectsQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->whereIn('cs.curricula_hemis_id', $curriculumIds)
+                ->whereIn('cs.curricula_hemis_id', $allCurriculumIds ?: [0])
+                ->whereIn('cs.semester_code', $allSemCodes ?: [0])
                 ->where('cs.is_active', 1)
                 ->where(function ($q) {
                     // in_group bo'sh yoki NULL bo'lganlar — guruhli fanlar e'tiborga olinmaydi
@@ -4835,10 +4869,11 @@ class ReportController extends Controller
 
             $currSubjects = $currSubjectsQuery->get();
 
-            // 2.5-QADAM: Tanlov fanlar (subject_type_code=12) uchun talaba haqiqatda
+            // (curr_id|sem) bo'yicha guruhlash — tez kirish uchun
+            $subjectsByPair = $currSubjects->groupBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->semester_code);
+
+            // 5-QADAM: Tanlov fanlar (subject_type_code=12) uchun talaba haqiqatda
             // qaysi fanni tanlaganini student_subjects'dan olamiz.
-            // Map: (student_hemis_id|curriculum_subject_hemis_id) =>
-            //      ['subject_id' => ..., 'subject_name' => ...]
             $tanlovCsHemisIds = $currSubjects
                 ->where('subject_type_code', '12')
                 ->pluck('curriculum_subject_hemis_id')
@@ -4862,70 +4897,61 @@ class ReportController extends Controller
                 }
             }
 
-            // 3-QADAM: Academic records olish — faqat mavjudligini tekshirish uchun
-            $arExistsLookup = [];
-            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
-                $arRecords = DB::table('academic_records')
-                    ->whereIn('student_id', $chunk)
-                    ->select('student_id', 'subject_id', 'semester_id')
-                    ->get();
-
-                foreach ($arRecords as $ar) {
-                    $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
-                }
-                unset($arRecords);
-            }
-
-            // 4-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
+            // 6-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
 
             foreach ($students as $st) {
                 if (!$st->curriculum_id) continue;
 
                 $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
-                $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
-                $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
-
                 $debts = [];
 
-                foreach ($subjects as $sub) {
-                    $subSemCode = (int) $sub->semester_code;
-
-                    if ($showCurrentSemester) {
-                        // Toggle ON: faqat joriy semestr
-                        if ($studentSemCode && $subSemCode !== $studentSemCode) continue;
-                    } else {
-                        // Toggle OFF: joriy semestrdan oldingi semestrlar (joriy dahil emas)
-                        if ($studentSemCode && $subSemCode >= $studentSemCode) continue;
+                // Talabaga tegishli (sem, curriculum) juftliklari ro'yxati
+                $studentPairs = []; // [sem_code => curriculum_id]
+                if ($showCurrentSemester) {
+                    // Faqat joriy semestr — joriy curriculum_id
+                    if ($studentSemCode) {
+                        $studentPairs[$studentSemCode] = $st->curriculum_id;
                     }
-
-                    // Tanlov fan bo'lsa, talaba haqiqatda qaysi fanni tanlaganini olamiz.
-                    // Aks holda curriculum_subjects'dagi subject_id'ni ishlatamiz.
-                    $effectiveSubjectId = $sub->subject_id;
-                    $effectiveSubjectName = $sub->subject_name;
-                    if ((string) $sub->subject_type_code === '12') {
-                        $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
-                        if ($picked) {
-                            $effectiveSubjectId = $picked['subject_id'];
-                            $effectiveSubjectName = $picked['subject_name'];
-                        } else {
-                            // Talaba hali tanlov qilmagan — bu fan slotini hisobga olmaymiz
-                            continue;
+                } else {
+                    // Joriy semestrdan oldingi (joriy DAHIL EMAS) — har sem uchun tarixiy curriculum
+                    foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                        if (!$studentSemCode || (int) $semCode < $studentSemCode) {
+                            $studentPairs[(int) $semCode] = $currId;
                         }
                     }
+                }
 
-                    $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
-                    if (isset($arExistsLookup[$arKey])) continue;
+                foreach ($studentPairs as $semCode => $currId) {
+                    $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
+                    $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
-                    // Curriculum da bor (yoki tanlangan), academic_records da yo'q = qarzdor
-                    $debts[] = [
-                        'subject_id'    => $effectiveSubjectId,
-                        'subject_name'  => $effectiveSubjectName,
-                        'semester_code' => $sub->semester_code,
-                        'semester_name' => $sub->semester_name,
-                        'credit'        => $sub->credit,
-                        'total_acload'  => $sub->total_acload,
-                    ];
+                    foreach ($subjectsForSem as $sub) {
+                        // Tanlov fan bo'lsa, talaba tanlovini olamiz
+                        $effectiveSubjectId = $sub->subject_id;
+                        $effectiveSubjectName = $sub->subject_name;
+                        if ((string) $sub->subject_type_code === '12') {
+                            $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
+                            if ($picked) {
+                                $effectiveSubjectId = $picked['subject_id'];
+                                $effectiveSubjectName = $picked['subject_name'];
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
+                        if (isset($arExistsLookup[$arKey])) continue;
+
+                        $debts[] = [
+                            'subject_id'    => $effectiveSubjectId,
+                            'subject_name'  => $effectiveSubjectName,
+                            'semester_code' => $sub->semester_code,
+                            'semester_name' => $sub->semester_name,
+                            'credit'        => $sub->credit,
+                            'total_acload'  => $sub->total_acload,
+                        ];
+                    }
                 }
 
                 $debtCount = count($debts);
@@ -5243,17 +5269,19 @@ class ReportController extends Controller
 
             $groupName = $request->get('group_name', '');
 
+            // Shu semestr uchun tarixiy curriculum_id'ni academic_records'dan olamiz.
+            // Agar talaba transfer qilingan bo'lsa, o'tgan semestrlarda eski curriculum
+            // saqlangan. Joriy/kelgusi semester uchun students.curriculum_id'ga qaytamiz.
+            $historicalCurriculumId = DB::table('academic_records')
+                ->where('student_id', $studentId)
+                ->where('semester_id', $semesterCode)
+                ->whereNotNull('curriculum_id')
+                ->value('curriculum_id');
+            $effectiveCurriculumId = $historicalCurriculumId ?: $student->curriculum_id;
+
             // Curriculum subjects — shu semestrga tegishli barcha fanlar.
-            // Jurnal getSubjects() bilan bir xil mantiq: curricula+semesters JOIN +
-            // baho qo'yilmaydigan fan namunalari chiqarib tashlanadi. is_active va
-            // subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
             $currSubjectsQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+                ->where('cs.curricula_hemis_id', $effectiveCurriculumId)
                 ->where('cs.semester_code', $semesterCode)
                 ->where('cs.is_active', 1)
                 ->where(function ($q) {
@@ -5398,35 +5426,56 @@ class ReportController extends Controller
 
             $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
 
-            // Jurnal getSubjects() bilan bir xil mantiq:
-            // curricula → semesters join, baho qo'yilmaydigan fan namunalari chiqarib tashlanadi.
-            // is_active va subject_code "/" filtrlari olib tashlandi (jurnalda ham qo'llanmagan).
-            $semesterListQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
+            // 1) academic_records'dan har semester uchun tarixiy curriculum_id va arExists
+            $arRows = DB::table('academic_records')
+                ->where('student_id', $studentId)
+                ->select('subject_id', 'semester_id', 'curriculum_id')
+                ->get();
+            $arExists = [];
+            $semCurr = []; // [sem_code => curriculum_id]
+            foreach ($arRows as $ar) {
+                $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
+                if (!isset($semCurr[$ar->semester_id]) && $ar->curriculum_id) {
+                    $semCurr[$ar->semester_id] = $ar->curriculum_id;
+                }
+            }
+
+            // Joriy semester uchun students.curriculum_id
+            if ($studentSemesterCode && !isset($semCurr[$studentSemesterCode])) {
+                $semCurr[$studentSemesterCode] = $student->curriculum_id;
+            }
+
+            // 2) Curriculum_subjects'ni har (curr_id, sem_code) juftligi uchun yuklab olamiz
+            $allCurrIds = collect($semCurr)->values()->unique()->all();
+            $allSems = collect($semCurr)->keys()->all();
+
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->whereIn('cs.curricula_hemis_id', $allCurrIds ?: [0])
+                ->whereIn('cs.semester_code', $allSems ?: [0])
                 ->where('cs.is_active', 1)
                 ->where(function ($q) {
                     $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
                 })
-                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_name')
+                ->select('cs.curricula_hemis_id', 'cs.curriculum_subject_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code', 'cs.credit', 'cs.total_acload')
                 ->distinct()
-                ->orderBy('cs.semester_code');
+                ->orderBy('cs.semester_code')
+                ->orderBy('cs.subject_name');
             foreach ($excludedPatterns as $pattern) {
-                $semesterListQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
             }
-            $records = $semesterListQuery->get();
+            $allCsRows = $currSubjectsQuery->get();
 
-            // Guruh suffiksi bo'yicha filtr
-            $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
+            // (curr_id|sem) bo'yicha guruhlash + faqat shu talabaga tegishli ((sem -> curr) mapidan
+            // foydalanib har sem uchun aynan o'sha sem'da ishlatilgan curriculum'dan)
+            $allCsRows = $this->filterSubjectsByGroupSuffix($allCsRows, $groupName);
 
-            // Semestrlarga guruhlash:
-            // Toggle ON: faqat joriy semestr tab ko'rinadi
-            // Toggle OFF: joriy semestrdan oldingilar ko'rinadi (joriy dahil emas)
-            $semesters = $records->groupBy('semester_code')
+            $currSubjects = $allCsRows->filter(function ($s) use ($semCurr) {
+                $expected = $semCurr[(string) $s->semester_code] ?? null;
+                return $expected !== null && (string) $s->curricula_hemis_id === (string) $expected;
+            })->values();
+
+            // 3) Semestr tab'lari (toggle bilan)
+            $semesters = $currSubjects->groupBy('semester_code')
                 ->when($showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
                     return $collection->filter(fn($items, $code) => (string) $code === $studentSemesterCode);
                 })
@@ -5441,29 +5490,7 @@ class ReportController extends Controller
                     ];
                 })->values();
 
-            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
-                ->where('cs.is_active', 1)
-                ->where(function ($q) {
-                    $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
-                })
-                ->select('cs.curriculum_subject_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code', 'cs.credit', 'cs.total_acload')
-                ->distinct()
-                ->orderBy('cs.semester_code')
-                ->orderBy('cs.subject_name');
-            foreach ($excludedPatterns as $pattern) {
-                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
-            }
-            $currSubjects = $currSubjectsQuery->get();
-
-            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
-
-            // Tanlov fanlar uchun talabaning tanlovi
+            // 4) Tanlov fanlar uchun talabaning tanlovi
             $tanlovCsHemisIds = $currSubjects
                 ->where('subject_type_code', '12')
                 ->pluck('curriculum_subject_hemis_id')
@@ -5486,18 +5513,7 @@ class ReportController extends Controller
                 }
             }
 
-            // Academic records lookup — faqat mavjudligini tekshirish
-            $arExists = [];
-            $arRecords = DB::table('academic_records')
-                ->where('student_id', $studentId)
-                ->select('subject_id', 'semester_id')
-                ->get();
-            foreach ($arRecords as $ar) {
-                $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
-            }
-
-            // Qarzlar: curriculum da bor, academic_records da yo'q.
-            // Tanlov fanlar uchun haqiqiy tanlangan fan bo'yicha tekshiriladi.
+            // 5) Qarzlar: curriculum da bor, academic_records da yo'q.
             $debtsAll = [];
 
             foreach ($currSubjects as $sub) {

@@ -5480,24 +5480,37 @@ class ReportController extends Controller
 
         // Holatni cache yoki diskdan o'qiymiz
         $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        $source = $data ? 'cache' : null;
         if (!$data && file_exists($paths['meta'])) {
             $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+            $source = 'meta';
         }
 
+        $debug = [
+            'export_key' => $exportKey,
+            'meta_path'  => $paths['meta'],
+            'meta_exists'=> file_exists($paths['meta']),
+            'xlsx_path'  => $paths['xlsx'],
+            'xlsx_exists'=> file_exists($paths['xlsx']),
+            'data_source'=> $source,
+            'data_status'=> $data['status'] ?? null,
+            'percent'    => $data['percent'] ?? null,
+        ];
+
         if (!$data || ($data['status'] ?? '') !== 'done') {
-            return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
+            \Illuminate\Support\Facades\Log::warning('[AR Export Download] Tayyor emas', $debug);
+            return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas', 'debug' => $debug], 404);
         }
 
         $fileName = $data['file_name'] ?? 'Academic_records.xlsx';
 
         if (file_exists($paths['xlsx'])) {
-            // Yuklab olishdan keyin meta'ni ham tozalaymiz
             return response()->download($paths['xlsx'], $fileName, [
                 'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ])->deleteFileAfterSend(true);
         }
 
-        // Eski format bilan orqaga moslik (file_path / file_content)
+        // Eski format bilan orqaga moslik
         $filePath = $data['file_path'] ?? null;
         if ($filePath && file_exists($filePath)) {
             return response()->download($filePath, $fileName, [
@@ -5513,7 +5526,8 @@ class ReportController extends Controller
             ]);
         }
 
-        return response()->json(['error' => 'Fayl serverda topilmadi'], 404);
+        \Illuminate\Support\Facades\Log::warning('[AR Export Download] Fayl topilmadi', $debug);
+        return response()->json(['error' => 'Fayl serverda topilmadi', 'debug' => $debug], 404);
     }
 
     /**

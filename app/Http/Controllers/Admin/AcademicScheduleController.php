@@ -1313,6 +1313,7 @@ class AcademicScheduleController extends Controller
                 $item = [
                     'group' => $group,
                     'subject' => $subject,
+                    'closing_form' => $subject->closing_form,
                     'level_code' => $semesterLevelMap[$group->curriculum_hemis_id . '_' . $subject->semester_code] ?? null,
                     'specialty_name' => $group->specialty_name,
                     'lesson_start_date' => $lessonInfo?->lesson_start ? substr($lessonInfo->lesson_start, 0, 10) : null,
@@ -1687,6 +1688,19 @@ class AcademicScheduleController extends Controller
                 $newTestDate = !empty($schedule['test_date']) ? $schedule['test_date'] : null;
                 $newTestNa = $testNa;
 
+                // Yopilish shakliga qarab keraksiz turdagi sanalarni N/A qilib qo'yish.
+                // KTR'da fanga "faqat OSKI" / "faqat Test" / "Yo'q" belgilangan bo'lsa,
+                // foydalanuvchi qo'lda N/A bosishi shart emas — avto qo'yiladi va sana tozalanadi.
+                $cf = $schedule['closing_form'] ?? null;
+                if (in_array($cf, ['test', 'none'], true)) {
+                    $newOskiDate = null;
+                    $newOskiNa = true;
+                }
+                if (in_array($cf, ['oski', 'none'], true)) {
+                    $newTestDate = null;
+                    $newTestNa = true;
+                }
+
                 if ($record->exists && !$canEditSaved && $rowUrinish === 1) {
                     // Faqat 1-urinish uchun mavjud sanani himoya qilamiz
                     if ($record->oski_date || $record->oski_na) {
@@ -1729,9 +1743,26 @@ class AcademicScheduleController extends Controller
                 // 1-urinish (12a) va 2-urinish (12b) qayta topshirish sanalarini ham qabul qilamiz
                 $resitFields = ['oski_resit_date', 'oski_resit_time', 'test_resit_date', 'test_resit_time',
                                 'oski_resit2_date', 'oski_resit2_time', 'test_resit2_date', 'test_resit2_time'];
+                $oskiResitFields = ['oski_resit_date', 'oski_resit_time', 'oski_resit2_date', 'oski_resit2_time'];
+                $testResitFields = ['test_resit_date', 'test_resit_time', 'test_resit2_date', 'test_resit2_time'];
                 foreach ($resitFields as $rf) {
                     if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', $rf) && array_key_exists($rf, $schedule)) {
                         $record->{$rf} = !empty($schedule[$rf]) ? $schedule[$rf] : null;
+                    }
+                }
+                // Yopilish shakliga mos kelmaydigan resit sanalarini tozalash
+                if (in_array($cf, ['test', 'none'], true)) {
+                    foreach ($oskiResitFields as $rf) {
+                        if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', $rf)) {
+                            $record->{$rf} = null;
+                        }
+                    }
+                }
+                if (in_array($cf, ['oski', 'none'], true)) {
+                    foreach ($testResitFields as $rf) {
+                        if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', $rf)) {
+                            $record->{$rf} = null;
+                        }
                     }
                 }
 

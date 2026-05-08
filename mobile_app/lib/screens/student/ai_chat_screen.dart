@@ -53,13 +53,21 @@ class _AiChatScreenState extends State<AiChatScreen>
       final cache = StudentDataCache();
       await cache.ensureFresh(force: force);
       final builder = StudentContextBuilder(cache);
-      final context = builder.build();
-      _gemini.setStudentContext(context);
+      final ctx = builder.build();
+      _gemini.setStudentContext(ctx);
       if (mounted) {
         setState(() {
           _contextLoading = false;
           _contextLoaded = cache.hasData;
         });
+        if (!cache.hasData) {
+          await cache.refresh();
+          if (mounted && cache.hasData) {
+            final ctx2 = StudentContextBuilder(cache).build();
+            _gemini.setStudentContext(ctx2);
+            setState(() => _contextLoaded = true);
+          }
+        }
       }
     } catch (_) {
       if (mounted) {

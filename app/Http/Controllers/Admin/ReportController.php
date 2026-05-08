@@ -4801,30 +4801,34 @@ class ReportController extends Controller
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
             $studentMap = $students->keyBy('hemis_id');
 
-            // 2-QADAM: Curriculum subjects olish (barcha talabalarning curriculum_id lari uchun)
-            $curriculumIds = $students->pluck('curriculum_id')->unique()->filter()->values()->toArray();
+            // 2-QADAM: Talabaning fanlari — student_subjects jadvalidan (per-student)
+            $ssRecords = DB::table('student_subjects')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->select('student_hemis_id', 'subject_id', 'semester_id', 'subject_name')
+                ->get();
 
-            // Jurnal getSubjects() bilan bir xil mantiq:
-            // curriculum_subjects → curricula → semesters bo'yicha join qilib,
-            // baho qo'yilmaydigan fan namunalarini chiqarib tashlaymiz.
-            // Faqat is_active = 1 bo'lgan fanlar olinadi.
-            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->whereIn('cs.curricula_hemis_id', $curriculumIds)
-                ->where('cs.is_active', 1)
-                ->select('cs.curricula_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
-                ->distinct();
-
+            // Baho qo'yilmaydigan fan namunalarini chiqarib tashlaymiz (jurnal kabi)
             $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
-            foreach ($excludedPatterns as $pattern) {
-                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            if (!empty($excludedPatterns)) {
+                $ssRecords = $ssRecords->reject(function ($r) use ($excludedPatterns) {
+                    foreach ($excludedPatterns as $p) {
+                        if (stripos($r->subject_name ?? '', $p) !== false) return true;
+                    }
+                    return false;
+                })->values();
             }
 
-            $currSubjects = $currSubjectsQuery->get();
+            // Credit / soat / semester nomi uchun curriculum_subjects'dan meta olamiz
+            $ssSubjectIds = $ssRecords->pluck('subject_id')->unique()->filter()->values()->toArray();
+            $csMeta = !empty($ssSubjectIds)
+                ? DB::table('curriculum_subjects')
+                    ->whereIn('subject_id', $ssSubjectIds)
+                    ->select('subject_id', 'credit', 'total_acload', 'semester_name')
+                    ->get()
+                    ->keyBy('subject_id')
+                : collect();
+
+            $subjectsByStudent = $ssRecords->groupBy('student_hemis_id');
 
             // 3-QADAM: Academic records olish — faqat mavjudligini tekshirish uchun
             $arExistsLookup = [];
@@ -4844,16 +4848,13 @@ class ReportController extends Controller
             $finalResults = [];
 
             foreach ($students as $st) {
-                if (!$st->curriculum_id) continue;
-
                 $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
-                $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
-                $subjects = $this->filterSubjectsByGroupSuffix($subjects, $st->group_name ?? '');
+                $subjects = $subjectsByStudent->get($st->hemis_id, collect());
 
                 $debts = [];
 
                 foreach ($subjects as $sub) {
-                    $subSemCode = (int) $sub->semester_code;
+                    $subSemCode = (int) $sub->semester_id;
 
                     if ($showCurrentSemester) {
                         // Toggle ON: faqat joriy semestr
@@ -4863,17 +4864,18 @@ class ReportController extends Controller
                         if ($studentSemCode && $subSemCode >= $studentSemCode) continue;
                     }
 
-                    $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
+                    $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_id;
                     if (isset($arExistsLookup[$arKey])) continue;
 
-                    // Curriculum da bor, academic_records da yo'q = qarzdor
+                    // student_subjects da bor, academic_records da yo'q = qarzdor
+                    $meta = $csMeta->get($sub->subject_id);
                     $debts[] = [
                         'subject_id'    => $sub->subject_id,
                         'subject_name'  => $sub->subject_name,
-                        'semester_code' => $sub->semester_code,
-                        'semester_name' => $sub->semester_name,
-                        'credit'        => $sub->credit,
-                        'total_acload'  => $sub->total_acload,
+                        'semester_code' => (string) $sub->semester_id,
+                        'semester_name' => $meta?->semester_name ?? '',
+                        'credit'        => $meta?->credit ?? 0,
+                        'total_acload'  => $meta?->total_acload ?? 0,
                     ];
                 }
 
@@ -4881,7 +4883,7 @@ class ReportController extends Controller
                 if ($debtCount < $minDebtCount) continue;
 
                 // Semestr bo'yicha tartiblash
-                usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                usort($debts, fn($a, $b) => (int)$a['semester_code'] <=> (int)$b['semester_code']);
 
                 $finalResults[] = [
                     'hemis_id'          => $st->hemis_id,
@@ -5173,7 +5175,7 @@ class ReportController extends Controller
     }
 
     /**
-     * Talabaning ma'lum semestrdagi barcha fanlari (curriculum_subjects dan)
+     * Talabaning ma'lum semestrdagi barcha fanlari (student_subjects dan)
      */
     public function studentSemesterGrades(Request $request)
     {
@@ -5186,34 +5188,38 @@ class ReportController extends Controller
             }
 
             $student = DB::table('students')->where('hemis_id', $studentId)->first();
-            if (!$student || !$student->curriculum_id) {
+            if (!$student) {
                 return response()->json(['grades' => []]);
             }
 
-            $groupName = $request->get('group_name', '');
+            // Talabaning shu semestrdagi fanlari — student_subjects'dan
+            $ssRecords = DB::table('student_subjects')
+                ->where('student_hemis_id', $studentId)
+                ->where('semester_id', $semesterCode)
+                ->select('subject_id', 'subject_name')
+                ->orderBy('subject_name')
+                ->get();
 
-            // Curriculum subjects — shu semestrga tegishli barcha fanlar.
-            // Faqat is_active = 1 bo'lgan fanlar olinadi.
-            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
-                ->where('cs.semester_code', $semesterCode)
-                ->where('cs.is_active', 1)
-                ->select('cs.subject_id', 'cs.subject_name', 'cs.semester_name', 'cs.credit', 'cs.total_acload')
-                ->distinct()
-                ->orderBy('cs.subject_name');
-
-            foreach (config('app.excluded_rating_subject_patterns', []) as $pattern) {
-                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            // Baho qo'yilmaydigan fanlarni chiqarib tashlash
+            $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+            if (!empty($excludedPatterns)) {
+                $ssRecords = $ssRecords->reject(function ($r) use ($excludedPatterns) {
+                    foreach ($excludedPatterns as $p) {
+                        if (stripos($r->subject_name ?? '', $p) !== false) return true;
+                    }
+                    return false;
+                })->values();
             }
 
-            $currSubjects = $currSubjectsQuery->get();
-
-            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
+            // Credit / soat / semester nomi uchun curriculum_subjects'dan meta
+            $ssSubjectIds = $ssRecords->pluck('subject_id')->unique()->filter()->values()->toArray();
+            $csMeta = !empty($ssSubjectIds)
+                ? DB::table('curriculum_subjects')
+                    ->whereIn('subject_id', $ssSubjectIds)
+                    ->select('subject_id', 'credit', 'total_acload', 'semester_name')
+                    ->get()
+                    ->keyBy('subject_id')
+                : collect();
 
             // Academic records — shu semestrga tegishli baholar
             $arRecords = DB::table('academic_records')
@@ -5223,21 +5229,22 @@ class ReportController extends Controller
                 ->get()
                 ->keyBy('subject_id');
 
-            // Curriculum fanlarini academic records bilan birlashtirish
+            // student_subjects fanlarini academic records bilan birlashtirish
             $grades = [];
-            foreach ($currSubjects as $sub) {
+            foreach ($ssRecords as $sub) {
                 $ar = $arRecords->get($sub->subject_id);
+                $meta = $csMeta->get($sub->subject_id);
                 $grades[] = (object) [
                     'subject_name' => $sub->subject_name,
-                    'credit'       => $sub->credit,
-                    'total_acload' => $sub->total_acload,
+                    'credit'       => $ar->credit ?? $meta?->credit ?? 0,
+                    'total_acload' => $ar->total_acload ?? $meta?->total_acload ?? 0,
                     'total_point'  => $ar->total_point ?? null,
                     'grade'        => $ar->grade ?? null,
                     'is_debt'      => !$ar, // academic_records da yo'q = qarzdor
                 ];
             }
 
-            $semesterName = $currSubjects->first()->semester_name ?? $semesterCode . '-semestr';
+            $semesterName = $csMeta->first()?->semester_name ?? $semesterCode . '-semestr';
 
             return response()->json([
                 'semester_name' => $semesterName,
@@ -5261,11 +5268,10 @@ class ReportController extends Controller
             }
 
             $student = DB::table('students')->where('hemis_id', $studentId)->first();
-            if (!$student || !$student->curriculum_id) {
+            if (!$student) {
                 return response()->json(['semesters' => [], 'grade_debts' => []]);
             }
 
-            $groupName = $request->get('group_name', '');
             $showCurrentSemester = $request->get('current_semester', '0') == '1';
 
             // Talabaning joriy semester kodi
@@ -5273,62 +5279,55 @@ class ReportController extends Controller
 
             $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
 
-            // Faqat is_active = 1 bo'lgan fanlar olinadi.
-            $semesterListQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
-                ->where('cs.is_active', 1)
-                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_name')
-                ->distinct()
-                ->orderBy('cs.semester_code');
-            foreach ($excludedPatterns as $pattern) {
-                $semesterListQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            // Talabaning fanlari — student_subjects'dan
+            $ssRecords = DB::table('student_subjects')
+                ->where('student_hemis_id', $studentId)
+                ->select('subject_id', 'subject_name', 'semester_id')
+                ->orderBy('semester_id')
+                ->orderBy('subject_name')
+                ->get();
+
+            if (!empty($excludedPatterns)) {
+                $ssRecords = $ssRecords->reject(function ($r) use ($excludedPatterns) {
+                    foreach ($excludedPatterns as $p) {
+                        if (stripos($r->subject_name ?? '', $p) !== false) return true;
+                    }
+                    return false;
+                })->values();
             }
-            $records = $semesterListQuery->get();
 
-            // Guruh suffiksi bo'yicha filtr
-            $records = $this->filterSubjectsByGroupSuffix($records, $groupName);
+            // Credit / soat / semester nomi uchun curriculum_subjects'dan meta
+            $ssSubjectIds = $ssRecords->pluck('subject_id')->unique()->filter()->values()->toArray();
+            $csMeta = !empty($ssSubjectIds)
+                ? DB::table('curriculum_subjects')
+                    ->whereIn('subject_id', $ssSubjectIds)
+                    ->select('subject_id', 'credit', 'total_acload', 'semester_name', 'semester_code')
+                    ->get()
+                    ->keyBy('subject_id')
+                : collect();
 
-            // Semestrlarga guruhlash:
-            // Toggle ON: faqat joriy semestr tab ko'rinadi
-            // Toggle OFF: joriy semestrdan oldingilar ko'rinadi (joriy dahil emas)
-            $semesters = $records->groupBy('semester_code')
+            // Semester nomini topish: avval curriculum_subjects.semester_name (agar mos kelsa),
+            // aks holda "{code}-semestr"
+            $semesterNameFor = function ($code) use ($csMeta) {
+                $match = $csMeta->first(fn($m) => (string) $m->semester_code === (string) $code);
+                return $match?->semester_name ?? $code . '-semestr';
+            };
+
+            // Semestrlarga guruhlash
+            $semesters = $ssRecords->groupBy('semester_id')
                 ->when($showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
                     return $collection->filter(fn($items, $code) => (string) $code === $studentSemesterCode);
                 })
                 ->when(!$showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
                     return $collection->filter(fn($items, $code) => (int) $code < (int) $studentSemesterCode);
                 })
-                ->map(function ($items, $semesterCode) {
+                ->map(function ($items, $semesterCode) use ($semesterNameFor) {
                     return (object) [
                         'semester_id' => $semesterCode,
-                        'semester_name' => $items->first()->semester_name,
+                        'semester_name' => $semesterNameFor($semesterCode),
                         'subject_count' => $items->count(),
                     ];
                 })->values();
-
-            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
-                ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
-                ->join('semesters as sem', function ($join) {
-                    $join->on('sem.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
-                        ->on('sem.code', '=', 'cs.semester_code');
-                })
-                ->where('cs.curricula_hemis_id', $student->curriculum_id)
-                ->where('cs.is_active', 1)
-                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
-                ->distinct()
-                ->orderBy('cs.semester_code')
-                ->orderBy('cs.subject_name');
-            foreach ($excludedPatterns as $pattern) {
-                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
-            }
-            $currSubjects = $currSubjectsQuery->get();
-
-            $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
             // Academic records lookup — faqat mavjudligini tekshirish
             $arExists = [];
@@ -5340,11 +5339,11 @@ class ReportController extends Controller
                 $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
             }
 
-            // Qarzlar: curriculum da bor, academic_records da yo'q
+            // Qarzlar: student_subjects da bor, academic_records da yo'q
             $debtsAll = [];
 
-            foreach ($currSubjects as $sub) {
-                $subSemCode = (int) $sub->semester_code;
+            foreach ($ssRecords as $sub) {
+                $subSemCode = (int) $sub->semester_id;
 
                 if ($showCurrentSemester) {
                     if ($studentSemesterCode && $subSemCode !== (int) $studentSemesterCode) continue;
@@ -5352,14 +5351,15 @@ class ReportController extends Controller
                     if ($studentSemesterCode && $subSemCode >= (int) $studentSemesterCode) continue;
                 }
 
-                if (isset($arExists[$sub->subject_id . '|' . $sub->semester_code])) continue;
+                if (isset($arExists[$sub->subject_id . '|' . $sub->semester_id])) continue;
 
+                $meta = $csMeta->get($sub->subject_id);
                 $debtsAll[] = [
-                    'semester_code' => $sub->semester_code,
-                    'semester_name' => $sub->semester_name,
+                    'semester_code' => (string) $sub->semester_id,
+                    'semester_name' => $semesterNameFor($sub->semester_id),
                     'subject_name'  => $sub->subject_name,
-                    'credit'        => $sub->credit,
-                    'total_acload'  => $sub->total_acload,
+                    'credit'        => $meta?->credit ?? 0,
+                    'total_acload'  => $meta?->total_acload ?? 0,
                     'status'        => 'Qarzdor',
                 ];
             }

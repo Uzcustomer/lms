@@ -5402,6 +5402,86 @@ class ReportController extends Controller
     }
 
     /**
+     * Academic records eksportini background jobda boshlash
+     */
+    public function startAcademicRecordsExport(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        $filters = $request->only([
+            'education_type', 'faculty', 'specialty', 'level_code', 'semester_code',
+            'group', 'student_status', 'student_name', 'student_type',
+        ]);
+
+        $exportKey = 'academic_records_export_' . auth()->id() . '_' . md5(json_encode($filters));
+
+        $existing = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if ($existing && ($existing['status'] ?? '') === 'running') {
+            return response()->json([
+                'export_key' => $exportKey,
+                'status'     => 'running',
+                'message'    => $existing['message'] ?? 'Ishlanmoqda...',
+                'percent'    => $existing['percent'] ?? 0,
+            ]);
+        }
+
+        \Illuminate\Support\Facades\Cache::put($exportKey, [
+            'status'     => 'running',
+            'message'    => 'Navbatga qo\'shilmoqda...',
+            'percent'    => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 1800);
+
+        \App\Jobs\ExportAcademicRecordsJob::dispatch($filters, $exportKey);
+
+        return response()->json([
+            'export_key' => $exportKey,
+            'status'     => 'running',
+            'message'    => 'Eksport boshlandi',
+        ]);
+    }
+
+    public function academicRecordsExportStatus(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['status' => 'error', 'message' => 'Export key topilmadi'], 400);
+        }
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data) {
+            return response()->json(['status' => 'error', 'message' => 'Eksport topilmadi yoki muddati tugagan']);
+        }
+        // file_content frontendga kerak emas, status uchun
+        unset($data['file_content']);
+        return response()->json($data);
+    }
+
+    public function academicRecordsExportDownload(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['error' => 'Export key topilmadi'], 400);
+        }
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data || ($data['status'] ?? '') !== 'done') {
+            return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
+        }
+        if (empty($data['file_content'])) {
+            return response()->json(['error' => 'Fayl kontenti topilmadi'], 404);
+        }
+        $content = base64_decode($data['file_content']);
+        $fileName = $data['file_name'] ?? 'Academic_records.xlsx';
+        return response($content, 200, [
+            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            'Content-Length'      => strlen($content),
+        ]);
+    }
+
+    /**
      * Talabaning barcha semestrlari — curriculum_subjects dan
      */
     public function studentAllRecords(Request $request)

@@ -102,6 +102,8 @@
                                     <option value="oski" {{ request('closing_form_filter') == 'oski' ? 'selected' : '' }}>Faqat OSKI</option>
                                     <option value="test" {{ request('closing_form_filter') == 'test' ? 'selected' : '' }}>Faqat Test</option>
                                     <option value="oski_test" {{ request('closing_form_filter') == 'oski_test' ? 'selected' : '' }}>OSKI + Test</option>
+                                    <option value="normativ" {{ request('closing_form_filter') == 'normativ' ? 'selected' : '' }}>Normativ</option>
+                                    <option value="sinov" {{ request('closing_form_filter') == 'sinov' ? 'selected' : '' }}>Sinov (test)</option>
                                     <option value="none" {{ request('closing_form_filter') == 'none' ? 'selected' : '' }}>Yo'q</option>
                                 </select>
                             </div>
@@ -141,6 +143,8 @@
                                 <option value="oski">Faqat OSKI</option>
                                 <option value="test">Faqat Test</option>
                                 <option value="oski_test">OSKI + Test</option>
+                                <option value="normativ">Normativ</option>
+                                <option value="sinov">Sinov (test)</option>
                                 <option value="none">Yo'q</option>
                             </select>
                             <button type="button" onclick="applyBulk()" style="background: #3b82f6; color: white; padding: 5px 12px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">Qo'llash</button>
@@ -184,6 +188,8 @@
                                                         'oski' => ['Faqat OSKI', '#dbeafe', '#1d4ed8'],
                                                         'test' => ['Faqat Test', '#dcfce7', '#15803d'],
                                                         'oski_test' => ['OSKI + Test', '#ede9fe', '#6d28d9'],
+                                                        'normativ' => ['Normativ', '#fef3c7', '#a16207'],
+                                                        'sinov' => ['Sinov (test)', '#ffedd5', '#c2410c'],
                                                         'none' => ["Yo'q", '#f1f5f9', '#475569'],
                                                     ] as $val => $meta)
                                                         @php
@@ -246,6 +252,8 @@
                 'oski': { bg: '#dbeafe', fg: '#1d4ed8' },
                 'test': { bg: '#dcfce7', fg: '#15803d' },
                 'oski_test': { bg: '#ede9fe', fg: '#6d28d9' },
+                'normativ': { bg: '#fef3c7', fg: '#a16207' },
+                'sinov': { bg: '#ffedd5', fg: '#c2410c' },
                 'none': { bg: '#f1f5f9', fg: '#475569' },
             };
             document.querySelectorAll('.cf-input').forEach(inp => {

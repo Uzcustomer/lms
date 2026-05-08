@@ -188,6 +188,8 @@
                                             'oski' => ['label' => 'OSKI', 'bg' => '#dbeafe', 'fg' => '#1d4ed8'],
                                             'test' => ['label' => 'Test', 'bg' => '#dcfce7', 'fg' => '#15803d'],
                                             'oski_test' => ['label' => 'OSKI + Test', 'bg' => '#ede9fe', 'fg' => '#6d28d9'],
+                                            'normativ' => ['label' => 'Normativ', 'bg' => '#fef3c7', 'fg' => '#a16207'],
+                                            'sinov' => ['label' => 'Sinov (test)', 'bg' => '#ffedd5', 'fg' => '#c2410c'],
                                             'none' => ['label' => "Yo'q", 'bg' => '#f1f5f9', 'fg' => '#475569'],
                                         ];
                                     @endphp

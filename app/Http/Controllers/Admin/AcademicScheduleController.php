@@ -1689,14 +1689,15 @@ class AcademicScheduleController extends Controller
                 $newTestNa = $testNa;
 
                 // Yopilish shakliga qarab keraksiz turdagi sanalarni N/A qilib qo'yish.
-                // KTR'da fanga "faqat OSKI" / "faqat Test" / "Yo'q" belgilangan bo'lsa,
-                // foydalanuvchi qo'lda N/A bosishi shart emas — avto qo'yiladi va sana tozalanadi.
+                // KTR'da fanga "faqat OSKI" / "faqat Test" / "Yo'q" / "Normativ" / "Sinov" belgilangan
+                // bo'lsa, foydalanuvchi qo'lda N/A bosishi shart emas — avto qo'yiladi.
+                // Normativ va Sinov fanlar OSKI/Test orqali topshirilmaydi, shuning uchun ikkalasi N/A.
                 $cf = $schedule['closing_form'] ?? null;
-                if (in_array($cf, ['test', 'none'], true)) {
+                if (in_array($cf, ['test', 'none', 'normativ', 'sinov'], true)) {
                     $newOskiDate = null;
                     $newOskiNa = true;
                 }
-                if (in_array($cf, ['oski', 'none'], true)) {
+                if (in_array($cf, ['oski', 'none', 'normativ', 'sinov'], true)) {
                     $newTestDate = null;
                     $newTestNa = true;
                 }
@@ -1751,14 +1752,14 @@ class AcademicScheduleController extends Controller
                     }
                 }
                 // Yopilish shakliga mos kelmaydigan resit sanalarini tozalash
-                if (in_array($cf, ['test', 'none'], true)) {
+                if (in_array($cf, ['test', 'none', 'normativ', 'sinov'], true)) {
                     foreach ($oskiResitFields as $rf) {
                         if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', $rf)) {
                             $record->{$rf} = null;
                         }
                     }
                 }
-                if (in_array($cf, ['oski', 'none'], true)) {
+                if (in_array($cf, ['oski', 'none', 'normativ', 'sinov'], true)) {
                     foreach ($testResitFields as $rf) {
                         if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', $rf)) {
                             $record->{$rf} = null;

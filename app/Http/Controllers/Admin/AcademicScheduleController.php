@@ -142,6 +142,7 @@ class AcademicScheduleController extends Controller
         $oskiDateTo = $request->get('oski_date_to');
         $testDateFrom = $request->get('test_date_from');
         $testDateTo = $request->get('test_date_to');
+        $selectedClosingForm = $request->get('closing_form'); // '', 'unset', 'oski', 'test', 'oski_test', 'normativ', 'sinov', 'none'
         $showStudents = $request->get('show_students') === '1';
         $urinishFilter = $request->get('urinish'); // '1', '2', '3' yoki null (barchasi)
         $isSearched = $request->has('searched');
@@ -191,6 +192,19 @@ class AcademicScheduleController extends Controller
                     });
                 })->filter(fn($items) => $items->isNotEmpty());
             }
+
+            // Yopilish shakli bo'yicha filtr
+            if (!empty($selectedClosingForm)) {
+                $scheduleData = $scheduleData->map(function ($items) use ($selectedClosingForm) {
+                    return $items->filter(function ($item) use ($selectedClosingForm) {
+                        $cf = $item['closing_form'] ?? null;
+                        if ($selectedClosingForm === 'unset') {
+                            return $cf === null;
+                        }
+                        return $cf === $selectedClosingForm;
+                    });
+                })->filter(fn($items) => $items->isNotEmpty());
+            }
         }
 
         $routePrefix = $this->routePrefix();
@@ -226,6 +240,7 @@ class AcademicScheduleController extends Controller
             'oskiDateTo',
             'testDateFrom',
             'testDateTo',
+            'selectedClosingForm',
             'currentSemesterToggle',
             'showStudents',
             'urinishFilter',

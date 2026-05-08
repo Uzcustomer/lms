@@ -148,6 +148,19 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0891b2;"></span> Test sanasi (gacha)</label>
                             <input type="text" id="test_date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
+                        <div class="filter-item" style="flex: 1; min-width: 180px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#059669;"></span> Yopilish shakli</label>
+                            <select id="closing_form" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="unset" {{ ($selectedClosingForm ?? '') === 'unset' ? 'selected' : '' }}>Belgilanmagan</option>
+                                <option value="oski" {{ ($selectedClosingForm ?? '') === 'oski' ? 'selected' : '' }}>Faqat OSKI</option>
+                                <option value="test" {{ ($selectedClosingForm ?? '') === 'test' ? 'selected' : '' }}>Faqat Test</option>
+                                <option value="oski_test" {{ ($selectedClosingForm ?? '') === 'oski_test' ? 'selected' : '' }}>OSKI + Test</option>
+                                <option value="normativ" {{ ($selectedClosingForm ?? '') === 'normativ' ? 'selected' : '' }}>Normativ</option>
+                                <option value="sinov" {{ ($selectedClosingForm ?? '') === 'sinov' ? 'selected' : '' }}>Sinov (test)</option>
+                                <option value="none" {{ ($selectedClosingForm ?? '') === 'none' ? 'selected' : '' }}>Yo'q</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -909,6 +922,8 @@
             if (showStudents === '1') url.searchParams.set('show_students', '1');
             var urinishVal = $('#urinish_filter').val();
             if (urinishVal) url.searchParams.set('urinish', urinishVal);
+            var cf = $('#closing_form').val();
+            if (cf) url.searchParams.set('closing_form', cf);
             window.location.href = url.toString();
         }
 

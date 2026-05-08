@@ -153,6 +153,25 @@
 
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
+                @php
+                    $unsetClosingFormCount = 0;
+                    foreach ($scheduleData as $itemsBatch) {
+                        foreach ($itemsBatch as $itemRow) {
+                            if (($itemRow['closing_form'] ?? null) === null) {
+                                $unsetClosingFormCount++;
+                            }
+                        }
+                    }
+                @endphp
+                @if($unsetClosingFormCount > 0)
+                    <div style="padding:10px 20px;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#92400e;display:flex;align-items:center;gap:8px;font-size:13px;">
+                        <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                        <span>
+                            <b>{{ $unsetClosingFormCount }}</b> ta fan uchun yopilish shakli belgilanmagan — OSKI va Test maydonlari ikkalasi ham ko'rinadi va N/A ni qo'lda belgilashingiz kerak bo'ladi.
+                            <a href="{{ route('admin.closing-form.index') }}" target="_blank" style="text-decoration:underline;font-weight:600;color:#7c2d12;">Yopilish shaklini belgilash sahifasiga o'tish</a>
+                        </span>
+                    </div>
+                @endif
                 <form method="POST" action="{{ route($routePrefix . '.academic-schedule.store') }}">
                     @csrf
                     <div style="padding:10px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;justify-content:space-between;">
@@ -209,6 +228,11 @@
                                             $itemTestNa = $item['test_na_for_urinish'] ?? false;
                                             $oskiSaved = !empty($itemOski) || $itemOskiNa;
                                             $testSaved = !empty($itemTest) || $itemTestNa;
+                                            // Yopilish shakli (KTR'da belgilanadi). Mos kelmaydigan tur bo'yicha
+                                            // sana maydoni ko'rsatilmaydi va saqlashda avto N/A qo'yiladi.
+                                            $cf = $item['closing_form'] ?? null;
+                                            $showOski = $cf === null || in_array($cf, ['oski', 'oski_test'], true);
+                                            $showTest = $cf === null || in_array($cf, ['test', 'oski_test'], true);
                                         @endphp
                                         <tr class="data-row">
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
@@ -247,6 +271,10 @@
                                                 </span>
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
+                                                @if(!$showOski)
+                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun OSKI yo'q (yopilish shakli: {{ $cf === 'test' ? 'Faqat Test' : 'Yo\'q' }})">—</span>
+                                                    <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
+                                                @else
                                                 <div class="exam-cell">
                                                     @if($oskiSaved && !($canEdit ?? false))
                                                         {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
@@ -303,8 +331,13 @@
                                                         </label>
                                                     @endif
                                                 </div>
+                                                @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
+                                                @if(!$showTest)
+                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun Test yo'q (yopilish shakli: {{ $cf === 'oski' ? 'Faqat OSKI' : 'Yo\'q' }})">—</span>
+                                                    <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
+                                                @else
                                                 <div class="exam-cell">
                                                     @if($testSaved && !($canEdit ?? false))
                                                         {{-- Saqlangan: o'zgartirib bo'lmaydi --}}
@@ -361,6 +394,7 @@
                                                         </label>
                                                     @endif
                                                 </div>
+                                                @endif
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][subject_name]" value="{{ $item['subject']->subject_name }}">
@@ -369,6 +403,7 @@
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
+                                                <input type="hidden" name="schedules[{{ $rowIndex }}][closing_form]" value="{{ $cf }}">
                                             </td>
                                         </tr>
 
@@ -427,7 +462,9 @@
                                                         <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $itemUrinish }}-urinish</span>
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
-                                                        @if($isBlocked)
+                                                        @if(!$showOski)
+                                                            <span style="color:#cbd5e1;font-size:10px;">—</span>
+                                                        @elseif($isBlocked)
                                                             <input type="text" placeholder="kk.oo.yyyy" maxlength="10" readonly disabled
                                                                    value="{{ $stuValueOski ? \Carbon\Carbon::parse($stuValueOski)->format('d.m.Y') : '' }}"
                                                                    title="{{ $blockedTitle }}"
@@ -442,7 +479,9 @@
                                                         @endif
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
-                                                        @if($isBlocked)
+                                                        @if(!$showTest)
+                                                            <span style="color:#cbd5e1;font-size:10px;">—</span>
+                                                        @elseif($isBlocked)
                                                             <input type="text" placeholder="kk.oo.yyyy" maxlength="10" readonly disabled
                                                                    value="{{ $stuValueTest ? \Carbon\Carbon::parse($stuValueTest)->format('d.m.Y') : '' }}"
                                                                    title="{{ $blockedTitle }}"
@@ -456,6 +495,7 @@
                                                                    style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
                                                         @endif
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][closing_form]" value="{{ $cf }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">

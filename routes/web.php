@@ -41,6 +41,7 @@ use App\Http\Controllers\Admin\AcademicScheduleController;
 use App\Http\Controllers\Admin\ServerDebugController;
 use App\Http\Controllers\Admin\ContractController;
 use App\Http\Controllers\Admin\KtrController;
+use App\Http\Controllers\Admin\ClosingFormController;
 use App\Http\Controllers\Admin\StaffRegistrationController;
 use App\Http\Controllers\Admin\StudentContractController as AdminStudentContractController;
 use App\Http\Controllers\Admin\KafedraController;
@@ -551,6 +552,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/change-request/{curriculumSubjectId}', [KtrController::class, 'requestChange'])->name('request-change');
             Route::post('/change-approve/{approvalId}', [KtrController::class, 'approveChange'])->name('approve-change');
             Route::delete('/plan/{curriculumSubjectId}', [KtrController::class, 'resetPlan'])->name('reset-plan');
+        });
+
+        // Fanning yopilish shakli (Closing form)
+        Route::prefix('closing-form')->name('closing-form.')->group(function () {
+            Route::get('/', [ClosingFormController::class, 'index'])->name('index');
+            Route::post('/bulk-update', [ClosingFormController::class, 'bulkUpdate'])->name('bulk-update');
+            Route::get('/get-specialties', [ClosingFormController::class, 'getSpecialties'])->name('get-specialties');
+            Route::get('/get-level-codes', [ClosingFormController::class, 'getLevelCodes'])->name('get-level-codes');
+            Route::get('/get-semesters', [ClosingFormController::class, 'getSemesters'])->name('get-semesters');
         });
 
         // To'garak arizalari

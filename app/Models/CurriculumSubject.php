@@ -29,6 +29,7 @@ class CurriculumSubject extends Model
         'is_active',
         'subject_details',
         'subject_exam_types',
+        'closing_form',
         'rating_grade_code',
         'rating_grade_name',
         'exam_finish_code',

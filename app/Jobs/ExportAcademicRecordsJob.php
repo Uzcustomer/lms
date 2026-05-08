@@ -12,6 +12,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class ExportAcademicRecordsJob implements ShouldQueue
 {
@@ -39,12 +40,13 @@ class ExportAcademicRecordsJob implements ShouldQueue
             $studentHemisIds = $this->resolveStudentHemisIds();
 
             if (empty($studentHemisIds)) {
+                $emptyPath = $this->saveBytesToExportDir($this->generateEmptyExcel(), 'Academic_records_empty.xlsx');
                 Cache::put($this->exportKey, [
-                    'status' => 'done',
-                    'message' => 'Talaba topilmadi',
-                    'percent' => 100,
-                    'file_name' => 'Academic_records_empty.xlsx',
-                    'file_content' => base64_encode($this->generateEmptyExcel()),
+                    'status'     => 'done',
+                    'message'    => 'Talaba topilmadi',
+                    'percent'    => 100,
+                    'file_name'  => 'Academic_records_empty.xlsx',
+                    'file_path'  => $emptyPath,
                     'updated_at' => now()->toDateTimeString(),
                 ], 1800);
                 return;
@@ -58,16 +60,16 @@ class ExportAcademicRecordsJob implements ShouldQueue
                 'export_key'    => $this->exportKey,
                 'file_name'     => $fileData['file_name'],
                 'students_count' => count($studentHemisIds),
-                'file_size'     => strlen($fileData['content']),
+                'file_size'     => filesize($fileData['file_path']),
             ]);
 
             Cache::put($this->exportKey, [
-                'status'       => 'done',
-                'message'      => 'Tayyor',
-                'percent'      => 100,
-                'file_name'    => $fileData['file_name'],
-                'file_content' => $fileData['content'],
-                'updated_at'   => now()->toDateTimeString(),
+                'status'     => 'done',
+                'message'    => 'Tayyor',
+                'percent'    => 100,
+                'file_name'  => $fileData['file_name'],
+                'file_path'  => $fileData['file_path'],
+                'updated_at' => now()->toDateTimeString(),
             ], 1800);
         } catch (\Throwable $e) {
             Log::error('[ExportAcademicRecordsJob] Xato: ' . $e->getMessage(), [
@@ -207,15 +209,14 @@ class ExportAcademicRecordsJob implements ShouldQueue
         $this->updateProgress('Fayl saqlanmoqda...', 97);
 
         $fileName = 'Academic_records_' . date('Y-m-d_H-i') . '.xlsx';
-        $temp = tempnam(sys_get_temp_dir(), 'ar_export_');
+        $dir = $this->ensureExportDir();
+        $relativePath = 'exports/academic_records/' . uniqid('ar_', true) . '.xlsx';
+        $absPath = storage_path('app/' . $relativePath);
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-        $writer->save($temp);
+        $writer->save($absPath);
         $spreadsheet->disconnectWorksheets();
 
-        $content = base64_encode(file_get_contents($temp));
-        @unlink($temp);
-
-        return ['file_name' => $fileName, 'content' => $content];
+        return ['file_name' => $fileName, 'file_path' => $absPath];
     }
 
     private function generateEmptyExcel(): string
@@ -230,6 +231,23 @@ class ExportAcademicRecordsJob implements ShouldQueue
         $content = file_get_contents($temp);
         @unlink($temp);
         return $content;
+    }
+
+    private function ensureExportDir(): string
+    {
+        $dir = storage_path('app/exports/academic_records');
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        return $dir;
+    }
+
+    private function saveBytesToExportDir(string $bytes, string $hint): string
+    {
+        $this->ensureExportDir();
+        $path = storage_path('app/exports/academic_records/' . uniqid('ar_', true) . '.xlsx');
+        file_put_contents($path, $bytes);
+        return $path;
     }
 
     private function updateProgress(string $message, int $percent, string $status = 'running'): void

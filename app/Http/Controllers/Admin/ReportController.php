@@ -5469,16 +5469,22 @@ class ReportController extends Controller
         if (!$data || ($data['status'] ?? '') !== 'done') {
             return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
         }
-        if (empty($data['file_content'])) {
-            return response()->json(['error' => 'Fayl kontenti topilmadi'], 404);
-        }
-        $content = base64_decode($data['file_content']);
         $fileName = $data['file_name'] ?? 'Academic_records.xlsx';
-        return response($content, 200, [
-            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
-            'Content-Length'      => strlen($content),
-        ]);
+        $filePath = $data['file_path'] ?? null;
+        if ($filePath && file_exists($filePath)) {
+            return response()->download($filePath, $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend(true);
+        }
+        if (!empty($data['file_content'])) {
+            $content = base64_decode($data['file_content']);
+            return response($content, 200, [
+                'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                'Content-Length'      => strlen($content),
+            ]);
+        }
+        return response()->json(['error' => 'Fayl serverda topilmadi'], 404);
     }
 
     /**

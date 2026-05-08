@@ -4820,7 +4820,12 @@ class ReportController extends Controller
                     // in_group bo'sh yoki NULL bo'lganlar — guruhli fanlar e'tiborga olinmaydi
                     $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
                 })
-                ->select('cs.curricula_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
+                ->select(
+                    'cs.curricula_hemis_id', 'cs.curriculum_subject_hemis_id',
+                    'cs.semester_code', 'cs.semester_name',
+                    'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code',
+                    'cs.credit', 'cs.total_acload'
+                )
                 ->distinct();
 
             $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
@@ -4829,6 +4834,33 @@ class ReportController extends Controller
             }
 
             $currSubjects = $currSubjectsQuery->get();
+
+            // 2.5-QADAM: Tanlov fanlar (subject_type_code=12) uchun talaba haqiqatda
+            // qaysi fanni tanlaganini student_subjects'dan olamiz.
+            // Map: (student_hemis_id|curriculum_subject_hemis_id) =>
+            //      ['subject_id' => ..., 'subject_name' => ...]
+            $tanlovCsHemisIds = $currSubjects
+                ->where('subject_type_code', '12')
+                ->pluck('curriculum_subject_hemis_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $tanlovPicksMap = [];
+            if (!empty($tanlovCsHemisIds)) {
+                $tanlovPicks = DB::table('student_subjects')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('curriculum_subject_hemis_id', $tanlovCsHemisIds)
+                    ->select('student_hemis_id', 'curriculum_subject_hemis_id', 'subject_id', 'subject_name')
+                    ->get();
+                foreach ($tanlovPicks as $tp) {
+                    $tanlovPicksMap[$tp->student_hemis_id . '|' . $tp->curriculum_subject_hemis_id] = [
+                        'subject_id'   => $tp->subject_id,
+                        'subject_name' => $tp->subject_name,
+                    ];
+                }
+            }
 
             // 3-QADAM: Academic records olish — faqat mavjudligini tekshirish uchun
             $arExistsLookup = [];
@@ -4867,13 +4899,28 @@ class ReportController extends Controller
                         if ($studentSemCode && $subSemCode >= $studentSemCode) continue;
                     }
 
-                    $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
+                    // Tanlov fan bo'lsa, talaba haqiqatda qaysi fanni tanlaganini olamiz.
+                    // Aks holda curriculum_subjects'dagi subject_id'ni ishlatamiz.
+                    $effectiveSubjectId = $sub->subject_id;
+                    $effectiveSubjectName = $sub->subject_name;
+                    if ((string) $sub->subject_type_code === '12') {
+                        $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
+                        if ($picked) {
+                            $effectiveSubjectId = $picked['subject_id'];
+                            $effectiveSubjectName = $picked['subject_name'];
+                        } else {
+                            // Talaba hali tanlov qilmagan — bu fan slotini hisobga olmaymiz
+                            continue;
+                        }
+                    }
+
+                    $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
                     if (isset($arExistsLookup[$arKey])) continue;
 
-                    // Curriculum da bor, academic_records da yo'q = qarzdor
+                    // Curriculum da bor (yoki tanlangan), academic_records da yo'q = qarzdor
                     $debts[] = [
-                        'subject_id'    => $sub->subject_id,
-                        'subject_name'  => $sub->subject_name,
+                        'subject_id'    => $effectiveSubjectId,
+                        'subject_name'  => $effectiveSubjectName,
                         'semester_code' => $sub->semester_code,
                         'semester_name' => $sub->semester_name,
                         'credit'        => $sub->credit,
@@ -5212,7 +5259,7 @@ class ReportController extends Controller
                 ->where(function ($q) {
                     $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
                 })
-                ->select('cs.subject_id', 'cs.subject_name', 'cs.semester_name', 'cs.credit', 'cs.total_acload')
+                ->select('cs.curriculum_subject_hemis_id', 'cs.subject_id', 'cs.subject_name', 'cs.semester_name', 'cs.subject_type_code', 'cs.credit', 'cs.total_acload')
                 ->distinct()
                 ->orderBy('cs.subject_name');
 
@@ -5224,6 +5271,30 @@ class ReportController extends Controller
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
 
+            // Tanlov fanlar (subject_type_code = 12) uchun talabaning haqiqiy tanlovini olamiz
+            $tanlovCsHemisIds = $currSubjects
+                ->where('subject_type_code', '12')
+                ->pluck('curriculum_subject_hemis_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $tanlovPicksMap = [];
+            if (!empty($tanlovCsHemisIds)) {
+                $picks = DB::table('student_subjects')
+                    ->where('student_hemis_id', $studentId)
+                    ->whereIn('curriculum_subject_hemis_id', $tanlovCsHemisIds)
+                    ->select('curriculum_subject_hemis_id', 'subject_id', 'subject_name')
+                    ->get();
+                foreach ($picks as $p) {
+                    $tanlovPicksMap[$p->curriculum_subject_hemis_id] = [
+                        'subject_id'   => $p->subject_id,
+                        'subject_name' => $p->subject_name,
+                    ];
+                }
+            }
+
             // Academic records — shu semestrga tegishli baholar
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $studentId)
@@ -5232,12 +5303,27 @@ class ReportController extends Controller
                 ->get()
                 ->keyBy('subject_id');
 
-            // Curriculum fanlarini academic records bilan birlashtirish
+            // Curriculum fanlarini academic records bilan birlashtirish.
+            // Tanlov fanlar uchun student_subjects'dan olingan haqiqiy fanga qaraymiz.
             $grades = [];
             foreach ($currSubjects as $sub) {
-                $ar = $arRecords->get($sub->subject_id);
+                $effectiveSubjectId = $sub->subject_id;
+                $effectiveSubjectName = $sub->subject_name;
+
+                if ((string) $sub->subject_type_code === '12') {
+                    $picked = $tanlovPicksMap[$sub->curriculum_subject_hemis_id] ?? null;
+                    if ($picked) {
+                        $effectiveSubjectId = $picked['subject_id'];
+                        $effectiveSubjectName = $picked['subject_name'];
+                    } else {
+                        // Talaba hali tanlov qilmagan — bu slotni hisobga olmaymiz
+                        continue;
+                    }
+                }
+
+                $ar = $arRecords->get($effectiveSubjectId);
                 $grades[] = (object) [
-                    'subject_name' => $sub->subject_name,
+                    'subject_name' => $effectiveSubjectName,
                     'credit'       => $sub->credit,
                     'total_acload' => $sub->total_acload,
                     'total_point'  => $ar->total_point ?? null,
@@ -5336,7 +5422,7 @@ class ReportController extends Controller
                 ->where(function ($q) {
                     $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
                 })
-                ->select('cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.credit', 'cs.total_acload')
+                ->select('cs.curriculum_subject_hemis_id', 'cs.semester_code', 'cs.semester_name', 'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code', 'cs.credit', 'cs.total_acload')
                 ->distinct()
                 ->orderBy('cs.semester_code')
                 ->orderBy('cs.subject_name');
@@ -5346,6 +5432,29 @@ class ReportController extends Controller
             $currSubjects = $currSubjectsQuery->get();
 
             $currSubjects = $this->filterSubjectsByGroupSuffix($currSubjects, $groupName);
+
+            // Tanlov fanlar uchun talabaning tanlovi
+            $tanlovCsHemisIds = $currSubjects
+                ->where('subject_type_code', '12')
+                ->pluck('curriculum_subject_hemis_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->toArray();
+            $tanlovPicksMap = [];
+            if (!empty($tanlovCsHemisIds)) {
+                $picks = DB::table('student_subjects')
+                    ->where('student_hemis_id', $studentId)
+                    ->whereIn('curriculum_subject_hemis_id', $tanlovCsHemisIds)
+                    ->select('curriculum_subject_hemis_id', 'subject_id', 'subject_name')
+                    ->get();
+                foreach ($picks as $p) {
+                    $tanlovPicksMap[$p->curriculum_subject_hemis_id] = [
+                        'subject_id'   => $p->subject_id,
+                        'subject_name' => $p->subject_name,
+                    ];
+                }
+            }
 
             // Academic records lookup — faqat mavjudligini tekshirish
             $arExists = [];
@@ -5357,7 +5466,8 @@ class ReportController extends Controller
                 $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
             }
 
-            // Qarzlar: curriculum da bor, academic_records da yo'q
+            // Qarzlar: curriculum da bor, academic_records da yo'q.
+            // Tanlov fanlar uchun haqiqiy tanlangan fan bo'yicha tekshiriladi.
             $debtsAll = [];
 
             foreach ($currSubjects as $sub) {
@@ -5369,12 +5479,25 @@ class ReportController extends Controller
                     if ($studentSemesterCode && $subSemCode >= (int) $studentSemesterCode) continue;
                 }
 
-                if (isset($arExists[$sub->subject_id . '|' . $sub->semester_code])) continue;
+                $effectiveSubjectId = $sub->subject_id;
+                $effectiveSubjectName = $sub->subject_name;
+                if ((string) $sub->subject_type_code === '12') {
+                    $picked = $tanlovPicksMap[$sub->curriculum_subject_hemis_id] ?? null;
+                    if ($picked) {
+                        $effectiveSubjectId = $picked['subject_id'];
+                        $effectiveSubjectName = $picked['subject_name'];
+                    } else {
+                        // Talaba hali tanlov qilmagan
+                        continue;
+                    }
+                }
+
+                if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
 
                 $debtsAll[] = [
                     'semester_code' => $sub->semester_code,
                     'semester_name' => $sub->semester_name,
-                    'subject_name'  => $sub->subject_name,
+                    'subject_name'  => $effectiveSubjectName,
                     'credit'        => $sub->credit,
                     'total_acload'  => $sub->total_acload,
                     'status'        => 'Qarzdor',

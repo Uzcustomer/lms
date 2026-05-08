@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
@@ -17,6 +18,14 @@ use Illuminate\Support\Facades\Route;
 Route::post('/sync-photos-to-moodle', [MoodlePhotoSyncController::class, 'syncPhotos'])
     ->middleware('throttle:5,1')
     ->name('api.moodle.sync-photos');
+
+// Moodle plugin → LMS descriptor confirmation. After local_hemisexport
+// successfully extracts a face descriptor for an approved photo, it POSTs
+// the idnumber list here so we can mark the row as fully usable in Moodle
+// and finally notify the tutor.
+Route::post('/moodle-descriptor-confirmed', [MoodleDescriptorCallbackController::class, 'confirm'])
+    ->middleware('throttle:30,1')
+    ->name('api.moodle.descriptor-confirmed');
 
 /*
 |--------------------------------------------------------------------------

@@ -241,36 +241,8 @@
 
         {{-- Yashirin shablon kartochkalari (zip yuklash uchun) --}}
         <div id="qr-hidden-cards" style="position:fixed; left:-10000px; top:0; pointer-events:none;">
-            @php
-                $w = $template['width_mm'];
-                $h = $template['height_mm'];
-                $bottomText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
-                $padY = 2.2;
-                $captionSpace = $bottomText !== '' ? 3.0 : 0;
-                $gap = $bottomText !== '' ? 1.2 : 0;
-                $qrSize = max(15, min($w - 4, $h - $captionSpace - $gap - $padY * 2));
-                $logoSize = $qrSize * 0.18;
-            @endphp
             @foreach($teachers as $teacher)
-            <div id="hidden-card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:{{ $padY }}mm 1.5mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:{{ $gap }}mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
-                <div style="flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;">
-                    <div style="width:{{ $qrSize }}mm; height:{{ $qrSize }}mm; display:flex; align-items:center; justify-content:center;">
-                        {!! str_replace('<svg ', '<svg style="width:100%;height:100%;display:block;" ', QrCode::size(300)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token))) !!}
-                    </div>
-                    @if($template['show_logo'])
-                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
-                        <div style="background:white; border-radius:50%; padding:0.3mm; display:flex;">
-                            <img src="{{ asset('logo.png') }}" alt="Logo" style="width:{{ $logoSize }}mm; height:{{ $logoSize }}mm; border-radius:50%;">
-                        </div>
-                    </div>
-                    @endif
-                </div>
-                @if($bottomText !== '')
-                <div style="font-size:1.9mm; color:#1e3a8a; font-weight:700; line-height:1.1; white-space:nowrap;">
-                    {{ $bottomText }}
-                </div>
-                @endif
-            </div>
+                @include('admin.staff-evaluation._card', ['cardId' => 'hidden-card-' . $teacher->id])
             @endforeach
         </div>
 
@@ -418,37 +390,7 @@
             @forelse($teachers as $teacher)
             @if($teacher->eval_qr_token)
             <div class="border rounded-lg overflow-hidden shadow-sm bg-white flex flex-col items-center">
-                @php
-                    $w = $template['width_mm'];
-                    $h = $template['height_mm'];
-                    $bottomText = trim(($template['institution'] ?? '') . ' ' . ($template['branch'] ?? ''));
-                    $padY = 2.2;
-                    $captionSpace = $bottomText !== '' ? 3.0 : 0;
-                    $gap = $bottomText !== '' ? 1.2 : 0;
-                    $qrSize = max(15, min($w - 4, $h - $captionSpace - $gap - $padY * 2));
-                    $logoSize = $qrSize * 0.18;
-                @endphp
-                <div id="card-{{ $teacher->id }}" style="width:{{ $w }}mm; height:{{ $h }}mm; padding:{{ $padY }}mm 1.5mm; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:{{ $gap }}mm; font-family:Arial,sans-serif; background:white; overflow:hidden; text-align:center;">
-                    {{-- QR kod with logo --}}
-                    <div style="flex:0 0 auto; position:relative; display:flex; align-items:center; justify-content:center;">
-                        <div style="width:{{ $qrSize }}mm; height:{{ $qrSize }}mm; display:flex; align-items:center; justify-content:center;">
-                            {!! str_replace('<svg ', '<svg style="width:100%;height:100%;display:block;" ', QrCode::size(300)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token))) !!}
-                        </div>
-                        @if($template['show_logo'])
-                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
-                            <div style="background:white; border-radius:50%; padding:0.3mm; display:flex;">
-                                <img src="{{ asset('logo.png') }}" alt="Logo" style="width:{{ $logoSize }}mm; height:{{ $logoSize }}mm; border-radius:50%;">
-                            </div>
-                        </div>
-                        @endif
-                    </div>
-                    {{-- Pastki yozuv --}}
-                    @if($bottomText !== '')
-                    <div style="font-size:1.9mm; color:#1e3a8a; font-weight:700; line-height:1.1; white-space:nowrap;">
-                        {{ $bottomText }}
-                    </div>
-                    @endif
-                </div>
+                @include('admin.staff-evaluation._card', ['cardId' => 'card-' . $teacher->id])
                 {{-- Yuklab olish tugmasi --}}
                 <div class="border-t px-4 py-3 text-center bg-gray-50">
                     <button onclick="downloadCard('card-{{ $teacher->id }}', '{{ Str::slug($teacher->full_name) }}')"

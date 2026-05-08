@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 class ClosingFormController extends Controller
 {
-    private const ALLOWED_FORMS = ['oski', 'test', 'oski_test', 'none'];
+    private const ALLOWED_FORMS = ['oski', 'test', 'oski_test', 'normativ', 'sinov', 'none'];
 
     private function checkAccess(): void
     {
@@ -126,7 +126,7 @@ class ClosingFormController extends Controller
 
         $validated = $request->validate([
             'closing_forms' => 'required|array',
-            'closing_forms.*' => 'nullable|in:oski,test,oski_test,none',
+            'closing_forms.*' => 'nullable|in:oski,test,oski_test,normativ,sinov,none',
         ]);
 
         $forms = $validated['closing_forms'];

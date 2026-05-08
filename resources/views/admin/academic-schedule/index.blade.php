@@ -230,9 +230,18 @@
                                             $testSaved = !empty($itemTest) || $itemTestNa;
                                             // Yopilish shakli (KTR'da belgilanadi). Mos kelmaydigan tur bo'yicha
                                             // sana maydoni ko'rsatilmaydi va saqlashda avto N/A qo'yiladi.
+                                            // Normativ va Sinov fanlar OSKI/Test orqali topshirilmaydi.
                                             $cf = $item['closing_form'] ?? null;
                                             $showOski = $cf === null || in_array($cf, ['oski', 'oski_test'], true);
                                             $showTest = $cf === null || in_array($cf, ['test', 'oski_test'], true);
+                                            $cfDashLabels = [
+                                                'test' => 'Faqat Test',
+                                                'oski' => 'Faqat OSKI',
+                                                'none' => "Yo'q",
+                                                'normativ' => 'Normativ',
+                                                'sinov' => 'Sinov (test)',
+                                            ];
+                                            $cfDashLabel = $cfDashLabels[$cf] ?? '';
                                         @endphp
                                         <tr class="data-row">
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
@@ -272,7 +281,7 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 @if(!$showOski)
-                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun OSKI yo'q (yopilish shakli: {{ $cf === 'test' ? 'Faqat Test' : 'Yo\'q' }})">—</span>
+                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun OSKI yo'q (yopilish shakli: {{ $cfDashLabel }})">—</span>
                                                     <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
                                                 @else
                                                 <div class="exam-cell">
@@ -335,7 +344,7 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 @if(!$showTest)
-                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun Test yo'q (yopilish shakli: {{ $cf === 'oski' ? 'Faqat OSKI' : 'Yo\'q' }})">—</span>
+                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun Test yo'q (yopilish shakli: {{ $cfDashLabel }})">—</span>
                                                     <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
                                                 @else
                                                 <div class="exam-cell">

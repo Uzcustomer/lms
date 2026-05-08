@@ -617,8 +617,9 @@
                             return;
                         }
                         if (resp.status === 'done') {
+                            var keyForDownload = arExportKey;
                             stopArPolling('Academic records');
-                            window.location.href = '{{ route("admin.reports.debtors.export-academic-records.download") }}?export_key=' + encodeURIComponent(arExportKey);
+                            window.location.href = '{{ route("admin.reports.debtors.export-academic-records.download") }}?export_key=' + encodeURIComponent(keyForDownload);
                             return;
                         }
                         if (resp.status === 'failed') {

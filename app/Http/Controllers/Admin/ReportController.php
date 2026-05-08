@@ -5450,11 +5450,21 @@ class ReportController extends Controller
         if (!$exportKey) {
             return response()->json(['status' => 'error', 'message' => 'Export key topilmadi'], 400);
         }
+
         $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+
+        // Cache yo'qolgan bo'lsa, diskdagi meta'dan o'qiymiz
+        if (!$data) {
+            $paths = \App\Jobs\ExportAcademicRecordsJob::pathsFor($exportKey);
+            if (file_exists($paths['meta'])) {
+                $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+            }
+        }
+
         if (!$data) {
             return response()->json(['status' => 'error', 'message' => 'Eksport topilmadi yoki muddati tugagan']);
         }
-        // file_content frontendga kerak emas, status uchun
+
         unset($data['file_content']);
         return response()->json($data);
     }
@@ -5465,11 +5475,29 @@ class ReportController extends Controller
         if (!$exportKey) {
             return response()->json(['error' => 'Export key topilmadi'], 400);
         }
+
+        $paths = \App\Jobs\ExportAcademicRecordsJob::pathsFor($exportKey);
+
+        // Holatni cache yoki diskdan o'qiymiz
         $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data && file_exists($paths['meta'])) {
+            $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+        }
+
         if (!$data || ($data['status'] ?? '') !== 'done') {
             return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
         }
+
         $fileName = $data['file_name'] ?? 'Academic_records.xlsx';
+
+        if (file_exists($paths['xlsx'])) {
+            // Yuklab olishdan keyin meta'ni ham tozalaymiz
+            return response()->download($paths['xlsx'], $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend(true);
+        }
+
+        // Eski format bilan orqaga moslik (file_path / file_content)
         $filePath = $data['file_path'] ?? null;
         if ($filePath && file_exists($filePath)) {
             return response()->download($filePath, $fileName, [
@@ -5484,6 +5512,7 @@ class ReportController extends Controller
                 'Content-Length'      => strlen($content),
             ]);
         }
+
         return response()->json(['error' => 'Fayl serverda topilmadi'], 404);
     }
 

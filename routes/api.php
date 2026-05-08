@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\MoodlePhotoSyncController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
@@ -9,6 +10,13 @@ use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
 use Illuminate\Support\Facades\Route;
+
+// Moodle (local_hemisexport) → LMS pull-back endpoint (server-to-server,
+// shared-secret auth via X-SYNC-SECRET). Re-queues approved photos for
+// the listed idnumbers via the existing SendStudentPhotoToMoodle job.
+Route::post('/sync-photos-to-moodle', [MoodlePhotoSyncController::class, 'syncPhotos'])
+    ->middleware('throttle:5,1')
+    ->name('api.moodle.sync-photos');
 
 /*
 |--------------------------------------------------------------------------

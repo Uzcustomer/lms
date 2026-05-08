@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Exports\StaffEvaluationExport;
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Models\Teacher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -32,7 +33,49 @@ class StaffEvaluationController extends Controller
 
         $teachers = $query->orderBy('full_name')->paginate(20)->withQueryString();
 
-        return view('admin.staff-evaluation.index', compact('teachers'));
+        $template = $this->getTemplateData();
+
+        return view('admin.staff-evaluation.index', compact('teachers', 'template'));
+    }
+
+    public function saveTemplate(Request $request)
+    {
+        $data = $request->validate([
+            'institution'    => 'nullable|string|max:255',
+            'branch'         => 'nullable|string|max:255',
+            'position_label' => 'nullable|string|max:255',
+            'title'          => 'nullable|string|max:255',
+            'description'    => 'nullable|string|max:1000',
+            'show_logo'      => 'nullable|boolean',
+            'width_mm'       => 'nullable|numeric|min:20|max:300',
+            'height_mm'      => 'nullable|numeric|min:20|max:300',
+        ]);
+
+        Setting::set('staff_eval_tpl_institution', $data['institution'] ?? '');
+        Setting::set('staff_eval_tpl_branch', $data['branch'] ?? '');
+        Setting::set('staff_eval_tpl_position_label', $data['position_label'] ?? '');
+        Setting::set('staff_eval_tpl_title', $data['title'] ?? '');
+        Setting::set('staff_eval_tpl_description', $data['description'] ?? '');
+        Setting::set('staff_eval_tpl_show_logo', $request->boolean('show_logo') ? '1' : '0');
+        Setting::set('staff_eval_tpl_width_mm', (string)($data['width_mm'] ?? 60));
+        Setting::set('staff_eval_tpl_height_mm', (string)($data['height_mm'] ?? 40));
+
+        return redirect()->route('admin.staff-evaluation.index', ['tab' => 'shablon'])
+            ->with('success', "Shablon muvaffaqiyatli saqlandi.");
+    }
+
+    private function getTemplateData(): array
+    {
+        return [
+            'institution'    => Setting::get('staff_eval_tpl_institution', 'Toshkent davlat tibbiyot universiteti'),
+            'branch'         => Setting::get('staff_eval_tpl_branch', 'Termiz filiali'),
+            'position_label' => Setting::get('staff_eval_tpl_position_label', 'Registrator ofisi xodimi:'),
+            'title'          => Setting::get('staff_eval_tpl_title', ''),
+            'description'    => Setting::get('staff_eval_tpl_description', ''),
+            'show_logo'      => Setting::get('staff_eval_tpl_show_logo', '1') === '1',
+            'width_mm'       => (float) Setting::get('staff_eval_tpl_width_mm', '60'),
+            'height_mm'      => (float) Setting::get('staff_eval_tpl_height_mm', '40'),
+        ];
     }
 
     public function show(Request $request, Teacher $teacher)

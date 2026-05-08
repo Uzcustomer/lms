@@ -50,6 +50,52 @@ class RetakeGroupController extends Controller
             $perPage = 50;
         }
 
+        // Guruh shakllantirilishi kutilayotgan arizalar — yassi ro'yxat (filtrlanadi).
+        // O'quv bo'limi tasdiqlagan, lekin guruhga biriktirilmagan arizalar.
+        $studentSearch = trim((string) $request->input('search', ''));
+        $pendingAppsQuery = RetakeApplication::query()
+            ->with(['group.student'])
+            ->where('dean_status', 'approved')
+            ->where('registrar_status', 'approved')
+            ->where('academic_dept_status', 'approved')
+            ->where('final_status', 'pending')
+            ->whereNull('retake_group_id')
+            ->whereHas('group', function ($q) {
+                $q->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'approved');
+            });
+
+        // Talaba ma'lumoti bo'yicha filtrlar (cascading: education_type, department, ...)
+        $hasStudentLevelFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty()
+            || $studentSearch !== '';
+        if ($hasStudentLevelFilter) {
+            $pendingAppsQuery->whereIn('student_hemis_id', function ($sub) use ($studentFilters, $studentSearch) {
+                $sub->select('hemis_id')->from('students');
+                if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+                if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+                if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+                if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+                if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+                if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+                if ($studentSearch !== '') {
+                    $sub->where(function ($q) use ($studentSearch) {
+                        $q->where('full_name', 'like', "%{$studentSearch}%")
+                          ->orWhere('hemis_id', $studentSearch);
+                    });
+                }
+            });
+        }
+        if ($subjectFilter) {
+            $pendingAppsQuery->where('subject_id', $subjectFilter);
+        }
+
+        $pendingApps = $pendingAppsQuery
+            ->orderBy('subject_name')
+            ->orderBy('semester_name')
+            ->orderByDesc('created_at')
+            ->paginate($perPage, ['*'], 'apps_page')
+            ->withQueryString();
+
         $groupsQuery = RetakeGroup::query()
             ->with('teacher')
             ->withCount(['applications as students_count'])
@@ -105,6 +151,7 @@ class RetakeGroupController extends Controller
 
         return view('teacher.academic-dept.retake-groups.index', [
             'aggregations' => $aggregations,
+            'pendingApps' => $pendingApps,
             'groups' => $groups,
             'statusFilter' => $statusFilter,
             'search' => $search,
@@ -147,6 +194,23 @@ class RetakeGroupController extends Controller
             ];
         });
 
+        // Qabul oynasidagi sanalar — guruh shu vaqtga moslashadi.
+        // Arizalar bir nechta oyna ostida bo'lishi mumkin (turli fakultet/kurs);
+        // shuning uchun majority bo'yicha eng ko'p uchragan oynani olamiz.
+        $windowDates = null;
+        $windowIds = $apps->pluck('group.window_id')->filter();
+        if ($windowIds->isNotEmpty()) {
+            $countByWindow = $windowIds->countBy()->sortDesc();
+            $topWindowId = $countByWindow->keys()->first();
+            $window = \App\Models\RetakeApplicationWindow::find($topWindowId);
+            if ($window) {
+                $windowDates = [
+                    'start_date' => $window->start_date->format('Y-m-d'),
+                    'end_date' => $window->end_date->format('Y-m-d'),
+                ];
+            }
+        }
+
         // O'qituvchilar — barcha aktiv teacher'lar (kelajakda fakultetga moslashtirsa bo'ladi)
         $teachers = Teacher::query()
             ->where('status', true)
@@ -157,6 +221,7 @@ class RetakeGroupController extends Controller
         return response()->json([
             'applications' => $applications,
             'teachers' => $teachers,
+            'windowDates' => $windowDates,
         ]);
     }
 

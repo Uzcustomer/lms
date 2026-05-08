@@ -666,6 +666,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('student-photos')->name('student-photos.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'index'])->name('index');
             Route::get('/pending-ids', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'pendingIds'])->name('pending-ids');
+            Route::post('/bulk-reject-by-ids', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'bulkRejectByIds'])->name('bulk-reject-by-ids');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'reject'])->name('reject');
             Route::post('/{id}/revert', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'revert'])->name('revert');
@@ -816,6 +817,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{windowId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowController::class, 'destroy'])->name('destroy');
         });
 
+        // O'quv bo'limi: Qayta o'qish arizalari (oldindan tasdiqlash)
+        Route::prefix('retake-applications')->name('retake-applications.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'index'])->name('index');
+            Route::post('/{applicationId}/approve', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'approve'])->name('approve');
+            Route::post('/{applicationId}/reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'reject'])->name('reject');
+            Route::post('/bulk-approve', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'bulkApprove'])->name('bulk-approve');
+            Route::post('/bulk-reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'bulkReject'])->name('bulk-reject');
+        });
+
         // O'quv bo'limi: Qayta o'qish guruhlari
         Route::prefix('retake-groups')->name('retake-groups.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'index'])->name('index');
@@ -904,6 +914,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/staff-evaluation/generate-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateAllQr'])->name('staff-evaluation.generate-all-qr');
         Route::post('/staff-evaluation/generate-selected-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateSelectedQr'])->name('staff-evaluation.generate-selected-qr');
         Route::delete('/staff-evaluation/delete-all-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteAllQr'])->name('staff-evaluation.delete-all-qr');
+        Route::post('/staff-evaluation/save-template', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'saveTemplate'])->name('staff-evaluation.save-template');
         Route::get('/staff-evaluation/{teacher}', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'show'])->name('staff-evaluation.show');
         Route::post('/staff-evaluation/{teacher}/generate-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'generateQr'])->name('staff-evaluation.generate-qr');
         Route::delete('/staff-evaluation/{teacher}/delete-qr', [\App\Http\Controllers\Admin\StaffEvaluationController::class, 'deleteQr'])->name('staff-evaluation.delete-qr');

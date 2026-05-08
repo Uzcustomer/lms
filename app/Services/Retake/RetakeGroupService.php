@@ -29,7 +29,7 @@ class RetakeGroupService
         $apps = RetakeApplication::query()
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
-            ->where('academic_dept_status', 'pending')
+            ->where('academic_dept_status', 'approved')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
             ->whereHas('group', function ($q) {
@@ -81,7 +81,7 @@ class RetakeGroupService
             ->whereRaw('LOWER(TRIM(semester_name)) = ?', [$normSemester])
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
-            ->where('academic_dept_status', 'pending')
+            ->where('academic_dept_status', 'approved')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
             ->whereHas('group', function ($q) {
@@ -137,7 +137,7 @@ class RetakeGroupService
             ->whereRaw('LOWER(TRIM(semester_name)) = ?', [$normSemester])
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
-            ->where('academic_dept_status', 'pending')
+            ->where('academic_dept_status', 'approved')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
             ->get();

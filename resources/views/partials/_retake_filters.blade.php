@@ -10,6 +10,15 @@
         $extraQueryFields — boshqa filter fieldlar uchun ['key' => 'value'] (hidden inputs)
         $hiddenFilters — render qilinmasin: ['education_type', 'group', ...]
 --}}
+
+@once
+    {{-- jQuery + Select2 — teacher layoutida yuklanmagan, filtr panel ularga muhtoj. --}}
+    @push('scripts')
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    @endpush
+@endonce
+
 @php
     $hiddenFilters = $hiddenFilters ?? [];
     $extraQueryFields = $extraQueryFields ?? [];

@@ -9,9 +9,12 @@ class AuditRetakeGradeOverflow extends Command
 {
     protected $signature = 'grades:audit-overflow
         {--csv= : CSV faylga eksport qilish (path)}
-        {--limit=0 : Konsolga chiqarilayotgan qatorlar soni (0 = hammasi)}';
+        {--limit=0 : Konsolga chiqarilayotgan qatorlar soni (0 = hammasi)}
+        {--apply : Tuzatishni haqiqatan qo\'llash (default — dry-run)}
+        {--force-yn-locked : YN ga yuborilgan yozuvlarni ham tuzatish}
+        {--backup= : Tuzatishdan oldin original qiymatlarni CSV ga saqlash}';
 
-    protected $description = 'retake_grade > 100 bo\'lgan buzilgan yozuvlarni topish va taklif qilingan to\'g\'ri qiymatlarni ko\'rsatish';
+    protected $description = 'retake_grade > 100 bo\'lgan buzilgan yozuvlarni topish va (ixtiyoriy) tuzatish';
 
     public function handle(): int
     {
@@ -35,6 +38,7 @@ class AuditRetakeGradeOverflow extends Command
                 'sg.grade as original_grade',
                 'sg.retake_grade',
                 'sg.retake_was_sababli',
+                'sg.is_yn_locked',
                 'sg.retake_graded_at',
                 'sg.updated_at',
             ]);
@@ -46,16 +50,22 @@ class AuditRetakeGradeOverflow extends Command
             return self::SUCCESS;
         }
 
-        $report = $rows->map(function ($r) {
-            // Bug: reconcile divided rg by 0.8 va keyin × current_pct qildi.
-            // Demak hozirgi rg = entered / 0.8 (sababli holatda),
-            // ya'ni entered ≈ rg × 0.8.
+        $apply = (bool) $this->option('apply');
+        $forceYnLocked = (bool) $this->option('force-yn-locked');
+
+        $plans = [];        // Tuzatishga tayyor yozuvlar
+        $skippedAnomaly = []; // entered > 100 (mantiqsiz)
+        $skippedYnLocked = []; // YN qulflangan
+
+        foreach ($rows as $r) {
+            // Hozirgi rg = entered / 0.8 (sababli holatda saqlangan).
+            // Ya'ni asl kiritilgan baho ≈ rg × 0.8.
             $likelyEntered = round($r->retake_grade * 0.8, 2);
-            $currentSababliExcuse = $this->checkCurrentSababli($r);
-            $proposedCoeff = $currentSababliExcuse ? 1.0 : 0.8;
+            $currentSababli = $this->checkCurrentSababli($r);
+            $proposedCoeff = $currentSababli ? 1.0 : 0.8;
             $proposedRg = round($likelyEntered * $proposedCoeff, 2);
 
-            return [
+            $entry = [
                 'id' => $r->id,
                 'student' => $r->full_name ?: $r->student_hemis_id,
                 'subject' => mb_strimwidth($r->subject_name ?? '', 0, 28, '…'),
@@ -65,35 +75,115 @@ class AuditRetakeGradeOverflow extends Command
                 'status' => $r->status,
                 'rg' => $r->retake_grade,
                 'flag' => $r->retake_was_sababli === null ? '—' : ($r->retake_was_sababli ? 'true' : 'false'),
-                'now_sababli' => $currentSababliExcuse ? 'true' : 'false',
+                'now_sababli' => $currentSababli ? 'true' : 'false',
                 'entered≈' => $likelyEntered,
                 'proposed_rg' => $proposedRg,
+                '_raw' => $r,
+                '_currentSababli' => $currentSababli,
             ];
-        });
 
-        $limit = (int) $this->option('limit');
-        $tableRows = $limit > 0 ? $report->take($limit)->all() : $report->all();
+            if ($likelyEntered > 100) {
+                $skippedAnomaly[] = $entry;
+                continue;
+            }
 
-        $this->table(
-            ['id', 'student', 'subject', 'date', 'pair', 'reason', 'status', 'rg', 'flag', 'now_sababli', 'entered≈', 'proposed_rg'],
-            $tableRows
-        );
+            if (!empty($r->is_yn_locked) && !$forceYnLocked) {
+                $skippedYnLocked[] = $entry;
+                continue;
+            }
 
+            $plans[] = $entry;
+        }
+
+        // Asosiy reja jadvali
+        $tableHeaders = ['id', 'student', 'subject', 'date', 'pair', 'reason', 'status', 'rg', 'flag', 'now_sababli', 'entered≈', 'proposed_rg'];
+        $stripInternal = fn($e) => array_filter($e, fn($_, $k) => !str_starts_with($k, '_'), ARRAY_FILTER_USE_BOTH);
+
+        if (!empty($plans)) {
+            $this->info("\n=== Tuzatish rejasi (" . count($plans) . " yozuv) ===");
+            $this->table($tableHeaders, array_map($stripInternal, $plans));
+        }
+
+        if (!empty($skippedAnomaly)) {
+            $this->warn("\n⚠ Mantiqsiz yozuvlar (entered > 100, qo'lda tekshirish kerak): " . count($skippedAnomaly));
+            $this->table($tableHeaders, array_map($stripInternal, $skippedAnomaly));
+        }
+
+        if (!empty($skippedYnLocked)) {
+            $this->warn("\n⚠ YN ga yuborilgan yozuvlar (--force-yn-locked bilan kiritish mumkin): " . count($skippedYnLocked));
+            $this->table($tableHeaders, array_map($stripInternal, $skippedYnLocked));
+        }
+
+        // CSV eksport
         if ($csvPath = $this->option('csv')) {
-            $fp = fopen($csvPath, 'w');
-            if (!$fp) {
-                $this->error("CSV ochib bo'lmadi: {$csvPath}");
-                return self::FAILURE;
-            }
-            fputcsv($fp, array_keys($report->first()));
-            foreach ($report as $row) {
-                fputcsv($fp, $row);
-            }
-            fclose($fp);
+            $this->writeCsv($csvPath, array_merge($plans, $skippedAnomaly, $skippedYnLocked), $tableHeaders);
             $this->info("CSV yozildi: {$csvPath}");
         }
 
+        // Backup csv (apply rejimida tavsiya etiladi)
+        if ($backupPath = $this->option('backup')) {
+            $this->writeCsv($backupPath, $plans, $tableHeaders);
+            $this->info("Backup yozildi: {$backupPath}");
+        }
+
+        if (!$apply) {
+            $this->info("\n[DRY-RUN] Hech narsa o'zgartirilmadi. Haqiqiy tuzatish uchun: --apply");
+            $this->info("Tavsiya: --apply bilan birga --backup=/tmp/backup-" . date('Ymd-His') . ".csv ham qo'shing.");
+            return self::SUCCESS;
+        }
+
+        if (empty($plans)) {
+            $this->warn("Tuzatishga yozuv yo'q.");
+            return self::SUCCESS;
+        }
+
+        if (!$this->confirm(count($plans) . " ta yozuv yangilanadi. Davom etamizmi?", false)) {
+            $this->warn("Bekor qilindi.");
+            return self::SUCCESS;
+        }
+
+        $updated = 0;
+        DB::transaction(function () use ($plans, &$updated) {
+            foreach ($plans as $p) {
+                DB::table('student_grades')
+                    ->where('id', $p['id'])
+                    ->update([
+                        'retake_grade' => $p['proposed_rg'],
+                        'retake_was_sababli' => $p['_currentSababli'],
+                        'updated_at' => now(),
+                    ]);
+                $updated++;
+            }
+        });
+
+        $this->info("✓ {$updated} ta yozuv yangilandi.");
+
+        if (!empty($skippedAnomaly)) {
+            $this->warn("Eslatma: " . count($skippedAnomaly) . " ta mantiqsiz yozuv tuzatilmadi — qo'lda ko'rib chiqing.");
+        }
+        if (!empty($skippedYnLocked)) {
+            $this->warn("Eslatma: " . count($skippedYnLocked) . " ta YN qulflangan yozuv tuzatilmadi.");
+        }
+
         return self::SUCCESS;
+    }
+
+    private function writeCsv(string $path, array $rows, array $headers): void
+    {
+        $fp = fopen($path, 'w');
+        if (!$fp) {
+            $this->error("CSV ochib bo'lmadi: {$path}");
+            return;
+        }
+        fputcsv($fp, $headers);
+        foreach ($rows as $row) {
+            $clean = [];
+            foreach ($headers as $h) {
+                $clean[] = $row[$h] ?? '';
+            }
+            fputcsv($fp, $clean);
+        }
+        fclose($fp);
     }
 
     private function checkCurrentSababli($row): bool

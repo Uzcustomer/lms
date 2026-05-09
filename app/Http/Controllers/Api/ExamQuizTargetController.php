@@ -145,10 +145,16 @@ class ExamQuizTargetController extends Controller
         }
 
         $lang = $this->resolveLang($student);
-        $template = (string) config(
-            'services.moodle.quiz_idnumber_template',
-            'YN {yn} ({lang})_{attempt}-urinish'
-        );
+
+        // Per-yn_type template wins (so "oski" -> "OSKI (uzb)..." while
+        // "test" -> "YN test (uzb)..."). Falls back to the single legacy
+        // template so a brand-new yn_type does not silently 500.
+        $perType = (array) config('services.moodle.quiz_idnumber_templates', []);
+        $template = $perType[strtolower($ynType)]
+            ?? (string) config(
+                'services.moodle.quiz_idnumber_template',
+                'YN {yn} ({lang})_{attempt}-urinish'
+            );
 
         return strtr($template, [
             '{yn}' => strtolower($ynType),
@@ -169,14 +175,30 @@ class ExamQuizTargetController extends Controller
         return $this->normalizeLang($group?->education_lang_code ?? 'uz');
     }
 
+    /**
+     * Mirror MoodleExamBookingService::normalizeLang — consult the
+     * services.moodle.lang_map (which already covers HEMIS numeric codes
+     * 11-15 in addition to alpha codes), then fall back to a best-effort
+     * short→long mapping.
+     */
     private function normalizeLang(string $code): string
     {
         $code = strtolower(trim($code));
+        if ($code === '') {
+            return (string) (config('services.moodle.lang_map.uz') ?? 'uzb');
+        }
+        $map = (array) config('services.moodle.lang_map', []);
+        if (isset($map[$code])) {
+            return (string) $map[$code];
+        }
+        if (in_array($code, $map, true)) {
+            return $code;
+        }
         return match ($code) {
             'uz', 'oz', 'uzb' => 'uzb',
             'ru', 'rus' => 'rus',
             'en', 'eng' => 'eng',
-            default => $code !== '' ? $code : 'uzb',
+            default => $code,
         };
     }
 }

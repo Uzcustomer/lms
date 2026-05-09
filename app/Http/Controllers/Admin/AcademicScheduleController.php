@@ -3371,6 +3371,67 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Test markazi: aniq talabaga aniq kompyuter raqamini biriktirish (admin pin).
+     * JIT rejimi (auto_jit) ishlayotgan talabalarga ham qo'llanadi — pinned
+     * yozuv JIT processor tomonidan tegilmaydi.
+     */
+    public function pinComputer(Request $request)
+    {
+        if ($this->isTestCenterReadOnly()) {
+            return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
+        }
+
+        $request->validate([
+            'group_hemis_id' => 'required|string',
+            'subject_id' => 'required|string',
+            'semester_code' => 'required|string',
+            'student_hemis_id' => 'required|string',
+            'yn_type' => 'required|string|in:OSKI,Test',
+            'computer_number' => 'required|integer|min:1',
+        ]);
+
+        $schedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->whereNull('student_hemis_id')
+            ->first();
+        if (!$schedule) {
+            return response()->json(['success' => false, 'message' => 'Jadval topilmadi'], 404);
+        }
+
+        $ynType = strtolower($request->yn_type);
+        $assignment = \App\Models\ComputerAssignment::query()
+            ->where('exam_schedule_id', $schedule->id)
+            ->where('student_hemis_id', $request->student_hemis_id)
+            ->where('yn_type', $ynType)
+            ->whereIn('status', [
+                \App\Models\ComputerAssignment::STATUS_SCHEDULED,
+                \App\Models\ComputerAssignment::STATUS_IN_PROGRESS,
+            ])
+            ->orderBy('planned_start')
+            ->first();
+
+        if (!$assignment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Talaba uchun faol biriktiruv topilmadi. Avval guruh uchun vaqt belgilang.',
+            ], 404);
+        }
+
+        $result = app(\App\Services\AutoAssignService::class)
+            ->pinComputer($assignment, (int) $request->computer_number);
+        if (empty($result['ok'])) {
+            return response()->json(['success' => false, 'message' => $result['reason'] ?? 'Xato'], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'computer_number' => (int) $request->computer_number,
+            'message' => "Kompyuter #{$request->computer_number} talabaga biriktirildi.",
+        ]);
+    }
+
+    /**
      * Test markazi: bitta talaba uchun shaxsiy 2-/3-urinish vaqtini saqlash.
      * Per-student exam_schedules yozuvi (student_hemis_id NOT NULL) yaratiladi yoki yangilanadi.
      * Sana — agar shaxsiy belgilanmagan bo'lsa — guruh darajasidagi resit sanasidan ko'chiriladi.

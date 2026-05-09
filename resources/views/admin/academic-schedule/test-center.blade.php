@@ -312,7 +312,7 @@
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
-                                                        <button type="button" class="auto-assign-btn" onclick="saveTestTime(this, false, true)" style="padding:3px 8px;background:#8b5cf6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Avtomatik random taqsimlash (vaqt + kompyuter)">
+                                                        <button type="button" class="auto-assign-btn" onclick="saveTestTime(this, false, true)" style="padding:3px 8px;background:#8b5cf6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Avtomatik taqsimlash (JIT — kompyuter 5 daqiqa qolganda biriktiriladi)">
                                                             🎲
                                                         </button>
                                                         @endif
@@ -394,6 +394,22 @@
                                                                     <svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                                 </button>
                                                                 @endif
+                                                            </div>
+                                                        @endif
+                                                        @if(!$tcReadOnly && !$stuBlocked)
+                                                            <div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;" title="Aniq kompyuter raqamini biriktirish (admin pin)">
+                                                                <span style="font-size:11px;color:#64748b;">🖥️</span>
+                                                                <input type="number" min="1" class="student-pc-input"
+                                                                       value="{{ $stuRow['pinned_computer'] ?? '' }}"
+                                                                       data-group-hemis-id="{{ $item['group']->group_hemis_id }}"
+                                                                       data-subject-id="{{ $item['subject']->subject_id ?? '' }}"
+                                                                       data-semester-code="{{ $item['subject']->semester_code ?? '' }}"
+                                                                       data-student-hemis-id="{{ $stuRow['hemis_id'] }}"
+                                                                       data-yn-type="{{ $item['yn_type'] ?? '' }}"
+                                                                       placeholder="#"
+                                                                       style="width:55px;padding:2px 4px;border:1px solid #d1d5db;border-radius:5px;font-size:11px;text-align:center;">
+                                                                <button type="button" onclick="pinComputerForStudent(this)"
+                                                                        style="padding:2px 6px;background:#0ea5e9;color:#fff;border:none;border-radius:5px;font-size:10px;cursor:pointer;" title="Kompyuter raqamini biriktirish (pin)">📌</button>
                                                             </div>
                                                         @endif
                                                     </td>
@@ -545,7 +561,7 @@
             var subjectName = input.getAttribute('data-subject-name') || 'Fan';
 
             if (autoRandom === true) {
-                if (!confirm('Avtomatik random rejimda guruh talabalari ' + timeVal + ' dan boshlab bo\'sh kompyuterlarga taqsimlanadi. Davom etamizmi?')) {
+                if (!confirm('JIT (just-in-time) avtomatik rejim:\n\n• Guruh talabalari ' + timeVal + ' dan boshlab vaqt slotlariga taqsimlanadi.\n• Aniq kompyuter raqami har bir talabaga test boshlanishidan ~5 daqiqa oldin random tanlanadi (real bo\'sh kompyuterlar asosida).\n• Talabaga shu paytda Telegram + LMS push xabar yuboriladi.\n\nDavom etamizmi?')) {
                     return;
                 }
             }
@@ -671,6 +687,48 @@
                 btn.disabled = false;
                 btn.style.opacity = '1';
             });
+        }
+
+        // Admin pin: aniq talabaga aniq kompyuter raqamini biriktirish.
+        // JIT taqsimlash ishlayotganda ham pinned yozuvga tegilmaydi.
+        function pinComputerForStudent(btn) {
+            var container = btn.parentElement;
+            var input = container.querySelector('.student-pc-input');
+            var n = parseInt((input.value || '').trim(), 10);
+            if (!n || n < 1) {
+                showToast('Xatolik', 'Kompyuter raqamini kiriting', true);
+                return;
+            }
+            btn.disabled = true; btn.style.opacity = '0.6';
+            var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            fetch('{{ route($routePrefix . ".academic-schedule.test-center.pin-computer") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    group_hemis_id: input.getAttribute('data-group-hemis-id'),
+                    subject_id: input.getAttribute('data-subject-id'),
+                    semester_code: input.getAttribute('data-semester-code'),
+                    student_hemis_id: input.getAttribute('data-student-hemis-id'),
+                    yn_type: input.getAttribute('data-yn-type') || 'Test',
+                    computer_number: n
+                })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    showToast('Saqlandi', 'Kompyuter #' + data.computer_number + ' biriktirildi', false);
+                    btn.style.background = '#16a34a';
+                    setTimeout(function() { btn.style.background = '#0ea5e9'; }, 1500);
+                } else {
+                    showToast('Xatolik', data.message || 'Xatolik yuz berdi', true);
+                }
+            })
+            .catch(function() { showToast('Xatolik', 'Xatolik yuz berdi', true); })
+            .finally(function() { btn.disabled = false; btn.style.opacity = '1'; });
         }
 
         // Dars to'qnashuvi modali — shu guruhning shu sanada/vaqtda darslari mavjud

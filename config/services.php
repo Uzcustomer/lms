@@ -90,7 +90,13 @@ return [
         'reserve_computers_count' => (int) env('MOODLE_RESERVE_COMPUTERS_COUNT', 5),
         // Minutes before planned_start at which the assigned computer number
         // is revealed to the student (and notified via Telegram + LMS push).
+        // Used by the legacy "auto_random" pre-allocated mode.
         'reveal_minutes_before' => (int) env('MOODLE_REVEAL_MINUTES_BEFORE', 15),
+        // JIT (just-in-time) assignment: how many minutes before planned_start
+        // the system picks a real free computer for each pending student and
+        // immediately notifies them. Smaller = harder for neighbors to
+        // collude in advance; larger = more buffer for student to walk in.
+        'jit_assign_minutes_before' => (int) env('MOODLE_JIT_ASSIGN_MINUTES_BEFORE', 5),
         // Total questions in a typical YN quiz; used to estimate when the
         // previous student is "near the end" so the next student can be warned.
         'quiz_total_questions' => (int) env('MOODLE_QUIZ_TOTAL_QUESTIONS', 25),

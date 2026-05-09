@@ -18,15 +18,19 @@ use Illuminate\Support\Facades\Log;
  * Periodic tick (every minute) that drives time-sensitive transitions for
  * computer assignments:
  *
- *   1. Reveal:       send "your computer is #N" once now >= reveal_at.
- *   2. Approaching:  warn the next-in-line student when the current
+ *   1. JIT assign:   for JIT-mode rows whose planned_start is within
+ *                    {jit_assign_minutes_before} minutes, pick a real
+ *                    free computer now and notify the student.
+ *   2. Reveal:       (legacy auto_random) send "your computer is #N"
+ *                    once now >= reveal_at for pre-allocated rows.
+ *   3. Approaching:  warn the next-in-line student when the current
  *                    occupant of the same computer has spent ~80% of
  *                    quiz_duration (≈ question 20 of 25).
- *   3. Ready:        notify the next student once the current one finishes.
- *   4. Overflow:     when planned_start has passed but the previous
+ *   4. Ready:        notify the next student once the current one finishes.
+ *   5. Overflow:     when planned_start has passed but the previous
  *                    occupant is still in_progress, move the new student
  *                    to a reserve computer.
- *   5. No-show:      mark scheduled assignments abandoned if actual_start
+ *   6. No-show:      mark scheduled assignments abandoned if actual_start
  *                    is missing N minutes after planned_start.
  */
 class ExamScheduleTickJob implements ShouldQueue
@@ -42,11 +46,47 @@ class ExamScheduleTickJob implements ShouldQueue
     ): void {
         $now = now();
 
+        $this->processJitAssignment($now, $autoAssign, $notifier);
         $this->processReveal($now, $notifier);
         $this->processFinishedReady($now, $notifier);
         $this->processApproaching($now, $notifier);
         $this->processOverflow($now, $autoAssign, $notifier);
         $this->processNoShow($now);
+    }
+
+    private function processJitAssignment(Carbon $now, AutoAssignService $autoAssign, ExamNotificationService $notifier): void
+    {
+        $jitMinutes = max(1, (int) config('services.moodle.jit_assign_minutes_before', 5));
+
+        $pending = ComputerAssignment::query()
+            ->whereNull('computer_number')
+            ->where('is_pinned', false)
+            ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+            ->where('planned_start', '<=', $now->copy()->addMinutes($jitMinutes))
+            ->where('planned_start', '>=', $now->copy()->subMinutes(30))
+            ->orderBy('planned_start')
+            ->limit(200)
+            ->get();
+
+        foreach ($pending as $a) {
+            try {
+                $picked = $autoAssign->jitAssign($a);
+                if ($picked === null) {
+                    // No primary slot free; try reserve as a last resort.
+                    $reserveNumber = $autoAssign->moveToReserve($a, 'overflow');
+                    if ($reserveNumber === null) {
+                        Log::warning('JIT: no free computer for assignment', ['id' => $a->id]);
+                        continue;
+                    }
+                    $a->refresh();
+                }
+                $a->refresh();
+                $notifier->notifyReveal($a);
+                $a->update(['reveal_notified' => true]);
+            } catch (\Throwable $e) {
+                Log::warning('JIT assignment failed', ['id' => $a->id, 'err' => $e->getMessage()]);
+            }
+        }
     }
 
     private function processReveal(Carbon $now, ExamNotificationService $notifier): void

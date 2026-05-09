@@ -10,23 +10,29 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Auto-assigns randomized time slots and computers for a group's YN exam,
- * keeping a configurable reserve pool of computers free for fallbacks.
+ * Auto-assigns YN exam time slots and (optionally) computers.
  *
- * Strategy: try to fit the whole group into one slot starting at the
- * provided $startTime. If the group is bigger than the available
- * (non-reserve, non-occupied) computers in that slot, students who don't
- * fit roll over to the next slot at $startTime + slot_minutes, and so on
- * (skipping lunch and respecting work hours).
+ * Default mode is JIT (just-in-time): distribute() pre-allocates only the
+ * time slot for each student (computer_number = null) and the actual
+ * computer is picked by ExamScheduleTickJob a few minutes before each
+ * student's planned_start, based on which computers are really free.
+ *
+ * Admin can override JIT for any individual student via pinComputer(),
+ * which commits a specific computer number now (is_pinned = true). The
+ * JIT processor never touches pinned rows.
  */
 class AutoAssignService
 {
     public function __construct() {}
 
     /**
+     * Plan time slots for a whole group; computer numbers stay null and
+     * are filled in JIT by the tick job. Skips lunch and respects work
+     * hours / capacity.
+     *
      * @param string $ynType "test" or "oski"
-     * @param string $startTime "HH:mm" — the earliest slot start for this group
-     * @return array{ok:bool, count?:int, slots?:array<int,array{time:string,students:int,computers:int[]}>, skipped?:bool, reason?:string}
+     * @param string $startTime "HH:mm" — earliest slot start for this group
+     * @return array{ok:bool, count?:int, slots?:array<int,array{time:string,students:int}>, skipped?:bool, reason?:string}
      */
     public function distribute(ExamSchedule $schedule, string $ynType, string $startTime): array
     {
@@ -74,15 +80,10 @@ class AutoAssignService
             return ['ok' => false, 'skipped' => true, 'reason' => 'no students in group'];
         }
 
-        $reservePool = Computer::reservePoolNumbers();
-        $totalComputers = (int) config('services.moodle.total_computers', 60);
-        $allActive = Computer::where('active', true)->pluck('number')->map(fn($n) => (int) $n)->all();
-        if (empty($allActive)) {
-            $allActive = range(1, $totalComputers);
+        $slotCapacity = $this->primaryComputerCount();
+        if ($slotCapacity < 1) {
+            return ['ok' => false, 'skipped' => true, 'reason' => 'no primary computers configured'];
         }
-        $primaryPool = array_values(array_diff($allActive, $reservePool));
-
-        $revealMinutes = max(0, (int) config('services.moodle.reveal_minutes_before', 15));
 
         $slotStart = Carbon::parse($dateStr . ' ' . substr($startTime, 0, 5));
         if ($slotStart->lt($workStart)) {
@@ -95,14 +96,14 @@ class AutoAssignService
         $now = now();
 
         $guard = 0;
-        while (!empty($remaining) && $guard++ < 50) {
+        while (!empty($remaining) && $guard++ < 100) {
             $slotEnd = $slotStart->copy()->addMinutes($slotLength);
 
             if ($slotEnd->gt($workEnd)) {
                 return [
                     'ok' => false,
                     'skipped' => true,
-                    'reason' => "no slot available in working hours; {$students->count()} students, " . count($remaining) . ' unplaced',
+                    'reason' => "no slot available in working hours; " . count($remaining) . ' students unplaced',
                 ];
             }
 
@@ -112,32 +113,42 @@ class AutoAssignService
                 continue;
             }
 
-            $occupied = $this->occupiedComputerNumbers($slotStart, $slotEnd, $schedule->id, $ynType);
-            $availablePrimary = array_values(array_diff($primaryPool, $occupied));
-            shuffle($availablePrimary);
+            // How many other students from OTHER schedules already share this slot?
+            $alreadyBookedHere = ComputerAssignment::query()
+                ->where('planned_end', '>', $slotStart)
+                ->where('planned_start', '<', $slotEnd)
+                ->where(function ($q) use ($schedule, $ynType) {
+                    $q->where('exam_schedule_id', '!=', $schedule->id)
+                        ->orWhere('yn_type', '!=', $ynType);
+                })
+                ->whereIn('status', [
+                    ComputerAssignment::STATUS_SCHEDULED,
+                    ComputerAssignment::STATUS_IN_PROGRESS,
+                ])
+                ->count();
 
-            if (empty($availablePrimary)) {
+            $room = max(0, $slotCapacity - $alreadyBookedHere);
+            if ($room < 1) {
                 $slotStart = $slotEnd->copy();
                 continue;
             }
 
-            $take = array_splice($remaining, 0, count($availablePrimary));
-            $picks = array_slice($availablePrimary, 0, count($take));
-
-            foreach ($take as $i => $student) {
+            $take = array_splice($remaining, 0, $room);
+            foreach ($take as $student) {
                 $createdRows[] = [
                     'exam_schedule_id' => $schedule->id,
                     'student_id_number' => (string) $student->student_id_number,
                     'student_hemis_id' => (string) $student->hemis_id,
                     'yn_type' => $ynType,
-                    'computer_number' => (int) $picks[$i],
+                    'computer_number' => null,
                     'planned_start' => $slotStart->copy(),
                     'planned_end' => $slotEnd->copy(),
-                    'reveal_at' => $slotStart->copy()->subMinutes($revealMinutes),
+                    'reveal_at' => null,
                     'reveal_notified' => false,
                     'approach_notified' => false,
                     'ready_notified' => false,
                     'is_reserve' => false,
+                    'is_pinned' => false,
                     'status' => ComputerAssignment::STATUS_SCHEDULED,
                     'created_at' => $now,
                     'updated_at' => $now,
@@ -147,7 +158,6 @@ class AutoAssignService
             $slotReport[] = [
                 'time' => $slotStart->format('H:i'),
                 'students' => count($take),
-                'computers' => $picks,
             ];
 
             $slotStart = $slotEnd->copy();
@@ -175,7 +185,7 @@ class AutoAssignService
         $timeField = $ynType . '_time';
         $modeField = $ynType . '_assignment_mode';
         $schedule->{$timeField} = $earliest;
-        $schedule->{$modeField} = 'auto_random';
+        $schedule->{$modeField} = 'auto_jit';
         $schedule->save();
 
         return [
@@ -183,6 +193,84 @@ class AutoAssignService
             'count' => count($createdRows),
             'slots' => $slotReport,
         ];
+    }
+
+    /**
+     * Pick a real free computer for a JIT-pending student and commit it.
+     * Returns the chosen computer number on success, null otherwise.
+     *
+     * "Free" means: the computer is active, not in the reserve pool, and
+     * not currently occupied (status != in_progress) by another student
+     * within this assignment's planned window.
+     */
+    public function jitAssign(ComputerAssignment $assignment): ?int
+    {
+        if ($assignment->is_pinned || $assignment->computer_number !== null) {
+            return $assignment->computer_number;
+        }
+
+        $occupied = $this->occupiedComputerNumbers(
+            $assignment->planned_start,
+            $assignment->planned_end,
+            $assignment->exam_schedule_id,
+            $assignment->yn_type,
+            excludeAssignmentId: $assignment->id,
+        );
+
+        $pool = $this->primaryPoolNumbers();
+        $available = array_values(array_diff($pool, $occupied));
+        if (empty($available)) {
+            return null;
+        }
+        shuffle($available);
+        $picked = (int) $available[0];
+
+        $assignment->update([
+            'computer_number' => $picked,
+            'reveal_at' => now(),
+        ]);
+
+        return $picked;
+    }
+
+    /**
+     * Admin pins a specific computer to a specific student. Bypasses JIT.
+     *
+     * @return array{ok:bool, reason?:string}
+     */
+    public function pinComputer(ComputerAssignment $assignment, int $computerNumber): array
+    {
+        $computer = Computer::where('number', $computerNumber)->where('active', true)->first();
+        if (!$computer) {
+            return ['ok' => false, 'reason' => "Kompyuter #{$computerNumber} mavjud emas yoki faol emas."];
+        }
+
+        $occupied = $this->occupiedComputerNumbers(
+            $assignment->planned_start,
+            $assignment->planned_end,
+            $assignment->exam_schedule_id,
+            $assignment->yn_type,
+            excludeAssignmentId: $assignment->id,
+        );
+        if (in_array($computerNumber, $occupied, true)) {
+            return ['ok' => false, 'reason' => "Kompyuter #{$computerNumber} bu vaqt oralig'ida boshqa talabaga band."];
+        }
+
+        $history = $assignment->history ?? [];
+        $history[] = [
+            'at' => now()->toIso8601String(),
+            'reason' => 'admin_pin',
+            'from' => $assignment->computer_number,
+            'to' => $computerNumber,
+        ];
+
+        $assignment->update([
+            'computer_number' => $computerNumber,
+            'is_pinned' => true,
+            'history' => $history,
+        ]);
+
+        return ['ok' => true];
     }
 
     /**
@@ -243,6 +331,7 @@ class AutoAssignService
         $q = ComputerAssignment::query()
             ->where('planned_end', '>', $start)
             ->where('planned_start', '<', $end)
+            ->whereNotNull('computer_number')
             ->where(function ($q) use ($excludeScheduleId, $excludeYnType) {
                 $q->where('exam_schedule_id', '!=', $excludeScheduleId)
                     ->orWhere('yn_type', '!=', $excludeYnType);
@@ -255,5 +344,24 @@ class AutoAssignService
             $q->where('id', '!=', $excludeAssignmentId);
         }
         return $q->pluck('computer_number')->unique()->values()->all();
+    }
+
+    /**
+     * @return int[]
+     */
+    private function primaryPoolNumbers(): array
+    {
+        $reserve = Computer::reservePoolNumbers();
+        $totalConfig = (int) config('services.moodle.total_computers', 60);
+        $allActive = Computer::where('active', true)->pluck('number')->map(fn($n) => (int) $n)->all();
+        if (empty($allActive)) {
+            $allActive = range(1, $totalConfig);
+        }
+        return array_values(array_diff($allActive, $reserve));
+    }
+
+    private function primaryComputerCount(): int
+    {
+        return count($this->primaryPoolNumbers());
     }
 }

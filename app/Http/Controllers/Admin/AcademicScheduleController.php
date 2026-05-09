@@ -295,8 +295,71 @@ class AcademicScheduleController extends Controller
         $allHemisIds = $studentsByGroup->flatten()->pluck('hemis_id')->unique()->values()->toArray();
         $pastDebtsMap = $this->computeStudentPastSemesterDebts($allHemisIds);
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap) {
+        // Aniq signal: qaysi talabaga student_grades'da attempt=2 yoki attempt=3 yozuvi bor.
+        // Bu jurnaldan qo'lda 12a/12b shakliga o'tkazilgan, lekin bahosi hali NULL bo'lgan
+        // talabalarni topish uchun. failed_attempt1 V<60 ga asoslangan, lekin OSKI/Test
+        // baholari bo'sh bo'lsa V hisoblanmaydi.
+        $hasGradeAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $explicitAttemptByStudent = []; // [hemis|subject|sem] => ['attempt2' => bool, 'attempt3' => bool]
+        if ($hasGradeAttemptCol && !empty($allHemisIds)) {
+            try {
+                $rows = DB::table('student_grades')
+                    ->whereIn('student_hemis_id', $allHemisIds)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->whereIn('attempt', [2, 3])
+                    ->whereNull('deleted_at')
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'attempt')
+                    ->distinct()
+                    ->get();
+                foreach ($rows as $r) {
+                    $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    if ((int) $r->attempt === 2) $explicitAttemptByStudent[$k]['attempt2'] = true;
+                    if ((int) $r->attempt === 3) $explicitAttemptByStudent[$k]['attempt3'] = true;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('explicit attempt lookup failed: ' . $e->getMessage());
+            }
+        }
+
+        // "Qatnashmagan" mantiq:
+        //   YN sanasi o'tib, guruhdagi BIROR talabaga OSKI/Test bahosi tushgan bo'lsa,
+        //   demak shu kuni imtihon o'tgan. Bahosi tushmagan talaba — qatnashmagan,
+        //   shu sababli avtomatik 2-urinishga o'tkaziladi.
+        // Bu yerda: (group|subject|sem) bo'yicha attempt=1 baholari mavjud talabalar ro'yxati.
+        $attempt1OskiByKey = []; // group|subj|sem => [hemis_id => true]
+        $attempt1TestByKey = [];
+        if (!empty($allHemisIds)) {
+            try {
+                $q = DB::table('student_grades as sg')
+                    ->whereIn('sg.student_hemis_id', $allHemisIds)
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->whereNotNull('sg.grade')
+                    ->whereNull('sg.deleted_at');
+                if ($hasGradeAttemptCol) {
+                    $q->where(function ($qq) {
+                        $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                    });
+                }
+                $rows = $q->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.training_type_code', 'sg.student_hemis_id')
+                    ->distinct()
+                    ->get();
+                foreach ($rows as $r) {
+                    $k = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    if ((int) $r->training_type_code === 101) {
+                        $attempt1OskiByKey[$k][$r->student_hemis_id] = true;
+                    } elseif ((int) $r->training_type_code === 102) {
+                        $attempt1TestByKey[$k][$r->student_hemis_id] = true;
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('attempt1 grade lookup failed: ' . $e->getMessage());
+            }
+        }
+        $today = now()->toDateString();
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
@@ -304,11 +367,31 @@ class AcademicScheduleController extends Controller
                 $statusByStudent = $studentStatus[$statusKey] ?? [];
                 $studentList = $studentsByGroup->get($gHid, collect());
 
+                // Guruhning OSKI/Test sanasi (asosiy schedule, student_hemis_id NULL)
+                $groupOskiDate = null;
+                $groupTestDate = null;
+                $groupKeyMain = $gHid . '|' . $subjectId . '|' . $semCode;
+                $oskiGradeMap = $attempt1OskiByKey[$groupKeyMain] ?? [];
+                $testGradeMap = $attempt1TestByKey[$groupKeyMain] ?? [];
+                // exam_schedules'dagi sanalar — item ichidan olamiz
+                $groupOskiDate = $item['oski_date'] ?? null;
+                $groupTestDate = $item['test_date'] ?? null;
+                $oskiPassed = $groupOskiDate && $groupOskiDate < $today && !empty($oskiGradeMap);
+                $testPassed = $groupTestDate && $groupTestDate < $today && !empty($testGradeMap);
+
                 $rows = [];
                 foreach ($studentList as $stu) {
                     $key = $gHid . '|' . $subjectId . '|' . $semCode . '|' . $stu->hemis_id;
                     $perRow = $perStudentMap[$key] ?? null;
                     $stat = $statusByStudent[$stu->hemis_id] ?? ['failed1' => false, 'failed2' => false, 'pullik' => false, 'held_back' => false];
+                    // Talaba qatnashmaganmi: guruhda imtihon o'tgan (boshqalar baho olgan)
+                    // lekin shu talabaga baho tushmagan — qatnashmagan, 2-urinishga o'tkaziladi
+                    $missedOski = $oskiPassed && empty($oskiGradeMap[$stu->hemis_id]);
+                    $missedTest = $testPassed && empty($testGradeMap[$stu->hemis_id]);
+                    $didNotAttend = $missedOski || $missedTest;
+                    $explicitKey = $stu->hemis_id . '|' . $subjectId . '|' . $semCode;
+                    $hasAttempt2 = !empty($explicitAttemptByStudent[$explicitKey]['attempt2']);
+                    $hasAttempt3 = !empty($explicitAttemptByStudent[$explicitKey]['attempt3']);
                     // [DEBUG] Vaqtinchalik — BAHOROV (5634) ning Bolalar xirurgiyasi (260) status
                     if ((int) $stu->hemis_id === 5634 && (int) $subjectId === 260) {
                         \Log::info('DBG_BAHOROV', [
@@ -319,6 +402,13 @@ class AcademicScheduleController extends Controller
                         ]);
                     }
                     $pastDebts = $pastDebtsMap[$stu->hemis_id] ?? [];
+                    // Yagona "1-urinishdan o'tmadi" signali — quyidagilardan biri:
+                    //   - V<60 (failed_attempt1)
+                    //   - Pullik
+                    //   - Imtihon kuni qatnashmagan (boshqalar baho olgan, talabaga yo'q)
+                    //   - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
+                    $effectiveFailed1 = $stat['failed1'] || $didNotAttend || $hasAttempt2;
+                    $effectiveFailed2 = $stat['failed2'] || $hasAttempt3;
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'student_id_number' => $stu->student_id_number ?? null,
@@ -331,8 +421,11 @@ class AcademicScheduleController extends Controller
                         'test_resit_time' => $perRow?->test_resit_time,
                         'test_resit2_date' => $perRow?->test_resit2_date?->format('Y-m-d'),
                         'test_resit2_time' => $perRow?->test_resit2_time,
-                        'failed_attempt1' => $stat['failed1'],
-                        'failed_attempt2' => $stat['failed2'],
+                        'failed_attempt1' => $effectiveFailed1,
+                        'failed_attempt2' => $effectiveFailed2,
+                        'did_not_attend' => $didNotAttend,
+                        'has_attempt2_grade' => $hasAttempt2,
+                        'has_attempt3_grade' => $hasAttempt3,
                         'is_pullik' => $stat['pullik'],
                         'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
@@ -3848,6 +3941,7 @@ class AcademicScheduleController extends Controller
         // Null/null yozuvlar (NB placeholderlar) inobatga olinmaydi.
         // Guruh bo'yicha alohida filterlanadi (chunki har item alohida guruh).
         $needsByKey = [];
+        $attemptExistsByKey = []; // Aniq signal: attempt=N yozuv mavjud (qo'lda 12a/12b ga o'tkazilgan)
         try {
             $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
 
@@ -3883,11 +3977,51 @@ class AcademicScheduleController extends Controller
                     $needsByKey[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att] = (int) $r->c;
                 }
             }
+
+            // Qo'shimcha aniq signal: agar talaba allaqachon attempt=N (yoki katta)
+            // yozuviga ega bo'lsa (qo'lda 12a/12b ga o'tkazilgan, OSKI/Test bahosi NULL bo'lsa ham),
+            // baho<60 so'rovi uni topmaydi. Shuning uchun attempt=N mavjudligini ham
+            // alohida saqlab, suppress qilmaslik uchun ishlatamiz.
+            if ($hasAttemptCol) {
+                foreach ([2, 3] as $att) {
+                    $rows = DB::table('student_grades as sg')
+                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                        ->whereNull('sg.deleted_at')
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->where('sg.attempt', $att)
+                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
+                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                        ->get();
+                    foreach ($rows as $r) {
+                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
+                        $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
+                        $attemptExistsByKey[$key] = (int) $r->c;
+                    }
+                }
+            }
+
+            // yn_submissions.attempt — agar talaba 12a/12b shakliga o'tkazilgan bo'lsa
+            if (\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
+                foreach ([2, 3] as $att) {
+                    $rows = DB::table('yn_submissions as yns')
+                        ->where('yns.attempt', $att)
+                        ->select('yns.group_hemis_id as group_id', 'yns.subject_id', 'yns.semester_code', DB::raw('1 as c'))
+                        ->groupBy('yns.group_hemis_id', 'yns.subject_id', 'yns.semester_code')
+                        ->get();
+                    foreach ($rows as $r) {
+                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
+                        if (!isset($needsByKey[$key])) {
+                            $needsByKey[$key] = 1;
+                        }
+                        $attemptExistsByKey[$key] = $attemptExistsByKey[$key] ?? 1;
+                    }
+                }
+            }
         } catch (\Throwable $e) {
             \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
         }
 
-        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey) {
+        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey) {
             $expanded = collect();
             foreach ($items as $item) {
                 $groupHid = $item['group']->group_hemis_id ?? '';
@@ -3906,10 +4040,13 @@ class AcademicScheduleController extends Controller
                 // 2-urinish — FAQAT mavjud yoki haqiqatan kerakli (yiqilgan talabalar bor)
                 $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
                 $needs2 = isset($needsByKey[$needsKeyBase . '|2']);
+                $explicit2 = isset($attemptExistsByKey[$needsKeyBase . '|2']);
                 // Agar attachStudentsToSchedule talabalarni biriktirgan bo'lsa,
                 // ularning haqiqiy failed_attempt1 statusi bilan moslash —
                 // student_grades'dagi xom baholar pullik/qayta baholash bilan farq qilishi mumkin.
-                if ($needs2 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
+                // FAQAT explicit signal yo'q bo'lsa suppress qilamiz (attempt=2 yozuvi bor bo'lsa,
+                // qo'lda 12a ga o'tkazilgan demak — har doim ko'rsatamiz).
+                if ($needs2 && !$explicit2 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
                     $hasActuallyFailed1 = false;
                     foreach ($item['students'] as $stu) {
                         if (!empty($stu['failed_attempt1'])) {
@@ -3936,7 +4073,8 @@ class AcademicScheduleController extends Controller
                 // 3-urinish — FAQAT mavjud yoki haqiqatan kerakli (12a yiqilganlar bor)
                 $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
                 $needs3 = isset($needsByKey[$needsKeyBase . '|3']);
-                if ($needs3 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
+                $explicit3 = isset($attemptExistsByKey[$needsKeyBase . '|3']);
+                if ($needs3 && !$explicit3 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
                     $hasActuallyFailed2 = false;
                     foreach ($item['students'] as $stu) {
                         if (!empty($stu['failed_attempt2'])) {

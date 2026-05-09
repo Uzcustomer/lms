@@ -3873,6 +3873,21 @@ class AcademicScheduleController extends Controller
                 // 2-urinish — FAQAT mavjud yoki haqiqatan kerakli (yiqilgan talabalar bor)
                 $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
                 $needs2 = isset($needsByKey[$needsKeyBase . '|2']);
+                // Agar attachStudentsToSchedule talabalarni biriktirgan bo'lsa,
+                // ularning haqiqiy failed_attempt1 statusi bilan moslash —
+                // student_grades'dagi xom baholar pullik/qayta baholash bilan farq qilishi mumkin.
+                if ($needs2 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
+                    $hasActuallyFailed1 = false;
+                    foreach ($item['students'] as $stu) {
+                        if (!empty($stu['failed_attempt1'])) {
+                            $hasActuallyFailed1 = true;
+                            break;
+                        }
+                    }
+                    if (!$hasActuallyFailed1) {
+                        $needs2 = false;
+                    }
+                }
                 $show2 = $has2Data || $needs2;
 
                 $row2 = null;
@@ -3888,6 +3903,18 @@ class AcademicScheduleController extends Controller
                 // 3-urinish — FAQAT mavjud yoki haqiqatan kerakli (12a yiqilganlar bor)
                 $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
                 $needs3 = isset($needsByKey[$needsKeyBase . '|3']);
+                if ($needs3 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
+                    $hasActuallyFailed2 = false;
+                    foreach ($item['students'] as $stu) {
+                        if (!empty($stu['failed_attempt2'])) {
+                            $hasActuallyFailed2 = true;
+                            break;
+                        }
+                    }
+                    if (!$hasActuallyFailed2) {
+                        $needs3 = false;
+                    }
+                }
                 $show3 = $has3Data || $needs3;
 
                 $row3 = null;

@@ -122,6 +122,22 @@ return [
             'MOODLE_QUIZ_IDNUMBER_TEMPLATE',
             'YN {yn} ({lang})_{attempt}-urinish'
         ),
+        // Per-yn_type override. The default template above is what
+        // local_hemisexport_book_group_exam writes for *test* quizzes
+        // (HEMIS YN test rounds). OSKI quizzes were named without the
+        // "YN " prefix and with the type uppercased ("OSKI (uzb)_..."),
+        // so they need a separate template. Add new entries here if a
+        // future yn_type follows yet another convention.
+        'quiz_idnumber_templates' => [
+            'oski' => env(
+                'MOODLE_QUIZ_IDNUMBER_TEMPLATE_OSKI',
+                'OSKI ({lang})_{attempt}-urinish'
+            ),
+            'test' => env(
+                'MOODLE_QUIZ_IDNUMBER_TEMPLATE_TEST',
+                'YN test ({lang})_{attempt}-urinish'
+            ),
+        ],
         // HEMIS educationLang.code → Moodle quiz_idnumber language token.
         // HEMIS uses both alpha (uz/ru/en) and numeric codes (11/12/13/14/15).
         'lang_map' => [

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\ExamAccessCheckController;
 use App\Http\Controllers\Api\ExamLayoutController;
+use App\Http\Controllers\Api\ExamQuizTargetController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -41,6 +42,13 @@ Route::post('/exam-access-check', [ExamAccessCheckController::class, 'check'])
 Route::post('/exam-layout-today', [ExamLayoutController::class, 'today'])
     ->middleware('throttle:60,1')
     ->name('api.moodle.exam-layout-today');
+
+// Moodle auth_faceid plugin → after a successful FaceID login, asks the
+// LMS whether this student has an active YN slot right now and, if so,
+// which Moodle quiz idnumber to redirect them to.
+Route::post('/exam-quiz-target', [ExamQuizTargetController::class, 'target'])
+    ->middleware('throttle:120,1')
+    ->name('api.moodle.exam-quiz-target');
 
 /*
 |--------------------------------------------------------------------------

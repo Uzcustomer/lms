@@ -85,6 +85,37 @@ return [
         'quiz_duration_minutes' => (int) env('MOODLE_QUIZ_DURATION_MINUTES', 25),
         // Buffer between two students sharing the same computer (in minutes)
         'computer_buffer_minutes' => (int) env('MOODLE_COMPUTER_BUFFER_MINUTES', 5),
+        // Number of computers reserved as a backup pool (excluded from primary
+        // assignment and used for overflow / no-show / broken-PC fallbacks).
+        'reserve_computers_count' => (int) env('MOODLE_RESERVE_COMPUTERS_COUNT', 5),
+        // Minutes before planned_start at which the assigned computer number
+        // is revealed to the student (and notified via Telegram + LMS push).
+        // Used by the legacy "auto_random" pre-allocated mode.
+        'reveal_minutes_before' => (int) env('MOODLE_REVEAL_MINUTES_BEFORE', 15),
+        // JIT (just-in-time) assignment: how many minutes before planned_start
+        // the system picks a real free computer for each pending student and
+        // immediately notifies them. Smaller = harder for neighbors to
+        // collude in advance; larger = more buffer for student to walk in.
+        'jit_assign_minutes_before' => (int) env('MOODLE_JIT_ASSIGN_MINUTES_BEFORE', 5),
+        // Total questions in a typical YN quiz; used to estimate when the
+        // previous student is "near the end" so the next student can be warned.
+        'quiz_total_questions' => (int) env('MOODLE_QUIZ_TOTAL_QUESTIONS', 25),
+        // Trigger "prepare to enter" notification to the next student once the
+        // current student has spent this fraction of their attempt time.
+        // 0.80 of 25 min ≈ minute 20 ≈ question 20 of 25.
+        'quiz_warn_progress_ratio' => (float) env('MOODLE_QUIZ_WARN_PROGRESS_RATIO', 0.80),
+        // IP prefix used to derive computer number from student request IP
+        // (e.g. "196.168.7." → 196.168.7.103 maps to computer #3).
+        'computer_ip_prefix' => env('MOODLE_COMPUTER_IP_PREFIX', '196.168.7.'),
+        // Last octet offset: computer #N has IP {prefix}{N + offset}.
+        // E.g. with offset=100, computer #3 → 196.168.7.103.
+        'computer_ip_offset' => (int) env('MOODLE_COMPUTER_IP_OFFSET', 100),
+        // Auto-assign overflow detection: a student is moved to a reserve
+        // computer when the previous slot has run over by this many minutes.
+        'overflow_grace_minutes' => (int) env('MOODLE_OVERFLOW_GRACE_MINUTES', 0),
+        // No-show detection: mark assignment abandoned if actual_start is
+        // missing this many minutes after planned_start.
+        'no_show_minutes' => (int) env('MOODLE_NO_SHOW_MINUTES', 5),
         // Quiz idnumber template. Placeholders: {yn} (lowercase: test/oski),
         // {YN} (uppercase), {lang} (uzb/rus/eng), {attempt} (1).
         'quiz_idnumber_template' => env(

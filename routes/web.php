@@ -780,6 +780,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
+            Route::post('/test-center/pin-computer', [AcademicScheduleController::class, 'pinComputer'])->name('test-center.pin-computer');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
@@ -1016,6 +1017,10 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
         Route::post('/profile-my/update-contact', [StudentController::class, 'updateContact'])->name('profile.update-contact');
         Route::get('/exam-schedule', [StudentController::class, 'examSchedule'])->name('exam-schedule');
+        Route::get('/exam/status', [\App\Http\Controllers\Student\StartExamController::class, 'status'])->name('exam.status');
+        Route::post('/exam/start', [\App\Http\Controllers\Student\StartExamController::class, 'start'])
+            ->middleware('enforce.assigned.computer')
+            ->name('exam.start');
 
         // Xizmatlar sahifasi
         Route::get('/services', function () {
@@ -1347,6 +1352,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
+            Route::post('/test-center/pin-computer', [AcademicScheduleController::class, 'pinComputer'])->name('test-center.pin-computer');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');

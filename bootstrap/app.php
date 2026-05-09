@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
             'nazoratchi.readonly' => \App\Http\Middleware\NazoratchiReadOnly::class,
+            'enforce.assigned.computer' => \App\Http\Middleware\EnforceAssignedComputer::class,
         ]);
 
         // Nazoratchi rolida ishlayotgan har qanday foydalanuvchi uchun yozish
@@ -73,6 +74,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
+
+        // YN test markazi: har minutda — kompyuter raqamini ochish, "tayyorlaning",
+        // "kirsangiz bo'ladi", overflow → zahira, no-show holatlari.
+        $schedule->job(new \App\Jobs\ExamScheduleTickJob())->everyMinute()->withoutOverlapping(2);
 
         // Qayta o'qish: muddati o'tgan oynalardagi pending arizalar avtomatik
         // rad ETILMAYDI. Dekan/Registrator/O'quv bo'limi qo'lda tasdiqlaydi

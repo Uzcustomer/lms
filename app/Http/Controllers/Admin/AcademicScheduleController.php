@@ -271,7 +271,7 @@ class AcademicScheduleController extends Controller
         $studentsByGroup = DB::table('students')
             ->whereIn('group_id', $allGroupHemisIds)
             ->where('student_status_code', 11)
-            ->select('hemis_id', 'full_name', 'group_id')
+            ->select('hemis_id', 'student_id_number', 'full_name', 'group_id')
             ->orderBy('full_name')
             ->get()
             ->groupBy('group_id');
@@ -321,6 +321,7 @@ class AcademicScheduleController extends Controller
                     $pastDebts = $pastDebtsMap[$stu->hemis_id] ?? [];
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
+                        'student_id_number' => $stu->student_id_number ?? null,
                         'full_name' => $stu->full_name,
                         'oski_resit_date' => $perRow?->oski_resit_date?->format('Y-m-d'),
                         'oski_resit_time' => $perRow?->oski_resit_time,
@@ -3441,11 +3442,11 @@ class AcademicScheduleController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('YN kunlari');
 
-        $headers = ['#', 'Guruh', "Yo'nalish", 'Fan', 'Kredit', 'Yopilish shakli', 'Urinish', 'OSKI sanasi', 'Test sanasi', 'Talaba FISH', 'Talaba HEMIS ID', 'Qarzlar soni', 'Izoh (qarz fanlari)'];
+        $headers = ['#', 'Guruh', "Yo'nalish", 'Fan', 'Kredit', 'Yopilish shakli', 'Urinish', 'OSKI sanasi', 'Test sanasi', 'Talaba FISH', 'Talaba ID', 'Holat', 'Qarzlar soni', 'Izoh (qarz fanlari)'];
         foreach ($headers as $i => $h) {
             $sheet->setCellValue([$i + 1, 1], $h);
         }
-        $sheet->getStyle('A1:M1')->applyFromArray([
+        $sheet->getStyle('A1:N1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2B5EA7']],
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
@@ -3480,6 +3481,7 @@ class AcademicScheduleController extends Controller
                 $sheet->setCellValue([11, $rowNum], '');
                 $sheet->setCellValue([12, $rowNum], '');
                 $sheet->setCellValue([13, $rowNum], '');
+                $sheet->setCellValue([14, $rowNum], '');
                 $rowNum++;
 
                 // Per-student qatorlar
@@ -3515,6 +3517,14 @@ class AcademicScheduleController extends Controller
                         }
                         $stuDebtNote = implode('; ', $stuDebtParts);
 
+                        // Holat: pullik / 4+ qarz (kursdan qoldirilgan)
+                        $stuIsHeldBack = !empty($stu['is_held_back']) || $stuDebtCount >= 4;
+                        $stuIsPullik = !empty($stu['is_pullik']);
+                        $statusParts = [];
+                        if ($stuIsHeldBack) $statusParts[] = '4 tadan ortiq qarz';
+                        if ($stuIsPullik) $statusParts[] = 'Pullik';
+                        $statusLabel = implode(' / ', $statusParts);
+
                         $sheet->setCellValue([1, $rowNum], '');
                         $sheet->setCellValue([2, $rowNum], $item['group']->name ?? '');
                         $sheet->setCellValue([3, $rowNum], $item['specialty_name'] ?? ($item['group']->specialty_name ?? ''));
@@ -3525,21 +3535,29 @@ class AcademicScheduleController extends Controller
                         $sheet->setCellValue([8, $rowNum], $fmt($stuOski));
                         $sheet->setCellValue([9, $rowNum], $fmt($stuTest));
                         $sheet->setCellValue([10, $rowNum], $stu['full_name'] ?? '');
-                        $sheet->setCellValue([11, $rowNum], $stu['hemis_id'] ?? '');
-                        $sheet->setCellValue([12, $rowNum], $stuDebtCount);
-                        $sheet->setCellValue([13, $rowNum], $stuDebtNote);
+                        $sheet->setCellValueExplicit([11, $rowNum], (string) ($stu['student_id_number'] ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                        $sheet->setCellValue([12, $rowNum], $statusLabel);
+                        $sheet->setCellValue([13, $rowNum], $stuDebtCount);
+                        $sheet->setCellValue([14, $rowNum], $stuDebtNote);
 
                         // Per-student qatorni vizual ajratish (kulrang fon)
-                        $sheet->getStyle("A{$rowNum}:M{$rowNum}")->applyFromArray([
+                        $sheet->getStyle("A{$rowNum}:N{$rowNum}")->applyFromArray([
                             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
                             'font' => ['italic' => true, 'size' => 10, 'color' => ['rgb' => '475569']],
                         ]);
-                        $sheet->getStyle("M{$rowNum}")->getAlignment()->setWrapText(true);
+                        $sheet->getStyle("N{$rowNum}")->getAlignment()->setWrapText(true);
                         // Qarz soni > 0 bo'lsa, yacheykani qizg'ish rangda ajratish
                         if ($stuDebtCount > 0) {
-                            $sheet->getStyle("L{$rowNum}")->applyFromArray([
+                            $sheet->getStyle("M{$rowNum}")->applyFromArray([
                                 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEF3C7']],
                                 'font' => ['bold' => true, 'color' => ['rgb' => '92400E']],
+                            ]);
+                        }
+                        // Holat to'lgan bo'lsa, qizil rangda ajratish
+                        if ($statusLabel !== '') {
+                            $sheet->getStyle("L{$rowNum}")->applyFromArray([
+                                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
+                                'font' => ['bold' => true, 'color' => ['rgb' => '991B1B']],
                             ]);
                         }
                         $rowNum++;
@@ -3548,20 +3566,20 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $widths = [5, 18, 30, 35, 8, 18, 12, 14, 14, 28, 14, 11, 60];
+        $widths = [5, 18, 30, 35, 8, 18, 12, 14, 14, 28, 14, 22, 11, 60];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = $rowNum - 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['rgb' => 'E2E8F0']]],
                 'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
             ]);
             $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("G2:I{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("L2:L{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("M2:M{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
         }
 
         $sheet->freezePane('A2');

@@ -1907,6 +1907,7 @@ class AcademicScheduleController extends Controller
 
         DB::beginTransaction();
         $bookingsToDispatch = [];
+        $autoDistributeToDispatch = [];
         try {
             foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
@@ -2081,12 +2082,27 @@ class AcademicScheduleController extends Controller
                 if ($testDateChanged && $newTestDate && !$newTestNa && $record->test_time) {
                     $bookingsToDispatch[] = [$record->id, 'test'];
                 }
+
+                // Date set without an explicit time → auto-distribute via JIT.
+                // The job uses work_hours_start from settings, splits the
+                // group across slots, and triggers Moodle booking once
+                // distribute() persists the earliest slot as test_time.
+                if ($oskiDateChanged && $newOskiDate && !$newOskiNa && empty($record->oski_time)) {
+                    $autoDistributeToDispatch[] = [$record->id, 'oski'];
+                }
+                if ($testDateChanged && $newTestDate && !$newTestNa && empty($record->test_time)) {
+                    $autoDistributeToDispatch[] = [$record->id, 'test'];
+                }
             }
             DB::commit();
 
             foreach ($bookingsToDispatch as [$id, $yn]) {
                 AssignComputersJob::dispatch($id, $yn);
                 BookMoodleGroupExam::dispatch($id, $yn);
+            }
+            foreach ($autoDistributeToDispatch ?? [] as [$id, $yn]) {
+                \App\Jobs\AutoDistributeOnDateSetJob::dispatch($id, $yn);
+                BookMoodleGroupExam::dispatch($id, $yn)->delay(now()->addSeconds(15));
             }
 
             return redirect()->back()->with('success', 'Imtihon sanalari muvaffaqiyatli saqlandi!');

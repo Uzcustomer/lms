@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ExamAccessCheckController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -26,6 +27,13 @@ Route::post('/sync-photos-to-moodle', [MoodlePhotoSyncController::class, 'syncPh
 Route::post('/moodle-descriptor-confirmed', [MoodleDescriptorCallbackController::class, 'confirm'])
     ->middleware('throttle:30,1')
     ->name('api.moodle.descriptor-confirmed');
+
+// Moodle quizaccess_lmsguard plugin → LMS pre-attempt check. Verifies the
+// student's IP matches the computer assigned to them and the slot is
+// active. Same X-SYNC-SECRET shared secret as the other Moodle callbacks.
+Route::post('/exam-access-check', [ExamAccessCheckController::class, 'check'])
+    ->middleware('throttle:120,1')
+    ->name('api.moodle.exam-access-check');
 
 /*
 |--------------------------------------------------------------------------

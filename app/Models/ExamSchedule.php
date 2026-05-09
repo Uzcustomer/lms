@@ -41,6 +41,8 @@ class ExamSchedule extends Model
         'test_moodle_synced_at',
         'test_moodle_response',
         'test_moodle_error',
+        'test_assignment_mode',
+        'oski_assignment_mode',
     ];
 
     protected $casts = [

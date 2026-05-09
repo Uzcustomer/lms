@@ -1016,6 +1016,10 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
         Route::post('/profile-my/update-contact', [StudentController::class, 'updateContact'])->name('profile.update-contact');
         Route::get('/exam-schedule', [StudentController::class, 'examSchedule'])->name('exam-schedule');
+        Route::get('/exam/status', [\App\Http\Controllers\Student\StartExamController::class, 'status'])->name('exam.status');
+        Route::post('/exam/start', [\App\Http\Controllers\Student\StartExamController::class, 'start'])
+            ->middleware('enforce.assigned.computer')
+            ->name('exam.start');
 
         // Xizmatlar sahifasi
         Route::get('/services', function () {

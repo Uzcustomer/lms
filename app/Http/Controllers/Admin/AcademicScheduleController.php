@@ -3282,9 +3282,24 @@ class AcademicScheduleController extends Controller
         // bron qilish bosqichi alohida ko'rib chiqiladi.
         $ynKey = $ynType === 'OSKI' ? 'oski' : 'test';
         $naFlag = $ynKey === 'oski' ? $examSchedule->oski_na : $examSchedule->test_na;
+        $autoRandom = $request->boolean('auto_random');
         if ($attempt === 1 && $relatedDate && !$naFlag) {
-            AssignComputersJob::dispatch($examSchedule->id, $ynKey);
-            BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
+            if ($autoRandom) {
+                $auto = app(\App\Services\AutoAssignService::class)
+                    ->distribute($examSchedule, $ynKey, $request->test_time);
+                if (empty($auto['ok'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Avtomatik taqsimlashda xato: ' . ($auto['reason'] ?? 'noma\'lum'),
+                    ], 422);
+                }
+                BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
+            } else {
+                $modeField = $ynKey . '_assignment_mode';
+                $examSchedule->update([$modeField => 'manual']);
+                AssignComputersJob::dispatch($examSchedule->id, $ynKey);
+                BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
+            }
         }
 
         // Shu guruhdagi Telegram tasdiqlangan talabalarga notification yuborish

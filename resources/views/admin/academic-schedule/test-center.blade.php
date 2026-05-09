@@ -312,6 +312,9 @@
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
+                                                        <button type="button" class="auto-assign-btn" onclick="saveTestTime(this, false, true)" style="padding:3px 8px;background:#8b5cf6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Avtomatik random taqsimlash (vaqt + kompyuter)">
+                                                            🎲
+                                                        </button>
                                                         @endif
                                                         @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
                                                             <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
@@ -524,12 +527,12 @@
             input.value = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
         }
 
-        function saveTestTime(btn, force) {
+        function saveTestTime(btn, force, autoRandom) {
             var container = btn.parentElement;
             var input = container.querySelector('.test-time-input');
             var timeVal = input.value.trim();
             if (!timeVal) {
-                showToast('Xatolik', 'Iltimos, vaqtni kiriting', true);
+                showToast('Xatolik', 'Iltimos, boshlang\'ich vaqtni kiriting (auto rejimda ham)', true);
                 return;
             }
 
@@ -540,6 +543,12 @@
             }
 
             var subjectName = input.getAttribute('data-subject-name') || 'Fan';
+
+            if (autoRandom === true) {
+                if (!confirm('Avtomatik random rejimda guruh talabalari ' + timeVal + ' dan boshlab bo\'sh kompyuterlarga taqsimlanadi. Davom etamizmi?')) {
+                    return;
+                }
+            }
 
             btn.disabled = true;
             btn.style.opacity = '0.6';
@@ -560,7 +569,8 @@
                     attempt: parseInt(input.getAttribute('data-attempt') || '1', 10),
                     test_time: timeVal,
                     yn_submitted: input.getAttribute('data-yn-submitted') === '1',
-                    force: force === true
+                    force: force === true,
+                    auto_random: autoRandom === true
                 })
             })
             .then(function(resp) { return resp.json(); })

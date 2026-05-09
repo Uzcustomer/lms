@@ -275,8 +275,13 @@ class AcademicScheduleController extends Controller
         // kim "yiqilgan" va kim "pullik" ekanligini bilish uchun.
         $studentStatus = $this->computeStudentAttemptStatuses($scheduleData);
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus) {
+        // O'tgan semestrlardagi qarz fanlari ro'yxatini hisoblash
+        // (>4 qarzdorlar menyusidagi logika asosida — academic_records'da yo'q fanlar)
+        $allHemisIds = $studentsByGroup->flatten()->pluck('hemis_id')->unique()->values()->toArray();
+        $pastDebtsMap = $this->computeStudentPastSemesterDebts($allHemisIds);
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
@@ -298,6 +303,7 @@ class AcademicScheduleController extends Controller
                             'is_pullik_will_be' => $stat['pullik'],
                         ]);
                     }
+                    $pastDebts = $pastDebtsMap[$stu->hemis_id] ?? [];
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'full_name' => $stu->full_name,
@@ -309,12 +315,175 @@ class AcademicScheduleController extends Controller
                         'failed_attempt2' => $stat['failed2'],
                         'is_pullik' => $stat['pullik'],
                         'is_held_back' => $stat['held_back'] ?? false,
+                        'past_debts' => $pastDebts,
                     ];
                 }
                 $item['students'] = $rows;
                 return $item;
             });
         });
+    }
+
+    /**
+     * Talabalarning o'tgan semestrlardagi qarz fanlari ro'yxati.
+     * "Qarz" = curriculum_subjects'da bor lekin academic_records'da yozuvi yo'q fanlar.
+     * Joriy semestr KIRITILMAYDI — joriy semestrdagi "qarz" status jurnal asosida
+     * (failed_attempt1 flagi orqali) alohida hisoblanadi.
+     *
+     * @param array $studentHemisIds
+     * @return array [hemis_id => [['subject_name' => ..., 'semester_name' => ..., 'semester_code' => ...], ...]]
+     */
+    private function computeStudentPastSemesterDebts(array $studentHemisIds): array
+    {
+        if (empty($studentHemisIds)) return [];
+
+        $result = [];
+
+        // Talaba ma'lumotlari (curriculum + joriy semestr)
+        $students = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->whereNotNull('curriculum_id')
+            ->select('hemis_id', 'curriculum_id', 'semester_code', 'group_name')
+            ->get();
+        if ($students->isEmpty()) return [];
+
+        // Har bir talabaning academic_records yozuvlari (qarz emasligini bilish uchun)
+        // va tarixiy curriculum_id (transferdan keyingi rejani topish uchun)
+        $arRecords = [];
+        foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
+            $arRecords = array_merge($arRecords, DB::table('academic_records')
+                ->whereIn('student_id', $chunk)
+                ->select('student_id', 'subject_id', 'semester_id', 'curriculum_id')
+                ->get()
+                ->all());
+        }
+        $arExistsLookup = []; // hemis_id|subject_id|semester_id => true
+        $studentSemCurr = []; // hemis_id => [semester_id => curriculum_id]
+        foreach ($arRecords as $ar) {
+            $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
+            if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
+                $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
+            }
+        }
+        unset($arRecords);
+
+        // (curriculum_id, semester_code) juftliklari
+        $curriculumPairs = []; // 'curr_id|sem' => true
+        foreach ($students as $st) {
+            $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+            foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                if (!$studentSemCode || (int) $semCode < $studentSemCode) {
+                    $curriculumPairs[$currId . '|' . $semCode] = true;
+                }
+            }
+        }
+        if (empty($curriculumPairs)) return [];
+
+        $allCurriculumIds = collect(array_keys($curriculumPairs))
+            ->map(fn($k) => explode('|', $k)[0])->unique()->values()->all();
+        $allSemCodes = collect(array_keys($curriculumPairs))
+            ->map(fn($k) => explode('|', $k)[1])->unique()->values()->all();
+
+        $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+            ->whereIn('cs.curricula_hemis_id', $allCurriculumIds ?: [0])
+            ->whereIn('cs.semester_code', $allSemCodes ?: [0])
+            ->where('cs.is_active', 1)
+            ->where(function ($q) {
+                $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+            })
+            ->select(
+                'cs.curricula_hemis_id', 'cs.curriculum_subject_hemis_id',
+                'cs.semester_code', 'cs.semester_name',
+                'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code'
+            )
+            ->distinct();
+
+        $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+        foreach ($excludedPatterns as $pattern) {
+            $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+        }
+        $currSubjects = $currSubjectsQuery->get();
+        $subjectsByPair = $currSubjects->groupBy(fn($s) => $s->curricula_hemis_id . '|' . $s->semester_code);
+
+        // Tanlov fanlari (subject_type_code=12) — talaba tanlagan fan id ni olish
+        $tanlovCsHemisIds = $currSubjects->where('subject_type_code', '12')
+            ->pluck('curriculum_subject_hemis_id')->filter()->unique()->values()->toArray();
+        $tanlovPicksMap = [];
+        if (!empty($tanlovCsHemisIds)) {
+            $tanlovPicks = DB::table('student_subjects')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereIn('curriculum_subject_hemis_id', $tanlovCsHemisIds)
+                ->select('student_hemis_id', 'curriculum_subject_hemis_id', 'subject_id', 'subject_name')
+                ->get();
+            foreach ($tanlovPicks as $tp) {
+                $tanlovPicksMap[$tp->student_hemis_id . '|' . $tp->curriculum_subject_hemis_id] = [
+                    'subject_id'   => $tp->subject_id,
+                    'subject_name' => $tp->subject_name,
+                ];
+            }
+        }
+
+        // Har bir talaba uchun qarz fanlarini yig'ish
+        foreach ($students as $st) {
+            $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+            $debts = [];
+            foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                if ($studentSemCode && (int) $semCode >= $studentSemCode) continue;
+
+                $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
+                $subjectsForSem = $this->filterSubjectsByGroupSuffixSimple($subjectsForSem, $st->group_name ?? '');
+
+                foreach ($subjectsForSem as $sub) {
+                    $effectiveSubjectId = $sub->subject_id;
+                    $effectiveSubjectName = $sub->subject_name;
+                    if ((string) $sub->subject_type_code === '12') {
+                        $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
+                        if ($picked) {
+                            $effectiveSubjectId = $picked['subject_id'];
+                            $effectiveSubjectName = $picked['subject_name'];
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
+                    if (isset($arExistsLookup[$arKey])) continue;
+
+                    $debts[] = [
+                        'subject_name' => $effectiveSubjectName,
+                        'semester_name' => $sub->semester_name,
+                        'semester_code' => (int) $sub->semester_code,
+                    ];
+                }
+            }
+
+            // Semestr bo'yicha tartiblash
+            usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+            $result[$st->hemis_id] = $debts;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Guruh suffiksiga qarab fan variantlarini filtrlash (ReportController logikasi nusxasi).
+     */
+    private function filterSubjectsByGroupSuffixSimple($records, string $groupName)
+    {
+        if (empty($groupName)) return $records;
+        $groupSuffix = '';
+        if (preg_match('/(\d+)([a-zA-Z])$/', trim($groupName), $m)) {
+            $groupSuffix = mb_strtolower($m[2]);
+        }
+        if (empty($groupSuffix)) return $records;
+
+        return $records->filter(function ($record) use ($groupSuffix) {
+            $name = $record->subject_name ?? '';
+            if (preg_match('/\(([a-zA-Zа-яА-Я])\)\s*$/u', $name, $m)) {
+                return mb_strtolower($m[1]) === $groupSuffix;
+            }
+            return true;
+        })->values();
     }
 
     /**
@@ -3143,11 +3312,11 @@ class AcademicScheduleController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('YN kunlari');
 
-        $headers = ['#', 'Guruh', "Yo'nalish", 'Fan', 'Kredit', 'Yopilish shakli', 'Urinish', 'OSKI sanasi', 'Test sanasi', 'Talaba FISH', 'Talaba HEMIS ID'];
+        $headers = ['#', 'Guruh', "Yo'nalish", 'Fan', 'Kredit', 'Yopilish shakli', 'Urinish', 'OSKI sanasi', 'Test sanasi', 'Talaba FISH', 'Talaba HEMIS ID', 'Qarzlar soni', 'Izoh (qarz fanlari)'];
         foreach ($headers as $i => $h) {
             $sheet->setCellValue([$i + 1, 1], $h);
         }
-        $sheet->getStyle('A1:K1')->applyFromArray([
+        $sheet->getStyle('A1:M1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2B5EA7']],
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
@@ -3180,6 +3349,8 @@ class AcademicScheduleController extends Controller
                 $sheet->setCellValue([9, $rowNum], $testNa ? 'N/A' : $fmt($test));
                 $sheet->setCellValue([10, $rowNum], '');
                 $sheet->setCellValue([11, $rowNum], '');
+                $sheet->setCellValue([12, $rowNum], '');
+                $sheet->setCellValue([13, $rowNum], '');
                 $rowNum++;
 
                 // Per-student qatorlar
@@ -3203,6 +3374,18 @@ class AcademicScheduleController extends Controller
                             $stuTest = $stu['test_resit2_date'] ?? '';
                         }
 
+                        // Qarz hisobi: o'tgan semestrlardagi qarzlar + joriy fan failed_attempt1
+                        $stuPastDebts = $stu['past_debts'] ?? [];
+                        $stuDebtCount = count($stuPastDebts) + (!empty($stu['failed_attempt1']) ? 1 : 0);
+                        $stuDebtParts = [];
+                        foreach ($stuPastDebts as $d) {
+                            $stuDebtParts[] = ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ')';
+                        }
+                        if (!empty($stu['failed_attempt1'])) {
+                            $stuDebtParts[] = ($item['subject']->subject_name ?? '') . ' (' . ($item['subject']->semester_name ?? 'joriy semestr') . ') — joriy';
+                        }
+                        $stuDebtNote = implode('; ', $stuDebtParts);
+
                         $sheet->setCellValue([1, $rowNum], '');
                         $sheet->setCellValue([2, $rowNum], $item['group']->name ?? '');
                         $sheet->setCellValue([3, $rowNum], $item['specialty_name'] ?? ($item['group']->specialty_name ?? ''));
@@ -3214,31 +3397,42 @@ class AcademicScheduleController extends Controller
                         $sheet->setCellValue([9, $rowNum], $fmt($stuTest));
                         $sheet->setCellValue([10, $rowNum], $stu['full_name'] ?? '');
                         $sheet->setCellValue([11, $rowNum], $stu['hemis_id'] ?? '');
+                        $sheet->setCellValue([12, $rowNum], $stuDebtCount);
+                        $sheet->setCellValue([13, $rowNum], $stuDebtNote);
 
                         // Per-student qatorni vizual ajratish (kulrang fon)
-                        $sheet->getStyle("A{$rowNum}:K{$rowNum}")->applyFromArray([
+                        $sheet->getStyle("A{$rowNum}:M{$rowNum}")->applyFromArray([
                             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
                             'font' => ['italic' => true, 'size' => 10, 'color' => ['rgb' => '475569']],
                         ]);
+                        $sheet->getStyle("M{$rowNum}")->getAlignment()->setWrapText(true);
+                        // Qarz soni > 0 bo'lsa, yacheykani qizg'ish rangda ajratish
+                        if ($stuDebtCount > 0) {
+                            $sheet->getStyle("L{$rowNum}")->applyFromArray([
+                                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEF3C7']],
+                                'font' => ['bold' => true, 'color' => ['rgb' => '92400E']],
+                            ]);
+                        }
                         $rowNum++;
                     }
                 }
             }
         }
 
-        $widths = [5, 18, 30, 35, 8, 18, 12, 14, 14, 28, 14];
+        $widths = [5, 18, 30, 35, 8, 18, 12, 14, 14, 28, 14, 11, 60];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = $rowNum - 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:M{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['rgb' => 'E2E8F0']]],
                 'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
             ]);
             $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle("G2:I{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("L2:L{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
         }
 
         $sheet->freezePane('A2');

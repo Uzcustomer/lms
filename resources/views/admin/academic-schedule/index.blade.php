@@ -456,12 +456,30 @@
                                                     $blockedTitle = $heldBackBlocked
                                                         ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, qayta topshira olmaydi'
                                                         : 'Pullik talaba — sana belgilab bo\'lmaydi';
+                                                    // Qarz fanlari: o'tgan semestrlardagi (academic_records'da yo'q)
+                                                    // + joriy semestrdagi failed_attempt1 (V<60) — shu satr fani uchun
+                                                    $stuPastDebts = $stuRow['past_debts'] ?? [];
+                                                    $stuDebtCount = count($stuPastDebts) + (!empty($stuRow['failed_attempt1']) ? 1 : 0);
+                                                    $stuDebtTooltip = '';
+                                                    if ($stuDebtCount > 0) {
+                                                        $tooltipLines = [];
+                                                        foreach ($stuPastDebts as $d) {
+                                                            $tooltipLines[] = '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ')';
+                                                        }
+                                                        if (!empty($stuRow['failed_attempt1'])) {
+                                                            $tooltipLines[] = '• ' . ($item['subject']->subject_name ?? '') . ' (' . ($item['subject']->semester_name ?? 'joriy semestr') . ') — joriy';
+                                                        }
+                                                        $stuDebtTooltip = implode("\n", $tooltipLines);
+                                                    }
                                                 @endphp
                                                 <tr class="student-sub-row" style="background:{{ $isBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
                                                     <td></td>
                                                     <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $isBlocked ? '#991b1b' : '#475569' }};">
                                                         <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $isBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
                                                         {{ $stuRow['full_name'] }}
+                                                        @if($stuDebtCount > 0)
+                                                            <span class="debt-badge" title="{{ $stuDebtTooltip }}">{{ $stuDebtCount }} qarz</span>
+                                                        @endif
                                                         @if($heldBackBlocked)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
                                                         @elseif($pullikBlocked)
@@ -1001,6 +1019,9 @@
 
         .btn-excel-export { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #047857, #10b981); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(4,120,87,0.3); height: 36px; text-decoration: none; }
         .btn-excel-export:hover { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 4px 12px rgba(4,120,87,0.4); transform: translateY(-1px); color: #fff; }
+
+        .debt-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; cursor: help; white-space: pre-line; }
+        .debt-badge:hover { background: #fde68a; border-color: #f59e0b; }
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }

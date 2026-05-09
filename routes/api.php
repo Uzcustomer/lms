@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ExamAccessCheckController;
+use App\Http\Controllers\Api\ExamLayoutController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -34,6 +35,12 @@ Route::post('/moodle-descriptor-confirmed', [MoodleDescriptorCallbackController:
 Route::post('/exam-access-check', [ExamAccessCheckController::class, 'check'])
     ->middleware('throttle:120,1')
     ->name('api.moodle.exam-access-check');
+
+// Moodle proctor dashboard (auth_faceid plugin) → today's full computer
+// grid with current/next student per cell. Same X-SYNC-SECRET auth.
+Route::post('/exam-layout-today', [ExamLayoutController::class, 'today'])
+    ->middleware('throttle:60,1')
+    ->name('api.moodle.exam-layout-today');
 
 /*
 |--------------------------------------------------------------------------

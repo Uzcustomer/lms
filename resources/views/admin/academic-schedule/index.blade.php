@@ -148,6 +148,19 @@
                             <label class="filter-label"><span class="fl-dot" style="background:#0891b2;"></span> Test sanasi (gacha)</label>
                             <input type="text" id="test_date_to" class="date-input sc-date" autocomplete="off" placeholder="dd.mm.yyyy" />
                         </div>
+                        <div class="filter-item" style="flex: 1; min-width: 180px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#059669;"></span> Yopilish shakli</label>
+                            <select id="closing_form" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="unset" {{ ($selectedClosingForm ?? '') === 'unset' ? 'selected' : '' }}>Belgilanmagan</option>
+                                <option value="oski" {{ ($selectedClosingForm ?? '') === 'oski' ? 'selected' : '' }}>Faqat OSKI</option>
+                                <option value="test" {{ ($selectedClosingForm ?? '') === 'test' ? 'selected' : '' }}>Faqat Test</option>
+                                <option value="oski_test" {{ ($selectedClosingForm ?? '') === 'oski_test' ? 'selected' : '' }}>OSKI + Test</option>
+                                <option value="normativ" {{ ($selectedClosingForm ?? '') === 'normativ' ? 'selected' : '' }}>Normativ</option>
+                                <option value="sinov" {{ ($selectedClosingForm ?? '') === 'sinov' ? 'selected' : '' }}>Sinov (test)</option>
+                                <option value="none" {{ ($selectedClosingForm ?? '') === 'none' ? 'selected' : '' }}>Yo'q</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -240,14 +253,19 @@
                                             $cf = $item['closing_form'] ?? null;
                                             $showOski = $cf === null || in_array($cf, ['oski', 'oski_test'], true);
                                             $showTest = $cf === null || in_array($cf, ['test', 'oski_test'], true);
-                                            $cfDashLabels = [
-                                                'test' => 'Faqat Test',
-                                                'oski' => 'Faqat OSKI',
-                                                'none' => "Yo'q",
-                                                'normativ' => 'Normativ',
-                                                'sinov' => 'Sinov (test)',
+                                            // Yopilish shakli belgilangan bo'lsa, N/A tugmasi kerak emas:
+                                            // OSKI/Test'ning kerakliligi to'liq yopilish shakli orqali boshqariladi.
+                                            $cfLocked = $cf !== null;
+                                            $cfMeta = [
+                                                'oski'      => ['label' => 'Faqat OSKI',  'bg' => '#dbeafe', 'fg' => '#1d4ed8', 'br' => '#bfdbfe'],
+                                                'test'      => ['label' => 'Faqat Test',  'bg' => '#dcfce7', 'fg' => '#15803d', 'br' => '#bbf7d0'],
+                                                'oski_test' => ['label' => 'OSKI + Test', 'bg' => '#ede9fe', 'fg' => '#6d28d9', 'br' => '#ddd6fe'],
+                                                'normativ'  => ['label' => 'Normativ',    'bg' => '#fef3c7', 'fg' => '#a16207', 'br' => '#fde68a'],
+                                                'sinov'     => ['label' => 'Sinov (test)','bg' => '#ffedd5', 'fg' => '#c2410c', 'br' => '#fed7aa'],
+                                                'none'      => ['label' => "Yo'q",        'bg' => '#f1f5f9', 'fg' => '#475569', 'br' => '#cbd5e1'],
                                             ];
-                                            $cfDashLabel = $cfDashLabels[$cf] ?? '';
+                                            $cfChip = $cfMeta[$cf] ?? null;
+                                            $cfDashLabel = $cfChip['label'] ?? '';
                                         @endphp
                                         <tr class="data-row">
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
@@ -260,6 +278,9 @@
                                                    title="Jurnalni yangi oynada ochish">
                                                     {{ $item['subject']->subject_name }}
                                                 </a>
+                                                @if($cfChip)
+                                                    <span class="cf-chip" style="background:{{ $cfChip['bg'] }};color:{{ $cfChip['fg'] }};border:1px solid {{ $cfChip['br'] }};" title="Yopilish shakli: {{ $cfChip['label'] }}">{{ $cfChip['label'] }}</span>
+                                                @endif
                                             </td>
                                             <td data-sort-value="{{ $item['subject']->credit }}" style="text-align:center;color:#64748b;">{{ $item['subject']->credit }}</td>
                                             <td data-sort-value="{{ $item['lesson_start_date'] ? \Carbon\Carbon::parse($item['lesson_start_date'])->format('d.m.Y') : '' }}" style="text-align:center;padding:4px 8px;">
@@ -287,7 +308,11 @@
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 @if(!$showOski)
-                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun OSKI yo'q (yopilish shakli: {{ $cfDashLabel }})">—</span>
+                                                    @if($cfChip)
+                                                        <span class="cf-chip cf-chip-cell" style="background:{{ $cfChip['bg'] }};color:{{ $cfChip['fg'] }};border:1px solid {{ $cfChip['br'] }};" title="Bu fan uchun OSKI yo'q">{{ $cfChip['label'] }}</span>
+                                                    @else
+                                                        <span style="color:#cbd5e1;font-size:12px;">—</span>
+                                                    @endif
                                                     <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
                                                 @else
                                                 <div class="exam-cell">
@@ -300,11 +325,13 @@
                                                                    title="Saqlangan sana o'zgartirib bo'lmaydi" />
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][oski_date]" id="oski_h_{{ $rowIndex }}" value="{{ $itemOski }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
                                                                    {{ $itemOskiNa ? 'checked' : '' }} disabled>
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($itemOskiNa)
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][oski_na]" value="1">
                                                         @endif
@@ -322,12 +349,14 @@
                                                                    class="exam-sc-date" autocomplete="off"
                                                                    data-initial-value="{{ $itemOski ? \Carbon\Carbon::parse($itemOski)->format('Y-m-d') : '' }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
                                                                    {{ $itemOskiNa ? 'checked' : '' }}
                                                                    onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($canDelete)
                                                         <button type="button" class="clear-date-btn" title="OSKI sanasini o'chirish"
                                                                 onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'oski')">
@@ -339,18 +368,24 @@
                                                             <input type="text" id="oski_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][oski_date]"
                                                                    class="exam-sc-date" autocomplete="off" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun OSKI yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][oski_na]" value="1"
                                                                    onchange="toggleNa(this, 'oski_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                     @endif
                                                 </div>
                                                 @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 @if(!$showTest)
-                                                    <span style="color:#cbd5e1;font-size:12px;" title="Bu fan uchun Test yo'q (yopilish shakli: {{ $cfDashLabel }})">—</span>
+                                                    @if($cfChip)
+                                                        <span class="cf-chip cf-chip-cell" style="background:{{ $cfChip['bg'] }};color:{{ $cfChip['fg'] }};border:1px solid {{ $cfChip['br'] }};" title="Bu fan uchun Test yo'q">{{ $cfChip['label'] }}</span>
+                                                    @else
+                                                        <span style="color:#cbd5e1;font-size:12px;">—</span>
+                                                    @endif
                                                     <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
                                                 @else
                                                 <div class="exam-cell">
@@ -363,11 +398,13 @@
                                                                    title="Saqlangan sana o'zgartirib bo'lmaydi" />
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][test_date]" id="test_h_{{ $rowIndex }}" value="{{ $itemTest }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle na-toggle-locked" title="Saqlangan holat o'zgartirib bo'lmaydi">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
                                                                    {{ $itemTestNa ? 'checked' : '' }} disabled>
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($itemTestNa)
                                                             <input type="hidden" name="schedules[{{ $rowIndex }}][test_na]" value="1">
                                                         @endif
@@ -385,12 +422,14 @@
                                                                    class="exam-sc-date" autocomplete="off"
                                                                    data-initial-value="{{ $itemTest ? \Carbon\Carbon::parse($itemTest)->format('Y-m-d') : '' }}" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
                                                                    {{ $itemTestNa ? 'checked' : '' }}
                                                                    onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                         @if($canDelete)
                                                         <button type="button" class="clear-date-btn" title="Test sanasini o'chirish"
                                                                 onclick="clearExamDate('{{ $item['group']->group_hemis_id }}', '{{ $item['subject']->subject_id }}', '{{ $item['subject']->semester_code }}', 'test')">
@@ -402,11 +441,13 @@
                                                             <input type="text" id="test_cal_{{ $rowIndex }}" name="schedules[{{ $rowIndex }}][test_date]"
                                                                    class="exam-sc-date" autocomplete="off" />
                                                         </div>
+                                                        @if(!$cfLocked)
                                                         <label class="na-toggle" title="Bu fan uchun Test yo'q">
                                                             <input type="checkbox" name="schedules[{{ $rowIndex }}][test_na]" value="1"
                                                                    onchange="toggleNa(this, 'test_wrap_{{ $rowIndex }}')">
                                                             <span class="na-label">N/A</span>
                                                         </label>
+                                                        @endif
                                                     @endif
                                                 </div>
                                                 @endif
@@ -905,6 +946,8 @@
             if (showStudents === '1') url.searchParams.set('show_students', '1');
             var urinishVal = $('#urinish_filter').val();
             if (urinishVal) url.searchParams.set('urinish', urinishVal);
+            var cf = $('#closing_form').val();
+            if (cf) url.searchParams.set('closing_form', cf);
             window.location.href = url.toString();
         }
 
@@ -1054,5 +1097,7 @@
         .lock-icon { font-size: 12px; flex-shrink: 0; opacity: 0.6; }
         .clear-date-btn { background: none; border: none; cursor: pointer; padding: 2px 3px; color: #ef4444; opacity: 0.7; line-height: 1; border-radius: 4px; flex-shrink: 0; }
         .clear-date-btn:hover { opacity: 1; background: #fee2e2; }
+        .cf-chip { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 600; line-height: 1.4; white-space: nowrap; vertical-align: middle; letter-spacing: 0.01em; }
+        .cf-chip-cell { margin-left: 0; padding: 3px 10px; font-size: 11px; }
     </style>
 </x-app-layout>

@@ -5402,6 +5402,135 @@ class ReportController extends Controller
     }
 
     /**
+     * Academic records eksportini background jobda boshlash
+     */
+    public function startAcademicRecordsExport(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        $filters = $request->only([
+            'education_type', 'faculty', 'specialty', 'level_code', 'semester_code',
+            'group', 'student_status', 'student_name', 'student_type',
+        ]);
+
+        $exportKey = 'academic_records_export_' . auth()->id() . '_' . md5(json_encode($filters));
+
+        $existing = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if ($existing && ($existing['status'] ?? '') === 'running') {
+            return response()->json([
+                'export_key' => $exportKey,
+                'status'     => 'running',
+                'message'    => $existing['message'] ?? 'Ishlanmoqda...',
+                'percent'    => $existing['percent'] ?? 0,
+            ]);
+        }
+
+        \Illuminate\Support\Facades\Cache::put($exportKey, [
+            'status'     => 'running',
+            'message'    => 'Navbatga qo\'shilmoqda...',
+            'percent'    => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 1800);
+
+        \App\Jobs\ExportAcademicRecordsJob::dispatch($filters, $exportKey);
+
+        return response()->json([
+            'export_key' => $exportKey,
+            'status'     => 'running',
+            'message'    => 'Eksport boshlandi',
+        ]);
+    }
+
+    public function academicRecordsExportStatus(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['status' => 'error', 'message' => 'Export key topilmadi'], 400);
+        }
+
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+
+        // Cache yo'qolgan bo'lsa, diskdagi meta'dan o'qiymiz
+        if (!$data) {
+            $paths = \App\Jobs\ExportAcademicRecordsJob::pathsFor($exportKey);
+            if (file_exists($paths['meta'])) {
+                $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+            }
+        }
+
+        if (!$data) {
+            return response()->json(['status' => 'error', 'message' => 'Eksport topilmadi yoki muddati tugagan']);
+        }
+
+        unset($data['file_content']);
+        return response()->json($data);
+    }
+
+    public function academicRecordsExportDownload(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['error' => 'Export key topilmadi'], 400);
+        }
+
+        $paths = \App\Jobs\ExportAcademicRecordsJob::pathsFor($exportKey);
+
+        // Holatni cache yoki diskdan o'qiymiz
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        $source = $data ? 'cache' : null;
+        if (!$data && file_exists($paths['meta'])) {
+            $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+            $source = 'meta';
+        }
+
+        $debug = [
+            'export_key' => $exportKey,
+            'meta_path'  => $paths['meta'],
+            'meta_exists'=> file_exists($paths['meta']),
+            'xlsx_path'  => $paths['xlsx'],
+            'xlsx_exists'=> file_exists($paths['xlsx']),
+            'data_source'=> $source,
+            'data_status'=> $data['status'] ?? null,
+            'percent'    => $data['percent'] ?? null,
+        ];
+
+        if (!$data || ($data['status'] ?? '') !== 'done') {
+            \Illuminate\Support\Facades\Log::warning('[AR Export Download] Tayyor emas', $debug);
+            return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas', 'debug' => $debug], 404);
+        }
+
+        $fileName = $data['file_name'] ?? 'Academic_records.xlsx';
+
+        if (file_exists($paths['xlsx'])) {
+            return response()->download($paths['xlsx'], $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend(true);
+        }
+
+        // Eski format bilan orqaga moslik
+        $filePath = $data['file_path'] ?? null;
+        if ($filePath && file_exists($filePath)) {
+            return response()->download($filePath, $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend(true);
+        }
+        if (!empty($data['file_content'])) {
+            $content = base64_decode($data['file_content']);
+            return response($content, 200, [
+                'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+                'Content-Length'      => strlen($content),
+            ]);
+        }
+
+        \Illuminate\Support\Facades\Log::warning('[AR Export Download] Fayl topilmadi', $debug);
+        return response()->json(['error' => 'Fayl serverda topilmadi', 'debug' => $debug], 404);
+    }
+
+    /**
      * Talabaning barcha semestrlari — curriculum_subjects dan
      */
     public function studentAllRecords(Request $request)

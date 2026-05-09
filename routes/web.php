@@ -620,6 +620,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
+        Route::post('/reports/debtors/export-academic-records/start', [ReportController::class, 'startAcademicRecordsExport'])->name('reports.debtors.export-academic-records.start');
+        Route::get('/reports/debtors/export-academic-records/status', [ReportController::class, 'academicRecordsExportStatus'])->name('reports.debtors.export-academic-records.status');
+        Route::get('/reports/debtors/export-academic-records/download', [ReportController::class, 'academicRecordsExportDownload'])->name('reports.debtors.export-academic-records.download');
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');
         Route::get('/reports/student-all-records', [ReportController::class, 'studentAllRecords'])->name('reports.student-all-records');
         Route::get('/reports/debug-student-subjects', [ReportController::class, 'debugStudentSubjects'])->name('reports.debug-student-subjects');
@@ -776,6 +779,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
             Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
+            Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
@@ -1342,6 +1346,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/test-center', [AcademicScheduleController::class, 'testCenterView'])->name('test-center');
             Route::get('/test-center/export-excel', [AcademicScheduleController::class, 'exportTestCenter'])->name('test-center.export-excel');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
+            Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');

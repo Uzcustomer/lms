@@ -367,17 +367,19 @@ class AcademicScheduleController extends Controller
                 $statusByStudent = $studentStatus[$statusKey] ?? [];
                 $studentList = $studentsByGroup->get($gHid, collect());
 
-                // Guruhning OSKI/Test sanasi (asosiy schedule, student_hemis_id NULL)
-                $groupOskiDate = null;
-                $groupTestDate = null;
+                // Guruhning OSKI/Test sanasi (asosiy schedule, student_hemis_id NULL).
+                // Sinov (test) / Normativ kabi closing_formlar uchun sana saqlanmaydi —
+                // bu holatda dars tugash sanasini ($item['lesson_end_date']) proxy sifatida olamiz.
                 $groupKeyMain = $gHid . '|' . $subjectId . '|' . $semCode;
                 $oskiGradeMap = $attempt1OskiByKey[$groupKeyMain] ?? [];
                 $testGradeMap = $attempt1TestByKey[$groupKeyMain] ?? [];
-                // exam_schedules'dagi sanalar — item ichidan olamiz
                 $groupOskiDate = $item['oski_date'] ?? null;
                 $groupTestDate = $item['test_date'] ?? null;
-                $oskiPassed = $groupOskiDate && $groupOskiDate < $today && !empty($oskiGradeMap);
-                $testPassed = $groupTestDate && $groupTestDate < $today && !empty($testGradeMap);
+                $lessonEnd = $item['lesson_end_date'] ?? null;
+                $effOskiDate = $groupOskiDate ?: $lessonEnd;
+                $effTestDate = $groupTestDate ?: $lessonEnd;
+                $oskiPassed = $effOskiDate && $effOskiDate < $today && !empty($oskiGradeMap);
+                $testPassed = $effTestDate && $effTestDate < $today && !empty($testGradeMap);
 
                 $rows = [];
                 foreach ($studentList as $stu) {
@@ -4037,28 +4039,26 @@ class AcademicScheduleController extends Controller
                 $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
                 $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
 
-                // 2-urinish — FAQAT mavjud yoki haqiqatan kerakli (yiqilgan talabalar bor)
+                // 2-urinish ko'rinish qoidasi:
+                //  - oski_resit_date / test_resit_date saqlangan bo'lsa
+                //  - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
+                //  - talabalar yuklangan bo'lsa: birortasida effective failed_attempt1
+                //    (V<60 yoki imtihonda qatnashmagan yoki attempt=2 yozuvi bor) bo'lsa
+                //  - aks holda eski raw <60 signali (talabalar yuklanmagan holat uchun)
                 $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
-                $needs2 = isset($needsByKey[$needsKeyBase . '|2']);
                 $explicit2 = isset($attemptExistsByKey[$needsKeyBase . '|2']);
-                // Agar attachStudentsToSchedule talabalarni biriktirgan bo'lsa,
-                // ularning haqiqiy failed_attempt1 statusi bilan moslash —
-                // student_grades'dagi xom baholar pullik/qayta baholash bilan farq qilishi mumkin.
-                // FAQAT explicit signal yo'q bo'lsa suppress qilamiz (attempt=2 yozuvi bor bo'lsa,
-                // qo'lda 12a ga o'tkazilgan demak — har doim ko'rsatamiz).
-                if ($needs2 && !$explicit2 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
-                    $hasActuallyFailed1 = false;
+                $needs2Raw = isset($needsByKey[$needsKeyBase . '|2']);
+                $studentsAttached = isset($item['students']) && is_array($item['students']) && !empty($item['students']);
+                $anyStudentNeeds2 = false;
+                if ($studentsAttached) {
                     foreach ($item['students'] as $stu) {
                         if (!empty($stu['failed_attempt1'])) {
-                            $hasActuallyFailed1 = true;
+                            $anyStudentNeeds2 = true;
                             break;
                         }
                     }
-                    if (!$hasActuallyFailed1) {
-                        $needs2 = false;
-                    }
                 }
-                $show2 = $has2Data || $needs2;
+                $show2 = $has2Data || $explicit2 || $anyStudentNeeds2 || ($needs2Raw && !$studentsAttached);
 
                 $row2 = null;
                 if ($show2) {
@@ -4070,23 +4070,20 @@ class AcademicScheduleController extends Controller
                     $row2['test_na_for_urinish'] = false;
                 }
 
-                // 3-urinish — FAQAT mavjud yoki haqiqatan kerakli (12a yiqilganlar bor)
+                // 3-urinish — xuddi shu mantiq, attempt=2 dan o'tmaganlar uchun
                 $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
-                $needs3 = isset($needsByKey[$needsKeyBase . '|3']);
                 $explicit3 = isset($attemptExistsByKey[$needsKeyBase . '|3']);
-                if ($needs3 && !$explicit3 && isset($item['students']) && is_array($item['students']) && !empty($item['students'])) {
-                    $hasActuallyFailed2 = false;
+                $needs3Raw = isset($needsByKey[$needsKeyBase . '|3']);
+                $anyStudentNeeds3 = false;
+                if ($studentsAttached) {
                     foreach ($item['students'] as $stu) {
                         if (!empty($stu['failed_attempt2'])) {
-                            $hasActuallyFailed2 = true;
+                            $anyStudentNeeds3 = true;
                             break;
                         }
                     }
-                    if (!$hasActuallyFailed2) {
-                        $needs3 = false;
-                    }
                 }
-                $show3 = $has3Data || $needs3;
+                $show3 = $has3Data || $explicit3 || $anyStudentNeeds3 || ($needs3Raw && !$studentsAttached);
 
                 $row3 = null;
                 if ($show3) {

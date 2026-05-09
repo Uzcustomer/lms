@@ -1403,6 +1403,21 @@ class AcademicScheduleController extends Controller
         if ($selectedDepartment) $curriculumQuery->where('department_hemis_id', $selectedDepartment);
         if ($selectedSpecialty) $curriculumQuery->where('specialty_hemis_id', $selectedSpecialty);
         if ($selectedEducationType) $curriculumQuery->where('education_type_code', $selectedEducationType);
+        // Kurs/semestr tanlangan bo'lsa — faqat o'sha level/code joriy bo'lgan curriculum'larni qoldirish.
+        // Aks holda d2/20 (hozir 6-kurs) kabi eski rejalar 5-kurs filtridan ham chiqib qolyapti
+        // (chunki ularda istalgan boshqa current semester bor).
+        if ($selectedLevelCode || $selectedSemester) {
+            $curriculumQuery->whereIn('curricula_hemis_id', function ($sub) use ($currentSemesterOnly, $currentEducationYear, $selectedLevelCode, $selectedSemester) {
+                $sub->select('curriculum_hemis_id')->from('semesters');
+                if ($currentSemesterOnly) {
+                    $sub->where('current', true);
+                } else {
+                    $sub->where('education_year', $currentEducationYear);
+                }
+                if ($selectedLevelCode) $sub->where('level_code', $selectedLevelCode);
+                if ($selectedSemester) $sub->where('code', $selectedSemester);
+            });
+        }
         $curriculumIds = $curriculumQuery->pluck('curricula_hemis_id');
 
         if ($curriculumIds->isEmpty()) return collect();

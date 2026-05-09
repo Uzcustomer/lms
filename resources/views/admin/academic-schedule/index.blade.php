@@ -193,10 +193,16 @@
                                 @endif
                             </span>
                         </div>
-                        <button type="submit" class="btn-save">
-                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            Saqlash
-                        </button>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <a href="{{ route($routePrefix . '.academic-schedule.export-excel', request()->query()) }}" class="btn-excel-export" title="Filtrdan chiqqan natijalarni Excel ga yuklash">
+                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                Excel
+                            </a>
+                            <button type="submit" class="btn-save">
+                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                Saqlash
+                            </button>
+                        </div>
                     </div>
 
                     <div style="overflow-x:auto;">
@@ -992,6 +998,9 @@
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
         .btn-save { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-save:hover { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
+
+        .btn-excel-export { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #047857, #10b981); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(4,120,87,0.3); height: 36px; text-decoration: none; }
+        .btn-excel-export:hover { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 4px 12px rgba(4,120,87,0.4); transform: translateY(-1px); color: #fff; }
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }

@@ -3044,6 +3044,216 @@ class AcademicScheduleController extends Controller
         );
     }
 
+    /**
+     * YN kunini belgilash sahifasidagi filtrdan chiqqan natijalarni Excel ga eksport qilish.
+     * Per-student qatorlar (2/3-urinishda yiqilgan talabalar) ham alohida qatorlar sifatida
+     * chiqariladi (show_students=1 bo'lsa).
+     */
+    public function exportExcel(Request $request)
+    {
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $adminRoles = ExamDateRoleService::adminRoles();
+        $isAdmin = $user && in_array($activeRole, $adminRoles, true);
+        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+            abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
+        }
+
+        $allowedLevelCodes = $isAdmin
+            ? array_keys(ExamDateRoleService::getMapping())
+            : ExamDateRoleService::levelsForRole($activeRole);
+
+        $currentSemesters = Semester::where('current', true)->get();
+
+        $selectedEducationType = $request->get('education_type');
+        $selectedDepartment = $request->get('department_id');
+        $selectedSpecialty = $request->get('specialty_id');
+        $selectedLevelCode = $request->get('level_code');
+        if (!$isAdmin && $selectedLevelCode && !in_array((string) $selectedLevelCode, $allowedLevelCodes, true)) {
+            $selectedLevelCode = null;
+        }
+        $selectedSemester = $request->get('semester_code');
+        $selectedGroup = $request->get('group_id');
+        $selectedSubject = $request->get('subject_id');
+        $selectedStatus = $request->get('status');
+        $dateFrom = $request->get('date_from');
+        $dateTo = $request->get('date_to');
+        $currentSemesterToggle = $request->get('current_semester', '1');
+        $oskiDateFrom = $request->get('oski_date_from');
+        $oskiDateTo = $request->get('oski_date_to');
+        $testDateFrom = $request->get('test_date_from');
+        $testDateTo = $request->get('test_date_to');
+        $showStudents = $request->get('show_students') === '1';
+        $urinishFilter = $request->get('urinish');
+
+        $scheduleData = $this->loadScheduleData(
+            $currentSemesters, $selectedDepartment, $selectedSpecialty,
+            $selectedSemester, $selectedGroup, $selectedEducationType,
+            $selectedLevelCode, $selectedSubject, $selectedStatus,
+            $currentSemesterToggle, false, $dateFrom, $dateTo
+        );
+
+        if (!$isAdmin && !empty($allowedLevelCodes)) {
+            $scheduleData = $scheduleData->map(function ($items) use ($allowedLevelCodes) {
+                return $items->filter(function ($item) use ($allowedLevelCodes) {
+                    $lvl = (string) ($item['group']->level_code ?? $item['level_code'] ?? '');
+                    return $lvl !== '' && in_array($lvl, $allowedLevelCodes, true);
+                });
+            })->filter(fn($items) => $items->isNotEmpty());
+        }
+
+        if ($oskiDateFrom || $oskiDateTo) {
+            $scheduleData = $scheduleData->map(function ($items) use ($oskiDateFrom, $oskiDateTo) {
+                return $items->filter(function ($item) use ($oskiDateFrom, $oskiDateTo) {
+                    $d = $item['oski_date'];
+                    if (!$d) return false;
+                    if ($oskiDateFrom && $d < $oskiDateFrom) return false;
+                    if ($oskiDateTo && $d > $oskiDateTo) return false;
+                    return true;
+                });
+            })->filter(fn($items) => $items->isNotEmpty());
+        }
+        if ($testDateFrom || $testDateTo) {
+            $scheduleData = $scheduleData->map(function ($items) use ($testDateFrom, $testDateTo) {
+                return $items->filter(function ($item) use ($testDateFrom, $testDateTo) {
+                    $d = $item['test_date'];
+                    if (!$d) return false;
+                    if ($testDateFrom && $d < $testDateFrom) return false;
+                    if ($testDateTo && $d > $testDateTo) return false;
+                    return true;
+                });
+            })->filter(fn($items) => $items->isNotEmpty());
+        }
+
+        if ($showStudents) {
+            $scheduleData = $this->attachStudentsToSchedule($scheduleData);
+        }
+        $scheduleData = $this->expandByUrinish($scheduleData, $urinishFilter);
+
+        $closingFormLabels = [
+            'oski' => 'Faqat OSKI',
+            'test' => 'Faqat Test',
+            'oski_test' => 'OSKI + Test',
+            'normativ' => 'Normativ',
+            'sinov' => 'Sinov (test)',
+            'none' => "Yo'q",
+        ];
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('YN kunlari');
+
+        $headers = ['#', 'Guruh', "Yo'nalish", 'Fan', 'Kredit', 'Yopilish shakli', 'Urinish', 'OSKI sanasi', 'Test sanasi', 'Talaba FISH', 'Talaba HEMIS ID'];
+        foreach ($headers as $i => $h) {
+            $sheet->setCellValue([$i + 1, 1], $h);
+        }
+        $sheet->getStyle('A1:K1')->applyFromArray([
+            'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2B5EA7']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+            'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER, 'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+        ]);
+
+        $rowNum = 2;
+        $counter = 0;
+        $fmt = fn($d) => $d ? \Carbon\Carbon::parse($d)->format('d.m.Y') : '';
+
+        foreach ($scheduleData as $items) {
+            foreach ($items as $item) {
+                $counter++;
+                $itemUrinish = (int) ($item['urinish'] ?? 1);
+                $oski = $item['oski_date_for_urinish'] ?? null;
+                $test = $item['test_date_for_urinish'] ?? null;
+                $oskiNa = $item['oski_na_for_urinish'] ?? false;
+                $testNa = $item['test_na_for_urinish'] ?? false;
+                $cf = $item['closing_form'] ?? null;
+                $cfLabel = $cf ? ($closingFormLabels[$cf] ?? $cf) : 'Belgilanmagan';
+
+                $sheet->setCellValue([1, $rowNum], $counter);
+                $sheet->setCellValue([2, $rowNum], $item['group']->name ?? '');
+                $sheet->setCellValue([3, $rowNum], $item['specialty_name'] ?? ($item['group']->specialty_name ?? ''));
+                $sheet->setCellValue([4, $rowNum], $item['subject']->subject_name ?? '');
+                $sheet->setCellValue([5, $rowNum], $item['subject']->credit ?? '');
+                $sheet->setCellValue([6, $rowNum], $cfLabel);
+                $sheet->setCellValue([7, $rowNum], $itemUrinish . '-urinish');
+                $sheet->setCellValue([8, $rowNum], $oskiNa ? 'N/A' : $fmt($oski));
+                $sheet->setCellValue([9, $rowNum], $testNa ? 'N/A' : $fmt($test));
+                $sheet->setCellValue([10, $rowNum], '');
+                $sheet->setCellValue([11, $rowNum], '');
+                $rowNum++;
+
+                // Per-student qatorlar
+                if ($showStudents && !empty($item['students']) && is_array($item['students'])) {
+                    $studentsForRow = $item['students'];
+                    if ($itemUrinish === 2) {
+                        $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt1'])));
+                    } elseif ($itemUrinish === 3) {
+                        $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt2'])));
+                    }
+
+                    foreach ($studentsForRow as $stu) {
+                        if ($itemUrinish === 1) {
+                            $stuOski = $stu['oski_date'] ?? '';
+                            $stuTest = $stu['test_date'] ?? '';
+                        } elseif ($itemUrinish === 2) {
+                            $stuOski = $stu['oski_resit_date'] ?? '';
+                            $stuTest = $stu['test_resit_date'] ?? '';
+                        } else {
+                            $stuOski = $stu['oski_resit2_date'] ?? '';
+                            $stuTest = $stu['test_resit2_date'] ?? '';
+                        }
+
+                        $sheet->setCellValue([1, $rowNum], '');
+                        $sheet->setCellValue([2, $rowNum], $item['group']->name ?? '');
+                        $sheet->setCellValue([3, $rowNum], $item['specialty_name'] ?? ($item['group']->specialty_name ?? ''));
+                        $sheet->setCellValue([4, $rowNum], '↳ ' . ($item['subject']->subject_name ?? ''));
+                        $sheet->setCellValue([5, $rowNum], '');
+                        $sheet->setCellValue([6, $rowNum], $cfLabel);
+                        $sheet->setCellValue([7, $rowNum], $itemUrinish . '-urinish');
+                        $sheet->setCellValue([8, $rowNum], $fmt($stuOski));
+                        $sheet->setCellValue([9, $rowNum], $fmt($stuTest));
+                        $sheet->setCellValue([10, $rowNum], $stu['full_name'] ?? '');
+                        $sheet->setCellValue([11, $rowNum], $stu['hemis_id'] ?? '');
+
+                        // Per-student qatorni vizual ajratish (kulrang fon)
+                        $sheet->getStyle("A{$rowNum}:K{$rowNum}")->applyFromArray([
+                            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
+                            'font' => ['italic' => true, 'size' => 10, 'color' => ['rgb' => '475569']],
+                        ]);
+                        $rowNum++;
+                    }
+                }
+            }
+        }
+
+        $widths = [5, 18, 30, 35, 8, 18, 12, 14, 14, 28, 14];
+        foreach ($widths as $col => $w) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
+        }
+
+        $lastRow = $rowNum - 1;
+        if ($lastRow > 1) {
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+                'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['rgb' => 'E2E8F0']]],
+                'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+            ]);
+            $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("G2:I{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+        }
+
+        $sheet->freezePane('A2');
+
+        $fileName = 'YN_kunlari_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'yn_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
     public function bandlikKursatkichi(Request $request)
     {
         $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];

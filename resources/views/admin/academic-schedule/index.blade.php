@@ -489,14 +489,6 @@
                                                         $stuValueOski = $stuRow['oski_resit2_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_resit2_date'] ?? '';
                                                     }
-                                                    // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
-                                                    $pullikBlocked = ($itemUrinish > 1) && !empty($stuRow['is_pullik']);
-                                                    // 4+ ta fandan qarz → kursdan qoldiriladi, qayta topshira olmaydi
-                                                    $heldBackBlocked = ($itemUrinish > 1) && !empty($stuRow['is_held_back']);
-                                                    $isBlocked = $pullikBlocked || $heldBackBlocked;
-                                                    $blockedTitle = $heldBackBlocked
-                                                        ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, qayta topshira olmaydi'
-                                                        : 'Pullik talaba — sana belgilab bo\'lmaydi';
                                                     // Qarz fanlari: o'tgan semestrlardagi (academic_records'da yo'q)
                                                     // + joriy semestrdagi failed_attempt1 (V<60) — shu satr fani uchun
                                                     $stuPastDebts = $stuRow['past_debts'] ?? [];
@@ -512,6 +504,16 @@
                                                         }
                                                         $stuDebtTooltip = implode("\n", $tooltipLines);
                                                     }
+                                                    // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
+                                                    $pullikBlocked = ($itemUrinish > 1) && !empty($stuRow['is_pullik']);
+                                                    // 4+ ta fandan qarz → kursdan qoldiriladi, qayta topshira olmaydi
+                                                    // (eski is_held_back yoki yangi total qarz soni >= 4 — qaysi biri bo'lsa)
+                                                    $isHeldBack = !empty($stuRow['is_held_back']) || $stuDebtCount >= 4;
+                                                    $heldBackBlocked = ($itemUrinish > 1) && $isHeldBack;
+                                                    $isBlocked = $pullikBlocked || $heldBackBlocked;
+                                                    $blockedTitle = $heldBackBlocked
+                                                        ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, qayta topshira olmaydi'
+                                                        : 'Pullik talaba — sana belgilab bo\'lmaydi';
                                                 @endphp
                                                 <tr class="student-sub-row" style="background:{{ $isBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
                                                     <td></td>

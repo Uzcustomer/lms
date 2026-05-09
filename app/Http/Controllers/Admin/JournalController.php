@@ -3161,10 +3161,18 @@ class JournalController extends Controller
             }
 
             $finalGrade = round($request->grade * $percentage, 2);
-            DB::table('student_grades')->where('id', $request->grade_id)->update([
+            $updateData = [
                 'retake_grade' => $finalGrade,
                 'updated_at' => now(),
-            ]);
+            ];
+            // retake_was_sababli ustunini ham sinxron yozish — aks holda keyingi
+            // reconcileRetakeGradesForJournal/recalculateRetakeGrade chaqiruvi
+            // saqlangan koeffitsientni noto'g'ri taxmin qilib, qiymatni 100/0.8 = 125
+            // kabi xato qayta hisoblab yuboradi.
+            if ($record->reason === 'absent') {
+                $updateData['retake_was_sababli'] = $isExcused;
+            }
+            DB::table('student_grades')->where('id', $request->grade_id)->update($updateData);
 
             return response()->json([
                 'success' => true,

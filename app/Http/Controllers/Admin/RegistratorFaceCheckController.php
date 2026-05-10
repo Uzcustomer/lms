@@ -60,44 +60,75 @@ class RegistratorFaceCheckController extends Controller
     public function show(Request $request, string $studentIdNumber)
     {
         $student = Student::where('student_id_number', $studentIdNumber)->firstOrFail();
-        $approvedPhoto = FaceIdService::getApprovedStudentPhoto($student);
-
-        $missing = [];
-        if (empty($student->image)) {
-            $missing[] = 'HEMIS rasm';
-        }
-        if (!$approvedPhoto) {
-            $missing[] = 'Mark approved rasm';
-        }
-
+        // The page deliberately does NOT expose any reference photos or
+        // similarity scores to the registrator UI — that data must stay
+        // server-side so a registrator can't game the AI checks for someone
+        // they recognise. The view only needs the student's identity.
         return view('admin.registrator-face-check.show', [
-            'student'        => $student,
-            'approvedPhoto'  => $approvedPhoto,
-            'missing'        => $missing,
-            'antiFraudPct'   => self::ANTI_FRAUD_THRESHOLD,
+            'student' => $student,
+        ]);
+    }
+
+    /**
+     * Confirm that the username typed by the student during the recapture flow
+     * matches the student selected from the registrator's list. Returns the
+     * full name so the registrator can compare against the passport.
+     *
+     * The lookup deliberately echoes only the public full_name; nothing is
+     * leaked about HEMIS photos, descriptor state or similarity scores.
+     */
+    public function lookup(Request $request, string $studentIdNumber): JsonResponse
+    {
+        $data = $request->validate([
+            'username' => 'required|string|max:64',
+        ]);
+
+        $student = Student::where('student_id_number', $studentIdNumber)->firstOrFail();
+        $typed = trim((string) $data['username']);
+
+        if ($typed === '' || !hash_equals((string) $student->student_id_number, $typed)) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'Username mos kelmadi. Talaba o\'zining ID raqamini kiritsin.',
+            ], 422);
+        }
+
+        return response()->json([
+            'ok'        => true,
+            'full_name' => (string) $student->full_name,
         ]);
     }
 
     /**
      * Stage 1: anti-fraud verify + save + sync.
      *
-     * Body: snapshot (data URL), descriptor (128 floats), det_score (optional).
+     * Body: snapshot (data URL), descriptor (128 floats), det_score (optional),
+     *       username (must match the URL student — confirmed in the lookup step).
      */
     public function verify(Request $request, string $studentIdNumber): JsonResponse
     {
         $data = $request->validate([
-            'snapshot'   => 'required|string',
-            'descriptor' => 'required|array|size:128',
+            'snapshot'     => 'required|string',
+            'descriptor'   => 'required|array|size:128',
             'descriptor.*' => 'numeric',
-            'det_score'  => 'nullable|numeric',
+            'det_score'    => 'nullable|numeric',
+            'username'     => 'required|string|max:64',
         ]);
 
         $student = Student::where('student_id_number', $studentIdNumber)->firstOrFail();
 
+        // Re-verify the typed username server-side — a registrator with the URL
+        // must not be able to skip the lookup confirmation step.
+        if (!hash_equals((string) $student->student_id_number, trim((string) $data['username']))) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'Username mos kelmadi.',
+            ], 422);
+        }
+
         if (empty($student->image)) {
             return response()->json([
                 'ok'      => false,
-                'reason'  => 'no_hemis_photo',
                 'message' => 'Talabaning HEMIS rasmi topilmadi.',
             ], 422);
         }
@@ -106,7 +137,6 @@ class RegistratorFaceCheckController extends Controller
         if (!$approvedPhoto) {
             return response()->json([
                 'ok'      => false,
-                'reason'  => 'no_mark_photo',
                 'message' => 'Talabaning markda tasdiqlangan rasmi topilmadi. '
                           . 'Avval tutor orqali rasm yuklash kerak.',
             ], 422);
@@ -116,7 +146,6 @@ class RegistratorFaceCheckController extends Controller
         if (!$snapshot) {
             return response()->json([
                 'ok'      => false,
-                'reason'  => 'bad_snapshot',
                 'message' => 'Webcam rasmini saqlab bo\'lmadi.',
             ], 422);
         }
@@ -144,8 +173,7 @@ class RegistratorFaceCheckController extends Controller
                 ]);
                 return response()->json([
                     'ok'      => false,
-                    'reason'  => 'compare_failed',
-                    'message' => 'AI yuz solishtirish servisi javob bermadi. Qayta urining.',
+                    'message' => 'Texnik xato. Birozdan keyin qayta urining.',
                 ], 502);
             }
 
@@ -154,15 +182,23 @@ class RegistratorFaceCheckController extends Controller
             $passed   = $simHemis >= self::ANTI_FRAUD_THRESHOLD
                      && $simMark  >= self::ANTI_FRAUD_THRESHOLD;
 
+            // Audit log: keep the actual scores server-side regardless of
+            // what we tell the registrator.
+            Log::info('[RegistratorFaceCheck] anti-fraud verify', [
+                'student_id_number' => $studentIdNumber,
+                'similarity_hemis'  => $simHemis,
+                'similarity_mark'   => $simMark,
+                'passed'            => $passed,
+                'registrator_id'    => auth()->id(),
+            ]);
+
             if (!$passed) {
+                // Generic message — never reveal which reference failed or by
+                // how much. The registrator must just take a sharper photo.
                 return response()->json([
-                    'ok'             => false,
-                    'reason'         => 'similarity_too_low',
-                    'message'        => 'Tasdiqlanmadi. Sifatli rasm oling: '
-                                      . 'webcam yorug\'roq joyga, yuz ramkaga to\'liq tushsin.',
-                    'similarity_hemis' => round($simHemis, 2),
-                    'similarity_mark'  => round($simMark, 2),
-                    'threshold'        => self::ANTI_FRAUD_THRESHOLD,
+                    'ok'      => false,
+                    'message' => 'Tasdiqlanmadi. Sifatliroq rasm oling: '
+                              . 'webcam yorug\'roq joyga, yuz ramkaga to\'liq tushsin.',
                 ], 422);
             }
 
@@ -174,7 +210,6 @@ class RegistratorFaceCheckController extends Controller
             if (!$newPhoto) {
                 return response()->json([
                     'ok'      => false,
-                    'reason'  => 'persist_failed',
                     'message' => 'Rasmni saqlab bo\'lmadi.',
                 ], 500);
             }
@@ -184,7 +219,7 @@ class RegistratorFaceCheckController extends Controller
 
             // Descriptor → Moodle (append to auth_faceid_descriptors).
             $descriptorService = app(MoodleFaceDescriptorService::class);
-            $saveDesc = $descriptorService->saveDescriptor(
+            $descriptorService->saveDescriptor(
                 (string) $student->student_id_number,
                 array_map('floatval', $data['descriptor']),
                 isset($data['det_score']) ? (float) $data['det_score'] : null,
@@ -192,13 +227,9 @@ class RegistratorFaceCheckController extends Controller
             );
 
             return response()->json([
-                'ok'               => true,
-                'photo_id'         => $newPhoto->id,
-                'similarity_hemis' => round($simHemis, 2),
-                'similarity_mark'  => round($simMark, 2),
-                'moodle_descriptor' => $saveDesc,
-                'message'          => 'Tasdiqlandi. Rasm va descriptor Moodle\'ga yuborildi. '
-                                    . 'Endi "Moodle precheck" tugmasi orqali test markazi simulyatsiyasini ishga tushiring.',
+                'ok'      => true,
+                'message' => 'Tasdiqlandi. Yuz Moodle\'ga yuborildi. '
+                          . 'Endi yana bir bor "Test markazi simulyatsiyasi" tugmasini bosing.',
             ]);
         } finally {
             $cleanup();
@@ -229,9 +260,8 @@ class RegistratorFaceCheckController extends Controller
         if (!$result['ok']) {
             return response()->json([
                 'ok'      => false,
-                'reason'  => 'moodle_unreachable',
-                'message' => 'Moodle bilan bog\'lanib bo\'lmadi: '
-                          . ($result['error'] ?? 'noma\'lum xato'),
+                'matched' => null,
+                'message' => 'Texnik xato. Birozdan keyin qayta urining.',
             ], 502);
         }
 
@@ -239,21 +269,27 @@ class RegistratorFaceCheckController extends Controller
         $status = (string) ($body['status'] ?? '');
         $matched = (bool) ($body['matched'] ?? false);
 
-        $message = match ($status) {
-            'matched'         => 'Test markazida muammosiz o\'tadi.',
-            'no_match'        => 'Hali ham mos kelmayapti. Yangi rasm oling yoki yorug\'lik/burchakni o\'zgartiring.',
-            'no_descriptors'  => 'Moodle\'da hali descriptor yo\'q. Rasm sinxronlanguncha bir necha soniya kuting.',
-            default           => 'Noma\'lum javob: ' . $status,
+        // Audit log only — registrator never sees distance/confidence/threshold.
+        Log::info('[RegistratorFaceCheck] moodle precheck', [
+            'student_id_number' => $studentIdNumber,
+            'matched'           => $matched,
+            'status'            => $status,
+            'distance'          => $body['distance']  ?? null,
+            'confidence'        => $body['confidence'] ?? null,
+            'registrator_id'    => auth()->id(),
+        ]);
+
+        $message = match (true) {
+            $matched                              => 'Test markazida muammosiz o\'tadi.',
+            $status === 'no_descriptors'          => 'Talaba uchun descriptor hali yo\'q. Yangi rasm olishingiz kerak.',
+            default                               => 'Test markazida o\'tmaydi. Yangi rasm olish tavsiya etiladi.',
         };
 
         return response()->json([
-            'ok'        => true,
-            'matched'   => $matched,
-            'status'    => $status,
-            'distance'  => $body['distance']  ?? null,
-            'confidence'=> $body['confidence'] ?? null,
-            'threshold' => $body['threshold'] ?? null,
-            'message'   => $message,
+            'ok'      => true,
+            'matched' => $matched,
+            'status'  => $status,
+            'message' => $message,
         ]);
     }
 
